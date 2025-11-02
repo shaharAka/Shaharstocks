@@ -345,8 +345,14 @@ function startHoldingsPriceHistoryJob() {
       
       log("[HoldingsHistory] Starting holdings price history update...");
       
-      // Get all holdings (both simulated and real)
-      const holdings = await storage.getPortfolioHoldings();
+      // Get all users and their holdings
+      const users = await storage.getUsers();
+      const allHoldings = [];
+      for (const user of users) {
+        const userHoldings = await storage.getPortfolioHoldings(user.id);
+        allHoldings.push(...userHoldings);
+      }
+      const holdings = allHoldings;
       
       if (holdings.length === 0) {
         log("[HoldingsHistory] No holdings to update");
@@ -725,9 +731,18 @@ function startSimulatedRuleExecutionJob() {
       
       log("[SimRuleExec] Evaluating trading rules for simulated holdings...");
       
-      // Get all enabled trading rules
-      const allRules = await storage.getTradingRules();
-      const enabledRules = allRules.filter(rule => rule.enabled);
+      // Get all users and their trading rules
+      const users = await storage.getUsers();
+      const allRulesArray = [];
+      const allHoldingsArray = [];
+      for (const user of users) {
+        const userRules = await storage.getTradingRules(user.id);
+        const userHoldings = await storage.getPortfolioHoldings(user.id, true);
+        allRulesArray.push(...userRules);
+        allHoldingsArray.push(...userHoldings);
+      }
+      
+      const enabledRules = allRulesArray.filter(rule => rule.enabled);
       
       if (enabledRules.length === 0) {
         log("[SimRuleExec] No enabled rules to evaluate");
@@ -735,7 +750,7 @@ function startSimulatedRuleExecutionJob() {
       }
       
       // Get all SIMULATED holdings only
-      const holdings = await storage.getPortfolioHoldings(true);
+      const holdings = allHoldingsArray;
       
       if (holdings.length === 0) {
         log("[SimRuleExec] No simulated holdings to evaluate");

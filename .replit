@@ -1,6 +1,10 @@
 modules = ["python-3.11", "nodejs-20", "postgresql-16"]
+run = "npm run dev"
 
 [nix]
 channel = "stable-25_05"
 packages = ["arrow-cpp", "glibcLocales", "libyaml", "pkg-config"]
-run = "npm run dev"
+
+[[ports]]
+localPort = 5000
+externalPort = 80

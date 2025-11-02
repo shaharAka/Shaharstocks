@@ -1029,6 +1029,13 @@ export class DatabaseStorage implements IStorage {
     return updatedUser;
   }
 
+  async markUserInitialDataFetched(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ initialDataFetched: true })
+      .where(eq(users.id, userId));
+  }
+
   async deleteUser(id: string): Promise<boolean> {
     const result = await db.delete(users).where(eq(users.id, id));
     return result.rowCount ? result.rowCount > 0 : false;

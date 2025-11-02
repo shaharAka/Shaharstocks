@@ -39,6 +39,87 @@ function isMarketOpen(): boolean {
   return timeInMinutes >= marketOpen && timeInMinutes < marketClose;
 }
 
+// Helper function to fetch initial OpenInsider data for new users
+async function fetchInitialDataForUser(userId: string): Promise<void> {
+  try {
+    console.log(`[InitialDataFetch] Starting initial data fetch for user ${userId}...`);
+    
+    // Fetch 500 transactions without any filters
+    const transactions = await openinsiderService.fetchInsiderPurchases(500);
+    
+    if (transactions.length === 0) {
+      console.log(`[InitialDataFetch] No transactions found for user ${userId}`);
+      await storage.markUserInitialDataFetched(userId);
+      return;
+    }
+
+    console.log(`[InitialDataFetch] Processing ${transactions.length} transactions for user ${userId}...`);
+    
+    // Convert transactions to stock recommendations
+    let createdCount = 0;
+    for (const transaction of transactions) {
+      try {
+        // Check if stock already exists
+        const existingStock = await storage.getStock(transaction.ticker);
+        
+        if (existingStock) {
+          continue;
+        }
+
+        // Get current market price from Finnhub
+        const quote = await finnhubService.getQuote(transaction.ticker);
+        if (!quote || !quote.currentPrice) {
+          continue;
+        }
+
+        // Fetch company profile, market cap, and news
+        const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
+        const data = stockData.get(transaction.ticker);
+
+        // Create stock recommendation with complete information
+        await storage.createStock({
+          ticker: transaction.ticker,
+          companyName: transaction.companyName || transaction.ticker,
+          currentPrice: quote.currentPrice.toString(),
+          previousClose: quote.previousClose?.toString() || quote.currentPrice.toString(),
+          insiderPrice: transaction.price.toString(),
+          insiderQuantity: transaction.quantity,
+          insiderTradeDate: transaction.filingDate,
+          insiderName: transaction.insiderName,
+          insiderTitle: transaction.insiderTitle,
+          recommendation: "buy",
+          source: "openinsider",
+          confidenceScore: transaction.confidence || 75,
+          peRatio: null,
+          marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
+          description: data?.companyInfo?.description || null,
+          industry: data?.companyInfo?.industry || null,
+          country: data?.companyInfo?.country || null,
+          webUrl: data?.companyInfo?.webUrl || null,
+          ipo: data?.companyInfo?.ipo || null,
+          news: data?.news || [],
+          insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
+          insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
+          priceHistory: [],
+        });
+
+        createdCount++;
+      } catch (err) {
+        console.error(`[InitialDataFetch] Error processing ${transaction.ticker}:`, err);
+      }
+    }
+
+    console.log(`[InitialDataFetch] Created ${createdCount} stock recommendations for user ${userId}`);
+    
+    // Mark user as having initial data fetched
+    await storage.markUserInitialDataFetched(userId);
+    
+  } catch (error) {
+    console.error(`[InitialDataFetch] Error fetching initial data for user ${userId}:`, error);
+    // Don't throw - this is a background operation
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Feature flags endpoint
   app.get("/api/feature-flags", async (req, res) => {
@@ -125,6 +206,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       req.session.userId = newUser.id;
+      
+      // Trigger initial data fetch in background (fire-and-forget)
+      console.log(`[UserCreation] Triggering initial data fetch for new user ${newUser.id}...`);
+      fetchInitialDataForUser(newUser.id).catch(err => {
+        console.error(`[UserCreation] Background initial data fetch failed for user ${newUser.id}:`, err);
+      });
+      
       res.json({ user: newUser });
     } catch (error) {
       res.status(500).json({ error: "Failed to create user" });

@@ -266,6 +266,8 @@ export async function runMacroAnalysis(industry?: string): Promise<InsertMacroAn
   const industryLabel = industry || "General Market";
   console.log(`[MacroAgent] Starting macro economic analysis for ${industryLabel}...`);
   
+  let sanitizedResponse = "";  // Declare in outer scope for error logging
+  
   try {
     // Fetch market data
     const marketData = await fetchMarketIndices();
@@ -393,11 +395,21 @@ Respond in JSON format:
     });
 
     let responseText = completion.choices[0].message.content || "{}";
+    sanitizedResponse = responseText;
     
     // Strip markdown code fences if present (e.g., ```json ... ```)
-    responseText = responseText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    // Handle multiple formats: ```json\n{...}\n```, ```\n{...}\n```, or just {...}
+    sanitizedResponse = sanitizedResponse.trim();
+    if (sanitizedResponse.startsWith('```')) {
+      // Remove opening fence (```json or ```)
+      sanitizedResponse = sanitizedResponse.replace(/^```(?:json|JSON)?\s*\n?/, '');
+      // Remove closing fence
+      sanitizedResponse = sanitizedResponse.replace(/\n?```\s*$/, '');
+      sanitizedResponse = sanitizedResponse.trim();
+    }
     
-    const analysis = JSON.parse(responseText);
+    console.log(`[MacroAgent] Parsing JSON response (${sanitizedResponse.length} chars)...`);
+    const analysis = JSON.parse(sanitizedResponse);
     
     // Validate and sanitize macro score
     const macroScore = typeof analysis.macroScore === "number" && !isNaN(analysis.macroScore) 
@@ -450,7 +462,17 @@ Respond in JSON format:
       errorMessage: null,
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("[MacroAgent] Error during analysis:", error);
+    
+    // If this is a JSON parse error, log the problematic response
+    if (errorMessage.includes('JSON') || errorMessage.includes('parse')) {
+      console.error("[MacroAgent] JSON parse failed. Check OpenAI response format.");
+      // Log a truncated version of the response for debugging (first 500 chars)
+      const preview = sanitizedResponse?.substring(0, 500) || 'No response available';
+      console.error("[MacroAgent] Response preview:", preview);
+    }
+    
     return {
       industry: industry || null,
       status: "failed",

@@ -42,13 +42,16 @@ class QueueWorker {
   }
 
   private async processLoop() {
+    console.log("[QueueWorker] Process loop started");
     while (this.running) {
       try {
         // Check if we can process more jobs
         if (this.processingCount < this.maxConcurrent) {
+          console.log("[QueueWorker] Polling for jobs...");
           const job = await storage.dequeueNextJob();
           
           if (job) {
+            console.log(`[QueueWorker] Dequeued job ${job.id} for ${job.ticker}`);
             // Process job without waiting (allows concurrent processing)
             this.processJob(job).catch(error => {
               console.error(`[QueueWorker] Unhandled error processing job ${job.id}:`, error);
@@ -57,6 +60,7 @@ class QueueWorker {
             // If we got a job, check for more immediately
             await this.sleep(100);
           } else {
+            console.log(`[QueueWorker] No pending jobs, sleeping for ${this.idleInterval}ms`);
             // Queue is empty, wait longer before checking again
             await this.sleep(this.idleInterval);
           }
@@ -69,6 +73,7 @@ class QueueWorker {
         await this.sleep(this.pollInterval);
       }
     }
+    console.log("[QueueWorker] Process loop ended");
   }
 
   private async processJob(job: AiAnalysisJob): Promise<void> {

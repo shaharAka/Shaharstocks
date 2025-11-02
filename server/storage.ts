@@ -1435,7 +1435,7 @@ export class DatabaseStorage implements IStorage {
   // Macro Analysis Methods
   async getLatestMacroAnalysis(industry?: string | null): Promise<MacroAnalysis | undefined> {
     // Get macro analysis for specific industry or general market (null industry)
-    // Filter for analyses less than 7 days old
+    // Filter for analyses less than 7 days old AND that are complete (have actual data)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     
     const [analysis] = await db
@@ -1446,7 +1446,9 @@ export class DatabaseStorage implements IStorage {
           industry 
             ? eq(macroAnalyses.industry, industry)
             : sql`${macroAnalyses.industry} IS NULL`,
-          sql`${macroAnalyses.createdAt} >= ${sevenDaysAgo}`
+          sql`${macroAnalyses.createdAt} >= ${sevenDaysAgo}`,
+          eq(macroAnalyses.status, "completed"),
+          sql`${macroAnalyses.macroFactor} IS NOT NULL`
         )
       )
       .orderBy(desc(macroAnalyses.createdAt))

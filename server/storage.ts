@@ -407,7 +407,13 @@ export class DatabaseStorage implements IStorage {
   async createTrade(trade: InsertTrade): Promise<Trade> {
     // Update portfolio holdings first - ensure simulated and real holdings are kept separate
     const isSimulated = trade.isSimulated ?? undefined;
-    const existingHolding = await this.getPortfolioHoldingByTicker(trade.ticker, isSimulated);
+    
+    // userId is required for portfolio operations
+    if (!trade.userId) {
+      throw new Error("userId is required to create a trade");
+    }
+    
+    const existingHolding = await this.getPortfolioHoldingByTicker(trade.userId, trade.ticker, isSimulated);
 
     // Validate sell trades
     if (trade.type === "sell") {
@@ -446,6 +452,7 @@ export class DatabaseStorage implements IStorage {
       } else {
         // Create new holding
         const newHolding = await this.createPortfolioHolding({
+          userId: trade.userId,
           ticker: trade.ticker,
           quantity: trade.quantity,
           averagePurchasePrice: trade.price,

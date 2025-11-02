@@ -5,10 +5,9 @@ import { finnhubService } from "./finnhubService";
 import type { BacktestJob } from "@shared/schema";
 import OpenAI from "openai";
 
-// Initialize OpenAI with Replit AI Integrations
+// Initialize OpenAI for backtesting analysis
 const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 interface DailyPrice {

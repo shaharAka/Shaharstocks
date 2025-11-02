@@ -1,10 +1,9 @@
 import OpenAI from "openai";
 import type { MacroAnalysis, InsertMacroAnalysis } from "@shared/schema";
 
-// Using Replit AI Integrations for OpenAI access
+// Using OpenAI API for macro analysis
 const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY!;

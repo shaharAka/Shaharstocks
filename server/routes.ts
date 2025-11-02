@@ -530,7 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Simulated holding already exists for this stock" });
       }
 
-      // Create simulated trade
+      // Create simulated trade (this automatically creates the portfolio holding)
       const trade = {
         userId: req.session.userId,
         ticker: stock.ticker,
@@ -544,14 +544,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       const createdTrade = await storage.createTrade(trade);
 
-      // Create simulated portfolio holding
-      const holding = await storage.createPortfolioHolding({
-        userId: req.session.userId,
-        ticker: stock.ticker,
-        quantity,
-        averagePurchasePrice: currentPrice.toFixed(2),
-        isSimulated: true,
-      });
+      // Get the created holding
+      const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, stock.ticker, true);
 
       // Update user-specific stock status to approved (simulated)
       await storage.ensureUserStockStatus(req.session.userId, req.params.ticker);

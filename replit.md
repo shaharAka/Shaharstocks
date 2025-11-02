@@ -10,6 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Fixes
 
+**November 2, 2025 - Automatic Initial Data Fetch for New Users:**
+- **Feature**: New users now automatically receive 500 OpenInsider stock recommendations on signup
+- **Implementation**: Added `initialDataFetched` boolean field to users schema to track completion
+- **Behavior**: Background job fetches 500 insider transactions without filters using fire-and-forget pattern
+- **Impact**: New users immediately see preliminary purchase recommendations, improving onboarding experience
+- **Technical Details**: User creation endpoint responds immediately; data fetch runs asynchronously with proper error handling and duplicate prevention
+
 **November 2, 2025 - Fixed Multi-User Simulate Feature Bug:**
 - **Issue**: Simulated holdings were being created with NULL user_id, making them invisible on the Simulation page
 - **Root Cause**: The `userId` field in `portfolioHoldings` and `trades` schemas was nullable (missing `.notNull()` constraint)

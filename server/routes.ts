@@ -608,23 +608,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const purchaseQuantity = 10;
 
           await storage.updateStock(ticker, {
-            recommendationStatus: "approved",
-            approvedAt: new Date()
+            recommendationStatus: "approved"
           });
 
           // Create holding
           const existingHolding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
           if (existingHolding) {
+            const currentAvg = parseFloat(existingHolding.averagePurchasePrice);
+            const newAvg = ((currentAvg * existingHolding.quantity + purchasePrice * purchaseQuantity) / (existingHolding.quantity + purchaseQuantity)).toFixed(2);
             await storage.updatePortfolioHolding(existingHolding.id, {
               quantity: existingHolding.quantity + purchaseQuantity,
-              averagePrice: ((existingHolding.averagePrice * existingHolding.quantity + purchasePrice * purchaseQuantity) / (existingHolding.quantity + purchaseQuantity)).toFixed(2)
+              averagePurchasePrice: newAvg
             });
           } else {
             await storage.createPortfolioHolding({
               userId: req.session.userId,
               ticker,
               quantity: purchaseQuantity,
-              averagePrice: purchasePrice.toFixed(2),
+              averagePurchasePrice: purchasePrice.toFixed(2),
             });
           }
 
@@ -721,11 +722,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Fetch latest quote
           await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit: 1 req/sec
-          const quote = await fetchStockQuote(ticker);
-          if (quote) {
+          const quote = await finnhubService.getQuote(ticker);
+          if (quote && quote.currentPrice) {
             await storage.updateStock(ticker, {
-              currentPrice: quote.c.toFixed(2),
-              previousClose: quote.pc?.toFixed(2) || stock.previousClose,
+              currentPrice: quote.currentPrice.toFixed(2),
+              previousClose: quote.previousClose?.toFixed(2) || stock.previousClose,
             });
             success++;
           } else {
@@ -790,7 +791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if we have a cached analysis (less than 7 days old) unless force is true
       if (!force) {
         const existingAnalysis = await storage.getStockAnalysis(ticker);
-        if (existingAnalysis) {
+        if (existingAnalysis && existingAnalysis.analyzedAt) {
           const cacheAge = Date.now() - new Date(existingAnalysis.analyzedAt).getTime();
           const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
           
@@ -2071,7 +2072,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { scope = "all_holdings", ticker } = req.body;
 
       // Fetch all scenarios to find the one we need
-      const allJobs = await storage.getBacktestJobs();
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const allJobs = await storage.getBacktestJobs(req.session.userId);
       let scenario = null;
       
       for (const job of allJobs) {

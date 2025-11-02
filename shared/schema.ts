@@ -226,7 +226,7 @@ export type AiAnalysisJob = typeof aiAnalysisJobs.$inferSelect;
 // Portfolio holdings - tracks what user owns
 export const portfolioHoldings = pgTable("portfolio_holdings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }), // Made nullable during migration
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   ticker: text("ticker").notNull(),
   quantity: integer("quantity").notNull(),
   averagePurchasePrice: decimal("average_purchase_price", { precision: 12, scale: 2 }).notNull(),
@@ -250,7 +250,7 @@ export type PortfolioHolding = typeof portfolioHoldings.$inferSelect;
 // Trade transactions history
 export const trades = pgTable("trades", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }), // Made nullable during migration
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   ticker: text("ticker").notNull(),
   type: text("type").notNull(), // "buy" or "sell"
   quantity: integer("quantity").notNull(),

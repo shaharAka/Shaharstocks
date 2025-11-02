@@ -8,3 +8,7 @@ packages = ["arrow-cpp", "glibcLocales", "libyaml", "pkg-config"]
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 39041
+externalPort = 3000

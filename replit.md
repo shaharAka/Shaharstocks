@@ -2,11 +2,19 @@
 
 ## Overview
 
-TradePro is a professional stock trading dashboard application offering real-time portfolio tracking, automated trigger-based trading rules, and backtesting capabilities. It combines modern fintech design with Material Design for a professional, information-dense interface optimized for timely trading decisions. The system is a full-stack TypeScript application with a React frontend and Express backend, focused on instant readability, quick trade execution, and comprehensive portfolio management. Key features include real-time stock recommendations with company profiles and news sentiment analysis, automated recommendation cleanup, and integration with Telegram for insider trading alerts. Features automated AI-powered financial analysis combining SEC EDGAR narrative reports (10-K/10-Q filings with MD&A, Risk Factors, Business Overview) and Alpha Vantage comprehensive fundamentals (income statement, balance sheet, cash flow, company overview) for deep multi-signal stock analysis. Includes industry-specific macro analysis that tailors market conditions to each stock's industry (e.g., Technology stocks analyzed against XLK ETF performance, Financials against XLF).
+TradePro is a professional stock trading dashboard application offering real-time portfolio tracking, automated trigger-based trading rules, backtesting capabilities, and multi-user collaboration with session-based authentication. It combines modern fintech design with Material Design for a professional, information-dense interface optimized for timely trading decisions. The system is a full-stack TypeScript application with a React frontend and Express backend, focused on instant readability, quick trade execution, and comprehensive portfolio management. Key features include real-time stock recommendations with company profiles and news sentiment analysis, automated recommendation cleanup, and integration with Telegram for insider trading alerts. Features automated AI-powered financial analysis combining SEC EDGAR narrative reports (10-K/10-Q filings with MD&A, Risk Factors, Business Overview) and Alpha Vantage comprehensive fundamentals (income statement, balance sheet, cash flow, company overview) for deep multi-signal stock analysis. Includes industry-specific macro analysis that tailors market conditions to each stock's industry (e.g., Technology stocks analyzed against XLK ETF performance, Financials against XLF).
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Recent Fixes
+
+**November 2, 2025 - Fixed Multi-User Simulate Feature Bug:**
+- **Issue**: Simulated holdings were being created with NULL user_id, making them invisible on the Simulation page
+- **Root Cause**: The `userId` field in `portfolioHoldings` and `trades` schemas was nullable (missing `.notNull()` constraint)
+- **Solution**: Updated schema to make `userId` required with `.notNull()` constraint in both tables
+- **Impact**: All new simulated holdings now properly track which user created them, enabling correct filtering on the Simulation page
 
 ## System Architecture
 

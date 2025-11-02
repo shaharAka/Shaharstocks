@@ -3,3 +3,4 @@ modules = ["python-3.11", "nodejs-20", "postgresql-16"]
 [nix]
 channel = "stable-25_05"
 packages = ["arrow-cpp", "glibcLocales", "libyaml", "pkg-config"]
+run = "npm run dev"

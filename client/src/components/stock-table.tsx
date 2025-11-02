@@ -407,7 +407,8 @@ export function StockTable({
                       );
                     }
                     
-                    const score = analysis.financialHealthScore;
+                    // Use integrated score if available (micro × macro), otherwise use confidence score, fallback to financial health score
+                    const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
                     const rating = analysis.overallRating;
                     let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "secondary";
                     
@@ -415,9 +416,16 @@ export function StockTable({
                     else if (rating === "avoid" || rating === "sell" || rating === "strong_avoid") badgeVariant = "destructive";
                     
                     return (
-                      <Badge variant={badgeVariant} className="text-xs font-mono">
-                        {score}/100
-                      </Badge>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <Badge variant={badgeVariant} className="text-xs font-mono">
+                          {score}/100
+                        </Badge>
+                        {analysis.integratedScore && analysis.confidenceScore !== analysis.integratedScore && (
+                          <span className="text-[10px] text-muted-foreground">
+                            (micro: {analysis.confidenceScore})
+                          </span>
+                        )}
+                      </div>
                     );
                   })()}
                 </TableCell>

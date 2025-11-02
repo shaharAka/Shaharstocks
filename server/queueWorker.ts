@@ -139,11 +139,11 @@ class QueueWorker {
       })();
 
       // Get or create industry-specific macro analysis
-      // Prefer: 1) Stock record from DB, 2) Alpha Vantage industry, 3) Alpha Vantage sector, 4) null
+      // Prefer: 1) Stock record from DB, 2) Alpha Vantage industry, 3) Alpha Vantage sector, 4) undefined
       const stock = await storage.getStock(job.ticker);
-      const rawIndustry = stock?.industry || companyOverview?.industry || companyOverview?.sector || null;
-      // Coerce "N/A" sentinel value to null to avoid creating useless industry buckets
-      const stockIndustry = (rawIndustry && rawIndustry !== "N/A") ? rawIndustry : null;
+      const rawIndustry = stock?.industry || companyOverview?.industry || companyOverview?.sector || undefined;
+      // Coerce "N/A" sentinel value to undefined to avoid creating useless industry buckets
+      const stockIndustry = (rawIndustry && rawIndustry !== "N/A") ? rawIndustry : undefined;
       console.log(`[QueueWorker] Getting macro economic analysis for industry: ${stockIndustry || "General Market"}...`);
       let macroAnalysis = await storage.getLatestMacroAnalysis(stockIndustry);
       

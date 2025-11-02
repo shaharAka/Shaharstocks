@@ -392,7 +392,11 @@ Respond in JSON format:
       temperature: 0.3,
     });
 
-    const responseText = completion.choices[0].message.content || "{}";
+    let responseText = completion.choices[0].message.content || "{}";
+    
+    // Strip markdown code fences if present (e.g., ```json ... ```)
+    responseText = responseText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    
     const analysis = JSON.parse(responseText);
     
     // Validate and sanitize macro score

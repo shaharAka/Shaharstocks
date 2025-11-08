@@ -164,18 +164,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { userId } = req.body;
-      if (!userId) {
-        return res.status(400).json({ error: "userId is required" });
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
       }
-      const user = await storage.getUser(userId);
+      
+      const user = await storage.getUserByEmail(email);
       if (!user) {
-        return res.status(404).json({ error: "User not found" });
+        return res.status(401).json({ error: "Invalid email or password" });
       }
-      req.session.userId = userId;
-      res.json({ user });
+
+      // Verify password
+      const bcrypt = await import("bcryptjs");
+      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+      if (!isValidPassword) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Check subscription status
+      if (user.subscriptionStatus !== "active") {
+        return res.status(403).json({ 
+          error: "Subscription required",
+          subscriptionStatus: user.subscriptionStatus 
+        });
+      }
+
+      req.session.userId = user.id;
+      res.json({ 
+        user: {
+          ...user,
+          passwordHash: undefined, // Don't send password hash to client
+        },
+        subscriptionStatus: user.subscriptionStatus
+      });
     } catch (error) {
+      console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });
+    }
+  });
+
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { name, email, password } = req.body;
+      if (!name || !email || !password) {
+        return res.status(400).json({ error: "Name, email, and password are required" });
+      }
+
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already in use" });
+      }
+
+      // Hash password
+      const bcrypt = await import("bcryptjs");
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      const avatarColors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
+      const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
+
+      const newUser = await storage.createUser({
+        name,
+        email,
+        passwordHash,
+        avatarColor,
+        subscriptionStatus: "inactive", // Default to inactive until PayPal subscription is confirmed
+      });
+
+      res.json({ 
+        user: {
+          ...newUser,
+          passwordHash: undefined, // Don't send password hash to client
+        }
+      });
+    } catch (error) {
+      console.error("Signup error:", error);
+      res.status(500).json({ error: "Failed to create account" });
     }
   });
 

@@ -339,10 +339,15 @@ export default function Purchase() {
 
   const bulkRejectMutation = useMutation({
     mutationFn: async (tickers: string[]) => {
+      console.log("[FRONTEND] Bulk reject mutation called with tickers:", tickers);
       const response = await apiRequest("POST", "/api/stocks/bulk-reject", { tickers });
-      return await response.json();
+      console.log("[FRONTEND] Bulk reject response status:", response.status);
+      const data = await response.json();
+      console.log("[FRONTEND] Bulk reject response data:", data);
+      return data;
     },
     onSuccess: (data) => {
+      console.log("[FRONTEND] Bulk reject success, invalidating queries");
       queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
       toast({
         title: "Bulk Rejection Complete",
@@ -350,7 +355,8 @@ export default function Purchase() {
       });
       clearSelection();
     },
-    onError: () => {
+    onError: (error) => {
+      console.log("[FRONTEND] Bulk reject error:", error);
       toast({
         title: "Bulk Rejection Failed",
         description: "Unable to reject recommendations. Please try again.",

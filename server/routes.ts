@@ -259,47 +259,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users", async (req, res) => {
+  // PayPal Webhook Handler - DISABLED FOR SECURITY
+  // This endpoint is DISABLED because it lacks PayPal signature verification
+  // DO NOT ENABLE until you implement proper PayPal webhook verification
+  // See PAYPAL_INTEGRATION.md for implementation requirements
+  app.post("/api/webhooks/paypal", async (req, res) => {
+    // SECURITY: Reject all webhook calls until signature verification is implemented
+    console.error("[PayPal Webhook] Rejected - Signature verification not implemented");
+    return res.status(501).json({ 
+      error: "PayPal webhook verification not implemented. Use admin activation endpoint for testing." 
+    });
+
+    // TODO: Implement this after adding PayPal signature verification
+    // Example verification flow:
+    // 1. Get webhook signature from headers
+    // 2. Verify signature using PayPal SDK or manual verification
+    // 3. Only if valid, process the event
+    // 4. Audit log all webhook attempts
+    
+    /*
     try {
-      const users = await storage.getUsers();
-      res.json(users);
+      // Step 1: Verify PayPal signature
+      const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+      const signature = req.headers['paypal-transmission-sig'];
+      const certUrl = req.headers['paypal-cert-url'];
+      const transmissionId = req.headers['paypal-transmission-id'];
+      const transmissionTime = req.headers['paypal-transmission-time'];
+      
+      // Verify using PayPal SDK
+      const isValid = await verifyPayPalWebhook({
+        webhookId,
+        signature,
+        certUrl,
+        transmissionId,
+        transmissionTime,
+        body: req.body
+      });
+      
+      if (!isValid) {
+        console.error("[PayPal Webhook] Invalid signature");
+        return res.status(401).json({ error: "Invalid webhook signature" });
+      }
+
+      const { event_type, resource } = req.body;
+      
+      // Step 2: Process verified events
+      if (event_type === "BILLING.SUBSCRIPTION.ACTIVATED") {
+        const { custom_id } = resource;
+        const subscriptionId = resource.id;
+
+        const user = await storage.getUserByEmail(custom_id);
+        if (user) {
+          await storage.updateUser(user.id, {
+            subscriptionStatus: "active",
+            paypalSubscriptionId: subscriptionId,
+            subscriptionStartDate: new Date(),
+          });
+
+          if (!user.initialDataFetched) {
+            fetchInitialDataForUser(user.id).catch(err => {
+              console.error(`[SubscriptionActivation] Failed for user ${user.id}:`, err);
+            });
+          }
+          
+          console.log(`[PayPal Webhook] Activated subscription for ${custom_id}`);
+        }
+      }
+
+      if (event_type === "BILLING.SUBSCRIPTION.CANCELLED") {
+        const { custom_id } = resource;
+        const user = await storage.getUserByEmail(custom_id);
+        if (user) {
+          await storage.updateUser(user.id, {
+            subscriptionStatus: "cancelled",
+            subscriptionEndDate: new Date(),
+          });
+          console.log(`[PayPal Webhook] Cancelled subscription for ${custom_id}`);
+        }
+      }
+
+      res.json({ received: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch users" });
+      console.error("PayPal webhook error:", error);
+      res.status(500).json({ error: "Webhook processing failed" });
+    }
+    */
+  });
+
+  // ADMIN ONLY: Manual subscription activation for testing
+  // WARNING: This endpoint should be removed or protected with admin authentication in production
+  app.post("/api/admin/activate-subscription", async (req, res) => {
+    try {
+      // In production, add admin authentication here
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const { email, paypalSubscriptionId } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const updatedUser = await storage.updateUser(user.id, {
+        subscriptionStatus: "active",
+        paypalSubscriptionId: paypalSubscriptionId || "manual_activation",
+        subscriptionStartDate: new Date(),
+      });
+
+      // Trigger initial data fetch in background if not done yet
+      if (!user.initialDataFetched) {
+        console.log(`[SubscriptionActivation] Triggering initial data fetch for user ${user.id}...`);
+        fetchInitialDataForUser(user.id).catch(err => {
+          console.error(`[SubscriptionActivation] Background initial data fetch failed for user ${user.id}:`, err);
+        });
+      }
+
+      res.json({ 
+        success: true,
+        user: {
+          ...updatedUser,
+          passwordHash: undefined,
+        }
+      });
+    } catch (error) {
+      console.error("Subscription activation error:", error);
+      res.status(500).json({ error: "Failed to activate subscription" });
     }
   });
 
-  app.post("/api/users", async (req, res) => {
+  app.get("/api/users", async (req, res) => {
     try {
-      const { name, email } = req.body;
-      if (!name || !email) {
-        return res.status(400).json({ error: "Name and email are required" });
-      }
-
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
-        return res.status(400).json({ error: "Email already in use" });
-      }
-
-      const avatarColors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
-      const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
-
-      const newUser = await storage.createUser({
-        name,
-        email,
-        avatarColor,
-      });
-
-      req.session.userId = newUser.id;
-      
-      // Trigger initial data fetch in background (fire-and-forget)
-      console.log(`[UserCreation] Triggering initial data fetch for new user ${newUser.id}...`);
-      fetchInitialDataForUser(newUser.id).catch(err => {
-        console.error(`[UserCreation] Background initial data fetch failed for user ${newUser.id}:`, err);
-      });
-      
-      res.json({ user: newUser });
+      // Only return user info, not password hashes
+      const users = await storage.getUsers();
+      const sanitizedUsers = users.map(user => ({
+        ...user,
+        passwordHash: undefined,
+      }));
+      res.json(sanitizedUsers);
     } catch (error) {
-      res.status(500).json({ error: "Failed to create user" });
+      res.status(500).json({ error: "Failed to fetch users" });
     }
   });
 

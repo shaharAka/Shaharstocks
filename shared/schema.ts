@@ -452,7 +452,12 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(), // Hashed password for authentication
   avatarColor: text("avatar_color").notNull().default("#3b82f6"), // Hex color for avatar
+  subscriptionStatus: text("subscription_status").notNull().default("inactive"), // "active", "inactive", "cancelled"
+  paypalSubscriptionId: text("paypal_subscription_id"), // PayPal subscription ID
+  subscriptionStartDate: timestamp("subscription_start_date"),
+  subscriptionEndDate: timestamp("subscription_end_date"),
   initialDataFetched: boolean("initial_data_fetched").notNull().default(false), // Track if initial 500 OpenInsider transactions have been fetched
   createdAt: timestamp("created_at").defaultNow(),
 });

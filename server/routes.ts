@@ -997,6 +997,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-reject", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
       const validationResult = bulkTickersSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({ error: "Invalid request", details: validationResult.error.errors });
@@ -1014,8 +1018,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          await storage.updateStock(ticker, {
-            recommendationStatus: "rejected",
+          // Update user-specific stock status (not the stock itself)
+          await storage.ensureUserStockStatus(req.session.userId, ticker);
+          await storage.updateUserStockStatus(req.session.userId, ticker, {
+            status: "rejected",
             rejectedAt: new Date()
           });
 

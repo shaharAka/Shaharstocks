@@ -1344,6 +1344,18 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
 
+    // Create or update analysis record with "analyzing" status
+    // This ensures the frontend can show the analyzing state immediately
+    const existingAnalysis = await this.getStockAnalysis(ticker);
+    if (existingAnalysis) {
+      await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
+    } else {
+      await db.insert(stockAnalyses).values({
+        ticker,
+        status: "analyzing",
+      });
+    }
+
     console.log(`[Queue] Enqueued analysis job for ${ticker} (priority: ${priority}, source: ${source})`);
     return job;
   }

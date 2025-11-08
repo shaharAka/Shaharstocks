@@ -158,8 +158,9 @@ export function StockTable({
       case "aiScore":
         const analysisA = getAIAnalysis(a.ticker);
         const analysisB = getAIAnalysis(b.ticker);
-        compareA = analysisA?.financialHealthScore || 0;
-        compareB = analysisB?.financialHealthScore || 0;
+        // Treat "analyzing" status as score 0 for sorting
+        compareA = (analysisA?.status === "analyzing" || !analysisA?.financialHealthScore) ? 0 : analysisA.financialHealthScore;
+        compareB = (analysisB?.status === "analyzing" || !analysisB?.financialHealthScore) ? 0 : analysisB.financialHealthScore;
         break;
       case "daysFromBuy":
         compareA = getDaysFromBuy(a.insiderTradeDate);

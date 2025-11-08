@@ -190,6 +190,7 @@ class QueueWorker {
       // Save analysis to database with macro integration
       await storage.saveStockAnalysis({
         ticker: analysis.ticker,
+        status: "completed",
         overallRating: analysis.overallRating,
         confidenceScore: analysis.confidenceScore,
         summary: analysis.summary,

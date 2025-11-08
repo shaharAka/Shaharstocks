@@ -454,6 +454,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(), // Hashed password for authentication
   avatarColor: text("avatar_color").notNull().default("#3b82f6"), // Hex color for avatar
+  isAdmin: boolean("is_admin").notNull().default(false), // Admin users can access backoffice
   subscriptionStatus: text("subscription_status").notNull().default("inactive"), // "active", "inactive", "cancelled"
   paypalSubscriptionId: text("paypal_subscription_id"), // PayPal subscription ID
   subscriptionStartDate: timestamp("subscription_start_date"),

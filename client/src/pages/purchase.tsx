@@ -235,11 +235,10 @@ export default function Purchase() {
   });
 
   const markViewedMutation = useMutation({
-    mutationFn: async ({ ticker, userId }: { ticker: string; userId: string }) => {
+    mutationFn: async ({ ticker }: { ticker: string }) => {
       const response = await fetch(`/api/stocks/${ticker}/view`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
       });
       if (!response.ok) throw new Error("Failed to mark as viewed");
       return await response.json();
@@ -868,7 +867,7 @@ export default function Purchase() {
             setExplorerOpen(true);
             // Mark stock as viewed when clicked
             if (currentUser) {
-              markViewedMutation.mutate({ ticker: stock.ticker, userId: currentUser.id });
+              markViewedMutation.mutate({ ticker: stock.ticker });
             }
           }}
         />
@@ -900,7 +899,7 @@ export default function Purchase() {
                   setExplorerOpen(true);
                   // Mark stock as viewed when clicked
                   if (currentUser) {
-                    markViewedMutation.mutate({ ticker: stock.ticker, userId: currentUser.id });
+                    markViewedMutation.mutate({ ticker: stock.ticker });
                   }
                 }}
               >

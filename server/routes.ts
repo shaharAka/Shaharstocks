@@ -1448,11 +1448,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock views routes
   app.post("/api/stocks/:ticker/view", async (req, res) => {
     try {
-      const { userId } = req.body;
-      if (!userId) {
-        return res.status(400).json({ error: "userId is required" });
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
       }
-      const view = await storage.markStockAsViewed(req.params.ticker, userId);
+      const view = await storage.markStockAsViewed(req.params.ticker, req.session.userId);
       res.status(201).json(view);
     } catch (error) {
       console.error("Mark stock as viewed error:", error);

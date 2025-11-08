@@ -129,7 +129,7 @@ export default function Purchase() {
     userRejectedAt?: Date;
   };
 
-  const { data: stocks, isLoading } = useQuery<StockWithUserStatus[]>({
+  const { data: stocks, isLoading, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
   });
 
@@ -346,9 +346,11 @@ export default function Purchase() {
       console.log("[FRONTEND] Bulk reject response data:", data);
       return data;
     },
-    onSuccess: (data) => {
-      console.log("[FRONTEND] Bulk reject success, invalidating queries");
-      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+    onSuccess: async (data) => {
+      console.log("[FRONTEND] Bulk reject success, invalidating queries and refetching");
+      await queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      await refetchStocks();
+      console.log("[FRONTEND] Refetch complete");
       toast({
         title: "Bulk Rejection Complete",
         description: `Successfully rejected ${data.success || selectedTickers.size} recommendations`,

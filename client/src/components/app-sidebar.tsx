@@ -8,6 +8,7 @@ import {
   ShoppingCart,
   LineChart,
   Cog,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Sidebar,
@@ -21,6 +22,7 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
+import { useUser } from "@/contexts/UserContext";
 
 const menuItems = [
   {
@@ -70,6 +72,7 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const newStocksCount = useNewStocksCount();
+  const { user } = useUser();
 
   return (
     <Sidebar>
@@ -121,6 +124,28 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {user?.isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className={location === "/admin" ? "bg-sidebar-accent" : ""}
+                    data-testid="link-admin"
+                  >
+                    <Link href="/admin">
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Backoffice</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
     </Sidebar>
   );

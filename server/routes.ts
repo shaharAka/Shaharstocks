@@ -434,6 +434,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/users", async (req, res) => {
     try {
+      // Only admin users can access the full user list
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const currentUser = await storage.getUser(req.session.userId);
+      if (!currentUser?.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
       // Only return user info, not password hashes
       const users = await storage.getUsers();
       const sanitizedUsers = users.map(user => ({

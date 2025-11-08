@@ -9,9 +9,11 @@ TradePro uses PayPal subscriptions for user authentication. Users must have an a
 ### 1. PayPal Configuration
 
 1. Create a PayPal Business account
-2. Set up a subscription button at https://www.paypal.com/buttons/
+2. Set up a subscription plan at https://www.paypal.com/billing/plans
 3. Configure the subscription with your pricing
-4. Copy the button ID (e.g., `D76W3RN6DY8K4`)
+4. Get the following from PayPal Developer Dashboard:
+   - Client ID: `AbxvMnD49CFQ1OmupMzmhtkXTM9OG5NI-VJ7Sff5dRiw8qM1Sb_4Ac4gVoXLB8Z8MSgnJefZJaaOmHMc`
+   - Plan ID: `P-7MD97450VP279543SNEHWHRI`
 
 ### 2. Webhook Configuration
 
@@ -33,13 +35,20 @@ Add these to your `.env` file:
 ADMIN_SECRET=your-secure-random-string-here
 ```
 
-### 4. PayPal Button Integration
+### 4. PayPal SDK Integration
 
-The signup flow currently shows a PayPal subscription button after account creation. Update the button ID in `client/src/pages/signup.tsx`:
+The signup flow uses the PayPal JavaScript SDK to render subscription buttons. After account creation, users see a PayPal button that:
 
-```html
-<input type="hidden" name="hosted_button_id" value="YOUR_BUTTON_ID" />
-```
+1. Loads the PayPal SDK with the configured Client ID
+2. Renders a subscription button with Plan ID `P-7MD97450VP279543SNEHWHRI`
+3. Handles subscription creation and approval
+4. Redirects to login page upon successful subscription
+
+The integration is fully configured in `client/src/pages/signup.tsx` with:
+- Dynamic SDK loading
+- Pill-shaped, silver button styling
+- Success/error handling
+- Automatic redirection to login after approval
 
 ## Testing Flow
 

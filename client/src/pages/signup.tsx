@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Link, useLocation } from "wouter";
 import { TrendingUp, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -24,10 +24,17 @@ const signupSchema = z.object({
 
 type SignupForm = z.infer<typeof signupSchema>;
 
+declare global {
+  interface Window {
+    paypal?: any;
+  }
+}
+
 export default function Signup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showPayPal, setShowPayPal] = useState(false);
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
 
   const form = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
@@ -60,6 +67,59 @@ export default function Signup() {
     },
   });
 
+  useEffect(() => {
+    if (showPayPal && !paypalLoaded) {
+      const script = document.createElement('script');
+      script.src = 'https://www.paypal.com/sdk/js?client-id=AbxvMnD49CFQ1OmupMzmhtkXTM9OG5NI-VJ7Sff5dRiw8qM1Sb_4Ac4gVoXLB8Z8MSgnJefZJaaOmHMc&vault=true&intent=subscription';
+      script.setAttribute('data-sdk-integration-source', 'button-factory');
+      script.async = true;
+      script.onload = () => {
+        setPaypalLoaded(true);
+      };
+      document.body.appendChild(script);
+
+      return () => {
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      };
+    }
+  }, [showPayPal, paypalLoaded]);
+
+  useEffect(() => {
+    if (paypalLoaded && window.paypal) {
+      window.paypal.Buttons({
+        style: {
+          shape: 'pill',
+          color: 'silver',
+          layout: 'vertical',
+          label: 'subscribe'
+        },
+        createSubscription: function(data: any, actions: any) {
+          return actions.subscription.create({
+            plan_id: 'P-7MD97450VP279543SNEHWHRI'
+          });
+        },
+        onApprove: function(data: any, actions: any) {
+          toast({
+            title: "Subscription successful!",
+            description: `Subscription ID: ${data.subscriptionID}. Your account will be activated shortly.`,
+          });
+          setTimeout(() => {
+            setLocation('/login');
+          }, 2000);
+        },
+        onError: function(err: any) {
+          toast({
+            title: "Subscription failed",
+            description: "There was an error processing your subscription. Please try again.",
+            variant: "destructive",
+          });
+        }
+      }).render('#paypal-button-container-P-7MD97450VP279543SNEHWHRI');
+    }
+  }, [paypalLoaded, toast, setLocation]);
+
   const onSubmit = (data: SignupForm) => {
     signupMutation.mutate(data);
   };
@@ -86,42 +146,7 @@ export default function Signup() {
               </div>
               
               <div className="flex justify-center">
-                <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
-                  <input type="hidden" name="cmd" value="_s-xclick" />
-                  <input type="hidden" name="hosted_button_id" value="D76W3RN6DY8K4" />
-                  <table>
-                    <tbody>
-                      <tr>
-                        <td>
-                          <input type="hidden" name="on0" value="Help us improve the platform"/>
-                          <label className="text-sm font-medium mb-2 block">Help us improve the platform</label>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>
-                          <Input 
-                            type="text" 
-                            name="os0" 
-                            maxLength={200} 
-                            placeholder="Your feedback (optional)"
-                            data-testid="input-feedback"
-                          />
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <input type="hidden" name="currency_code" value="USD" />
-                  <div className="mt-4 flex justify-center">
-                    <input 
-                      type="image" 
-                      src="https://www.paypalobjects.com/en_US/i/btn/btn_subscribe_LG.gif" 
-                      name="submit" 
-                      title="PayPal - The safer, easier way to pay online!" 
-                      alt="Subscribe" 
-                      data-testid="button-paypal-subscribe"
-                    />
-                  </div>
-                </form>
+                <div id="paypal-button-container-P-7MD97450VP279543SNEHWHRI" data-testid="paypal-button-container"></div>
               </div>
 
               <div className="text-center pt-4 border-t">

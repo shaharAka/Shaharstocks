@@ -10,6 +10,22 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Fixes
 
+**November 8, 2025 - Super Admin Backoffice Feature:**
+- **Feature**: Added comprehensive admin dashboard for managing users and subscriptions
+- **Access**: Only users with `isAdmin: true` can access the `/admin` route
+- **Admin User**: Created super admin account (shaharro@gmail.com) with full admin privileges
+- **Capabilities**:
+  - View all users with subscription status, email, and admin flags
+  - Activate user subscriptions manually (requires admin secret)
+  - Promote users to admin status (requires admin secret)
+  - Stats dashboard showing total users, active subscriptions, inactive users, and admin count
+- **Security**:
+  - Frontend: Admin page redirects non-admins, query gated with `enabled: !!currentUser?.isAdmin`
+  - Backend: `/api/users` endpoint validates session and admin status before returning user data
+  - All admin actions require `x-admin-secret` header for authentication
+  - Password hashes never exposed in API responses
+- **UI**: Dedicated "Admin" section in sidebar (only visible to admin users) with "Backoffice" link
+
 **November 2, 2025 - Automatic Initial Data Fetch for New Users:**
 - **Feature**: New users now automatically receive 500 OpenInsider stock recommendations on signup
 - **Implementation**: Added `initialDataFetched` boolean field to users schema to track completion

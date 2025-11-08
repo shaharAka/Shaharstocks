@@ -57,6 +57,7 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
     
     // Convert transactions to stock recommendations
     let createdCount = 0;
+    let filteredCount = 0;
     for (const transaction of transactions) {
       try {
         // Check if stock already exists
@@ -75,6 +76,22 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
         // Fetch company profile, market cap, and news
         const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
         const data = stockData.get(transaction.ticker);
+        
+        // Apply market cap filter (must be > $500M)
+        const marketCapValue = data?.marketCap ? data.marketCap * 1_000_000 : 0;
+        if (marketCapValue < 500_000_000) {
+          filteredCount++;
+          console.log(`[InitialDataFetch] ${transaction.ticker} market cap too low: $${(marketCapValue / 1_000_000).toFixed(1)}M, skipping`);
+          continue;
+        }
+        
+        // Apply options deal filter (insider price should be >= 15% of current price)
+        const insiderPriceNum = transaction.price;
+        if (insiderPriceNum < quote.currentPrice * 0.15) {
+          filteredCount++;
+          console.log(`[InitialDataFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum} vs market: $${quote.currentPrice}), skipping`);
+          continue;
+        }
 
         // Create stock recommendation with complete information
         await storage.createStock({
@@ -109,7 +126,7 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
       }
     }
 
-    console.log(`[InitialDataFetch] Created ${createdCount} stock recommendations for user ${userId}`);
+    console.log(`[InitialDataFetch] Processed ${transactions.length} transactions for user ${userId}: created ${createdCount}, filtered ${filteredCount}`);
     
     // Mark user as having initial data fetched
     await storage.markUserInitialDataFetched(userId);

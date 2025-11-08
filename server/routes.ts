@@ -997,40 +997,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-reject", async (req, res) => {
     try {
+      console.log("[BULK REJECT] Endpoint called. Session userId:", req.session.userId);
+      console.log("[BULK REJECT] Request body:", JSON.stringify(req.body));
+      
       if (!req.session.userId) {
+        console.log("[BULK REJECT] No userId in session - returning 401");
         return res.status(401).json({ error: "Not authenticated" });
       }
 
       const validationResult = bulkTickersSchema.safeParse(req.body);
       if (!validationResult.success) {
+        console.log("[BULK REJECT] Validation failed:", validationResult.error.errors);
         return res.status(400).json({ error: "Invalid request", details: validationResult.error.errors });
       }
       const { tickers } = validationResult.data;
+      console.log("[BULK REJECT] Processing tickers:", tickers);
 
       let success = 0;
       const errors: string[] = [];
 
       for (const ticker of tickers) {
         try {
+          console.log(`[BULK REJECT] Processing ticker: ${ticker}`);
           const stock = await storage.getStock(ticker);
           if (!stock) {
+            console.log(`[BULK REJECT] Stock ${ticker} not found`);
             errors.push(`${ticker}: not found`);
             continue;
           }
 
-          // Update user-specific stock status (not the stock itself)
+          console.log(`[BULK REJECT] Ensuring user stock status for user ${req.session.userId}, ticker ${ticker}`);
           await storage.ensureUserStockStatus(req.session.userId, ticker);
-          await storage.updateUserStockStatus(req.session.userId, ticker, {
+          
+          console.log(`[BULK REJECT] Updating user stock status to rejected`);
+          const updated = await storage.updateUserStockStatus(req.session.userId, ticker, {
             status: "rejected",
             rejectedAt: new Date()
           });
+          console.log(`[BULK REJECT] Update result for ${ticker}:`, updated);
 
           success++;
         } catch (err) {
+          console.log(`[BULK REJECT] Error processing ${ticker}:`, err);
           errors.push(`${ticker}: ${err instanceof Error ? err.message : 'unknown error'}`);
         }
       }
 
+      console.log(`[BULK REJECT] Complete. Success: ${success}, Failed: ${errors.length}`);
       res.json({ 
         success, 
         failed: errors.length,
@@ -1038,7 +1051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: `Rejected ${success}/${tickers.length} recommendations`
       });
     } catch (error) {
-      console.error("Bulk reject error:", error);
+      console.error("[BULK REJECT] Fatal error:", error);
       res.status(500).json({ error: "Failed to bulk reject" });
     }
   });

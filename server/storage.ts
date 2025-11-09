@@ -1162,8 +1162,22 @@ export class DatabaseStorage implements IStorage {
     const [status] = await db
       .insert(userStockStatuses)
       .values(statusData)
-      .onConflictDoNothing()
+      .onConflictDoUpdate({
+        target: [userStockStatuses.userId, userStockStatuses.ticker],
+        set: { 
+          status: statusData.status,
+          approvedAt: statusData.approvedAt || null,
+          rejectedAt: statusData.rejectedAt || null,
+          dismissedAt: statusData.dismissedAt || null,
+          updatedAt: new Date()
+        }
+      })
       .returning();
+    
+    if (!status) {
+      throw new Error(`Failed to create/update user stock status for ${statusData.ticker}`);
+    }
+    
     return status;
   }
 

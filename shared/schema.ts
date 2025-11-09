@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -61,7 +61,9 @@ export const userStockStatuses = pgTable("user_stock_statuses", {
   dismissedAt: timestamp("dismissed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  userTickerUnique: uniqueIndex("user_ticker_unique_idx").on(table.userId, table.ticker),
+}));
 
 export const insertUserStockStatusSchema = createInsertSchema(userStockStatuses).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertUserStockStatus = z.infer<typeof insertUserStockStatusSchema>;

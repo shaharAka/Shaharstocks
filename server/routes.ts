@@ -190,12 +190,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       req.session.userId = user.id;
-      res.json({ 
-        user: {
-          ...user,
-          passwordHash: undefined, // Don't send password hash to client
-        },
-        subscriptionStatus: user.subscriptionStatus
+      
+      // Explicitly save session before sending response to ensure cookie is set
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ error: "Failed to save session" });
+        }
+        
+        res.json({ 
+          user: {
+            ...user,
+            passwordHash: undefined, // Don't send password hash to client
+          },
+          subscriptionStatus: user.subscriptionStatus
+        });
       });
     } catch (error) {
       console.error("Login error:", error);

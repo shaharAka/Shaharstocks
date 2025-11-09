@@ -779,8 +779,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Admin access required" });
       }
 
+      // Support includeArchived query parameter
+      const includeArchived = req.query.includeArchived === "true";
+
       // Only return user info, not password hashes
-      const users = await storage.getUsers();
+      const users = await storage.getUsers({ includeArchived });
       const sanitizedUsers = users.map(user => ({
         ...user,
         passwordHash: undefined,
@@ -1708,15 +1711,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.get("/api/users", async (req, res) => {
-    try {
-      const users = await storage.getUsers();
-      res.json(users);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch users" });
-    }
-  });
-
   // Stock comment routes
   app.get("/api/stocks/:ticker/comments", async (req, res) => {
     try {

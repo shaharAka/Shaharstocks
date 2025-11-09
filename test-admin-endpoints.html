@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin API Endpoint Tester</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #0f0; }
+    .test { margin: 10px 0; padding: 10px; border: 1px solid #333; }
+    .success { background: #002200; border-color: #0f0; }
+    .error { background: #220000; border-color: #f00; color: #f00; }
+    .pending { background: #222200; border-color: #ff0; color: #ff0; }
+    h1 { color: #0ff; }
+    h2 { color: #f0f; margin-top: 20px; }
+    button { 
+      background: #0f0; 
+      color: #000; 
+      border: none; 
+      padding: 10px 20px; 
+      cursor: pointer; 
+      font-weight: bold;
+      margin: 10px 5px;
+    }
+    button:hover { background: #0c0; }
+    input { 
+      background: #333; 
+      color: #0f0; 
+      border: 1px solid #0f0; 
+      padding: 5px; 
+      margin: 5px;
+      width: 300px;
+    }
+    pre { background: #000; padding: 10px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>TradePro Admin API Endpoint Tester</h1>
+  
+  <div style="background: #333; padding: 15px; margin: 20px 0;">
+    <h3 style="color: #ff0; margin-top: 0;">Configuration</h3>
+    <div>
+      <label>Admin Secret: <input type="password" id="adminSecret" placeholder="Enter ADMIN_SECRET" /></label>
+    </div>
+    <div>
+      <label>Test User Email: <input type="email" id="testEmail" value="test@example.com" /></label>
+    </div>
+    <button onclick="runAllTests()">Run All Tests</button>
+    <button onclick="clearResults()">Clear Results</button>
+  </div>
+
+  <h2>Test Results:</h2>
+  <div id="results"></div>
+
+  <script>
+    const results = document.getElementById('results');
+    let testCount = 0;
+    let passCount = 0;
+    let failCount = 0;
+
+    function clearResults() {
+      results.innerHTML = '';
+      testCount = 0;
+      passCount = 0;
+      failCount = 0;
+    }
+
+    function logTest(name, status, message, details = null) {
+      testCount++;
+      if (status === 'success') passCount++;
+      if (status === 'error') failCount++;
+      
+      const div = document.createElement('div');
+      div.className = `test ${status}`;
+      div.innerHTML = `
+        <strong>${testCount}. ${name}</strong><br/>
+        Status: ${status.toUpperCase()}<br/>
+        ${message}<br/>
+        ${details ? `<pre>${JSON.stringify(details, null, 2)}</pre>` : ''}
+      `;
+      results.appendChild(div);
+      
+      // Update summary
+      updateSummary();
+    }
+
+    function updateSummary() {
+      let summary = document.getElementById('summary');
+      if (!summary) {
+        summary = document.createElement('div');
+        summary.id = 'summary';
+        summary.style.cssText = 'background: #000; padding: 15px; margin: 20px 0; font-size: 16px;';
+        results.insertBefore(summary, results.firstChild);
+      }
+      summary.innerHTML = `
+        <strong>Tests Run: ${testCount}</strong> | 
+        <span style="color: #0f0;">Passed: ${passCount}</span> | 
+        <span style="color: #f00;">Failed: ${failCount}</span>
+      `;
+    }
+
+    async function testEndpoint(name, method, endpoint, body = null) {
+      const adminSecret = document.getElementById('adminSecret').value;
+      if (!adminSecret) {
+        logTest(name, 'error', 'Admin secret not provided', null);
+        return false;
+      }
+
+      try {
+        logTest(name, 'pending', 'Testing...', null);
+        
+        const options = {
+          method: method,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-secret': adminSecret,
+          },
+          credentials: 'include',
+        };
+
+        if (body) {
+          options.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(endpoint, options);
+        const data = await response.json();
+
+        if (response.ok) {
+          results.removeChild(results.lastChild); // Remove pending
+          logTest(name, 'success', `HTTP ${response.status}`, data);
+          return true;
+        } else {
+          results.removeChild(results.lastChild); // Remove pending
+          logTest(name, 'error', `HTTP ${response.status}: ${data.error || 'Unknown error'}`, data);
+          return false;
+        }
+      } catch (error) {
+        results.removeChild(results.lastChild); // Remove pending
+        logTest(name, 'error', `Exception: ${error.message}`, { stack: error.stack });
+        return false;
+      }
+    }
+
+    async function runAllTests() {
+      clearResults();
+      const testEmail = document.getElementById('testEmail').value;
+      
+      logTest('Setup', 'pending', 'Starting comprehensive admin endpoint tests...', null);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      results.removeChild(results.lastChild);
+
+      // Test 1: Get all users
+      await testEndpoint(
+        'Get All Users',
+        'GET',
+        '/api/users'
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test 2: Activate subscription
+      await testEndpoint(
+        'Activate Subscription',
+        'POST',
+        '/api/admin/activate-subscription',
+        { email: testEmail }
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test 3: Deactivate subscription
+      await testEndpoint(
+        'Deactivate Subscription',
+        'POST',
+        '/api/admin/deactivate-subscription',
+        { email: testEmail }
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test 4: Extend subscription
+      await testEndpoint(
+        'Extend Subscription (3 months)',
+        'POST',
+        '/api/admin/extend-subscription',
+        { 
+          email: testEmail, 
+          months: 3,
+          reason: 'Testing subscription extension'
+        }
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test 5: Archive user
+      await testEndpoint(
+        'Archive User',
+        'POST',
+        '/api/admin/archive-user',
+        { email: testEmail }
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test 6: Unarchive user
+      await testEndpoint(
+        'Unarchive User',
+        'POST',
+        '/api/admin/unarchive-user',
+        { email: testEmail }
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test 7: Reset password
+      await testEndpoint(
+        'Reset Password',
+        'POST',
+        '/api/admin/reset-password',
+        { 
+          email: testEmail,
+          newPassword: 'NewTestPassword123!'
+        }
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test 8: Create payment
+      await testEndpoint(
+        'Create Manual Payment',
+        'POST',
+        '/api/admin/create-payment',
+        { 
+          email: testEmail,
+          amount: 25.00,
+          paymentMethod: 'cash',
+          notes: 'Test payment from endpoint tester'
+        }
+      );
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Test 9: Get user payments (need to get user ID first)
+      const usersResponse = await fetch('/api/users', {
+        credentials: 'include'
+      });
+      const users = await usersResponse.json();
+      const testUser = users.find(u => u.email === testEmail);
+      
+      if (testUser) {
+        await testEndpoint(
+          'Get User Payments',
+          'GET',
+          `/api/admin/user-payments/${testUser.id}`
+        );
+      } else {
+        logTest('Get User Payments', 'error', 'Test user not found', null);
+      }
+
+      logTest('Tests Complete', 'success', `
+        Total: ${testCount} | 
+        Passed: ${passCount} | 
+        Failed: ${failCount}
+      `, null);
+    }
+
+    // Set default admin secret from env if available
+    window.addEventListener('DOMContentLoaded', () => {
+      const adminSecret = prompt('Enter your ADMIN_SECRET to test admin endpoints:');
+      if (adminSecret) {
+        document.getElementById('adminSecret').value = adminSecret;
+      }
+    });
+  </script>
+</body>
+</html>

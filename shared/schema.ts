@@ -462,15 +462,78 @@ export const users = pgTable("users", {
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
   initialDataFetched: boolean("initial_data_fetched").notNull().default(false), // Track if initial 500 OpenInsider transactions have been fetched
+  archived: boolean("archived").notNull().default(false), // Soft delete for hiding users from admin list
+  archivedAt: timestamp("archived_at"),
+  archivedBy: varchar("archived_by"), // Which admin archived this user
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ 
   id: true, 
-  createdAt: true 
+  createdAt: true,
+  archivedAt: true,
 });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Payment history - track all payments (PayPal and manual)
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  paymentDate: timestamp("payment_date").notNull(),
+  paymentMethod: text("payment_method").notNull(), // "paypal", "manual", "stripe", etc.
+  status: text("status").notNull().default("completed"), // "completed", "pending", "failed", "refunded"
+  transactionId: text("transaction_id"), // External payment processor transaction ID
+  notes: text("notes"), // Admin notes about manual payments
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: varchar("created_by"), // Which admin created manual payment (null for automated)
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Payment = typeof payments.$inferSelect;
+
+// Manual subscription overrides - when admin extends subscription manually
+export const manualOverrides = pgTable("manual_overrides", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  monthsExtended: integer("months_extended").notNull(), // How many months were added
+  reason: text("reason"), // Why this override was created
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: varchar("created_by").notNull(), // Which admin created this override
+});
+
+export const insertManualOverrideSchema = createInsertSchema(manualOverrides).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertManualOverride = z.infer<typeof insertManualOverrideSchema>;
+export type ManualOverride = typeof manualOverrides.$inferSelect;
+
+// Password reset tokens - for secure admin password reset flow
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: varchar("created_by").notNull(), // Which admin initiated the reset
+});
+
+export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({ 
+  id: true, 
+  createdAt: true,
+  used: true,
+});
+export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 
 // User tutorials - track which tutorials each user has completed
 export const userTutorials = pgTable("user_tutorials", {

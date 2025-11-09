@@ -441,6 +441,332 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ADMIN ONLY: Deactivate user subscription
+  app.post("/api/admin/deactivate-subscription", async (req, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const updatedUser = await storage.updateUserSubscriptionStatus(
+        user.id,
+        "inactive",
+        new Date()
+      );
+
+      res.json({
+        success: true,
+        message: "Subscription deactivated",
+        user: {
+          ...updatedUser,
+          passwordHash: undefined,
+        }
+      });
+    } catch (error) {
+      console.error("Deactivate subscription error:", error);
+      res.status(500).json({ error: "Failed to deactivate subscription" });
+    }
+  });
+
+  // ADMIN ONLY: Reset user password (generate secure token)
+  app.post("/api/admin/reset-password", async (req, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { email, newPassword } = req.body;
+      if (!email || !newPassword) {
+        return res.status(400).json({ error: "Email and new password are required" });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const bcrypt = await import("bcryptjs");
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      const updatedUser = await storage.updateUser(user.id, {
+        passwordHash,
+      });
+
+      res.json({
+        success: true,
+        message: "Password reset successfully",
+      });
+    } catch (error) {
+      console.error("Password reset error:", error);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
+  // ADMIN ONLY: Archive user (soft delete)
+  app.post("/api/admin/archive-user", async (req, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const archivedUser = await storage.archiveUser(user.id, req.session.userId);
+
+      res.json({
+        success: true,
+        message: "User archived",
+        user: {
+          ...archivedUser,
+          passwordHash: undefined,
+        }
+      });
+    } catch (error) {
+      console.error("Archive user error:", error);
+      res.status(500).json({ error: "Failed to archive user" });
+    }
+  });
+
+  // ADMIN ONLY: Unarchive user
+  app.post("/api/admin/unarchive-user", async (req, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const unarchivedUser = await storage.unarchiveUser(user.id);
+
+      res.json({
+        success: true,
+        message: "User unarchived",
+        user: {
+          ...unarchivedUser,
+          passwordHash: undefined,
+        }
+      });
+    } catch (error) {
+      console.error("Unarchive user error:", error);
+      res.status(500).json({ error: "Failed to unarchive user" });
+    }
+  });
+
+  // ADMIN ONLY: Hard delete user
+  app.delete("/api/admin/delete-user", async (req, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const deleted = await storage.deleteUser(user.id);
+
+      res.json({
+        success: deleted,
+        message: deleted ? "User permanently deleted" : "Failed to delete user",
+      });
+    } catch (error) {
+      console.error("Delete user error:", error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  // ADMIN ONLY: Manually extend subscription for N months
+  app.post("/api/admin/extend-subscription", async (req, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { email, months, reason } = req.body;
+      if (!email || !months) {
+        return res.status(400).json({ error: "Email and months are required" });
+      }
+
+      if (typeof months !== "number" || months <= 0 || months > 120) {
+        return res.status(400).json({ error: "Months must be between 1 and 120" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const startDate = new Date();
+      const endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + months);
+
+      const override = await storage.createManualOverride({
+        userId: user.id,
+        startDate,
+        endDate,
+        monthsExtended: months,
+        reason: reason || `Admin extended subscription by ${months} month(s)`,
+        createdBy: req.session.userId,
+      });
+
+      const updatedUser = await storage.updateUserSubscriptionStatus(
+        user.id,
+        "active",
+        endDate
+      );
+
+      res.json({
+        success: true,
+        message: `Subscription extended by ${months} month(s)`,
+        override,
+        user: {
+          ...updatedUser,
+          passwordHash: undefined,
+        }
+      });
+    } catch (error) {
+      console.error("Extend subscription error:", error);
+      res.status(500).json({ error: "Failed to extend subscription" });
+    }
+  });
+
+  // ADMIN ONLY: Get user payment history and stats
+  app.get("/api/admin/user-payments/:userId", async (req, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const { userId } = req.params;
+      if (!userId) {
+        return res.status(400).json({ error: "User ID is required" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const [payments, stats, overrides] = await Promise.all([
+        storage.getUserPayments(userId),
+        storage.getPaymentStats(userId),
+        storage.getUserManualOverrides(userId),
+      ]);
+
+      res.json({
+        user: {
+          ...user,
+          passwordHash: undefined,
+        },
+        payments,
+        stats,
+        overrides,
+      });
+    } catch (error) {
+      console.error("Get user payments error:", error);
+      res.status(500).json({ error: "Failed to get user payments" });
+    }
+  });
+
+  // ADMIN ONLY: Create manual payment record
+  app.post("/api/admin/create-payment", async (req, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { email, amount, paymentMethod, notes } = req.body;
+      if (!email || !amount) {
+        return res.status(400).json({ error: "Email and amount are required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const payment = await storage.createPayment({
+        userId: user.id,
+        amount: amount.toString(),
+        paymentDate: new Date(),
+        paymentMethod: paymentMethod || "manual",
+        status: "completed",
+        transactionId: `manual_${Date.now()}`,
+        notes: notes || "Manual payment entry by admin",
+        createdBy: req.session.userId,
+      });
+
+      res.json({
+        success: true,
+        message: "Payment record created",
+        payment,
+      });
+    } catch (error) {
+      console.error("Create payment error:", error);
+      res.status(500).json({ error: "Failed to create payment" });
+    }
+  });
+
   app.get("/api/users", async (req, res) => {
     try {
       // Only admin users can access the full user list

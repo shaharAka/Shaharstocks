@@ -51,6 +51,12 @@ import {
   type InsertUserStockStatus,
   type UserTutorial,
   type InsertUserTutorial,
+  type Payment,
+  type InsertPayment,
+  type ManualOverride,
+  type InsertManualOverride,
+  type PasswordResetToken,
+  type InsertPasswordResetToken,
   stocks,
   portfolioHoldings,
   trades,
@@ -75,6 +81,9 @@ import {
   aiAnalysisJobs,
   userStockStatuses,
   userTutorials,
+  payments,
+  manualOverrides,
+  passwordResetTokens,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and } from "drizzle-orm";
@@ -160,12 +169,36 @@ export interface IStorage {
   createBacktestScenario(scenario: InsertBacktestScenario): Promise<BacktestScenario>;
 
   // Users
-  getUsers(): Promise<User[]>;
+  getUsers(options?: { includeArchived?: boolean }): Promise<User[]>;
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
+  archiveUser(userId: string, archivedBy: string): Promise<User | undefined>;
+  unarchiveUser(userId: string): Promise<User | undefined>;
+  updateUserSubscriptionStatus(userId: string, status: string, endDate?: Date): Promise<User | undefined>;
+
+  // Payments
+  getUserPayments(userId: string): Promise<Payment[]>;
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  getPaymentStats(userId: string): Promise<{
+    totalPaid: string;
+    lastPaymentDate: Date | null;
+    lastPaymentAmount: string | null;
+    paymentCount: number;
+  }>;
+
+  // Manual Overrides
+  createManualOverride(override: InsertManualOverride): Promise<ManualOverride>;
+  getUserManualOverrides(userId: string): Promise<ManualOverride[]>;
+  getActiveManualOverride(userId: string): Promise<ManualOverride | undefined>;
+
+  // Password Reset
+  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(tokenId: string): Promise<boolean>;
+  purgeExpiredPasswordResetTokens(): Promise<number>;
 
   // Stock Comments
   getStockComments(ticker: string): Promise<StockCommentWithUser[]>;
@@ -1001,8 +1034,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Users
-  async getUsers(): Promise<User[]> {
-    return await db.select().from(users);
+  async getUsers(options?: { includeArchived?: boolean }): Promise<User[]> {
+    if (options?.includeArchived) {
+      return await db.select().from(users);
+    }
+    return await db.select().from(users).where(eq(users.archived, false));
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -1039,6 +1075,152 @@ export class DatabaseStorage implements IStorage {
   async deleteUser(id: string): Promise<boolean> {
     const result = await db.delete(users).where(eq(users.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async archiveUser(userId: string, archivedBy: string): Promise<User | undefined> {
+    const [archivedUser] = await db
+      .update(users)
+      .set({
+        archived: true,
+        archivedAt: new Date(),
+        archivedBy,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return archivedUser;
+  }
+
+  async unarchiveUser(userId: string): Promise<User | undefined> {
+    const [unarchivedUser] = await db
+      .update(users)
+      .set({
+        archived: false,
+        archivedAt: null,
+        archivedBy: null,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return unarchivedUser;
+  }
+
+  async updateUserSubscriptionStatus(userId: string, status: string, endDate?: Date): Promise<User | undefined> {
+    const updates: Partial<User> = { subscriptionStatus: status };
+    if (endDate) {
+      updates.subscriptionEndDate = endDate;
+    }
+    const [updatedUser] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  // Payments
+  async getUserPayments(userId: string): Promise<Payment[]> {
+    return await db
+      .select()
+      .from(payments)
+      .where(eq(payments.userId, userId))
+      .orderBy(desc(payments.paymentDate));
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const [newPayment] = await db.insert(payments).values(payment).returning();
+    return newPayment;
+  }
+
+  async getPaymentStats(userId: string): Promise<{
+    totalPaid: string;
+    lastPaymentDate: Date | null;
+    lastPaymentAmount: string | null;
+    paymentCount: number;
+  }> {
+    const [stats] = await db
+      .select({
+        totalPaid: sql<string>`COALESCE(SUM(${payments.amount}), 0)::text`,
+        lastPaymentDate: sql<Date | null>`MAX(${payments.paymentDate})`,
+        lastPaymentAmount: sql<string | null>`(
+          SELECT ${payments.amount}::text 
+          FROM ${payments} 
+          WHERE ${payments.userId} = ${userId} 
+          ORDER BY ${payments.paymentDate} DESC 
+          LIMIT 1
+        )`,
+        paymentCount: sql<number>`COUNT(*)::int`,
+      })
+      .from(payments)
+      .where(eq(payments.userId, userId));
+
+    return stats || {
+      totalPaid: "0",
+      lastPaymentDate: null,
+      lastPaymentAmount: null,
+      paymentCount: 0,
+    };
+  }
+
+  // Manual Overrides
+  async createManualOverride(override: InsertManualOverride): Promise<ManualOverride> {
+    const [newOverride] = await db.insert(manualOverrides).values(override).returning();
+    return newOverride;
+  }
+
+  async getUserManualOverrides(userId: string): Promise<ManualOverride[]> {
+    return await db
+      .select()
+      .from(manualOverrides)
+      .where(eq(manualOverrides.userId, userId))
+      .orderBy(desc(manualOverrides.createdAt));
+  }
+
+  async getActiveManualOverride(userId: string): Promise<ManualOverride | undefined> {
+    const now = new Date();
+    const [override] = await db
+      .select()
+      .from(manualOverrides)
+      .where(
+        and(
+          eq(manualOverrides.userId, userId),
+          sql`${manualOverrides.startDate} <= ${now}`,
+          sql`${manualOverrides.endDate} > ${now}`
+        )
+      )
+      .orderBy(desc(manualOverrides.endDate))
+      .limit(1);
+    return override;
+  }
+
+  // Password Reset
+  async createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken> {
+    const [newToken] = await db.insert(passwordResetTokens).values(token).returning();
+    return newToken;
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    const [resetToken] = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, token));
+    return resetToken;
+  }
+
+  async markPasswordResetTokenUsed(tokenId: string): Promise<boolean> {
+    const result = await db
+      .update(passwordResetTokens)
+      .set({ used: true })
+      .where(eq(passwordResetTokens.id, tokenId));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async purgeExpiredPasswordResetTokens(): Promise<number> {
+    const now = new Date();
+    const result = await db
+      .delete(passwordResetTokens)
+      .where(
+        sql`${passwordResetTokens.expiresAt} < ${now} OR ${passwordResetTokens.used} = true`
+      );
+    return result.rowCount || 0;
   }
 
   // Stock Comments

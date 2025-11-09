@@ -124,8 +124,24 @@ export default function AdminPage() {
   };
 
   const { data: users, isLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/users", showArchived],
     enabled: !!currentUser?.isAdmin,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (showArchived) {
+        params.append("includeArchived", "true");
+      }
+      const url = `/api/users${params.toString() ? `?${params.toString()}` : ""}`;
+      const res = await fetch(url, {
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        throw new Error("Failed to fetch users");
+      }
+      
+      return res.json();
+    },
   });
 
   const { data: paymentsData } = useQuery<{

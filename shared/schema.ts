@@ -462,6 +462,7 @@ export const users = pgTable("users", {
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
   initialDataFetched: boolean("initial_data_fetched").notNull().default(false), // Track if initial 500 OpenInsider transactions have been fetched
+  hasSeenOnboarding: boolean("has_seen_onboarding").notNull().default(false), // Track if user has completed the onboarding flow
   archived: boolean("archived").notNull().default(false), // Soft delete for hiding users from admin list
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by"), // Which admin archived this user

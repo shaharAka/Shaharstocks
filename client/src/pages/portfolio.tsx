@@ -23,15 +23,15 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 export default function Portfolio() {
   const [activeTab, setActiveTab] = useState("overview");
   const { user } = useUser();
-  const [showOnboarding, setShowOnboarding] = useState(!user?.initialDataFetched);
+  const [showOnboarding, setShowOnboarding] = useState(!user?.hasSeenOnboarding);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   
-  // Ensure onboarding dialog closes permanently once user has fetched initial data
+  // Ensure onboarding dialog closes permanently once user has seen it
   useEffect(() => {
-    if (user?.initialDataFetched) {
+    if (user?.hasSeenOnboarding) {
       setShowOnboarding(false);
     }
-  }, [user?.initialDataFetched]);
+  }, [user?.hasSeenOnboarding]);
   
   const { data: holdings, isLoading: holdingsLoading } = usePortfolioHoldings();
   const { data: stocks, isLoading: stocksLoading } = useStocks();
@@ -95,12 +95,12 @@ export default function Portfolio() {
   return (
     <>
       <Onboarding 
-        open={showOnboarding && !user?.initialDataFetched} 
+        open={showOnboarding && !user?.hasSeenOnboarding} 
         onOpenChange={setShowOnboarding}
         onComplete={() => setOnboardingComplete(true)}
       />
-      {/* Only show tutorial after onboarding is complete or if user has already fetched data */}
-      {(onboardingComplete || user?.initialDataFetched) && (
+      {/* Only show tutorial after onboarding is complete or if user has already seen it */}
+      {(onboardingComplete || user?.hasSeenOnboarding) && (
         <Tutorial tutorialId="portfolio" />
       )}
       <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-2xl mx-auto">

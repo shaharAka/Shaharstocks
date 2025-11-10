@@ -272,6 +272,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/auth/mark-onboarding-complete", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      await storage.markUserHasSeenOnboarding(req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark onboarding complete error:", error);
+      res.status(500).json({ error: "Failed to mark onboarding as complete" });
+    }
+  });
+
   // PayPal Webhook Handler - DISABLED FOR SECURITY
   // This endpoint is DISABLED because it lacks PayPal signature verification
   // DO NOT ENABLE until you implement proper PayPal webhook verification

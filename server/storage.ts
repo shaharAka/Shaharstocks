@@ -184,6 +184,7 @@ export interface IStorage {
   archiveUser(userId: string, archivedBy: string): Promise<User | undefined>;
   unarchiveUser(userId: string): Promise<User | undefined>;
   updateUserSubscriptionStatus(userId: string, status: string, endDate?: Date): Promise<User | undefined>;
+  markUserHasSeenOnboarding(userId: string): Promise<void>;
 
   // Payments
   getUserPayments(userId: string): Promise<Payment[]>;
@@ -1109,6 +1110,13 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(users)
       .set({ initialDataFetched: true })
+      .where(eq(users.id, userId));
+  }
+
+  async markUserHasSeenOnboarding(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ hasSeenOnboarding: true })
       .where(eq(users.id, userId));
   }
 

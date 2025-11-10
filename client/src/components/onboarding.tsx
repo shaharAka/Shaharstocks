@@ -70,13 +70,24 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
     fetchOpeninsiderMutation.mutate();
   };
 
+  const markOnboardingCompleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/auth/mark-onboarding-complete", {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
+    },
+  });
+
   const handleViewRecommendations = () => {
+    markOnboardingCompleteMutation.mutate();
     onOpenChange(false);
     setLocation("/recommendations");
     onComplete();
   };
 
   const handleSkip = () => {
+    markOnboardingCompleteMutation.mutate();
     onOpenChange(false);
     onComplete();
   };
@@ -86,7 +97,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl" data-testid="dialog-onboarding">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-onboarding">
         <DialogHeader>
           <div className="flex items-center justify-between mb-2">
             <DialogTitle className="text-2xl">Welcome to TradePro!</DialogTitle>
@@ -105,7 +116,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                 Follow company insiders who are buying or selling their own stock.
               </DialogDescription>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
                 <Card data-testid="card-feature-insider">
                   <CardHeader className="pb-3">
                     <Database className="h-8 w-8 mb-2 text-primary" />
@@ -232,39 +243,35 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
           )}
         </div>
 
-        <DialogFooter className="flex items-center justify-between">
-          <div>
-            {step === 1 && (
+        <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          {step === 1 && (
+            <>
               <Button
                 variant="ghost"
-                size="lg"
                 onClick={handleSkip}
+                className="w-full sm:w-auto"
                 data-testid="button-skip-onboarding"
               >
                 Skip for now
               </Button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            {step === 1 && (
               <Button
-                size="lg"
                 onClick={handleStartFetching}
+                className="w-full sm:w-auto"
                 data-testid="button-fetch-openinsider"
               >
                 Start Fetching Data
               </Button>
-            )}
-            {step === 3 && (
-              <Button
-                size="lg"
-                onClick={handleViewRecommendations}
-                data-testid="button-view-recommendations"
-              >
-                View Recommendations
-              </Button>
-            )}
-          </div>
+            </>
+          )}
+          {step === 3 && (
+            <Button
+              onClick={handleViewRecommendations}
+              className="w-full sm:w-auto ml-auto"
+              data-testid="button-view-recommendations"
+            >
+              View Recommendations
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Link, useLocation } from "wouter";
-import { TrendingUp, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { TrendingUp, ArrowLeft, CheckCircle2, ShieldAlert, Zap, TrendingUpIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 
@@ -17,6 +18,9 @@ const signupSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string(),
+  acceptTerms: z.boolean().refine((val) => val === true, {
+    message: "You must accept the terms and conditions",
+  }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -43,6 +47,7 @@ export default function Signup() {
       email: "",
       password: "",
       confirmPassword: "",
+      acceptTerms: false,
     },
   });
 
@@ -127,7 +132,7 @@ export default function Signup() {
   if (showPayPal) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-4xl">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
               <CheckCircle2 className="h-8 w-8 text-green-500" />
@@ -137,27 +142,63 @@ export default function Signup() {
               Subscribe to activate your account
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-4">
-                  Your account has been created successfully. To access TradePro, please complete your subscription.
-                </p>
-              </div>
-              
-              <div className="flex justify-center">
-                <div id="paypal-button-container-P-7MD97450VP279543SNEHWHRI" data-testid="paypal-button-container"></div>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-muted/50 rounded-lg p-6 space-y-4">
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <TrendingUpIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-semibold mb-1">Professional Stock Analysis</h3>
+                      <p className="text-sm text-muted-foreground">
+                        TradePro provides real-time portfolio tracking, dual-agent AI analysis powered by SEC filings and sector ETF data, and automated trading rules.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-semibold mb-1">Premium Managed Services</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Get access to insider trading alerts via Telegram, comprehensive backtesting simulations, and multi-user collaboration features.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-semibold mb-1">About Subscription Charges</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Subscription fees cover connections to managed premium data services (Alpha Vantage, Finnhub, OpenAI), secure deployment infrastructure, and ongoing platform maintenance.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="text-center pt-4 border-t">
-                <p className="text-xs text-muted-foreground mb-2">
-                  After completing your subscription, you can log in to access your account.
-                </p>
-                <Button variant="outline" asChild data-testid="button-go-to-login">
-                  <Link href="/login">
-                    Go to Login
-                  </Link>
-                </Button>
+              <div className="bg-muted/50 rounded-lg p-6 space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Complete your subscription to unlock all features
+                  </p>
+                </div>
+                
+                <div className="flex justify-center">
+                  <div id="paypal-button-container-P-7MD97450VP279543SNEHWHRI" data-testid="paypal-button-container"></div>
+                </div>
+
+                <div className="text-center pt-4 border-t">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    After completing your subscription, you can log in to access your account.
+                  </p>
+                  <Button variant="outline" asChild data-testid="button-go-to-login">
+                    <Link href="/login">
+                      Go to Login
+                    </Link>
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -230,6 +271,30 @@ export default function Signup() {
                       <Input type="password" placeholder="••••••••" {...field} data-testid="input-confirm-password" />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="acceptTerms"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-accept-terms"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-normal">
+                        I accept the{" "}
+                        <Link href="/terms" className="text-primary hover:underline" data-testid="link-terms">
+                          Terms and Conditions
+                        </Link>
+                      </FormLabel>
+                      <FormMessage />
+                    </div>
                   </FormItem>
                 )}
               />

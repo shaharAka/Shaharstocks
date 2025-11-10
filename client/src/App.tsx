@@ -21,6 +21,7 @@ import Settings from "@/pages/settings";
 import AdminPage from "@/pages/admin";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
+import Terms from "@/pages/terms";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
 
@@ -29,6 +30,7 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/terms" component={Terms} />
       <Route path="/" component={Dashboard} />
       <Route path="/purchase" component={Purchase} />
       <Route path="/management" component={Management} />
@@ -47,7 +49,7 @@ function AuthenticatedApp() {
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !user && location !== "/login" && location !== "/signup") {
+    if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/terms") {
       setLocation("/login");
     }
   }, [user, isLoading, location, setLocation]);
@@ -60,11 +62,11 @@ function AuthenticatedApp() {
     );
   }
 
-  if (!user && location !== "/login" && location !== "/signup") {
+  if (!user && location !== "/login" && location !== "/signup" && location !== "/terms") {
     return null;
   }
 
-  if (location === "/login" || location === "/signup") {
+  if (location === "/login" || location === "/signup" || location === "/terms") {
     return <Router />;
   }
 

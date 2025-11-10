@@ -5,25 +5,30 @@ import Rules from "./rules";
 import Simulation from "./simulation";
 
 export default function Trading() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   
-  // Read tab from URL query parameter
+  // Read tab from URL query parameter and sync with location changes
   const searchParams = new URLSearchParams(window.location.search);
   const tabFromUrl = searchParams.get('tab') || 'rules';
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   
-  // Sync tab state with URL parameter when URL changes
+  // Sync tab state when URL changes (either from wouter or browser navigation)
   useEffect(() => {
-    const handleUrlChange = () => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab') || 'rules';
+    setActiveTab(tab);
+  }, [location]); // Watch wouter location changes
+  
+  // Also listen to popstate for browser back/forward
+  useEffect(() => {
+    const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get('tab') || 'rules';
       setActiveTab(tab);
     };
     
-    window.addEventListener('popstate', handleUrlChange);
-    handleUrlChange(); // Initialize on mount
-    
-    return () => window.removeEventListener('popstate', handleUrlChange);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
   
   // Update URL when tab changes via UI

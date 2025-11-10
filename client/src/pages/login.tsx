@@ -36,7 +36,7 @@ export default function Login() {
       const response = await apiRequest("POST", "/api/auth/login", data);
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.subscriptionStatus === "inactive") {
         toast({
           title: "Subscription Required",
@@ -46,7 +46,8 @@ export default function Login() {
         return;
       }
       
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/current-user"] });
       toast({
         title: "Welcome back!",
         description: "You have successfully logged in.",

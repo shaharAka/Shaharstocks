@@ -95,6 +95,16 @@ app.use((req, res, next) => {
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
+    // Add middleware to bypass Vite for API routes
+    app.use('/api/*', (req, res, next) => {
+      // If we get here, it means no API route matched - return 404
+      if (!res.headersSent) {
+        res.status(404).json({ error: "API endpoint not found" });
+      } else {
+        next();
+      }
+    });
+    
     await setupVite(app, server);
   } else {
     serveStatic(app);

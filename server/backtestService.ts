@@ -337,7 +337,7 @@ class BacktestService {
    * Same criteria as Purchase page: market cap > $500M, insider price >= 15% of current price
    */
   private async filterPurchaseCandidates(messages: any[]): Promise<any[]> {
-    const candidates: any[] = [];
+    const candidatesMap = new Map<string, any>();
 
     for (const msg of messages) {
       // Skip if message is missing
@@ -357,6 +357,9 @@ class BacktestService {
       // Use Telegram message post date as purchase date (when user could act on it)
       const telegramMessageDate = new Date(msg.date * 1000).toISOString().split('T')[0];
       const insiderTradeDate = this.extractInsiderTradeDate(msg.text); // For reference only
+
+      // Create composite key: ticker + insider trade date to preserve multiple recommendations for same stock
+      const compositeKey = `${ticker}_${insiderTradeDate || telegramMessageDate}`;
 
       // Try to get stock from database first
       let stock = await storage.getStock(ticker);
@@ -386,16 +389,20 @@ class BacktestService {
             continue;
           }
 
-          candidates.push({
+          const candidate = {
             ticker,
             insiderPrice,
             insiderTradeDate,
             telegramMessageDate, // This is the actual purchase date
             marketPriceAtInsiderDate: quote.currentPrice.toString(),
             marketCap: `$${(marketCapValue / 1_000_000).toFixed(1)}M`,
-          });
-          
-          console.log(`[BacktestFilter] ${ticker} is valid candidate (market cap: $${(marketCapValue / 1_000_000).toFixed(1)}M, price: $${quote.currentPrice})`);
+          };
+
+          // Use composite key to prevent duplicates while preserving multiple buy recommendations for same ticker on different dates
+          if (!candidatesMap.has(compositeKey)) {
+            candidatesMap.set(compositeKey, candidate);
+            console.log(`[BacktestFilter] ${ticker} is valid candidate (market cap: $${(marketCapValue / 1_000_000).toFixed(1)}M, price: $${quote.currentPrice})`);
+          }
         } catch (error: any) {
           console.log(`[BacktestFilter] Failed to fetch ${ticker} info: ${error.message}, skipping`);
           continue;
@@ -419,20 +426,25 @@ class BacktestService {
           continue;
         }
 
-        candidates.push({
+        const candidate = {
           ticker,
           insiderPrice,
           insiderTradeDate,
           telegramMessageDate, // This is the actual purchase date
           marketPriceAtInsiderDate: stock.currentPrice,
           marketCap: stock.marketCap,
-        });
-        
-        console.log(`[BacktestFilter] ${ticker} is valid candidate (existing in DB)`);
+        };
+
+        // Use composite key to prevent duplicates while preserving multiple buy recommendations for same ticker on different dates
+        if (!candidatesMap.has(compositeKey)) {
+          candidatesMap.set(compositeKey, candidate);
+          console.log(`[BacktestFilter] ${ticker} is valid candidate (existing in DB)`);
+        }
       }
     }
 
-    return candidates;
+    // Convert map to array
+    return Array.from(candidatesMap.values());
   }
 
   private extractTicker(message: string): string | null {

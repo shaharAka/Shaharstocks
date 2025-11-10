@@ -134,10 +134,10 @@ export default function Community() {
         description: "Suggestion status updated",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to update status",
+        description: error.message || "Failed to update status",
         variant: "destructive",
       });
     },
@@ -154,10 +154,10 @@ export default function Community() {
         description: "Suggestion deleted",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to delete suggestion",
+        description: error.message || "Failed to delete suggestion",
         variant: "destructive",
       });
     },

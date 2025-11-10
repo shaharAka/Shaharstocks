@@ -2962,12 +2962,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/feature-suggestions/:id/status", async (req, res) => {
     try {
+      console.log("[PATCH /status] Session:", req.session);
+      console.log("[PATCH /status] Session userId:", req.session.userId);
+      
       // Check if user is logged in and is an admin
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
       const user = await storage.getUser(req.session.userId);
+      console.log("[PATCH /status] User found:", user?.email, "isAdmin:", user?.isAdmin);
+      
       if (!user || !user.isAdmin) {
         return res.status(403).json({ error: "Unauthorized - Admin access required" });
       }

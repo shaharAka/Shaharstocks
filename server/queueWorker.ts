@@ -31,9 +31,17 @@ class QueueWorker {
 
     this.running = true;
     console.log("[QueueWorker] Starting AI analysis queue worker...");
+    console.log("[QueueWorker] Initializing process loop...");
     
-    // Start the processing loop
-    this.processLoop();
+    // Start the processing loop in the background with error handling
+    // DO NOT await - it's an infinite loop!
+    this.processLoop().catch(error => {
+      console.error("[QueueWorker] FATAL: Process loop crashed:", error);
+      console.error("[QueueWorker] Stack trace:", error instanceof Error ? error.stack : "N/A");
+      this.running = false;
+    });
+    
+    console.log("[QueueWorker] Background process loop initiated");
   }
 
   async stop() {
@@ -42,38 +50,45 @@ class QueueWorker {
   }
 
   private async processLoop() {
-    console.log("[QueueWorker] Process loop started");
+    console.log("[QueueWorker] ✅ Process loop started, running =", this.running);
+    
+    let iterationCount = 0;
     while (this.running) {
+      iterationCount++;
+      console.log(`[QueueWorker] 🔄 Loop iteration ${iterationCount}, processingCount = ${this.processingCount}`);
+      
       try {
         // Check if we can process more jobs
         if (this.processingCount < this.maxConcurrent) {
-          console.log("[QueueWorker] Polling for jobs...");
+          console.log("[QueueWorker] 📥 Polling for jobs...");
           const job = await storage.dequeueNextJob();
           
           if (job) {
-            console.log(`[QueueWorker] Dequeued job ${job.id} for ${job.ticker}`);
+            console.log(`[QueueWorker] ✅ Dequeued job ${job.id} for ${job.ticker}`);
             // Process job without waiting (allows concurrent processing)
             this.processJob(job).catch(error => {
-              console.error(`[QueueWorker] Unhandled error processing job ${job.id}:`, error);
+              console.error(`[QueueWorker] ❌ Unhandled error processing job ${job.id}:`, error);
             });
             
             // If we got a job, check for more immediately
             await this.sleep(100);
           } else {
-            console.log(`[QueueWorker] No pending jobs, sleeping for ${this.idleInterval}ms`);
+            console.log(`[QueueWorker] 💤 No pending jobs, sleeping for ${this.idleInterval}ms`);
             // Queue is empty, wait longer before checking again
             await this.sleep(this.idleInterval);
           }
         } else {
+          console.log(`[QueueWorker] ⏸️  Max concurrent jobs (${this.maxConcurrent}) reached, waiting...`);
           // Max concurrent jobs reached, wait a bit
           await this.sleep(this.pollInterval);
         }
       } catch (error) {
-        console.error("[QueueWorker] Error in process loop:", error);
+        console.error("[QueueWorker] ❌ Error in process loop:", error);
+        console.error("[QueueWorker] Stack trace:", error instanceof Error ? error.stack : "N/A");
         await this.sleep(this.pollInterval);
       }
     }
-    console.log("[QueueWorker] Process loop ended");
+    console.log("[QueueWorker] 🛑 Process loop ended");
   }
 
   private async processJob(job: AiAnalysisJob): Promise<void> {
@@ -100,24 +115,31 @@ class QueueWorker {
         stockService.getNewsSentiment(job.ticker),
       ]);
 
+      console.log(`[QueueWorker] 📊 Analyzing price-news correlation for ${job.ticker}...`);
       const priceNewsCorrelation = stockService.analyzePriceNewsCorrelation(dailyPrices, newsSentiment);
+      console.log(`[QueueWorker] ✅ Price-news correlation complete`);
 
       // Fetch SEC filings and comprehensive fundamentals (optional, non-blocking)
       let secFilingData = null;
       let comprehensiveFundamentals = null;
       
+      console.log(`[QueueWorker] 📁 Fetching SEC filings for ${job.ticker}...`);
       try {
         secFilingData = await secEdgarService.getCompanyFilingData(job.ticker);
+        console.log(`[QueueWorker] ✅ SEC filings fetched successfully`);
       } catch (error) {
-        console.warn(`[QueueWorker] Could not fetch SEC filings for ${job.ticker}:`, error instanceof Error ? error.message : error);
+        console.warn(`[QueueWorker] ⚠️  Could not fetch SEC filings for ${job.ticker}:`, error instanceof Error ? error.message : error);
       }
       
+      console.log(`[QueueWorker] 📊 Fetching comprehensive fundamentals for ${job.ticker}...`);
       try {
         comprehensiveFundamentals = await stockService.getComprehensiveFundamentals(job.ticker);
+        console.log(`[QueueWorker] ✅ Fundamentals fetched successfully`);
       } catch (error) {
-        console.warn(`[QueueWorker] Could not fetch fundamentals for ${job.ticker}:`, error instanceof Error ? error.message : error);
+        console.warn(`[QueueWorker] ⚠️  Could not fetch fundamentals for ${job.ticker}:`, error instanceof Error ? error.message : error);
       }
 
+      console.log(`[QueueWorker] 🔧 Preparing SEC filings data...`);
       const secFilings = secFilingData ? {
         formType: secFilingData.formType,
         filingDate: secFilingData.filingDate,
@@ -125,11 +147,14 @@ class QueueWorker {
         riskFactors: secFilingData.riskFactors,
         businessOverview: secFilingData.businessOverview,
       } : undefined;
+      console.log(`[QueueWorker] ✅ SEC data prepared`);
 
       // Check for insider trading data
+      console.log(`[QueueWorker] 🔍 Checking for insider trading data for ${job.ticker}...`);
       const insiderTradingStrength = await (async () => {
         try {
           const stock = await storage.getStock(job.ticker);
+          console.log(`[QueueWorker] Stock data retrieved: ${stock ? 'found' : 'not found'}`);
           if (stock && stock.recommendation === "buy") {
             return {
               recentPurchases: 1,
@@ -138,10 +163,12 @@ class QueueWorker {
             };
           }
           return undefined;
-        } catch {
+        } catch (error) {
+          console.error(`[QueueWorker] Error getting insider trading data:`, error);
           return undefined;
         }
       })();
+      console.log(`[QueueWorker] ✅ Insider trading check complete`);
 
       // Get or create industry-specific macro analysis
       // Prefer: 1) Stock record from DB, 2) Alpha Vantage industry, 3) Alpha Vantage sector, 4) undefined

@@ -65,6 +65,21 @@ interface PriceNewsCorrelation {
   strength: "strong" | "moderate" | "weak";
 }
 
+/**
+ * Wraps a promise with a timeout to prevent infinite hangs
+ * @param promise The promise to wrap
+ * @param timeoutMs Timeout in milliseconds  
+ * @param errorMessage Custom error message when timeout occurs
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    ),
+  ]);
+}
+
 class StockService {
   private apiKey: string;
   private baseUrl = "https://www.alphavantage.co/query";
@@ -253,99 +268,160 @@ class StockService {
   /**
    * Get technical indicators for a stock (RSI, MACD, Bollinger Bands, Moving Averages, ATR)
    * Uses Alpha Vantage Premium API technical indicators endpoints
+   * RESILIENT: Fetches all indicators in parallel with timeout protection and graceful fallbacks
    */
   async getTechnicalIndicators(ticker: string, dailyPrices: DailyPrice[]): Promise<TechnicalIndicators> {
-    try {
-      // Fetch RSI (Relative Strength Index - 14 period)
-      const rsiUrl = `${this.baseUrl}?function=RSI&symbol=${ticker}&interval=daily&time_period=14&series_type=close&apikey=${this.apiKey}`;
-      const rsiData = await this.fetchWithCache(rsiUrl, `rsi_${ticker}`);
-      const rsiValue = parseFloat(Object.values(rsiData["Technical Analysis: RSI"] || {})[0]?.["RSI"] || "50");
-      
-      // Fetch MACD (Moving Average Convergence Divergence)
-      const macdUrl = `${this.baseUrl}?function=MACD&symbol=${ticker}&interval=daily&series_type=close&apikey=${this.apiKey}`;
-      const macdData = await this.fetchWithCache(macdUrl, `macd_${ticker}`);
-      const latestMacd = Object.values(macdData["Technical Analysis: MACD"] || {})[0] as any;
-      
-      // Fetch Bollinger Bands
-      const bbUrl = `${this.baseUrl}?function=BBANDS&symbol=${ticker}&interval=daily&time_period=20&series_type=close&apikey=${this.apiKey}`;
-      const bbData = await this.fetchWithCache(bbUrl, `bbands_${ticker}`);
-      const latestBB = Object.values(bbData["Technical Analysis: BBANDS"] || {})[0] as any;
-      
-      // Fetch SMA 20
-      const sma20Url = `${this.baseUrl}?function=SMA&symbol=${ticker}&interval=daily&time_period=20&series_type=close&apikey=${this.apiKey}`;
-      const sma20Data = await this.fetchWithCache(sma20Url, `sma20_${ticker}`);
-      const sma20 = parseFloat(Object.values(sma20Data["Technical Analysis: SMA"] || {})[0]?.["SMA"] || "0");
-      
-      // Fetch SMA 50
-      const sma50Url = `${this.baseUrl}?function=SMA&symbol=${ticker}&interval=daily&time_period=50&series_type=close&apikey=${this.apiKey}`;
-      const sma50Data = await this.fetchWithCache(sma50Url, `sma50_${ticker}`);
-      const sma50 = parseFloat(Object.values(sma50Data["Technical Analysis: SMA"] || {})[0]?.["SMA"] || "0");
-      
-      // Fetch EMA 12
-      const ema12Url = `${this.baseUrl}?function=EMA&symbol=${ticker}&interval=daily&time_period=12&series_type=close&apikey=${this.apiKey}`;
-      const ema12Data = await this.fetchWithCache(ema12Url, `ema12_${ticker}`);
-      const ema12 = parseFloat(Object.values(ema12Data["Technical Analysis: EMA"] || {})[0]?.["EMA"] || "0");
-      
-      // Fetch ATR (Average True Range - volatility)
-      const atrUrl = `${this.baseUrl}?function=ATR&symbol=${ticker}&interval=daily&time_period=14&apikey=${this.apiKey}`;
-      const atrData = await this.fetchWithCache(atrUrl, `atr_${ticker}`);
-      const atr = parseFloat(Object.values(atrData["Technical Analysis: ATR"] || {})[0]?.["ATR"] || "0");
+    console.log(`[StockService] 📊 getTechnicalIndicators start for ${ticker} - fetching 7 indicators in parallel...`);
+    
+    const INDICATOR_TIMEOUT = 15000; // 15 second timeout per indicator
+    const currentPrice = dailyPrices[dailyPrices.length - 1]?.close || 0;
 
-      // Calculate current price position relative to Bollinger Bands
-      const currentPrice = dailyPrices[dailyPrices.length - 1]?.close || 0;
-      const upperBand = parseFloat(latestBB?.["Real Upper Band"] || currentPrice);
-      const middleBand = parseFloat(latestBB?.["Real Middle Band"] || currentPrice);
-      const lowerBand = parseFloat(latestBB?.["Real Lower Band"] || currentPrice);
-      
-      let bbPosition: "above" | "below" | "inside" = "inside";
-      if (currentPrice > upperBand) bbPosition = "above";
-      else if (currentPrice < lowerBand) bbPosition = "below";
+    // Fetch all indicators in parallel with timeout protection
+    const results = await Promise.allSettled([
+      withTimeout(
+        this.fetchWithCache(`${this.baseUrl}?function=RSI&symbol=${ticker}&interval=daily&time_period=14&series_type=close&apikey=${this.apiKey}`, `rsi_${ticker}`),
+        INDICATOR_TIMEOUT,
+        `RSI fetch timeout for ${ticker}`
+      ),
+      withTimeout(
+        this.fetchWithCache(`${this.baseUrl}?function=MACD&symbol=${ticker}&interval=daily&series_type=close&apikey=${this.apiKey}`, `macd_${ticker}`),
+        INDICATOR_TIMEOUT,
+        `MACD fetch timeout for ${ticker}`
+      ),
+      withTimeout(
+        this.fetchWithCache(`${this.baseUrl}?function=BBANDS&symbol=${ticker}&interval=daily&time_period=20&series_type=close&apikey=${this.apiKey}`, `bbands_${ticker}`),
+        INDICATOR_TIMEOUT,
+        `Bollinger Bands fetch timeout for ${ticker}`
+      ),
+      withTimeout(
+        this.fetchWithCache(`${this.baseUrl}?function=SMA&symbol=${ticker}&interval=daily&time_period=20&series_type=close&apikey=${this.apiKey}`, `sma20_${ticker}`),
+        INDICATOR_TIMEOUT,
+        `SMA 20 fetch timeout for ${ticker}`
+      ),
+      withTimeout(
+        this.fetchWithCache(`${this.baseUrl}?function=SMA&symbol=${ticker}&interval=daily&time_period=50&series_type=close&apikey=${this.apiKey}`, `sma50_${ticker}`),
+        INDICATOR_TIMEOUT,
+        `SMA 50 fetch timeout for ${ticker}`
+      ),
+      withTimeout(
+        this.fetchWithCache(`${this.baseUrl}?function=EMA&symbol=${ticker}&interval=daily&time_period=12&series_type=close&apikey=${this.apiKey}`, `ema12_${ticker}`),
+        INDICATOR_TIMEOUT,
+        `EMA 12 fetch timeout for ${ticker}`
+      ),
+      withTimeout(
+        this.fetchWithCache(`${this.baseUrl}?function=ATR&symbol=${ticker}&interval=daily&time_period=14&apikey=${this.apiKey}`, `atr_${ticker}`),
+        INDICATOR_TIMEOUT,
+        `ATR fetch timeout for ${ticker}`
+      ),
+    ]);
 
-      // Determine volume trend from recent data
-      const recentVolumes = dailyPrices.slice(-10).map(p => p.volume);
-      const avgRecentVolume = recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length;
-      const lastVolume = dailyPrices[dailyPrices.length - 1]?.volume || 0;
-      let volumeTrend: "increasing" | "decreasing" | "stable" = "stable";
+    // Parse results with fallbacks
+    const [rsiResult, macdResult, bbResult, sma20Result, sma50Result, ema12Result, atrResult] = results;
+
+    // RSI parsing with fallback
+    let rsiValue = 50; // Default neutral
+    if (rsiResult.status === "fulfilled") {
+      try {
+        rsiValue = parseFloat(Object.values(rsiResult.value["Technical Analysis: RSI"] || {})[0]?.["RSI"] || "50");
+        console.log(`[StockService] ✅ RSI: ${rsiValue}`);
+      } catch (e) {
+        console.warn(`[StockService] ⚠️  RSI parse error, using default`);
+      }
+    } else {
+      console.warn(`[StockService] ⚠️  RSI failed: ${rsiResult.reason.message}`);
+    }
+
+    // MACD parsing with fallback
+    let macdValue = 0, macdSignal = 0, macdHist = 0;
+    if (macdResult.status === "fulfilled") {
+      try {
+        const latestMacd = Object.values(macdResult.value["Technical Analysis: MACD"] || {})[0] as any;
+        macdValue = parseFloat(latestMacd?.["MACD"] || "0");
+        macdSignal = parseFloat(latestMacd?.["MACD_Signal"] || "0");
+        macdHist = parseFloat(latestMacd?.["MACD_Hist"] || "0");
+        console.log(`[StockService] ✅ MACD fetched`);
+      } catch (e) {
+        console.warn(`[StockService] ⚠️  MACD parse error, using defaults`);
+      }
+    } else {
+      console.warn(`[StockService] ⚠️  MACD failed: ${macdResult.reason.message}`);
+    }
+
+    // Bollinger Bands parsing with fallback
+    let upperBand = currentPrice, middleBand = currentPrice, lowerBand = currentPrice;
+    if (bbResult.status === "fulfilled") {
+      try {
+        const latestBB = Object.values(bbResult.value["Technical Analysis: BBANDS"] || {})[0] as any;
+        upperBand = parseFloat(latestBB?.["Real Upper Band"] || currentPrice);
+        middleBand = parseFloat(latestBB?.["Real Middle Band"] || currentPrice);
+        lowerBand = parseFloat(latestBB?.["Real Lower Band"] || currentPrice);
+        console.log(`[StockService] ✅ Bollinger Bands fetched`);
+      } catch (e) {
+        console.warn(`[StockService] ⚠️  Bollinger Bands parse error, using current price`);
+      }
+    } else {
+      console.warn(`[StockService] ⚠️  Bollinger Bands failed: ${bbResult.reason.message}`);
+    }
+
+    // SMA/EMA/ATR parsing with fallbacks
+    const sma20 = sma20Result.status === "fulfilled" ? parseFloat(Object.values(sma20Result.value["Technical Analysis: SMA"] || {})[0]?.["SMA"] || "0") : 0;
+    const sma50 = sma50Result.status === "fulfilled" ? parseFloat(Object.values(sma50Result.value["Technical Analysis: SMA"] || {})[0]?.["SMA"] || "0") : 0;
+    const ema12 = ema12Result.status === "fulfilled" ? parseFloat(Object.values(ema12Result.value["Technical Analysis: EMA"] || {})[0]?.["EMA"] || "0") : 0;
+    const atr = atrResult.status === "fulfilled" ? parseFloat(Object.values(atrResult.value["Technical Analysis: ATR"] || {})[0]?.["ATR"] || "0") : 0;
+    
+    if (sma20Result.status === "fulfilled") console.log(`[StockService] ✅ SMA 20 fetched`);
+    else console.warn(`[StockService] ⚠️  SMA 20 failed: ${sma20Result.reason.message}`);
+    
+    if (sma50Result.status === "fulfilled") console.log(`[StockService] ✅ SMA 50 fetched`);
+    else console.warn(`[StockService] ⚠️  SMA 50 failed: ${sma50Result.reason.message}`);
+    
+    if (ema12Result.status === "fulfilled") console.log(`[StockService] ✅ EMA 12 fetched`);
+    else console.warn(`[StockService] ⚠️  EMA 12 failed: ${ema12Result.reason.message}`);
+    
+    if (atrResult.status === "fulfilled") console.log(`[StockService] ✅ ATR fetched`);
+    else console.warn(`[StockService] ⚠️  ATR failed: ${atrResult.reason.message}`);
+
+    // Calculate Bollinger Band position
+    let bbPosition: "above" | "below" | "inside" = "inside";
+    if (currentPrice > upperBand) bbPosition = "above";
+    else if (currentPrice < lowerBand) bbPosition = "below";
+
+    // Calculate volume trend
+    const recentVolumes = dailyPrices.slice(-10).map(p => p.volume);
+    const avgRecentVolume = recentVolumes.length > 0 ? recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length : 0;
+    const lastVolume = dailyPrices[dailyPrices.length - 1]?.volume || 0;
+    let volumeTrend: "increasing" | "decreasing" | "stable" = "stable";
+    if (avgRecentVolume > 0) {
       if (lastVolume > avgRecentVolume * 1.2) volumeTrend = "increasing";
       else if (lastVolume < avgRecentVolume * 0.8) volumeTrend = "decreasing";
-
-      return {
-        rsi: {
-          value: rsiValue,
-          signal: rsiValue > 70 ? "overbought" : rsiValue < 30 ? "oversold" : "neutral"
-        },
-        macd: {
-          value: parseFloat(latestMacd?.["MACD"] || "0"),
-          signal: parseFloat(latestMacd?.["MACD_Signal"] || "0"),
-          histogram: parseFloat(latestMacd?.["MACD_Hist"] || "0"),
-          trend: parseFloat(latestMacd?.["MACD_Hist"] || "0") > 0 ? "bullish" : parseFloat(latestMacd?.["MACD_Hist"] || "0") < 0 ? "bearish" : "neutral"
-        },
-        bollingerBands: {
-          upper: upperBand,
-          middle: middleBand,
-          lower: lowerBand,
-          position: bbPosition
-        },
-        sma20,
-        sma50,
-        ema12,
-        volumeTrend,
-        atr
-      };
-    } catch (error) {
-      console.error(`[StockService] Error fetching technical indicators for ${ticker}:`, error);
-      // Return neutral defaults if technical indicators fail
-      return {
-        rsi: { value: 50, signal: "neutral" },
-        macd: { value: 0, signal: 0, histogram: 0, trend: "neutral" },
-        bollingerBands: { upper: 0, middle: 0, lower: 0, position: "inside" },
-        sma20: 0,
-        sma50: 0,
-        ema12: 0,
-        volumeTrend: "stable",
-        atr: 0
-      };
     }
+
+    const successCount = results.filter(r => r.status === "fulfilled").length;
+    console.log(`[StockService] ✅ getTechnicalIndicators complete for ${ticker}: ${successCount}/7 indicators fetched successfully`);
+
+    return {
+      rsi: {
+        value: rsiValue,
+        signal: rsiValue > 70 ? "overbought" : rsiValue < 30 ? "oversold" : "neutral"
+      },
+      macd: {
+        value: macdValue,
+        signal: macdSignal,
+        histogram: macdHist,
+        trend: macdHist > 0 ? "bullish" : macdHist < 0 ? "bearish" : "neutral"
+      },
+      bollingerBands: {
+        upper: upperBand,
+        middle: middleBand,
+        lower: lowerBand,
+        position: bbPosition
+      },
+      sma20,
+      sma50,
+      ema12,
+      volumeTrend,
+      atr
+    };
   }
 
   /**

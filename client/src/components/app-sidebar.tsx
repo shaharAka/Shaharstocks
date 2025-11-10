@@ -17,6 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
@@ -52,6 +53,14 @@ export function AppSidebar() {
   const [location] = useLocation();
   const newStocksCount = useNewStocksCount();
   const { user } = useUser();
+  const { setOpen, isMobile } = useSidebar();
+
+  const handleNavClick = () => {
+    // Close sidebar on mobile after navigation
+    if (isMobile) {
+      setOpen(false);
+    }
+  };
 
   return (
     <Sidebar>
@@ -84,7 +93,7 @@ export function AppSidebar() {
                       }
                       data-testid={item.testId}
                     >
-                      <Link href={item.url}>
+                      <Link href={item.url} onClick={handleNavClick}>
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                         {showBadge && (
@@ -115,7 +124,7 @@ export function AppSidebar() {
                     className={location === "/admin" ? "bg-sidebar-accent" : ""}
                     data-testid="link-admin"
                   >
-                    <Link href="/admin">
+                    <Link href="/admin" onClick={handleNavClick}>
                       <ShieldCheck className="h-4 w-4" />
                       <span>Backoffice</span>
                     </Link>

@@ -18,6 +18,7 @@ import History from "@/pages/history";
 import Rules from "@/pages/rules";
 import Simulation from "@/pages/simulation";
 import Settings from "@/pages/settings";
+import Community from "@/pages/community";
 import AdminPage from "@/pages/admin";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/history" component={History} />
       <Route path="/rules" component={Rules} />
       <Route path="/simulation" component={Simulation} />
+      <Route path="/community" component={Community} />
       <Route path="/settings" component={Settings} />
       <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />

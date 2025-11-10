@@ -9,6 +9,7 @@ import {
   LineChart,
   Cog,
   ShieldCheck,
+  Lightbulb,
 } from "lucide-react";
 import {
   Sidebar,
@@ -60,6 +61,12 @@ const menuItems = [
     url: "/simulation",
     icon: FlaskConical,
     testId: "link-simulation",
+  },
+  {
+    title: "Community",
+    url: "/community",
+    icon: Lightbulb,
+    testId: "link-community",
   },
   {
     title: "Settings",

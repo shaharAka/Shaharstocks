@@ -716,8 +716,9 @@ Generate 100 diverse scenarios exploring all ranges of risk/reward profiles.`;
         continue; // Skip if no price data
       }
 
-      // Use Telegram message date (when user could actually buy), not insider trade date
-      const buyDate = candidate.telegramMessageDate;
+      // Use firstViableDate (when trade first met buy criteria)
+      // This is stored in priceData.insiderBuyDate during matrix building
+      const buyDate = priceData.insiderBuyDate;
 
       // Find buy date in price matrix, or snap to nearest prior trading day
       let buyIndex = priceData.priceMatrix.findIndex((p: any) => p.date === buyDate);

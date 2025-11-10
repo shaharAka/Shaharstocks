@@ -53,12 +53,12 @@ export function AppSidebar() {
   const [location] = useLocation();
   const newStocksCount = useNewStocksCount();
   const { user } = useUser();
-  const { setOpen, isMobile } = useSidebar();
+  const { setOpenMobile, isMobile } = useSidebar();
 
   const handleNavClick = () => {
     // Close sidebar on mobile after navigation
     if (isMobile) {
-      setOpen(false);
+      setOpenMobile(false);
     }
   };
 

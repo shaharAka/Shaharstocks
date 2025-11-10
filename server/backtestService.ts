@@ -211,16 +211,6 @@ class BacktestService {
 
       console.log(`[BacktestJob ${jobId}] Found ${candidates.length} valid candidates`);
 
-      await storage.updateBacktestJob(jobId, {
-        candidateStocks: candidates.map(c => ({
-          ticker: c.ticker,
-          insiderBuyDate: c.insiderTradeDate, // Insider's trade date
-          insiderPrice: parseFloat(c.insiderPrice),
-          marketPrice: parseFloat(c.marketPriceAtInsiderDate || c.insiderPrice),
-          marketCap: c.marketCap || "Unknown",
-        }))
-      });
-
       // Stage 3: Build price matrices
       await storage.updateBacktestJob(jobId, { 
         status: "building_matrix", 
@@ -228,6 +218,7 @@ class BacktestService {
       });
 
       console.log(`[BacktestJob ${jobId}] Building price matrices for ${candidates.length} stocks...`);
+      const viableCandidates: any[] = [];
       
       for (let i = 0; i < candidates.length; i++) {
         if (await this.isJobCancelled(jobId)) {
@@ -245,6 +236,13 @@ class BacktestService {
 
           // Find the first viable date (when trade met buy criteria)
           const marketCapValue = candidate.marketCap ? this.parseMarketCap(candidate.marketCap) : 0;
+          
+          // Skip if market cap is invalid (NaN or zero)
+          if (!marketCapValue || isNaN(marketCapValue)) {
+            console.log(`[BacktestJob ${jobId}] ${candidate.ticker} has invalid market cap, skipping`);
+            continue;
+          }
+          
           const insiderPriceNum = parseFloat(candidate.insiderPrice);
           const firstViableDate = this.findFirstViableDate(priceMatrix, insiderPriceNum, marketCapValue);
 
@@ -255,6 +253,7 @@ class BacktestService {
 
           // Store candidate with firstViableDate
           candidate.firstViableDate = firstViableDate;
+          viableCandidates.push(candidate);
 
           await storage.createBacktestPriceData({
             jobId,
@@ -279,6 +278,17 @@ class BacktestService {
         }
       }
 
+      // Update candidateStocks with actual firstViableDate used in simulation
+      await storage.updateBacktestJob(jobId, {
+        candidateStocks: viableCandidates.map(c => ({
+          ticker: c.ticker,
+          insiderBuyDate: c.firstViableDate, // First viable date used in simulation
+          insiderPrice: parseFloat(c.insiderPrice),
+          marketPrice: parseFloat(c.marketPriceAtInsiderDate || c.insiderPrice),
+          marketCap: c.marketCap || "Unknown",
+        }))
+      });
+
       if (await this.isJobCancelled(jobId)) {
         console.log(`[BacktestJob ${jobId}] Job cancelled by user`);
         return;
@@ -291,7 +301,7 @@ class BacktestService {
       });
 
       console.log(`[BacktestJob ${jobId}] Generating trading scenarios with OpenAI...`);
-      await this.generateScenarios(jobId, candidates);
+      await this.generateScenarios(jobId, viableCandidates);
 
       if (await this.isJobCancelled(jobId)) {
         console.log(`[BacktestJob ${jobId}] Job cancelled by user`);

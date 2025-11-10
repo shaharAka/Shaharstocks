@@ -65,6 +65,25 @@ Comprehensive test coverage for the dual-agent (micro + macro) AI analysis syste
   - Edge cases (missing data, retries, failures)
 - **Run**: `npx vitest` or `npx vitest --ui`
 
+### Known Issues & Fixes
+
+#### AI Analysis Queue Worker Hang (Fixed - Nov 10, 2025)
+**Problem**: AI analysis jobs were hanging indefinitely in "processing" state, never completing. Root cause was `getTechnicalIndicators()` fetching 7 technical indicators (RSI, MACD, Bollinger Bands, SMA 20, SMA 50, EMA 12, ATR) sequentially from Alpha Vantage API. If any single indicator request hung (commonly SMA 20), the entire analysis pipeline would freeze forever.
+
+**Fix Applied**:
+1. Added `withTimeout()` utility wrapper to prevent infinite promise hangs (15-second timeout per indicator)
+2. Rewrote `getTechnicalIndicators()` to fetch all 7 indicators in parallel using `Promise.allSettled()`
+3. Implemented graceful fallbacks - if any indicator times out or fails, analysis continues with neutral default values
+4. Enhanced queue worker logging with iteration counts, job status emojis, and error stack traces for debugging
+
+**Testing Notes**:
+- Test suite (47 tests) uses heavy mocking and did NOT catch this production bug
+- Real-world testing requires monitoring production logs after server restart
+- Watch for indicators that consistently timeout (may indicate API quota issues)
+- Queue worker polls every 2-10 seconds with atomic job dequeue (FOR UPDATE SKIP LOCKED)
+
+**Architect Review**: ✅ Pass - No security issues, proper error handling, maintains pipeline behavior
+
 ## External Dependencies
 
 - **UI Frameworks**: @radix-ui/*, shadcn/ui, Recharts, Lucide React.

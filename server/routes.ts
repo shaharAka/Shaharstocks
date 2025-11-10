@@ -2399,6 +2399,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Convert transactions to stock recommendations
       let createdCount = 0;
+      const createdTickers: string[] = []; // Track newly created tickers for AI analysis
+      
       for (const transaction of transactions) {
         try {
           // Check if stock already exists
@@ -2446,6 +2448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           createdCount++;
+          createdTickers.push(transaction.ticker); // Track this ticker for AI analysis
 
           // Send Telegram notification
           if (telegramNotificationService.isReady()) {
@@ -2480,6 +2483,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const user = await storage.getUser(req.session.userId);
         if (user && !user.initialDataFetched) {
           await storage.markUserInitialDataFetched(req.session.userId);
+          
+          // Auto-trigger AI analysis for newly created stocks during onboarding
+          if (createdTickers.length > 0) {
+            console.log(`[Onboarding] Auto-queueing AI analysis for ${createdTickers.length} new stocks`);
+            
+            // Queue AI analysis for each newly created ticker
+            const queuePromises = createdTickers.map(ticker =>
+              storage.enqueueAnalysisJob(ticker, "onboarding", "normal")
+                .catch((err: any) => {
+                  console.error(`[Onboarding] Failed to queue AI analysis for ${ticker}:`, err);
+                  return null; // Continue with other tickers even if one fails
+                })
+            );
+            
+            // Wait for all queue operations to complete
+            const results = await Promise.allSettled(queuePromises);
+            const queuedCount = results.filter(r => r.status === 'fulfilled' && r.value !== null).length;
+            
+            console.log(`[Onboarding] Successfully queued AI analysis for ${queuedCount}/${createdTickers.length} stocks`);
+          }
         }
       }
       

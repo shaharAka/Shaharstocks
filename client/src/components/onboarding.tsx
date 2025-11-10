@@ -30,11 +30,14 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
   const fetchOpeninsiderMutation = useMutation({
     mutationFn: async () => {
-      // First, ensure OpenInsider is enabled with default settings
+      // First, ensure OpenInsider is enabled with meaningful default filters
       await apiRequest("POST", "/api/openinsider/config", {
         enabled: true,
         fetchLimit: 500,
         fetchInterval: "hourly",
+        // Default filters for high-quality recommendations
+        insiderTitles: ["CEO", "CFO", "Director", "President", "COO", "CTO", "10% Owner"],
+        minTransactionValue: 100000, // $100k minimum transaction value
       });
       
       // Then fetch the data

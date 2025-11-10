@@ -268,12 +268,25 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   async initializeDefaults() {
     // Create default Telegram configuration if it doesn't exist
-    const existingConfig = await this.getTelegramConfig();
-    if (!existingConfig) {
+    const existingTelegramConfig = await this.getTelegramConfig();
+    if (!existingTelegramConfig) {
       await this.createOrUpdateTelegramConfig({
         channelUsername: "InsiderTrading_SEC",
         phoneNumber: undefined,
         enabled: true,
+      });
+    }
+
+    // Create default OpenInsider configuration if it doesn't exist
+    const existingOpeninsiderConfig = await this.getOpeninsiderConfig();
+    if (!existingOpeninsiderConfig) {
+      await this.createOrUpdateOpeninsiderConfig({
+        enabled: true,
+        fetchLimit: 500,
+        fetchInterval: "hourly",
+        fetchPreviousDayOnly: false,
+        insiderTitles: ["CEO", "CFO", "Director", "President", "COO", "CTO", "10% Owner"],
+        minTransactionValue: 100000, // $100k minimum
       });
     }
   }

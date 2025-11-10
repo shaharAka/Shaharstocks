@@ -275,7 +275,7 @@ export function StockTable({
                 <SortIcon field="marketCap" />
               </Button>
             </TableHead>
-            <TableHead className="text-right hidden 2xl:table-cell">
+            <TableHead className="text-right hidden lg:table-cell">
               <Button
                 variant="ghost"
                 size="sm"
@@ -388,7 +388,7 @@ export function StockTable({
                 <TableCell className="text-sm text-muted-foreground hidden xl:table-cell">
                   {stock.marketCap || "-"}
                 </TableCell>
-                <TableCell className="text-right hidden 2xl:table-cell" data-testid={`cell-ai-score-${stock.ticker}`}>
+                <TableCell className="text-right hidden lg:table-cell" data-testid={`cell-ai-score-${stock.ticker}`}>
                   {(() => {
                     const analysis = getAIAnalysis(stock.ticker);
                     if (!analysis) return <span className="text-xs text-muted-foreground">-</span>;

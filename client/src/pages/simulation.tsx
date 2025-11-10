@@ -380,47 +380,30 @@ export default function Simulation() {
     });
   }, [holdings, stocks, holdingStocks, selectedTickers]);
 
-  // Transform data for normalized view (percentage change from insider purchase price)
+  // Transform data for normalized view (percentage change from user's actual purchase price)
   const normalizedChartData = useMemo(() => {
-    if (combinedChartData.length === 0 || !holdingStocks) return [];
+    if (combinedChartData.length === 0 || !holdingStocks || !holdings) return [];
 
-    // Get insider purchase date for each stock
+    // Use user's actual purchase date and price from holdings
     const stockPurchaseDates: Record<string, Date> = {};
     const stockBasePrices: Record<string, number> = {};
     
     holdingStocks.forEach(stock => {
-      if (selectedTickers.has(stock.ticker) && stock.insiderTradeDate) {
-        // Use insider trade date as the purchase date (day 0)
-        const date = new Date(stock.insiderTradeDate);
-        // Validate the date is valid
-        if (!isNaN(date.getTime())) {
-          stockPurchaseDates[stock.ticker] = date;
-        }
-      }
-    });
+      if (!selectedTickers.has(stock.ticker)) return;
 
-    // For each stock, find the price on or closest to the purchase date
-    Object.keys(stockPurchaseDates).forEach(ticker => {
-      const purchaseDate = stockPurchaseDates[ticker];
-      
-      // Find the first price data point on or after the purchase date
+      // Find the holding for this stock to get the actual purchase price
+      const holding = holdings.find(h => h.ticker === stock.ticker);
+      if (!holding) return;
+
+      // Use the user's actual average purchase price as baseline
+      stockBasePrices[stock.ticker] = parseFloat(holding.averagePurchasePrice);
+
+      // Find the earliest purchase date from price history (use first available data point)
+      // In the future, this could be derived from trades table for more accuracy
       for (const dataPoint of combinedChartData) {
-        if (dataPoint[ticker] != null) {
-          const dataDate = new Date(dataPoint.date);
-          if (!isNaN(dataDate.getTime()) && dataDate >= purchaseDate) {
-            stockBasePrices[ticker] = dataPoint[ticker];
-            break;
-          }
-        }
-      }
-      
-      // If no price found after purchase date, use first available price
-      if (!stockBasePrices[ticker]) {
-        for (const dataPoint of combinedChartData) {
-          if (dataPoint[ticker] != null) {
-            stockBasePrices[ticker] = dataPoint[ticker];
-            break;
-          }
+        if (dataPoint[stock.ticker] != null) {
+          stockPurchaseDates[stock.ticker] = new Date(dataPoint.date);
+          break;
         }
       }
     });
@@ -451,7 +434,7 @@ export default function Simulation() {
 
     // Convert map to sorted array
     return Array.from(dayDataMap.values()).sort((a, b) => a.day - b.day);
-  }, [combinedChartData, holdingStocks, selectedTickers]);
+  }, [combinedChartData, holdingStocks, selectedTickers, holdings]);
 
   // Select which data to display based on view mode
   const displayChartData = viewMode === "normalized" ? normalizedChartData : combinedChartData;

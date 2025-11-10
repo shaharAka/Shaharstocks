@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,6 +25,13 @@ export default function Portfolio() {
   const { user } = useUser();
   const [showOnboarding, setShowOnboarding] = useState(!user?.initialDataFetched);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  
+  // Ensure onboarding dialog closes permanently once user has fetched initial data
+  useEffect(() => {
+    if (user?.initialDataFetched) {
+      setShowOnboarding(false);
+    }
+  }, [user?.initialDataFetched]);
   
   const { data: holdings, isLoading: holdingsLoading } = usePortfolioHoldings();
   const { data: stocks, isLoading: stocksLoading } = useStocks();

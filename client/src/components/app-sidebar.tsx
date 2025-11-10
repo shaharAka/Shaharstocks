@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -72,6 +73,9 @@ export function AppSidebar() {
   const newStocksCount = useNewStocksCount();
   const { user } = useUser();
   const { setOpenMobile, isMobile, state } = useSidebar();
+  
+  // State to track current tab for reactive updates
+  const [currentTab, setCurrentTab] = useState(new URLSearchParams(window.location.search).get('tab'));
 
   const handleNavClick = () => {
     // Close sidebar on mobile after navigation
@@ -83,15 +87,31 @@ export function AppSidebar() {
   const handleSubMenuClick = (url: string) => {
     // Use setLocation for proper navigation including query params
     setLocation(url);
+    // Dispatch custom event to notify pages of URL change
+    window.dispatchEvent(new Event('urlchange'));
     handleNavClick();
   };
+  
+  // Listen for URL changes to update sidebar active state
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const params = new URLSearchParams(window.location.search);
+      setCurrentTab(params.get('tab'));
+    };
+    
+    window.addEventListener('urlchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    
+    return () => {
+      window.removeEventListener('urlchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, []);
 
   const isCollapsed = state === "collapsed";
   
-  // Get current path and query params for active state detection
+  // Get current path for active state detection
   const currentPath = location;
-  const currentParams = new URLSearchParams(window.location.search);
-  const currentTab = currentParams.get('tab');
 
   return (
     <Sidebar>

@@ -22,39 +22,41 @@ import { PortfolioHistory } from "@/components/portfolio/history";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 
 export default function Portfolio() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const { user } = useUser();
   const [showOnboarding, setShowOnboarding] = useState(!user?.hasSeenOnboarding);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   
-  // Read tab from URL query parameter and sync with location changes
+  // Read tab from URL query parameter
   const searchParams = new URLSearchParams(window.location.search);
   const tabFromUrl = searchParams.get('tab') || 'overview';
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   
-  // Sync tab state when URL changes (either from wouter or browser navigation)
+  // Listen to custom URL change events and popstate
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab') || 'overview';
-    setActiveTab(tab);
-  }, [location]); // Watch wouter location changes
-  
-  // Also listen to popstate for browser back/forward
-  useEffect(() => {
-    const handlePopState = () => {
+    const handleUrlChange = () => {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get('tab') || 'overview';
       setActiveTab(tab);
     };
     
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    // Listen to popstate (browser back/forward)
+    window.addEventListener('popstate', handleUrlChange);
+    // Listen to custom event for programmatic navigation
+    window.addEventListener('urlchange', handleUrlChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('urlchange', handleUrlChange);
+    };
   }, []);
   
   // Update URL when tab changes via UI
   const handleTabChange = (newTab: string) => {
     setActiveTab(newTab);
     setLocation(`/?tab=${newTab}`);
+    // Dispatch custom event for other components
+    window.dispatchEvent(new Event('urlchange'));
   };
   
   // Ensure onboarding dialog closes permanently once user has seen it

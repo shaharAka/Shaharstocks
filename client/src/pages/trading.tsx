@@ -5,36 +5,38 @@ import Rules from "./rules";
 import Simulation from "./simulation";
 
 export default function Trading() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   
-  // Read tab from URL query parameter and sync with location changes
+  // Read tab from URL query parameter
   const searchParams = new URLSearchParams(window.location.search);
   const tabFromUrl = searchParams.get('tab') || 'rules';
   const [activeTab, setActiveTab] = useState(tabFromUrl);
   
-  // Sync tab state when URL changes (either from wouter or browser navigation)
+  // Listen to custom URL change events and popstate
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab') || 'rules';
-    setActiveTab(tab);
-  }, [location]); // Watch wouter location changes
-  
-  // Also listen to popstate for browser back/forward
-  useEffect(() => {
-    const handlePopState = () => {
+    const handleUrlChange = () => {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get('tab') || 'rules';
       setActiveTab(tab);
     };
     
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    // Listen to popstate (browser back/forward)
+    window.addEventListener('popstate', handleUrlChange);
+    // Listen to custom event for programmatic navigation
+    window.addEventListener('urlchange', handleUrlChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('urlchange', handleUrlChange);
+    };
   }, []);
   
   // Update URL when tab changes via UI
   const handleTabChange = (newTab: string) => {
     setActiveTab(newTab);
     setLocation(`/trading?tab=${newTab}`);
+    // Dispatch custom event for other components
+    window.dispatchEvent(new Event('urlchange'));
   };
 
   return (

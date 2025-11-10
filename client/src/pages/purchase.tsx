@@ -693,6 +693,10 @@ export default function Purchase() {
     return commentCounts.find(c => c.ticker === ticker)?.count || 0;
   };
 
+  const getAIAnalysis = (ticker: string) => {
+    return analyses.find(a => a.ticker === ticker);
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-2xl mx-auto">
       <div className="space-y-4">
@@ -901,6 +905,7 @@ export default function Purchase() {
             const isProfitable = priceDiff >= 0;
 
             const stockInterests = getStockInterests(stock.ticker);
+            const analysis = getAIAnalysis(stock.ticker);
 
             return (
               <Card 
@@ -1001,6 +1006,46 @@ export default function Purchase() {
                   {stock.marketCap && (
                     <div className="text-xs text-muted-foreground" data-testid={`text-marketcap-${stock.ticker}`}>
                       {stock.marketCap} market cap
+                    </div>
+                  )}
+
+                  {analysis && (
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                      {analysis.status === "analyzing" ? (
+                        <Badge variant="outline" className="text-xs" data-testid={`badge-ai-analyzing-${stock.ticker}`}>
+                          <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                          Analyzing...
+                        </Badge>
+                      ) : analysis.status === "failed" ? (
+                        <Badge variant="destructive" className="text-xs" data-testid={`badge-ai-failed-${stock.ticker}`}>
+                          Analysis Failed
+                        </Badge>
+                      ) : (
+                        <>
+                          {(() => {
+                            const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
+                            const rating = analysis.overallRating;
+                            let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "secondary";
+                            
+                            if (rating === "buy" || rating === "strong_buy") badgeVariant = "default";
+                            else if (rating === "avoid" || rating === "sell" || rating === "strong_avoid") badgeVariant = "destructive";
+                            
+                            return (
+                              <div className="flex items-center gap-2">
+                                <Badge variant={badgeVariant} className="text-xs font-mono" data-testid={`badge-ai-score-${stock.ticker}`}>
+                                  {score}/100
+                                </Badge>
+                                {analysis.integratedScore && analysis.confidenceScore !== analysis.integratedScore && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    (micro: {analysis.confidenceScore})
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </>
+                      )}
                     </div>
                   )}
 

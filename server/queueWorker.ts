@@ -274,3 +274,6 @@ class QueueWorker {
 }
 
 export const queueWorker = new QueueWorker();
+
+// Export class for testing
+export { QueueWorker };

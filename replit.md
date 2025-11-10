@@ -46,12 +46,31 @@ Preferred communication style: Simple, everyday language.
 - **Collaboration**: Multi-user system with stock-specific comment threads, interest markers, and filtering options for recommendations.
 - **Admin Backoffice**: Comprehensive dashboard for user, subscription, and payment management (PayPal and manual), with audit trails for manual overrides, soft/hard user deletion, and secure password resets. Requires `isAdmin: true` for access and `x-admin-secret` for authentication.
 
+## Testing
+
+### AI Analysis Regression Suite
+Comprehensive test coverage for the dual-agent (micro + macro) AI analysis system:
+- **Test Framework**: Vitest with @vitest/ui
+- **Coverage**: 47 tests, 100% passing ✅
+- **Location**: `tests/ai-analysis/`
+- **Files**: 
+  - `fixtures.ts` - Mock data for all services
+  - `queueWorker.test.ts` - Core pipeline tests (16 tests)
+  - `triggers.test.ts` - All 5 trigger path tests (10 tests)
+  - `integrated-score.test.ts` - Score calculation tests (21 tests)
+- **Validation**:
+  - All 5 trigger paths (onboarding, automated, fetch-now, single-run, re-run)
+  - Complete micro + macro integration
+  - Integrated score calculation (micro × macro, clamped 0-100)
+  - Edge cases (missing data, retries, failures)
+- **Run**: `npx vitest` or `npx vitest --ui`
+
 ## External Dependencies
 
 - **UI Frameworks**: @radix-ui/*, shadcn/ui, Recharts, Lucide React.
 - **Database & ORM**: @neondatabase/serverless, Drizzle ORM, drizzle-zod.
 - **Data Management**: @tanstack/react-query, react-hook-form, zod, date-fns.
-- **Development Tools**: TypeScript, Vite, ESBuild, tsx.
+- **Development Tools**: TypeScript, Vite, ESBuild, tsx, Vitest.
 - **Integration Points**:
     - **Telegram**: GramJS for MTProto API communication.
     - **OpenInsider.com**: Python (BeautifulSoup4) for web scraping insider trading data.

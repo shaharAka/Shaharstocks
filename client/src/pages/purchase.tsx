@@ -710,22 +710,6 @@ export default function Purchase() {
             </p>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
-            {ibkrStatus && (
-              <Badge 
-                variant={ibkrStatus.connected ? "default" : "outline"}
-                className="flex items-center gap-1.5"
-                data-testid="badge-ibkr-status"
-              >
-                {ibkrStatus.connected ? (
-                  <Wifi className="h-3 w-3" />
-                ) : (
-                  <WifiOff className="h-3 w-3" />
-                )}
-                <span className="text-xs">
-                  IBKR: {ibkrStatus.connected ? (ibkrStatus.isPaperTrading ? "Paper" : "Live") : "Disconnected"}
-                </span>
-              </Badge>
-            )}
             <Button
               variant="outline"
               size="lg"

@@ -184,7 +184,11 @@ export default function Community() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log("[Community] Submit clicked, user:", user);
+    console.log("[Community] Title:", title, "Description:", description);
+    
     if (!user?.id) {
+      console.log("[Community] No user ID, showing error");
       toast({
         title: "Error",
         description: "You must be logged in to submit a suggestion",
@@ -194,6 +198,7 @@ export default function Community() {
     }
     
     if (!title.trim() || !description.trim()) {
+      console.log("[Community] Empty fields, showing error");
       toast({
         title: "Error",
         description: "Please fill in all fields",
@@ -202,6 +207,7 @@ export default function Community() {
       return;
     }
     
+    console.log("[Community] Calling mutation with:", { title, description, userId: user.id });
     createMutation.mutate({ title, description });
   };
 

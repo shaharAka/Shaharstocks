@@ -6,6 +6,7 @@ import {
   LineChart,
   ShieldCheck,
   Lightbulb,
+  ChevronDown,
 } from "lucide-react";
 import {
   Sidebar,
@@ -16,9 +17,22 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 
@@ -28,6 +42,11 @@ const menuItems = [
     url: "/",
     icon: LayoutDashboard,
     testId: "link-portfolio",
+    subItems: [
+      { title: "Overview", url: "/?tab=overview", testId: "link-portfolio-overview" },
+      { title: "Management", url: "/?tab=management", testId: "link-portfolio-management" },
+      { title: "History", url: "/?tab=history", testId: "link-portfolio-history" },
+    ],
   },
   {
     title: "Recommendations",
@@ -40,6 +59,10 @@ const menuItems = [
     url: "/trading",
     icon: LineChart,
     testId: "link-trading",
+    subItems: [
+      { title: "Trading Rules", url: "/trading?tab=rules", testId: "link-trading-rules" },
+      { title: "Backtesting", url: "/trading?tab=simulation", testId: "link-trading-backtesting" },
+    ],
   },
   {
     title: "Community",
@@ -53,7 +76,7 @@ export function AppSidebar() {
   const [location] = useLocation();
   const newStocksCount = useNewStocksCount();
   const { user } = useUser();
-  const { setOpenMobile, isMobile } = useSidebar();
+  const { setOpenMobile, isMobile, state } = useSidebar();
 
   const handleNavClick = () => {
     // Close sidebar on mobile after navigation
@@ -61,6 +84,13 @@ export function AppSidebar() {
       setOpenMobile(false);
     }
   };
+
+  const isCollapsed = state === "collapsed";
+  
+  // Get current path and query params for active state detection
+  const currentPath = location;
+  const currentParams = new URLSearchParams(window.location.search);
+  const currentTab = currentParams.get('tab');
 
   return (
     <Sidebar>
@@ -81,31 +111,92 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
-                const isActive = location === item.url;
+                // Check if current page matches this menu item
+                const isPageActive = currentPath === item.url;
                 const showBadge = item.url === "/recommendations" && newStocksCount > 0;
                 
+                // If item has sub-items, render as collapsible
+                if (item.subItems) {
+                  return (
+                    <Collapsible key={item.title} asChild defaultOpen={isPageActive}>
+                      <SidebarMenuItem>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <CollapsibleTrigger asChild>
+                              <SidebarMenuButton
+                                className={isPageActive ? "bg-sidebar-accent" : ""}
+                                data-testid={item.testId}
+                              >
+                                <item.icon className="h-4 w-4" />
+                                <span>{item.title}</span>
+                                <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                              </SidebarMenuButton>
+                            </CollapsibleTrigger>
+                          </TooltipTrigger>
+                          {isCollapsed && (
+                            <TooltipContent side="right">
+                              <p>{item.title}</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {item.subItems.map((subItem) => {
+                              // Extract tab param from subItem URL
+                              const subItemTab = new URLSearchParams(subItem.url.split('?')[1] || '').get('tab');
+                              const isSubItemActive = isPageActive && currentTab === subItemTab;
+                              
+                              return (
+                                <SidebarMenuSubItem key={subItem.title}>
+                                  <SidebarMenuSubButton
+                                    asChild
+                                    isActive={isSubItemActive}
+                                    data-testid={subItem.testId}
+                                  >
+                                    <Link href={subItem.url} onClick={handleNavClick}>
+                                      <span>{subItem.title}</span>
+                                    </Link>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  );
+                }
+                
+                // Regular menu item without sub-items
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      className={
-                        isActive ? "bg-sidebar-accent" : ""
-                      }
-                      data-testid={item.testId}
-                    >
-                      <Link href={item.url} onClick={handleNavClick}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                        {showBadge && (
-                          <span 
-                            className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
-                            data-testid="badge-new-stocks"
-                          >
-                            {newStocksCount}
-                          </span>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton
+                          asChild
+                          className={isPageActive ? "bg-sidebar-accent" : ""}
+                          data-testid={item.testId}
+                        >
+                          <Link href={item.url} onClick={handleNavClick}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                            {showBadge && (
+                              <span 
+                                className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
+                                data-testid="badge-new-stocks"
+                              >
+                                {newStocksCount}
+                              </span>
+                            )}
+                          </Link>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      {isCollapsed && (
+                        <TooltipContent side="right">
+                          <p>{item.title}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
                   </SidebarMenuItem>
                 );
               })}
@@ -119,16 +210,25 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    className={location === "/admin" ? "bg-sidebar-accent" : ""}
-                    data-testid="link-admin"
-                  >
-                    <Link href="/admin" onClick={handleNavClick}>
-                      <ShieldCheck className="h-4 w-4" />
-                      <span>Backoffice</span>
-                    </Link>
-                  </SidebarMenuButton>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton
+                        asChild
+                        className={location === "/admin" ? "bg-sidebar-accent" : ""}
+                        data-testid="link-admin"
+                      >
+                        <Link href="/admin" onClick={handleNavClick}>
+                          <ShieldCheck className="h-4 w-4" />
+                          <span>Backoffice</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    {isCollapsed && (
+                      <TooltipContent side="right">
+                        <p>Backoffice</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>

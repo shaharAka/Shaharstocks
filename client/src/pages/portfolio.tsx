@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,10 +22,35 @@ import { PortfolioHistory } from "@/components/portfolio/history";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 
 export default function Portfolio() {
-  const [activeTab, setActiveTab] = useState("overview");
+  const [, setLocation] = useLocation();
   const { user } = useUser();
   const [showOnboarding, setShowOnboarding] = useState(!user?.hasSeenOnboarding);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  
+  // Read tab from URL query parameter
+  const searchParams = new URLSearchParams(window.location.search);
+  const tabFromUrl = searchParams.get('tab') || 'overview';
+  const [activeTab, setActiveTab] = useState(tabFromUrl);
+  
+  // Sync tab state with URL parameter when URL changes
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab') || 'overview';
+      setActiveTab(tab);
+    };
+    
+    window.addEventListener('popstate', handleUrlChange);
+    handleUrlChange(); // Initialize on mount
+    
+    return () => window.removeEventListener('popstate', handleUrlChange);
+  }, []);
+  
+  // Update URL when tab changes via UI
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    setLocation(`/?tab=${newTab}`);
+  };
   
   // Ensure onboarding dialog closes permanently once user has seen it
   useEffect(() => {
@@ -215,7 +241,7 @@ export default function Portfolio() {
         </div>
 
         {/* Tabbed Content */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 md:space-y-6">
           <TabsList className="w-full grid grid-cols-3" data-testid="tabs-portfolio">
             <TabsTrigger value="overview" data-testid="tab-overview" title="View portfolio performance and holdings summary">
               Overview

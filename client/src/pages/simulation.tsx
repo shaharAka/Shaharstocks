@@ -513,9 +513,9 @@ export default function Simulation() {
   }, [holdings, stocks, rules, selectedTickers]);
 
   // Calculate sell rule boundary lines as percentages for normalized view
-  // Show each unique rule only once without stock-specific details
+  // Show each unique rule only once without stock-specific details, filtered by selected tickers
   const sellRuleLinesNormalized = useMemo(() => {
-    if (!rules) return [];
+    if (!rules || !holdings || !stocks) return [];
 
     const uniqueLines = new Map<string, {
       rule: TradingRule;
@@ -524,35 +524,46 @@ export default function Simulation() {
       name: string;
     }>();
 
-    // Only process rules with price_change_percent metric (which is natural for normalized view)
-    rules.forEach((rule) => {
-      if (!rule.enabled) return;
-      if (rule.action !== "sell" && rule.action !== "sell_all") return;
-      if (!rule.conditions || rule.conditions.length === 0) return;
+    // Only process rules that apply to selected stocks
+    holdings.forEach((holding) => {
+      const stock = stocks.find((s) => s.ticker === holding.ticker);
+      if (!stock || !selectedTickers.has(stock.ticker)) return;
 
-      const condition = rule.conditions[0];
-      
-      // Only show price_change_percent rules in normalized view
-      if (condition.metric === "price_change_percent") {
-        const percentage = condition.value;
-        const isLower = (condition.operator === "<" || condition.operator === "<=");
+      // Find applicable sell rules for this stock
+      const applicableRules = rules.filter(
+        (rule) =>
+          rule.enabled &&
+          (rule.action === "sell" || rule.action === "sell_all") &&
+          (rule.scope === "all_holdings" || 
+           (rule.scope === "specific_stock" && rule.ticker === stock.ticker))
+      );
+
+      applicableRules.forEach((rule) => {
+        if (!rule.conditions || rule.conditions.length === 0) return;
+        const condition = rule.conditions[0];
         
-        // Use rule ID as key to ensure each rule appears only once
-        const key = `${rule.id}-${percentage}`;
-        
-        if (!uniqueLines.has(key)) {
-          uniqueLines.set(key, {
-            rule,
-            percentage,
-            isLower,
-            name: rule.name,
-          });
+        // Only show price_change_percent rules in normalized view
+        if (condition.metric === "price_change_percent") {
+          const percentage = condition.value;
+          const isLower = (condition.operator === "<" || condition.operator === "<=");
+          
+          // Use rule ID as key to ensure each rule appears only once
+          const key = `${rule.id}-${percentage}`;
+          
+          if (!uniqueLines.has(key)) {
+            uniqueLines.set(key, {
+              rule,
+              percentage,
+              isLower,
+              name: rule.name,
+            });
+          }
         }
-      }
+      });
     });
 
     return Array.from(uniqueLines.values());
-  }, [rules]);
+  }, [rules, holdings, stocks, selectedTickers]);
 
   // Calculate Y-axis domain to include both data, boundary lines, and purchase prices
   const yAxisDomain = useMemo(() => {

@@ -187,39 +187,6 @@ class StockService {
   }
 
   /**
-   * Get company overview including market cap, P/E ratio, etc.
-   */
-  async getCompanyOverview(ticker: string): Promise<StockProfile> {
-    const url = `${this.baseUrl}?function=OVERVIEW&symbol=${ticker}&apikey=${this.apiKey}`;
-    const data = await this.fetchWithCache(url, `overview_${ticker}`);
-
-    if (!data.Symbol) {
-      throw new Error(`No company overview data found for ${ticker}`);
-    }
-
-    // Format market cap
-    const marketCapNum = parseFloat(data.MarketCapitalization || "0");
-    let marketCap = "N/A";
-    if (marketCapNum >= 1e12) {
-      marketCap = `$${(marketCapNum / 1e12).toFixed(2)}T`;
-    } else if (marketCapNum >= 1e9) {
-      marketCap = `$${(marketCapNum / 1e9).toFixed(2)}B`;
-    } else if (marketCapNum >= 1e6) {
-      marketCap = `$${(marketCapNum / 1e6).toFixed(2)}M`;
-    }
-
-    return {
-      symbol: data.Symbol,
-      name: data.Name || `${ticker} Inc.`,
-      marketCap,
-      peRatio: data.PERatio || "N/A",
-      sector: data.Sector || "N/A",
-      industry: data.Industry || "N/A",
-      description: data.Description || "",
-    };
-  }
-
-  /**
    * Get 2 weeks of candlestick data for quick visual reference
    * Returns OHLCV data for the last 14 trading days
    */
@@ -249,60 +216,6 @@ class StockService {
     }
 
     return prices.reverse(); // Oldest to newest for chart display
-  }
-
-  /**
-   * Get balance sheet data (annual and quarterly)
-   */
-  async getBalanceSheet(ticker: string): Promise<any> {
-    const url = `${this.baseUrl}?function=BALANCE_SHEET&symbol=${ticker}&apikey=${this.apiKey}`;
-    const data = await this.fetchWithCache(url, `balance_sheet_${ticker}`);
-
-    if (!data.symbol && !data.annualReports) {
-      throw new Error(`No balance sheet data found for ${ticker}`);
-    }
-
-    return {
-      symbol: data.symbol,
-      annualReports: data.annualReports || [],
-      quarterlyReports: data.quarterlyReports || [],
-    };
-  }
-
-  /**
-   * Get income statement data (annual and quarterly)
-   */
-  async getIncomeStatement(ticker: string): Promise<any> {
-    const url = `${this.baseUrl}?function=INCOME_STATEMENT&symbol=${ticker}&apikey=${this.apiKey}`;
-    const data = await this.fetchWithCache(url, `income_statement_${ticker}`);
-
-    if (!data.symbol && !data.annualReports) {
-      throw new Error(`No income statement data found for ${ticker}`);
-    }
-
-    return {
-      symbol: data.symbol,
-      annualReports: data.annualReports || [],
-      quarterlyReports: data.quarterlyReports || [],
-    };
-  }
-
-  /**
-   * Get cash flow data (annual and quarterly)
-   */
-  async getCashFlow(ticker: string): Promise<any> {
-    const url = `${this.baseUrl}?function=CASH_FLOW&symbol=${ticker}&apikey=${this.apiKey}`;
-    const data = await this.fetchWithCache(url, `cash_flow_${ticker}`);
-
-    if (!data.symbol && !data.annualReports) {
-      throw new Error(`No cash flow data found for ${ticker}`);
-    }
-
-    return {
-      symbol: data.symbol,
-      annualReports: data.annualReports || [],
-      quarterlyReports: data.quarterlyReports || [],
-    };
   }
 
   /**

@@ -85,9 +85,9 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between p-4 border-b bg-background shrink-0">
+          <header className="flex items-center justify-between px-2 py-2 md:p-4 border-b bg-background shrink-0">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2">
               <Button
                 size="icon"
                 variant="ghost"
@@ -95,6 +95,7 @@ function AuthenticatedApp() {
                   window.dispatchEvent(new CustomEvent('replay-tutorial'));
                 }}
                 data-testid="button-help"
+                className="h-11 w-11"
               >
                 <HelpCircle className="h-5 w-5" />
               </Button>
@@ -103,6 +104,7 @@ function AuthenticatedApp() {
                 variant="ghost"
                 onClick={() => setSettingsOpen(true)}
                 data-testid="button-settings"
+                className="h-11 w-11"
               >
                 <SettingsIcon className="h-5 w-5" />
               </Button>
@@ -111,7 +113,7 @@ function AuthenticatedApp() {
             </div>
           </header>
           <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+            <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-auto">
               <Settings />
             </DialogContent>
           </Dialog>

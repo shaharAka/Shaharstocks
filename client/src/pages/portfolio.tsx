@@ -103,9 +103,9 @@ export default function Portfolio() {
       {(onboardingComplete || user?.initialDataFetched) && (
         <Tutorial tutorialId="portfolio" />
       )}
-      <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-2xl mx-auto">
         <div>
-          <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+          <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">
             Portfolio
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -114,7 +114,7 @@ export default function Portfolio() {
         </div>
 
         {/* Portfolio Summary Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -123,10 +123,10 @@ export default function Portfolio() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-semibold" data-testid="text-portfolio-value">
+              <div className="text-2xl md:text-3xl font-mono font-semibold" data-testid="text-portfolio-value">
                 ${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div className="mt-3 h-12">
+              <div className="mt-2 md:mt-3 h-8 md:h-12">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={portfolioSparkline}>
                     <Line
@@ -155,7 +155,7 @@ export default function Portfolio() {
             </CardHeader>
             <CardContent>
               <div
-                className={`text-3xl font-mono font-semibold ${
+                className={`text-2xl md:text-3xl font-mono font-semibold ${
                   isPositive ? "text-success" : "text-destructive"
                 }`}
                 data-testid="text-total-pl"
@@ -164,9 +164,9 @@ export default function Portfolio() {
               </div>
               <div className="flex items-center gap-1 mt-1">
                 {isPositive ? (
-                  <ArrowUpRight className="h-3 w-3 text-success" />
+                  <ArrowUpRight className="h-4 w-4 text-success" />
                 ) : (
-                  <ArrowDownRight className="h-3 w-3 text-destructive" />
+                  <ArrowDownRight className="h-4 w-4 text-destructive" />
                 )}
                 <span
                   className={`text-sm font-mono font-medium ${
@@ -187,7 +187,7 @@ export default function Portfolio() {
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-semibold" data-testid="text-holdings-count">
+              <div className="text-2xl md:text-3xl font-mono font-semibold" data-testid="text-holdings-count">
                 {holdings?.length || 0}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -204,7 +204,7 @@ export default function Portfolio() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-semibold">
+              <div className="text-2xl md:text-3xl font-mono font-semibold">
                 {trades?.length || 0}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -215,14 +215,14 @@ export default function Portfolio() {
         </div>
 
         {/* Tabbed Content */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList data-testid="tabs-portfolio">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
+          <TabsList className="w-full grid grid-cols-3" data-testid="tabs-portfolio">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="management" data-testid="tab-management">Management</TabsTrigger>
             <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-6" forceMount hidden={activeTab !== "overview"}>
+          <TabsContent value="overview" className="space-y-4 md:space-y-6" forceMount hidden={activeTab !== "overview"}>
             <PortfolioOverview 
               holdings={holdings || []} 
               stocks={stocks || []} 

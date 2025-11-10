@@ -1,5 +1,6 @@
 import session from "express-session";
 import MemoryStore from "memorystore";
+import type { IStorage } from "./storage";
 
 const MemStore = MemoryStore(session);
 
@@ -30,4 +31,20 @@ export function requireUser(req: any, res: any, next: any) {
     return res.status(401).json({ error: "Not authenticated" });
   }
   next();
+}
+
+// Factory function to create admin middleware with storage dependency
+export function createRequireAdmin(storage: IStorage) {
+  return async function requireAdmin(req: any, res: any, next: any) {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !user.isAdmin) {
+      return res.status(403).json({ error: "Unauthorized - Admin access required" });
+    }
+    
+    next();
+  };
 }

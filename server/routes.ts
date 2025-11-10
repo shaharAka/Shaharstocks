@@ -11,6 +11,7 @@ import { telegramNotificationService } from "./telegramNotificationService";
 import { backtestService } from "./backtestService";
 import { finnhubService } from "./finnhubService";
 import { openinsiderService } from "./openinsiderService";
+import { createRequireAdmin } from "./session";
 
 /**
  * Check if US stock market is currently open
@@ -138,6 +139,9 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Create admin middleware with storage dependency
+  const requireAdmin = createRequireAdmin(storage);
+  
   // Feature flags endpoint
   app.get("/api/feature-flags", async (req, res) => {
     res.json({
@@ -357,14 +361,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ADMIN ONLY: Manual subscription activation for testing
   // WARNING: This endpoint should be removed or protected with admin authentication in production
-  app.post("/api/admin/activate-subscription", async (req, res) => {
+  app.post("/api/admin/activate-subscription", requireAdmin, async (req, res) => {
     try {
-      // In production, add admin authentication here
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
       const { email, paypalSubscriptionId } = req.body;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
@@ -404,13 +402,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ADMIN ONLY: Create or promote user to super admin
   // WARNING: This endpoint should be protected in production
-  app.post("/api/admin/create-super-admin", async (req, res) => {
+  app.post("/api/admin/create-super-admin", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
       const { email } = req.body;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
@@ -442,13 +435,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADMIN ONLY: Deactivate user subscription
-  app.post("/api/admin/deactivate-subscription", async (req, res) => {
+  app.post("/api/admin/deactivate-subscription", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
       const { email } = req.body;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
@@ -480,17 +468,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADMIN ONLY: Reset user password (generate secure token)
-  app.post("/api/admin/reset-password", async (req, res) => {
+  app.post("/api/admin/reset-password", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
       const { email, newPassword } = req.body;
       if (!email || !newPassword) {
         return res.status(400).json({ error: "Email and new password are required" });
@@ -523,17 +502,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADMIN ONLY: Archive user (soft delete)
-  app.post("/api/admin/archive-user", async (req, res) => {
+  app.post("/api/admin/archive-user", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
       const { email } = req.body;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
@@ -544,7 +514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const archivedUser = await storage.archiveUser(user.id, req.session.userId);
+      const archivedUser = await storage.archiveUser(user.id, req.session.userId!);
 
       res.json({
         success: true,
@@ -561,13 +531,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADMIN ONLY: Unarchive user
-  app.post("/api/admin/unarchive-user", async (req, res) => {
+  app.post("/api/admin/unarchive-user", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
       const { email } = req.body;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
@@ -595,13 +560,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADMIN ONLY: Hard delete user
-  app.delete("/api/admin/delete-user", async (req, res) => {
+  app.delete("/api/admin/delete-user", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
       const { email } = req.body;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
@@ -625,17 +585,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADMIN ONLY: Manually extend subscription for N months
-  app.post("/api/admin/extend-subscription", async (req, res) => {
+  app.post("/api/admin/extend-subscription", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
       const { email, months, reason } = req.body;
       if (!email || !months) {
         return res.status(400).json({ error: "Email and months are required" });
@@ -660,7 +611,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate,
         monthsExtended: months,
         reason: reason || `Admin extended subscription by ${months} month(s)`,
-        createdBy: req.session.userId,
+        createdBy: req.session.userId!,
       });
 
       const updatedUser = await storage.updateUserSubscriptionStatus(
@@ -685,13 +636,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADMIN ONLY: Get user payment history and stats
-  app.get("/api/admin/user-payments/:userId", async (req, res) => {
+  app.get("/api/admin/user-payments/:userId", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
       const { userId } = req.params;
       if (!userId) {
         return res.status(400).json({ error: "User ID is required" });
@@ -724,17 +670,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ADMIN ONLY: Create manual payment record
-  app.post("/api/admin/create-payment", async (req, res) => {
+  app.post("/api/admin/create-payment", requireAdmin, async (req, res) => {
     try {
-      const adminSecret = req.headers["x-admin-secret"];
-      if (adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
-      }
-
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
       const { email, amount, paymentMethod, notes } = req.body;
       if (!email || !amount) {
         return res.status(400).json({ error: "Email and amount are required" });
@@ -753,7 +690,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "completed",
         transactionId: `manual_${Date.now()}`,
         notes: notes || "Manual payment entry by admin",
-        createdBy: req.session.userId,
+        createdBy: req.session.userId!,
       });
 
       res.json({
@@ -2960,22 +2897,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/feature-suggestions/:id/status", async (req, res) => {
+  app.patch("/api/feature-suggestions/:id/status", requireAdmin, async (req, res) => {
     try {
-      console.log("[PATCH /status] Session:", req.session);
-      console.log("[PATCH /status] Session userId:", req.session.userId);
-      
-      // Check if user is logged in and is an admin
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-
-      const user = await storage.getUser(req.session.userId);
-      console.log("[PATCH /status] User found:", user?.email, "isAdmin:", user?.isAdmin);
-      
-      if (!user || !user.isAdmin) {
-        return res.status(403).json({ error: "Unauthorized - Admin access required" });
-      }
 
       const { status } = req.body;
       if (!status) {
@@ -2994,17 +2917,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/feature-suggestions/:id", async (req, res) => {
+  app.delete("/api/feature-suggestions/:id", requireAdmin, async (req, res) => {
     try {
-      // Check if user is logged in and is an admin
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-
-      const user = await storage.getUser(req.session.userId);
-      if (!user || !user.isAdmin) {
-        return res.status(403).json({ error: "Unauthorized - Admin access required" });
-      }
 
       const success = await storage.deleteFeatureSuggestion(req.params.id);
       if (!success) {

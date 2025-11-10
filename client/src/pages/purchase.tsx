@@ -653,17 +653,17 @@ export default function Purchase() {
       if (daysSincePurchase > maxDays) return false;
     }
     
-    // Automatically exclude small cap stocks (< $100M)
+    // Automatically exclude small cap stocks (< $500M)
     const marketCapInMillions = getMarketCapValue(stock.marketCap);
-    if (marketCapInMillions > 0 && marketCapInMillions < 100) {
+    if (marketCapInMillions > 0 && marketCapInMillions < 500) {
       return false;
     }
     
-    // Filter out likely options deals: insider price < 0.2 * current price
+    // Filter out likely options deals: insider price < 0.15 * current price
     if (stock.insiderPrice && stock.currentPrice) {
       const insiderPrice = parseFloat(stock.insiderPrice);
       const currentPrice = parseFloat(stock.currentPrice);
-      if (insiderPrice > 0 && currentPrice > 0 && insiderPrice < 0.2 * currentPrice) {
+      if (insiderPrice > 0 && currentPrice > 0 && insiderPrice < 0.15 * currentPrice) {
         return false;
       }
     }

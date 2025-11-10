@@ -159,8 +159,11 @@ export function StockTable({
         const analysisA = getAIAnalysis(a.ticker);
         const analysisB = getAIAnalysis(b.ticker);
         // Treat "analyzing" status as score 0 for sorting
-        compareA = (analysisA?.status === "analyzing" || !analysisA?.financialHealthScore) ? 0 : analysisA.financialHealthScore;
-        compareB = (analysisB?.status === "analyzing" || !analysisB?.financialHealthScore) ? 0 : analysisB.financialHealthScore;
+        // Use integrated score (micro × macro) if available, fallback to confidence score, then financial health score
+        const scoreA = analysisA?.integratedScore ?? analysisA?.confidenceScore ?? analysisA?.financialHealthScore;
+        const scoreB = analysisB?.integratedScore ?? analysisB?.confidenceScore ?? analysisB?.financialHealthScore;
+        compareA = (analysisA?.status === "analyzing" || !scoreA) ? 0 : scoreA;
+        compareB = (analysisB?.status === "analyzing" || !scoreB) ? 0 : scoreB;
         break;
       case "daysFromBuy":
         compareA = getDaysFromBuy(a.insiderTradeDate);

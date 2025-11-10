@@ -65,6 +65,7 @@ app.use((req, res, next) => {
 (async () => {
   // Initialize default configuration
   await storage.initializeDefaults();
+  log("Server starting with session-based admin authentication...");
   
   // Initialize Telegram services only if feature flag is enabled
   if (ENABLE_TELEGRAM) {

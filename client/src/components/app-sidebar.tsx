@@ -68,7 +68,7 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const newStocksCount = useNewStocksCount();
   const { user } = useUser();
   const { setOpenMobile, isMobile, state } = useSidebar();
@@ -78,6 +78,12 @@ export function AppSidebar() {
     if (isMobile) {
       setOpenMobile(false);
     }
+  };
+
+  const handleSubMenuClick = (url: string) => {
+    // Use setLocation for proper navigation including query params
+    setLocation(url);
+    handleNavClick();
   };
 
   const isCollapsed = state === "collapsed";
@@ -136,13 +142,11 @@ export function AppSidebar() {
                               return (
                                 <SidebarMenuSubItem key={subItem.title}>
                                   <SidebarMenuSubButton
-                                    asChild
                                     isActive={isSubItemActive}
                                     data-testid={subItem.testId}
+                                    onClick={() => handleSubMenuClick(subItem.url)}
                                   >
-                                    <Link href={subItem.url} onClick={handleNavClick}>
-                                      <span>{subItem.title}</span>
-                                    </Link>
+                                    <span>{subItem.title}</span>
                                   </SidebarMenuSubButton>
                                 </SidebarMenuSubItem>
                               );

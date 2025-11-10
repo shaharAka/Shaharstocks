@@ -237,6 +237,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
             {step === 1 && (
               <Button
                 variant="ghost"
+                size="lg"
                 onClick={handleSkip}
                 data-testid="button-skip-onboarding"
               >
@@ -247,6 +248,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
           <div className="flex gap-2">
             {step === 1 && (
               <Button
+                size="lg"
                 onClick={handleStartFetching}
                 data-testid="button-fetch-openinsider"
               >
@@ -255,6 +257,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
             )}
             {step === 3 && (
               <Button
+                size="lg"
                 onClick={handleViewRecommendations}
                 data-testid="button-view-recommendations"
               >

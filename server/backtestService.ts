@@ -43,12 +43,12 @@ class BacktestService {
   }
 
   /**
-   * Build price matrix for a stock: 1 month before Telegram message date to today
+   * Build price matrix for a stock: from insider trade date to today
    * Checks database cache first before hitting Alpha Vantage API
    */
-  async buildPriceMatrix(ticker: string, telegramMessageDate: string): Promise<DailyPrice[]> {
+  async buildPriceMatrix(ticker: string, insiderTradeDate: string): Promise<DailyPrice[]> {
     // Check if we already have cached price data for this ticker and date
-    const cached = await storage.getCachedPriceData(ticker, telegramMessageDate);
+    const cached = await storage.getCachedPriceData(ticker, insiderTradeDate);
     
     if (cached && cached.priceMatrix && cached.priceMatrix.length > 0) {
       console.log(`[BacktestService] Using cached price data for ${ticker} (${cached.priceMatrix.length} days)`);
@@ -56,18 +56,40 @@ class BacktestService {
     }
 
     // Not in cache - fetch from Alpha Vantage
-    const messageDate = new Date(telegramMessageDate);
-    
-    // Calculate date range: 1 month before message date to today
-    const oneMonthBefore = new Date(messageDate);
-    oneMonthBefore.setMonth(oneMonthBefore.getMonth() - 1);
-    
+    const tradeDate = new Date(insiderTradeDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset to start of day
 
-    console.log(`[BacktestService] Fetching ${ticker} prices from Alpha Vantage (${oneMonthBefore.toISOString().split('T')[0]} to ${today.toISOString().split('T')[0]})`);
+    console.log(`[BacktestService] Fetching ${ticker} prices from Alpha Vantage (${insiderTradeDate} to ${today.toISOString().split('T')[0]})`);
 
-    return await this.fetchHistoricalPrices(ticker, oneMonthBefore, today);
+    return await this.fetchHistoricalPrices(ticker, tradeDate, today);
+  }
+
+  /**
+   * Find the first date when a trade became viable (met buy criteria)
+   * Criteria: market cap > $500M AND insider price >= 15% of market price
+   */
+  private findFirstViableDate(
+    priceMatrix: DailyPrice[], 
+    insiderPrice: number, 
+    marketCap: number
+  ): string | null {
+    // Market cap threshold: $500M
+    if (marketCap < 500_000_000) {
+      return null; // Never viable
+    }
+
+    // Find first date where insider price >= 15% of market price
+    for (const pricePoint of priceMatrix) {
+      const marketPrice = pricePoint.close;
+      const priceRatio = insiderPrice / marketPrice;
+      
+      if (priceRatio >= 0.15) {
+        return pricePoint.date;
+      }
+    }
+
+    return null; // Never met the 15% threshold
   }
 
   /**

@@ -26,7 +26,7 @@ type FeatureSuggestion = {
 };
 
 export default function Community() {
-  const { user } = useUser();
+  const { user, isLoading: userLoading } = useUser();
   const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -87,10 +87,18 @@ export default function Community() {
         description: "Your feature suggestion has been submitted!",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
+      let errorMessage = "Failed to submit feature suggestion";
+      
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.error) {
+        errorMessage = typeof error.error === 'string' ? error.error : "Failed to submit feature suggestion";
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to submit feature suggestion",
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -175,6 +183,16 @@ export default function Community() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to submit a suggestion",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (!title.trim() || !description.trim()) {
       toast({
         title: "Error",
@@ -183,6 +201,7 @@ export default function Community() {
       });
       return;
     }
+    
     createMutation.mutate({ title, description });
   };
 
@@ -246,7 +265,7 @@ export default function Community() {
               </div>
               <Button
                 type="submit"
-                disabled={createMutation.isPending}
+                disabled={createMutation.isPending || userLoading || !user?.id}
                 data-testid="button-submit-suggestion"
               >
                 {createMutation.isPending ? "Submitting..." : "Submit Suggestion"}

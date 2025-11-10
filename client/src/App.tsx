@@ -9,14 +9,12 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { UserProfile } from "@/components/user-profile";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import Dashboard from "@/pages/dashboard";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import Portfolio from "@/pages/portfolio";
 import Purchase from "@/pages/purchase";
-import Management from "@/pages/management";
-import History from "@/pages/history";
-import Rules from "@/pages/rules";
-import Simulation from "@/pages/simulation";
+import Trading from "@/pages/trading";
 import Settings from "@/pages/settings";
 import Community from "@/pages/community";
 import AdminPage from "@/pages/admin";
@@ -24,7 +22,7 @@ import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Terms from "@/pages/terms";
 import NotFound from "@/pages/not-found";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 function Router() {
   return (
@@ -32,15 +30,19 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/terms" component={Terms} />
-      <Route path="/" component={Dashboard} />
-      <Route path="/purchase" component={Purchase} />
-      <Route path="/management" component={Management} />
-      <Route path="/history" component={History} />
-      <Route path="/rules" component={Rules} />
-      <Route path="/simulation" component={Simulation} />
+      <Route path="/" component={Portfolio} />
+      <Route path="/recommendations" component={Purchase} />
+      <Route path="/trading" component={Trading} />
       <Route path="/community" component={Community} />
-      <Route path="/settings" component={Settings} />
       <Route path="/admin" component={AdminPage} />
+      {/* Legacy redirects for backwards compatibility */}
+      <Route path="/purchase" component={Purchase} />
+      <Route path="/management" component={Portfolio} />
+      <Route path="/history" component={Portfolio} />
+      <Route path="/dashboard" component={Portfolio} />
+      <Route path="/rules" component={Trading} />
+      <Route path="/simulation" component={Trading} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -49,6 +51,7 @@ function Router() {
 function AuthenticatedApp() {
   const { user, isLoading } = useUser();
   const [location, setLocation] = useLocation();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/terms") {
@@ -95,10 +98,23 @@ function AuthenticatedApp() {
               >
                 <HelpCircle className="h-5 w-5" />
               </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setSettingsOpen(true)}
+                data-testid="button-settings"
+              >
+                <SettingsIcon className="h-5 w-5" />
+              </Button>
               <UserProfile />
               <ThemeToggle />
             </div>
           </header>
+          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+              <Settings />
+            </DialogContent>
+          </Dialog>
           <main className="flex-1 overflow-auto">
             <Router />
           </main>

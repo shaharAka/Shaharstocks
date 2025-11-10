@@ -2,12 +2,8 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
   TrendingUp,
-  History,
-  Settings as SettingsIcon,
-  FlaskConical,
   ShoppingCart,
   LineChart,
-  Cog,
   ShieldCheck,
   Lightbulb,
 } from "lucide-react";
@@ -27,52 +23,28 @@ import { useUser } from "@/contexts/UserContext";
 
 const menuItems = [
   {
-    title: "Dashboard",
+    title: "Portfolio",
     url: "/",
     icon: LayoutDashboard,
-    testId: "link-dashboard",
+    testId: "link-portfolio",
   },
   {
-    title: "Purchase",
-    url: "/purchase",
+    title: "Recommendations",
+    url: "/recommendations",
     icon: ShoppingCart,
-    testId: "link-purchase",
+    testId: "link-recommendations",
   },
   {
-    title: "Management",
-    url: "/management",
+    title: "Trading",
+    url: "/trading",
     icon: LineChart,
-    testId: "link-management",
-  },
-  {
-    title: "Trade History",
-    url: "/history",
-    icon: History,
-    testId: "link-history",
-  },
-  {
-    title: "Trading Rules",
-    url: "/rules",
-    icon: SettingsIcon,
-    testId: "link-rules",
-  },
-  {
-    title: "Simulation",
-    url: "/simulation",
-    icon: FlaskConical,
-    testId: "link-simulation",
+    testId: "link-trading",
   },
   {
     title: "Community",
     url: "/community",
     icon: Lightbulb,
     testId: "link-community",
-  },
-  {
-    title: "Settings",
-    url: "/settings",
-    icon: Cog,
-    testId: "link-settings",
   },
 ];
 
@@ -101,7 +73,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {menuItems.map((item) => {
                 const isActive = location === item.url;
-                const showBadge = item.url === "/purchase" && newStocksCount > 0;
+                const showBadge = item.url === "/recommendations" && newStocksCount > 0;
                 
                 return (
                   <SidebarMenuItem key={item.title}>

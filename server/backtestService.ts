@@ -214,7 +214,7 @@ class BacktestService {
       await storage.updateBacktestJob(jobId, {
         candidateStocks: candidates.map(c => ({
           ticker: c.ticker,
-          insiderBuyDate: c.telegramMessageDate, // When user could actually purchase
+          insiderBuyDate: c.insiderTradeDate, // Insider's trade date
           insiderPrice: parseFloat(c.insiderPrice),
           marketPrice: parseFloat(c.marketPriceAtInsiderDate || c.insiderPrice),
           marketCap: c.marketCap || "Unknown",
@@ -237,22 +237,36 @@ class BacktestService {
 
         const candidate = candidates[i];
         try {
+          // Build price matrix from insider trade date to today
           const priceMatrix = await this.buildPriceMatrix(
             candidate.ticker, 
-            candidate.telegramMessageDate // Use message date, not insider trade date
+            candidate.insiderTradeDate // Use insider trade date to get full historical data
           );
+
+          // Find the first viable date (when trade met buy criteria)
+          const marketCapValue = candidate.marketCap ? this.parseMarketCap(candidate.marketCap) : 0;
+          const insiderPriceNum = parseFloat(candidate.insiderPrice);
+          const firstViableDate = this.findFirstViableDate(priceMatrix, insiderPriceNum, marketCapValue);
+
+          if (!firstViableDate) {
+            console.log(`[BacktestJob ${jobId}] ${candidate.ticker} never became viable, skipping`);
+            continue;
+          }
+
+          // Store candidate with firstViableDate
+          candidate.firstViableDate = firstViableDate;
 
           await storage.createBacktestPriceData({
             jobId,
             ticker: candidate.ticker,
-            insiderBuyDate: candidate.telegramMessageDate, // When user could actually buy
+            insiderBuyDate: firstViableDate, // Use first viable date as purchase date
             priceMatrix,
           });
 
           const progress = 40 + Math.floor((i + 1) / candidates.length * 20);
           await storage.updateBacktestJob(jobId, { progress });
 
-          console.log(`[BacktestJob ${jobId}] Built price matrix for ${candidate.ticker} (${priceMatrix.length} days)`);
+          console.log(`[BacktestJob ${jobId}] Built price matrix for ${candidate.ticker} (${priceMatrix.length} days, first viable: ${firstViableDate})`);
 
           // Rate limiting: Alpha Vantage Premium is 75 calls/minute (0.8s per call)
           if (i < candidates.length - 1) {

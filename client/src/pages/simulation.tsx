@@ -13,6 +13,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Tooltip as TooltipUI,
+  TooltipContent as TooltipUIContent,
+  TooltipTrigger as TooltipUITrigger,
+} from "@/components/ui/tooltip";
 import { Activity, TrendingUp, TrendingDown, FlaskConical, Play, Clock, CheckCircle2, CheckCircle, XCircle, Loader2, AlertCircle, Trash2, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { type PortfolioHolding, type Stock, type TradingRule, type Trade } from "@shared/schema";
 import {
@@ -855,24 +860,38 @@ export default function Simulation() {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1 border rounded-md p-1">
-                <Button
-                  variant={viewMode === "actual" ? "default" : "ghost"}
-                  size="lg"
-                  onClick={() => setViewMode("actual")}
-                  data-testid="toggle-view-mode-actual"
-                  className="toggle-elevate"
-                >
-                  Actual
-                </Button>
-                <Button
-                  variant={viewMode === "normalized" ? "default" : "ghost"}
-                  size="lg"
-                  onClick={() => setViewMode("normalized")}
-                  data-testid="toggle-view-mode-normalized"
-                  className="toggle-elevate"
-                >
-                  Normalized
-                </Button>
+                <TooltipUI>
+                  <TooltipUITrigger asChild>
+                    <Button
+                      variant={viewMode === "actual" ? "default" : "ghost"}
+                      size="lg"
+                      onClick={() => setViewMode("actual")}
+                      data-testid="toggle-view-mode-actual"
+                      className="toggle-elevate"
+                    >
+                      Actual
+                    </Button>
+                  </TooltipUITrigger>
+                  <TooltipUIContent>
+                    <p>View actual dollar values of stock prices</p>
+                  </TooltipUIContent>
+                </TooltipUI>
+                <TooltipUI>
+                  <TooltipUITrigger asChild>
+                    <Button
+                      variant={viewMode === "normalized" ? "default" : "ghost"}
+                      size="lg"
+                      onClick={() => setViewMode("normalized")}
+                      data-testid="toggle-view-mode-normalized"
+                      className="toggle-elevate"
+                    >
+                      Normalized
+                    </Button>
+                  </TooltipUITrigger>
+                  <TooltipUIContent>
+                    <p>View percentage change from your purchase price</p>
+                  </TooltipUIContent>
+                </TooltipUI>
               </div>
               <Button
                 variant="outline"

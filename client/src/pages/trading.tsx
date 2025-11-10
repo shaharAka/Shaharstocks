@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import Rules from "./rules";
 import Simulation from "./simulation";
 
@@ -19,8 +24,22 @@ export default function Trading() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
         <TabsList className="w-full grid grid-cols-2" data-testid="tabs-trading">
-          <TabsTrigger value="rules" data-testid="tab-rules">Trading Rules</TabsTrigger>
-          <TabsTrigger value="simulation" data-testid="tab-simulation">Backtesting</TabsTrigger>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <TabsTrigger value="rules" data-testid="tab-rules">Trading Rules</TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Create automated rules to trigger actions based on stock price changes</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <TabsTrigger value="simulation" data-testid="tab-simulation">Backtesting</TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Simulate how your holdings would perform using historical price data</p>
+            </TooltipContent>
+          </Tooltip>
         </TabsList>
 
         <TabsContent value="rules" forceMount hidden={activeTab !== "rules"}>

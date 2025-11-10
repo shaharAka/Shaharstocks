@@ -3,6 +3,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   TrendingUp,
   TrendingDown,
   Wallet,
@@ -217,9 +222,30 @@ export default function Portfolio() {
         {/* Tabbed Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
           <TabsList className="w-full grid grid-cols-3" data-testid="tabs-portfolio">
-            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="management" data-testid="tab-management">Management</TabsTrigger>
-            <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View portfolio performance and holdings summary</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <TabsTrigger value="management" data-testid="tab-management">Management</TabsTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Buy, sell, and manage your stock positions</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View complete trade history and transactions</p>
+              </TooltipContent>
+            </Tooltip>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4 md:space-y-6" forceMount hidden={activeTab !== "overview"}>

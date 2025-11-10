@@ -797,3 +797,41 @@ export const insertBacktestScenarioSchema = createInsertSchema(backtestScenarios
 });
 export type InsertBacktestScenario = z.infer<typeof insertBacktestScenarioSchema>;
 export type BacktestScenario = typeof backtestScenarios.$inferSelect;
+
+// Feature Suggestions - community board for feature requests
+export const featureSuggestions = pgTable("feature_suggestions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  status: text("status").notNull().default("pending"), // "pending", "roadmap", "deleted"
+  voteCount: integer("vote_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertFeatureSuggestionSchema = createInsertSchema(featureSuggestions).omit({ 
+  id: true, 
+  voteCount: true,
+  createdAt: true, 
+  updatedAt: true 
+});
+export type InsertFeatureSuggestion = z.infer<typeof insertFeatureSuggestionSchema>;
+export type FeatureSuggestion = typeof featureSuggestions.$inferSelect;
+
+// Feature Votes - track which users voted for which suggestions
+export const featureVotes = pgTable("feature_votes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  suggestionId: varchar("suggestion_id").notNull().references(() => featureSuggestions.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userSuggestionUnique: uniqueIndex("user_suggestion_unique_idx").on(table.userId, table.suggestionId),
+}));
+
+export const insertFeatureVoteSchema = createInsertSchema(featureVotes).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertFeatureVote = z.infer<typeof insertFeatureVoteSchema>;
+export type FeatureVote = typeof featureVotes.$inferSelect;

@@ -57,6 +57,10 @@ import {
   type InsertManualOverride,
   type PasswordResetToken,
   type InsertPasswordResetToken,
+  type FeatureSuggestion,
+  type InsertFeatureSuggestion,
+  type FeatureVote,
+  type InsertFeatureVote,
   stocks,
   portfolioHoldings,
   trades,
@@ -84,6 +88,8 @@ import {
   payments,
   manualOverrides,
   passwordResetTokens,
+  featureSuggestions,
+  featureVotes,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and } from "drizzle-orm";
@@ -247,6 +253,16 @@ export interface IStorage {
   getMacroAnalysis(id: string): Promise<MacroAnalysis | undefined>;
   createMacroAnalysis(analysis: InsertMacroAnalysis): Promise<MacroAnalysis>;
   updateMacroAnalysisStatus(id: string, status: string, errorMessage?: string): Promise<void>;
+
+  // Feature Suggestions
+  getFeatureSuggestions(userId?: string, status?: string): Promise<(FeatureSuggestion & { userName: string; userHasVoted: boolean })[]>;
+  getFeatureSuggestion(id: string): Promise<FeatureSuggestion | undefined>;
+  createFeatureSuggestion(suggestion: InsertFeatureSuggestion): Promise<FeatureSuggestion>;
+  updateFeatureSuggestionStatus(id: string, status: string): Promise<FeatureSuggestion | undefined>;
+  deleteFeatureSuggestion(id: string): Promise<boolean>;
+  voteForSuggestion(suggestionId: string, userId: string): Promise<boolean>;
+  unvoteForSuggestion(suggestionId: string, userId: string): Promise<boolean>;
+  hasUserVoted(suggestionId: string, userId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1705,6 +1721,144 @@ export class DatabaseStorage implements IStorage {
       .update(macroAnalyses)
       .set({ status, errorMessage: errorMessage || null })
       .where(eq(macroAnalyses.id, id));
+  }
+
+  // Feature Suggestion Methods
+  async getFeatureSuggestions(userId?: string, status?: string): Promise<(FeatureSuggestion & { userName: string; userHasVoted: boolean })[]> {
+    let query = db
+      .select({
+        id: featureSuggestions.id,
+        userId: featureSuggestions.userId,
+        title: featureSuggestions.title,
+        description: featureSuggestions.description,
+        status: featureSuggestions.status,
+        voteCount: featureSuggestions.voteCount,
+        createdAt: featureSuggestions.createdAt,
+        updatedAt: featureSuggestions.updatedAt,
+        userName: users.name,
+      })
+      .from(featureSuggestions)
+      .leftJoin(users, eq(featureSuggestions.userId, users.id));
+
+    if (status) {
+      query = query.where(eq(featureSuggestions.status, status)) as any;
+    }
+
+    const suggestions = await query.orderBy(desc(featureSuggestions.voteCount), desc(featureSuggestions.createdAt));
+
+    // Check if current user has voted for each suggestion
+    if (userId) {
+      const userVotes = await db
+        .select({ suggestionId: featureVotes.suggestionId })
+        .from(featureVotes)
+        .where(eq(featureVotes.userId, userId));
+      
+      const votedSuggestionIds = new Set(userVotes.map(v => v.suggestionId));
+      
+      return suggestions.map(s => ({
+        ...s,
+        userName: s.userName || 'Unknown User',
+        userHasVoted: votedSuggestionIds.has(s.id),
+      }));
+    }
+
+    return suggestions.map(s => ({
+      ...s,
+      userName: s.userName || 'Unknown User',
+      userHasVoted: false,
+    }));
+  }
+
+  async getFeatureSuggestion(id: string): Promise<FeatureSuggestion | undefined> {
+    const [suggestion] = await db
+      .select()
+      .from(featureSuggestions)
+      .where(eq(featureSuggestions.id, id));
+    return suggestion;
+  }
+
+  async createFeatureSuggestion(suggestion: InsertFeatureSuggestion): Promise<FeatureSuggestion> {
+    const [created] = await db
+      .insert(featureSuggestions)
+      .values(suggestion)
+      .returning();
+    return created;
+  }
+
+  async updateFeatureSuggestionStatus(id: string, status: string): Promise<FeatureSuggestion | undefined> {
+    const [updated] = await db
+      .update(featureSuggestions)
+      .set({ status, updatedAt: sql`now()` })
+      .where(eq(featureSuggestions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteFeatureSuggestion(id: string): Promise<boolean> {
+    const result = await db
+      .delete(featureSuggestions)
+      .where(eq(featureSuggestions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async voteForSuggestion(suggestionId: string, userId: string): Promise<boolean> {
+    try {
+      // Insert vote
+      await db.insert(featureVotes).values({ suggestionId, userId });
+      
+      // Increment vote count
+      await db
+        .update(featureSuggestions)
+        .set({ 
+          voteCount: sql`${featureSuggestions.voteCount} + 1`,
+          updatedAt: sql`now()`
+        })
+        .where(eq(featureSuggestions.id, suggestionId));
+      
+      return true;
+    } catch (error) {
+      // Vote already exists (unique constraint violation)
+      return false;
+    }
+  }
+
+  async unvoteForSuggestion(suggestionId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(featureVotes)
+      .where(
+        and(
+          eq(featureVotes.suggestionId, suggestionId),
+          eq(featureVotes.userId, userId)
+        )
+      );
+
+    if (result.rowCount && result.rowCount > 0) {
+      // Decrement vote count
+      await db
+        .update(featureSuggestions)
+        .set({ 
+          voteCount: sql`${featureSuggestions.voteCount} - 1`,
+          updatedAt: sql`now()`
+        })
+        .where(eq(featureSuggestions.id, suggestionId));
+      
+      return true;
+    }
+
+    return false;
+  }
+
+  async hasUserVoted(suggestionId: string, userId: string): Promise<boolean> {
+    const [vote] = await db
+      .select()
+      .from(featureVotes)
+      .where(
+        and(
+          eq(featureVotes.suggestionId, suggestionId),
+          eq(featureVotes.userId, userId)
+        )
+      );
+    return !!vote;
   }
 }
 

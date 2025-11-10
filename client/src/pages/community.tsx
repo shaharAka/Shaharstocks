@@ -125,17 +125,7 @@ export default function Community() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const adminSecret = localStorage.getItem("ADMIN_SECRET") || "";
-      const response = await fetch(`/api/feature-suggestions/${id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-secret": adminSecret,
-        },
-        body: JSON.stringify({ status }),
-      });
-      if (!response.ok) throw new Error("Failed to update status");
-      return response.json();
+      return apiRequest("PATCH", `/api/feature-suggestions/${id}/status`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/feature-suggestions"] });
@@ -155,15 +145,7 @@ export default function Community() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const adminSecret = localStorage.getItem("ADMIN_SECRET") || "";
-      const response = await fetch(`/api/feature-suggestions/${id}`, {
-        method: "DELETE",
-        headers: {
-          "x-admin-secret": adminSecret,
-        },
-      });
-      if (!response.ok) throw new Error("Failed to delete suggestion");
-      return response.json();
+      return apiRequest("DELETE", `/api/feature-suggestions/${id}`, {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/feature-suggestions"] });

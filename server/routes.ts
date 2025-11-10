@@ -2962,10 +2962,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/feature-suggestions/:id/status", async (req, res) => {
     try {
-      // Check admin secret
-      const adminSecret = req.headers['x-admin-secret'];
-      if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
+      // Check if user is logged in and is an admin
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !user.isAdmin) {
+        return res.status(403).json({ error: "Unauthorized - Admin access required" });
       }
 
       const { status } = req.body;
@@ -2987,10 +2991,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/feature-suggestions/:id", async (req, res) => {
     try {
-      // Check admin secret
-      const adminSecret = req.headers['x-admin-secret'];
-      if (!adminSecret || adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).json({ error: "Unauthorized" });
+      // Check if user is logged in and is an admin
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !user.isAdmin) {
+        return res.status(403).json({ error: "Unauthorized - Admin access required" });
       }
 
       const success = await storage.deleteFeatureSuggestion(req.params.id);

@@ -28,11 +28,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 
@@ -120,25 +115,17 @@ export function AppSidebar() {
                   return (
                     <Collapsible key={item.title} asChild defaultOpen={isPageActive}>
                       <SidebarMenuItem>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <CollapsibleTrigger asChild>
-                              <SidebarMenuButton
-                                className={isPageActive ? "bg-sidebar-accent" : ""}
-                                data-testid={item.testId}
-                              >
-                                <item.icon className="h-4 w-4" />
-                                <span>{item.title}</span>
-                                <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-                              </SidebarMenuButton>
-                            </CollapsibleTrigger>
-                          </TooltipTrigger>
-                          {isCollapsed && (
-                            <TooltipContent side="right">
-                              <p>{item.title}</p>
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            className={isPageActive ? "bg-sidebar-accent" : ""}
+                            data-testid={item.testId}
+                            tooltip={isCollapsed ? item.title : undefined}
+                          >
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                            <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
                             {item.subItems.map((subItem) => {
@@ -170,33 +157,25 @@ export function AppSidebar() {
                 // Regular menu item without sub-items
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <SidebarMenuButton
-                          asChild
-                          className={isPageActive ? "bg-sidebar-accent" : ""}
-                          data-testid={item.testId}
-                        >
-                          <Link href={item.url} onClick={handleNavClick}>
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                            {showBadge && (
-                              <span 
-                                className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
-                                data-testid="badge-new-stocks"
-                              >
-                                {newStocksCount}
-                              </span>
-                            )}
-                          </Link>
-                        </SidebarMenuButton>
-                      </TooltipTrigger>
-                      {isCollapsed && (
-                        <TooltipContent side="right">
-                          <p>{item.title}</p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
+                    <SidebarMenuButton
+                      asChild
+                      className={isPageActive ? "bg-sidebar-accent" : ""}
+                      data-testid={item.testId}
+                      tooltip={isCollapsed ? item.title : undefined}
+                    >
+                      <Link href={item.url} onClick={handleNavClick}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                        {showBadge && (
+                          <span 
+                            className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
+                            data-testid="badge-new-stocks"
+                          >
+                            {newStocksCount}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
               })}
@@ -210,25 +189,17 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SidebarMenuButton
-                        asChild
-                        className={location === "/admin" ? "bg-sidebar-accent" : ""}
-                        data-testid="link-admin"
-                      >
-                        <Link href="/admin" onClick={handleNavClick}>
-                          <ShieldCheck className="h-4 w-4" />
-                          <span>Backoffice</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </TooltipTrigger>
-                    {isCollapsed && (
-                      <TooltipContent side="right">
-                        <p>Backoffice</p>
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
+                  <SidebarMenuButton
+                    asChild
+                    className={location === "/admin" ? "bg-sidebar-accent" : ""}
+                    data-testid="link-admin"
+                    tooltip={isCollapsed ? "Backoffice" : undefined}
+                  >
+                    <Link href="/admin" onClick={handleNavClick}>
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Backoffice</span>
+                    </Link>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>

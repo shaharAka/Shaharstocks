@@ -659,12 +659,17 @@ export default function Purchase() {
       return false;
     }
     
-    // Filter out likely options deals: insider price < 0.15 * current price
+    // Filter out likely options deals and data errors: 
+    // insider price should be between 15% and 200% of current price
     if (stock.insiderPrice && stock.currentPrice) {
       const insiderPrice = parseFloat(stock.insiderPrice);
       const currentPrice = parseFloat(stock.currentPrice);
-      if (insiderPrice > 0 && currentPrice > 0 && insiderPrice < 0.15 * currentPrice) {
-        return false;
+      if (insiderPrice > 0 && currentPrice > 0) {
+        const ratio = insiderPrice / currentPrice;
+        // Filter out if ratio is too low (< 0.15) or too high (> 2.0)
+        if (ratio < 0.15 || ratio > 2.0) {
+          return false;
+        }
       }
     }
     

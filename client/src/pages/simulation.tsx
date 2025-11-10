@@ -1439,17 +1439,41 @@ export default function Simulation() {
                           };
                         });
 
+                        // Calculate price change from purchase date to latest date
+                        const purchasePrice = chartData.find((d: any) => d.isInsiderBuy)?.price || chartData[0]?.price;
+                        const latestPrice = chartData[chartData.length - 1]?.price;
+                        const priceChange = latestPrice && purchasePrice ? latestPrice - purchasePrice : 0;
+                        const priceChangePercent = purchasePrice ? (priceChange / purchasePrice) * 100 : 0;
+                        const isPositiveChange = priceChange >= 0;
+
                         return (
                           <div key={stockData.ticker} className="border rounded-lg p-4 space-y-4" data-testid={`stock-price-${stockData.ticker}`}>
                             <div className="flex items-start justify-between">
-                              <div>
-                                <h4 className="font-semibold text-lg">{stockData.ticker}</h4>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="font-semibold text-lg">{stockData.ticker}</h4>
+                                  {purchasePrice && latestPrice && (
+                                    <Badge
+                                      variant={isPositiveChange ? "default" : "destructive"}
+                                      className="text-xs"
+                                      data-testid={`badge-price-change-${stockData.ticker}`}
+                                    >
+                                      {isPositiveChange ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                                      {isPositiveChange ? "+" : ""}{priceChangePercent.toFixed(2)}%
+                                    </Badge>
+                                  )}
+                                </div>
                                 {candidate && (
                                   <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
                                     <p>Market Cap: {candidate.marketCap}</p>
                                     <p>Purchase Date (Alert Received): {insiderBuyDate.toLocaleDateString()}</p>
                                     <p>Insider Price: ${candidate.insiderPrice?.toFixed(2)}</p>
-                                    <p>Market Price at Alert: ${candidate.marketPrice?.toFixed(2)}</p>
+                                    <p>Market Price at Alert: ${purchasePrice?.toFixed(2)}</p>
+                                    {latestPrice && (
+                                      <p className={isPositiveChange ? "text-success font-medium" : "text-destructive font-medium"}>
+                                        Latest Price: ${latestPrice.toFixed(2)} ({isPositiveChange ? "+" : ""}${priceChange.toFixed(2)})
+                                      </p>
+                                    )}
                                   </div>
                                 )}
                               </div>

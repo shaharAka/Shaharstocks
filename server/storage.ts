@@ -1001,7 +1001,18 @@ export class DatabaseStorage implements IStorage {
 
   // Backtest Price Data
   async getBacktestPriceData(jobId: string): Promise<BacktestPriceData[]> {
-    return await db.select().from(backtestPriceData).where(eq(backtestPriceData.jobId, jobId));
+    const allData = await db.select().from(backtestPriceData).where(eq(backtestPriceData.jobId, jobId));
+    
+    const uniqueByTicker = new Map<string, BacktestPriceData>();
+    allData.forEach(data => {
+      if (!uniqueByTicker.has(data.ticker) || 
+          (data.createdAt && uniqueByTicker.get(data.ticker)!.createdAt && 
+           data.createdAt > uniqueByTicker.get(data.ticker)!.createdAt!)) {
+        uniqueByTicker.set(data.ticker, data);
+      }
+    });
+    
+    return Array.from(uniqueByTicker.values());
   }
 
   async getCachedPriceData(ticker: string, insiderBuyDate: string): Promise<BacktestPriceData | undefined> {

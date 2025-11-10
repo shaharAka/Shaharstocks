@@ -124,7 +124,7 @@ export function UserProfile() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" data-testid="button-user-profile">
+          <Button variant="ghost" size="icon" data-testid="button-user-profile" className="h-11 w-11">
             <Avatar className="h-8 w-8">
               <AvatarFallback style={{ backgroundColor: user.avatarColor }}>
                 {user.name.charAt(0).toUpperCase()}

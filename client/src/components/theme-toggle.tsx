@@ -11,6 +11,7 @@ export function ThemeToggle() {
       size="icon"
       onClick={() => setTheme(theme === "light" ? "dark" : "light")}
       data-testid="button-theme-toggle"
+      className="h-11 w-11"
     >
       {theme === "light" ? (
         <Moon className="h-5 w-5" />

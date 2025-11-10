@@ -12,6 +12,15 @@ Preferred communication style: Simple, everyday language.
 - **Design System**: shadcn/ui (New York style) with Radix UI primitives, Tailwind CSS for styling, custom CSS variables for theming (light/dark mode).
 - **Typography**: Inter for UI, JetBrains Mono for numerical data.
 - **Responsiveness**: Mobile-first approach with a 12-column CSS Grid layout.
+  - **Mobile Optimization (Completed)**: Comprehensive 44px minimum touch target compliance across all mobile-critical flows.
+    - All primary buttons: 40px (`size="lg"`) or 44px (`h-11 w-11`)
+    - Icon buttons in header/navigation: 44px (`h-11 w-11`)
+    - Filter, toggle, and action buttons: 40px minimum
+    - Responsive layouts: Single-column mobile (sm:grid-cols-2 tablets), proper breakpoints (sm:, md:, lg:, xl:)
+    - Container padding: p-4 md:p-6, consistent spacing (gap-2 md:gap-3)
+    - Font sizes: text-xl md:text-2xl headers, ≥14px body text
+    - Optimized pages: Portfolio, Purchase/Recommendations, Trading (Rules/Simulation), Community, Settings
+    - Optimized components: StockTable, BulkActionToolbar, StockComments, AppHeader, Sidebar
 - **Visuals**: Charts with auto-scaling y-axis and inline ticker labels; color-coded avatars for user interest markers.
 - **Tutorials**: Interactive guided tours using react-joyride for onboarding, with session-based tracking.
 

@@ -209,16 +209,16 @@ export default function Community() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Lightbulb className="h-8 w-8 text-primary" />
+    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-2xl">
+      <div className="flex items-center gap-3 mb-4 md:mb-6">
+        <Lightbulb className="h-6 w-6 md:h-8 md:w-8 text-primary" />
         <div>
-          <h1 className="text-3xl font-bold" data-testid="heading-community">Community Board</h1>
-          <p className="text-muted-foreground">Suggest features and vote on what matters most</p>
+          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold" data-testid="heading-community">Community Board</h1>
+          <p className="text-sm text-muted-foreground">Suggest features and vote on what matters most</p>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle data-testid="heading-submit-idea">Submit Your Idea</CardTitle>
@@ -292,13 +292,13 @@ export default function Community() {
         </Card>
       </div>
 
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold flex items-center gap-2" data-testid="heading-suggestions">
-          <MessageSquare className="h-6 w-6" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
+        <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="heading-suggestions">
+          <MessageSquare className="h-5 w-5 md:h-6 md:w-6" />
           Feature Suggestions
         </h2>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48" data-testid="select-status-filter">
+          <SelectTrigger className="w-full sm:w-48" data-testid="select-status-filter">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
           <SelectContent>
@@ -331,7 +331,7 @@ export default function Community() {
                   <div className="flex flex-col items-center gap-1">
                     <Button
                       variant={suggestion.userHasVoted ? "default" : "outline"}
-                      size="sm"
+                      size="lg"
                       onClick={() => handleVote(suggestion.id, suggestion.userHasVoted)}
                       disabled={voteMutation.isPending}
                       data-testid={`button-vote-${suggestion.id}`}
@@ -362,11 +362,11 @@ export default function Community() {
                     </p>
 
                     {user?.isAdmin && (
-                      <div className="flex gap-2 pt-2 border-t">
+                      <div className="flex gap-2 pt-2 border-t flex-wrap">
                         <span className="text-sm text-muted-foreground mr-2">Admin:</span>
                         {suggestion.status !== "roadmap" && (
                           <Button
-                            size="sm"
+                            size="lg"
                             variant="outline"
                             onClick={() => updateStatusMutation.mutate({ id: suggestion.id, status: "roadmap" })}
                             disabled={updateStatusMutation.isPending}
@@ -378,7 +378,7 @@ export default function Community() {
                         )}
                         {suggestion.status === "roadmap" && (
                           <Button
-                            size="sm"
+                            size="lg"
                             variant="outline"
                             onClick={() => updateStatusMutation.mutate({ id: suggestion.id, status: "pending" })}
                             disabled={updateStatusMutation.isPending}
@@ -388,7 +388,7 @@ export default function Community() {
                           </Button>
                         )}
                         <Button
-                          size="sm"
+                          size="lg"
                           variant="destructive"
                           onClick={() => {
                             if (confirm("Are you sure you want to delete this suggestion?")) {

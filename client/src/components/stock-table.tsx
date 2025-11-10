@@ -204,9 +204,9 @@ export function StockTable({
             <TableHead>
               <Button
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => handleSort("ticker")}
-                className="h-8 px-2"
+                className="px-2"
                 data-testid="sort-ticker"
               >
                 Ticker
@@ -217,9 +217,9 @@ export function StockTable({
             <TableHead>
               <Button
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => handleSort("recommendation")}
-                className="h-8 px-2"
+                className="px-2"
                 data-testid="sort-recommendation"
               >
                 Rec.
@@ -229,9 +229,9 @@ export function StockTable({
             <TableHead className="text-right">
               <Button
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => handleSort("price")}
-                className="h-8 px-2"
+                className="px-2"
                 data-testid="sort-price"
               >
                 Price
@@ -242,9 +242,9 @@ export function StockTable({
             <TableHead className="text-right">
               <Button
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => handleSort("change")}
-                className="h-8 px-2"
+                className="px-2"
                 data-testid="sort-change"
               >
                 Change
@@ -254,9 +254,9 @@ export function StockTable({
             <TableHead className="text-right hidden xl:table-cell">
               <Button
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => handleSort("insiderPrice")}
-                className="h-8 px-2"
+                className="px-2"
                 data-testid="sort-insider-price"
               >
                 Insider $
@@ -266,9 +266,9 @@ export function StockTable({
             <TableHead className="hidden xl:table-cell">
               <Button
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => handleSort("marketCap")}
-                className="h-8 px-2"
+                className="px-2"
                 data-testid="sort-market-cap"
               >
                 Mkt Cap
@@ -278,9 +278,9 @@ export function StockTable({
             <TableHead className="text-right hidden lg:table-cell">
               <Button
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => handleSort("aiScore")}
-                className="h-8 px-2"
+                className="px-2"
                 data-testid="sort-ai-score"
               >
                 AI Score
@@ -290,9 +290,9 @@ export function StockTable({
             <TableHead className="hidden lg:table-cell">
               <Button
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => handleSort("daysFromBuy")}
-                className="h-8 px-2"
+                className="px-2"
                 data-testid="sort-days-from-buy"
               >
                 Days

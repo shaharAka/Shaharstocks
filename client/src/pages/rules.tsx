@@ -401,6 +401,7 @@ export default function Rules() {
                       size="icon"
                       onClick={() => openEditDialog(rule)}
                       data-testid={`button-edit-${rule.id}`}
+                      className="h-11 w-11"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -409,6 +410,7 @@ export default function Rules() {
                       size="icon"
                       onClick={() => handleDeleteRule(rule.id)}
                       data-testid={`button-delete-${rule.id}`}
+                      className="h-11 w-11"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

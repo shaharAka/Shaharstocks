@@ -156,6 +156,7 @@ export function StockComments({ ticker }: StockCommentsProps) {
                 size="icon"
                 disabled={!newComment.trim() || createCommentMutation.isPending}
                 data-testid="button-send-comment"
+                className="h-11 w-11"
               >
                 <Send className="h-4 w-4" />
               </Button>

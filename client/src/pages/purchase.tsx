@@ -581,12 +581,12 @@ export default function Purchase() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6">
         <div>
           <Skeleton className="h-8 w-48 mb-2" />
           <Skeleton className="h-4 w-96" />
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Card key={i}>
               <CardHeader>
@@ -702,7 +702,7 @@ export default function Purchase() {
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+            <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">
               Purchase Recommendations
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -728,7 +728,7 @@ export default function Purchase() {
             )}
             <Button
               variant="outline"
-              size="sm"
+              size="lg"
               onClick={() => refreshAllMutation.mutate()}
               disabled={refreshAllMutation.isPending}
               data-testid="button-refresh-all"
@@ -739,17 +739,17 @@ export default function Purchase() {
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={() => refreshAllMutation.mutate()}
               disabled={refreshAllMutation.isPending}
               data-testid="button-refresh-all-mobile"
-              className="sm:hidden"
+              className="sm:hidden h-11 w-11"
             >
               <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? "animate-spin" : ""}`} />
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="lg"
               onClick={() => bulkAnalyzeMutation.mutate()}
               disabled={bulkAnalyzeMutation.isPending}
               data-testid="button-analyze-all"
@@ -760,13 +760,13 @@ export default function Purchase() {
             </Button>
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <div className="flex gap-1">
+            <div className="flex gap-1 flex-wrap">
               <Button
                 variant={recommendationFilter === "buy" ? "default" : "outline"}
-                size="sm"
+                size="lg"
                 onClick={() => setRecommendationFilter("buy")}
                 data-testid="button-filter-buy"
                 className="toggle-elevate"
@@ -776,7 +776,7 @@ export default function Purchase() {
               </Button>
               <Button
                 variant={recommendationFilter === "sell" ? "default" : "outline"}
-                size="sm"
+                size="lg"
                 onClick={() => setRecommendationFilter("sell")}
                 data-testid="button-filter-sell"
                 className="toggle-elevate"
@@ -786,7 +786,7 @@ export default function Purchase() {
               </Button>
               <Button
                 variant={recommendationFilter === "all" ? "default" : "outline"}
-                size="sm"
+                size="lg"
                 onClick={() => setRecommendationFilter("all")}
                 data-testid="button-filter-all"
                 className="toggle-elevate"
@@ -824,7 +824,7 @@ export default function Purchase() {
           <div className="flex gap-1">
             <Button
               variant={viewMode === "table" ? "default" : "outline"}
-              size="sm"
+              size="lg"
               onClick={() => setViewMode("table")}
               data-testid="button-view-table"
               className="toggle-elevate"
@@ -834,7 +834,7 @@ export default function Purchase() {
             </Button>
             <Button
               variant={viewMode === "cards" ? "default" : "outline"}
-              size="sm"
+              size="lg"
               onClick={() => setViewMode("cards")}
               data-testid="button-view-cards"
               className="toggle-elevate"

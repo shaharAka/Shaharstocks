@@ -31,14 +31,14 @@ export function BulkActionToolbar({
         selectedCount === 0 ? "invisible h-0 mb-0 p-0 border-0" : "visible"
       }`}
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex items-center gap-3">
           <Badge variant="default" className="font-mono" data-testid="badge-selected-count">
             {selectedCount} selected
           </Badge>
           <Button
             variant="ghost"
-            size="sm"
+            size="lg"
             onClick={onClear}
             data-testid="button-clear-selection"
           >
@@ -47,10 +47,10 @@ export function BulkActionToolbar({
           </Button>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="default"
-            size="sm"
+            size="lg"
             onClick={onApprove}
             data-testid="button-bulk-approve"
           >
@@ -59,7 +59,7 @@ export function BulkActionToolbar({
           </Button>
           <Button
             variant="destructive"
-            size="sm"
+            size="lg"
             onClick={onReject}
             data-testid="button-bulk-reject"
           >
@@ -68,7 +68,7 @@ export function BulkActionToolbar({
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={onMarkInterest}
             data-testid="button-bulk-interest"
           >
@@ -77,7 +77,7 @@ export function BulkActionToolbar({
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={onRefresh}
             data-testid="button-bulk-refresh"
           >
@@ -86,7 +86,7 @@ export function BulkActionToolbar({
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={onAnalyze}
             data-testid="button-bulk-analyze"
           >
@@ -95,7 +95,7 @@ export function BulkActionToolbar({
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={onSimulate}
             disabled={isSimulating}
             data-testid="button-bulk-simulate"

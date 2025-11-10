@@ -596,7 +596,7 @@ function OpenInsiderConfigSection() {
                     <Button
                       key={title}
                       type="button"
-                      size="sm"
+                      size="lg"
                       variant={insiderTitles.includes(title) ? "default" : "outline"}
                       onClick={() => {
                         if (insiderTitles.includes(title)) {

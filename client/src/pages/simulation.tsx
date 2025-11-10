@@ -863,26 +863,26 @@ export default function Simulation() {
               <div className="flex items-center gap-1 border rounded-md p-1">
                 <Button
                   variant={viewMode === "actual" ? "default" : "ghost"}
-                  size="sm"
+                  size="lg"
                   onClick={() => setViewMode("actual")}
                   data-testid="toggle-view-mode-actual"
-                  className="h-7 px-2 text-xs toggle-elevate"
+                  className="toggle-elevate"
                 >
                   Actual
                 </Button>
                 <Button
                   variant={viewMode === "normalized" ? "default" : "ghost"}
-                  size="sm"
+                  size="lg"
                   onClick={() => setViewMode("normalized")}
                   data-testid="toggle-view-mode-normalized"
-                  className="h-7 px-2 text-xs toggle-elevate"
+                  className="toggle-elevate"
                 >
                   Normalized
                 </Button>
               </div>
               <Button
                 variant="outline"
-                size="sm"
+                size="lg"
                 onClick={selectAllTickers}
                 data-testid="button-select-all"
               >
@@ -890,7 +890,7 @@ export default function Simulation() {
               </Button>
               <Button
                 variant="outline"
-                size="sm"
+                size="lg"
                 onClick={deselectAllTickers}
                 data-testid="button-deselect-all"
               >
@@ -1140,6 +1140,7 @@ export default function Simulation() {
                         onClick={() => deleteSimulationMutation.mutate(stock.ticker)}
                         disabled={deleteSimulationMutation.isPending}
                         data-testid={`button-remove-${stock.ticker}`}
+                        className="h-11 w-11"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -1359,7 +1360,7 @@ export default function Simulation() {
                               </Badge>
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="lg"
                                 onClick={() => cancelBacktest(job.id)}
                                 disabled={cancelBacktestMutation.isPending}
                                 data-testid={`button-cancel-${job.id}`}
@@ -1386,7 +1387,7 @@ export default function Simulation() {
                               )}
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="lg"
                                 onClick={() => deleteBacktest(job.id)}
                                 disabled={deleteBacktestMutation.isPending}
                                 data-testid={`button-delete-${job.id}`}
@@ -1593,7 +1594,7 @@ export default function Simulation() {
                                 <p className="text-sm text-muted-foreground mt-1">{scenario.description}</p>
                               </div>
                               <Button
-                                size="sm"
+                                size="lg"
                                 variant="outline"
                                 onClick={() => openImportDialog(scenario.id)}
                                 data-testid={`button-import-scenario-${scenario.scenarioNumber}`}
@@ -1659,7 +1660,7 @@ export default function Simulation() {
                               <CollapsibleTrigger asChild>
                                 <Button
                                   variant="ghost"
-                                  size="sm"
+                                  size="lg"
                                   className="w-full mt-2 justify-between"
                                   data-testid={`button-toggle-trades-${scenario.scenarioNumber}`}
                                 >

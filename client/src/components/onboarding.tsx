@@ -30,6 +30,14 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
   const fetchOpeninsiderMutation = useMutation({
     mutationFn: async () => {
+      // First, ensure OpenInsider is enabled with default settings
+      await apiRequest("POST", "/api/openinsider/config", {
+        enabled: true,
+        fetchLimit: 500,
+        fetchInterval: "hourly",
+      });
+      
+      // Then fetch the data
       const res = await apiRequest("POST", "/api/openinsider/fetch", {
         limit: 500,
       });
@@ -45,10 +53,10 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
       });
       setStep(3);
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to fetch insider trading data. You can try again later from Settings.",
+        description: error?.message || "Failed to fetch insider trading data. You can try again later from Settings.",
         variant: "destructive",
       });
     },

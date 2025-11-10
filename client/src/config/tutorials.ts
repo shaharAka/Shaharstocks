@@ -1,6 +1,6 @@
 import { Step } from "react-joyride";
 
-export type TutorialId = "dashboard" | "purchase" | "management" | "history" | "rules" | "backtesting" | "settings" | "stocks" | "simulation";
+export type TutorialId = "portfolio" | "purchase" | "management" | "history" | "rules" | "backtesting" | "settings" | "trading" | "onboarding";
 
 export interface TutorialConfig {
   id: TutorialId;
@@ -9,54 +9,49 @@ export interface TutorialConfig {
 }
 
 export const tutorials: Record<TutorialId, TutorialConfig> = {
-  dashboard: {
-    id: "dashboard",
-    title: "Dashboard Tour",
+  portfolio: {
+    id: "portfolio",
+    title: "Portfolio Tour",
     steps: [
       {
         target: "body",
-        content: "Welcome to TradePro! This is your command center for stock trading. Let's take a quick tour.",
+        content: "Welcome to TradePro! This is your command center for stock trading. Let's take a quick tour of the main navigation.",
         placement: "center",
       },
       {
-        target: '[data-testid="link-purchase"]',
-        content: "Purchase page: Review and approve insider trading recommendations",
+        target: '[data-testid="link-recommendations"]',
+        content: "Recommendations: Review and approve insider trading recommendations from company insiders",
         placement: "right",
       },
       {
-        target: '[data-testid="link-management"]',
-        content: "Management page: Monitor your active portfolio holdings with real-time charts and trading rules",
+        target: '[data-testid="link-trading"]',
+        content: "Trading: Create automated trading rules and test strategies with backtesting simulations",
         placement: "right",
       },
       {
-        target: '[data-testid="link-simulation"]',
-        content: "Simulation page: Test what-if scenarios with simulated positions without risking real money",
+        target: '[data-testid="link-community"]',
+        content: "Community: Share feature ideas, vote on suggestions, and view the development roadmap",
         placement: "right",
       },
       {
-        target: '[data-testid="link-history"]',
-        content: "History page: View all your past trades and performance",
-        placement: "right",
+        target: '[data-testid="button-settings"]',
+        content: "Settings: Configure your data sources and integrations (click the gear icon)",
+        placement: "left",
       },
       {
-        target: '[data-testid="link-rules"]',
-        content: "Rules page: Create automated trading rules to manage your positions",
-        placement: "right",
+        target: '[data-testid="tab-overview"]',
+        content: "Overview tab: Your dashboard showing portfolio summary and holdings",
+        placement: "bottom",
       },
       {
-        target: '[data-testid="link-backtesting"]',
-        content: "Backtesting page: Test your trading strategies on historical data",
-        placement: "right",
+        target: '[data-testid="tab-management"]',
+        content: "Management tab: Monitor positions with real-time charts and trading rules",
+        placement: "bottom",
       },
       {
-        target: '[data-testid="link-stocks"]',
-        content: "Stocks page: Browse all stocks and execute manual trades",
-        placement: "right",
-      },
-      {
-        target: '[data-testid="link-settings"]',
-        content: "Settings: Configure your data sources and integrations",
-        placement: "right",
+        target: '[data-testid="tab-history"]',
+        content: "History tab: View all your past trades and performance",
+        placement: "bottom",
       },
     ],
   },
@@ -143,6 +138,27 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       },
     ],
   },
+  trading: {
+    id: "trading",
+    title: "Trading Tools",
+    steps: [
+      {
+        target: "body",
+        content: "The Trading page has two powerful tools: automated trading rules and backtesting simulations",
+        placement: "center",
+      },
+      {
+        target: '[data-testid="tab-rules"]',
+        content: "Trading Rules tab: Create automated rules to manage positions without constant monitoring",
+        placement: "bottom",
+      },
+      {
+        target: '[data-testid="tab-simulation"]',
+        content: "Backtesting tab: Test strategies on historical data to see how they would have performed",
+        placement: "bottom",
+      },
+    ],
+  },
   rules: {
     id: "rules",
     title: "Trading Rules",
@@ -206,50 +222,24 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       },
     ],
   },
-  stocks: {
-    id: "stocks",
-    title: "Stock Browser",
+  onboarding: {
+    id: "onboarding",
+    title: "Welcome to TradePro",
     steps: [
       {
         target: "body",
-        content: "Browse all stocks and execute manual trades",
+        content: "Welcome to TradePro! Let's get you started with setting up your first data source for insider trading recommendations.",
         placement: "center",
       },
       {
-        target: '[data-testid="input-search"]',
-        content: "Search for stocks by ticker or company name",
-        placement: "bottom",
-      },
-      {
-        target: '[data-testid^="button-trade-"]',
-        content: "Execute manual buy or sell trades for any stock",
-        placement: "left",
-      },
-    ],
-  },
-  simulation: {
-    id: "simulation",
-    title: "Simulated Trading",
-    steps: [
-      {
-        target: "body",
-        content: "Test what-if scenarios with simulated positions. All trades here are virtual and don't affect your real portfolio.",
+        target: '[data-testid="section-openinsider"]',
+        content: "OpenInsider.com scrapes real insider trading transactions. We'll start by fetching the first batch of recommendations.",
         placement: "center",
       },
       {
-        target: '[data-testid="badge-simulated"]',
-        content: "These positions are simulated - perfect for testing strategies risk-free!",
-        placement: "bottom",
-      },
-      {
-        target: '[data-testid="button-remove-simulated"]',
-        content: "Remove simulated positions at any time",
-        placement: "left",
-      },
-      {
-        target: "body",
-        content: "Trading rules work the same way in simulation mode, letting you test automated strategies safely.",
-        placement: "center",
+        target: '[data-testid="button-fetch-openinsider"]',
+        content: "Click here to start fetching insider trading data. This will get you the latest 500 transactions.",
+        placement: "top",
       },
     ],
   },

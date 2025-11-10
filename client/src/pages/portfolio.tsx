@@ -12,6 +12,8 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import { Tutorial } from "@/components/tutorial";
+import { Onboarding } from "@/components/onboarding";
+import { useUser } from "@/contexts/UserContext";
 import { usePortfolioHoldings, useStocks, useTradingRules, useTrades } from "@/hooks/use-portfolio-data";
 import { PortfolioOverview } from "@/components/portfolio/overview";
 import { PortfolioManagement } from "@/components/portfolio/management";
@@ -20,6 +22,9 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 
 export default function Portfolio() {
   const [activeTab, setActiveTab] = useState("overview");
+  const { user } = useUser();
+  const [showOnboarding, setShowOnboarding] = useState(!user?.initialDataFetched);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
   
   const { data: holdings, isLoading: holdingsLoading } = usePortfolioHoldings();
   const { data: stocks, isLoading: stocksLoading } = useStocks();
@@ -82,7 +87,15 @@ export default function Portfolio() {
 
   return (
     <>
-      <Tutorial tutorialId="dashboard" />
+      <Onboarding 
+        open={showOnboarding && !user?.initialDataFetched} 
+        onOpenChange={setShowOnboarding}
+        onComplete={() => setOnboardingComplete(true)}
+      />
+      {/* Only show tutorial after onboarding is complete or if user has already fetched data */}
+      {(onboardingComplete || user?.initialDataFetched) && (
+        <Tutorial tutorialId="portfolio" />
+      )}
       <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
         <div>
           <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">

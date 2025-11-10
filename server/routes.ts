@@ -2472,11 +2472,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.updateOpeninsiderSyncStatus();
+      
+      // Mark user's initial data as fetched if this is their first time
+      // We do this regardless of createdCount to avoid the onboarding dialog reappearing
+      // if all transactions were duplicates or filtered out
+      if (req.session.userId) {
+        const user = await storage.getUser(req.session.userId);
+        if (user && !user.initialDataFetched) {
+          await storage.markUserInitialDataFetched(req.session.userId);
+        }
+      }
+      
       res.json({ 
         success: true, 
         message: `Successfully created ${createdCount} new stock recommendations from ${transactions.length} transactions`,
         created: createdCount,
-        total: transactions.length
+        total: transactions.length,
+        transactionsFetched: transactions.length
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

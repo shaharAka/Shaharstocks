@@ -171,6 +171,9 @@ export default function Purchase() {
       await queryClient.refetchQueries({ queryKey: ["/api/stocks", "rejected"] });
       await queryClient.refetchQueries({ queryKey: ["/api/stocks/with-user-status"] });
       
+      // Switch to pending tab so user can see the restored stock
+      setActiveTab("pending");
+      
       toast({
         title: "Stock Restored",
         description: `${data.stock.ticker} has been restored to pending recommendations`,

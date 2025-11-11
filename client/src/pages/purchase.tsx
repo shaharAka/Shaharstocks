@@ -376,10 +376,26 @@ export default function Purchase() {
       const response = await apiRequest("POST", endpoint, body);
       return await response.json();
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
+      // Try to refetch both queries immediately for instant UI update
+      try {
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ["/api/stocks/with-user-status"] }),
+          variables.action === "reject" 
+            ? queryClient.refetchQueries({ queryKey: ["/api/stocks", "rejected"] })
+            : Promise.resolve()
+        ]);
+      } catch (error) {
+        console.error("Failed to refetch queries after stock action:", error);
+      }
+      
+      // Always invalidate as safety net (runs even if refetch fails)
       queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/portfolio/holdings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/trades"] });
+      if (variables.action === "reject") {
+        queryClient.invalidateQueries({ queryKey: ["/api/stocks", "rejected"] });
+      }
       
       if (variables.action === "approve") {
         const broker = data.broker || "manual";
@@ -467,8 +483,21 @@ export default function Purchase() {
     },
     onSuccess: async (data) => {
       console.log("[FRONTEND] Bulk reject success, invalidating queries and refetching");
-      await queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
-      await refetchStocks();
+      
+      // Try to refetch both queries in parallel for instant UI update
+      try {
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: ["/api/stocks/with-user-status"] }),
+          queryClient.refetchQueries({ queryKey: ["/api/stocks", "rejected"] })
+        ]);
+      } catch (error) {
+        console.error("Failed to refetch queries after bulk rejection:", error);
+      }
+      
+      // Always invalidate as safety net (runs even if refetch fails)
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", "rejected"] });
+      
       console.log("[FRONTEND] Refetch complete");
       toast({
         title: "Bulk Rejection Complete",

@@ -834,15 +834,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stocks/with-user-status", async (req, res) => {
     try {
       if (!req.session.userId) {
+        console.log("[with-user-status] No userId in session");
         return res.status(401).json({ error: "Not authenticated" });
       }
+      
+      console.log(`[with-user-status] Fetching stocks for user ${req.session.userId}`);
       
       // Use the new storage method that includes user status and latest active job
       const stocksWithStatus = await storage.getStocksWithUserStatus(req.session.userId);
       
+      console.log(`[with-user-status] Found ${stocksWithStatus.length} stocks`);
+      console.log(`[with-user-status] Pending stocks: ${stocksWithStatus.filter(s => s.userStatus === 'pending').length}`);
+      console.log(`[with-user-status] Rejected stocks: ${stocksWithStatus.filter(s => s.userStatus === 'rejected').length}`);
+      
       res.json(stocksWithStatus);
     } catch (error) {
-      console.error("Failed to fetch stocks with user status:", error);
+      console.error("[with-user-status] ERROR:", error);
       res.status(500).json({ error: "Failed to fetch stocks with user status" });
     }
   });

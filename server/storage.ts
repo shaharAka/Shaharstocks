@@ -1432,58 +1432,75 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStocksWithUserStatus(userId: string): Promise<any[]> {
-    // Get all stocks with user statuses and latest active AI analysis job
-    // Uses LEFT JOINs with LATERAL for efficient latest-job-per-ticker lookup
-    const results = await db
-      .select({
-        // Stock fields
-        stock: stocks,
-        // User status fields
-        userStatus: userStockStatuses.status,
-        userApprovedAt: userStockStatuses.approvedAt,
-        userRejectedAt: userStockStatuses.rejectedAt,
-        userDismissedAt: userStockStatuses.dismissedAt,
-        // Latest active job fields (pending, processing, or failed)
-        jobStatus: aiAnalysisJobs.status,
-        jobCurrentStep: aiAnalysisJobs.currentStep,
-        jobStepDetails: aiAnalysisJobs.stepDetails,
-        jobLastError: aiAnalysisJobs.lastError,
-        jobCreatedAt: aiAnalysisJobs.createdAt,
-      })
-      .from(stocks)
-      .leftJoin(
-        userStockStatuses,
-        and(
-          eq(stocks.ticker, userStockStatuses.ticker),
-          eq(userStockStatuses.userId, userId)
+    try {
+      console.log(`[Storage] getStocksWithUserStatus called for userId: ${userId}`);
+      
+      // Get all stocks with user statuses and latest active AI analysis job
+      // Uses LEFT JOINs with LATERAL for efficient latest-job-per-ticker lookup
+      const results = await db
+        .select({
+          // Stock fields
+          stock: stocks,
+          // User status fields
+          userStatus: userStockStatuses.status,
+          userApprovedAt: userStockStatuses.approvedAt,
+          userRejectedAt: userStockStatuses.rejectedAt,
+          userDismissedAt: userStockStatuses.dismissedAt,
+          // Latest active job fields (pending, processing, or failed)
+          jobStatus: aiAnalysisJobs.status,
+          jobCurrentStep: aiAnalysisJobs.currentStep,
+          jobStepDetails: aiAnalysisJobs.stepDetails,
+          jobLastError: aiAnalysisJobs.lastError,
+          jobCreatedAt: aiAnalysisJobs.createdAt,
+        })
+        .from(stocks)
+        .leftJoin(
+          userStockStatuses,
+          and(
+            eq(stocks.ticker, userStockStatuses.ticker),
+            eq(userStockStatuses.userId, userId)
+          )
         )
-      )
-      .leftJoin(
-        sql`LATERAL (
-          SELECT * FROM ${aiAnalysisJobs}
-          WHERE ${aiAnalysisJobs.ticker} = ${stocks.ticker}
-            AND ${aiAnalysisJobs.status} IN ('pending', 'processing', 'failed')
-          ORDER BY ${aiAnalysisJobs.createdAt} DESC
-          LIMIT 1
-        ) AS ${aiAnalysisJobs}`,
-        sql`true`
-      );
+        .leftJoin(
+          sql`LATERAL (
+            SELECT * FROM ${aiAnalysisJobs}
+            WHERE ${aiAnalysisJobs.ticker} = ${stocks.ticker}
+              AND ${aiAnalysisJobs.status} IN ('pending', 'processing', 'failed')
+            ORDER BY ${aiAnalysisJobs.createdAt} DESC
+            LIMIT 1
+          ) AS ${aiAnalysisJobs}`,
+          sql`true`
+        );
 
-    // Transform results to include analysisJob as optional nested object
-    return results.map(row => ({
-      ...row.stock,
-      userStatus: row.userStatus || "pending",
-      userApprovedAt: row.userApprovedAt,
-      userRejectedAt: row.userRejectedAt,
-      userDismissedAt: row.userDismissedAt,
-      analysisJob: row.jobStatus ? {
-        status: row.jobStatus,
-        currentStep: row.jobCurrentStep,
-        stepDetails: row.jobStepDetails,
-        lastError: row.jobLastError,
-        updatedAt: row.jobCreatedAt,
-      } : null,
-    }));
+      console.log(`[Storage] Query returned ${results.length} rows`);
+
+      // Transform results to include analysisJob as optional nested object
+      const transformed = results.map(row => ({
+        ...row.stock,
+        userStatus: row.userStatus || "pending",
+        userApprovedAt: row.userApprovedAt,
+        userRejectedAt: row.userRejectedAt,
+        userDismissedAt: row.userDismissedAt,
+        analysisJob: row.jobStatus ? {
+          status: row.jobStatus,
+          currentStep: row.jobCurrentStep,
+          stepDetails: row.jobStepDetails,
+          lastError: row.jobLastError,
+          updatedAt: row.jobCreatedAt,
+        } : null,
+      }));
+      
+      console.log(`[Storage] Transformed data - sample:`, transformed[0] ? {
+        ticker: transformed[0].ticker,
+        userStatus: transformed[0].userStatus,
+        recommendationStatus: transformed[0].recommendationStatus
+      } : 'no data');
+      
+      return transformed;
+    } catch (error) {
+      console.error('[Storage] getStocksWithUserStatus ERROR:', error);
+      throw error;
+    }
   }
 
   async createUserStockStatus(statusData: InsertUserStockStatus): Promise<UserStockStatus> {

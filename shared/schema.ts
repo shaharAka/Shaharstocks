@@ -42,6 +42,9 @@ export const stocks = pgTable("stocks", {
   // Insider sentiment (from Finnhub)
   insiderSentimentMspr: decimal("insider_sentiment_mspr", { precision: 10, scale: 4 }), // Monthly Share Purchase Ratio (-1 to 1)
   insiderSentimentChange: decimal("insider_sentiment_change", { precision: 10, scale: 4 }), // Change in MSPR from previous month
+  microAnalysisCompleted: boolean("micro_analysis_completed").notNull().default(false), // Micro agent (fundamental) analysis completed
+  macroAnalysisCompleted: boolean("macro_analysis_completed").notNull().default(false), // Macro agent (industry/sector) analysis completed
+  combinedAnalysisCompleted: boolean("combined_analysis_completed").notNull().default(false), // Integrated score calculated
   lastUpdated: timestamp("last_updated").defaultNow(),
   rejectedAt: timestamp("rejected_at"), // When the recommendation was rejected
 });
@@ -213,6 +216,14 @@ export const aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   startedAt: timestamp("started_at"), // When processing began
   completedAt: timestamp("completed_at"), // When job finished (success or failure)
   errorMessage: text("error_message"), // Error details if failed
+  currentStep: text("current_step"), // Current processing step: "fetching_data", "micro_analysis", "macro_analysis", "calculating_score", "completed"
+  stepDetails: jsonb("step_details").$type<{
+    phase?: string; // "data_fetch", "micro", "macro", "integration"
+    substep?: string; // Detailed substep like "fetching RSI", "analyzing fundamentals"
+    progress?: string; // Progress indicator like "2/7" or "50%"
+    timestamp?: string; // ISO timestamp of last update
+  }>(),
+  lastError: text("last_error"), // Detailed error message for the current/last failed step
   createdAt: timestamp("created_at").defaultNow(),
 });
 

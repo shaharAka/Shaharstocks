@@ -247,6 +247,9 @@ export interface IStorage {
   getJobById(jobId: string): Promise<AiAnalysisJob | undefined>;
   getJobsByTicker(ticker: string): Promise<AiAnalysisJob[]>;
   updateJobStatus(jobId: string, status: string, updates?: Partial<AiAnalysisJob>): Promise<void>;
+  updateJobProgress(jobId: string, currentStep: string, stepDetails: any): Promise<void>;
+  markStockAnalysisPhaseComplete(ticker: string, phase: 'micro' | 'macro' | 'combined'): Promise<void>;
+  getStocksWithIncompleteAnalysis(): Promise<Stock[]>;
   getQueueStats(): Promise<{ pending: number; processing: number; completed: number; failed: number }>;
 
   // Macro Analysis
@@ -1668,6 +1671,65 @@ export class DatabaseStorage implements IStorage {
       .where(eq(aiAnalysisJobs.id, jobId));
 
     console.log(`[Queue] Updated job ${jobId} to status: ${status}`);
+  }
+
+  async updateJobProgress(jobId: string, currentStep: string, stepDetails: any): Promise<void> {
+    await db
+      .update(aiAnalysisJobs)
+      .set({
+        currentStep,
+        stepDetails,
+        lastError: null, // Clear error on successful progress update
+      })
+      .where(eq(aiAnalysisJobs.id, jobId));
+  }
+
+  async markStockAnalysisPhaseComplete(ticker: string, phase: 'micro' | 'macro' | 'combined'): Promise<void> {
+    // Use row-level locking to prevent race conditions (SELECT ... FOR UPDATE)
+    const fieldMap = {
+      'micro': 'micro_analysis_completed',
+      'macro': 'macro_analysis_completed',
+      'combined': 'combined_analysis_completed',
+    };
+
+    const fieldName = fieldMap[phase];
+
+    await db.execute(sql`
+      UPDATE ${stocks}
+      SET ${sql.raw(fieldName)} = true
+      WHERE ticker = ${ticker}
+      AND id = (
+        SELECT id FROM ${stocks}
+        WHERE ticker = ${ticker}
+        FOR UPDATE
+      )
+    `);
+
+    console.log(`[Storage] Marked ${phase} analysis complete for ${ticker}`);
+  }
+
+  async getStocksWithIncompleteAnalysis(): Promise<Stock[]> {
+    // Get stocks where at least one analysis phase is incomplete AND there's no active job running
+    const incompleteStocks = await db
+      .select()
+      .from(stocks)
+      .where(
+        and(
+          eq(stocks.recommendationStatus, 'pending'),
+          sql`(
+            ${stocks.microAnalysisCompleted} = false
+            OR ${stocks.macroAnalysisCompleted} = false
+            OR ${stocks.combinedAnalysisCompleted} = false
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${aiAnalysisJobs}
+            WHERE ${aiAnalysisJobs.ticker} = ${stocks.ticker}
+            AND ${aiAnalysisJobs.status} IN ('pending', 'processing')
+          )`
+        )
+      );
+
+    return incompleteStocks;
   }
 
   async getQueueStats(): Promise<{ pending: number; processing: number; completed: number; failed: number }> {

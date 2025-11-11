@@ -23,6 +23,30 @@ class QueueWorker {
   private processingCount = 0;
   private maxConcurrent = 1; // Process one job at a time for now
 
+  /**
+   * Update job progress with current step and details
+   */
+  private async updateProgress(
+    jobId: string,
+    ticker: string,
+    currentStep: string,
+    stepDetails: {
+      phase?: string;
+      substep?: string;
+      progress?: string;
+    }
+  ) {
+    try {
+      await storage.updateJobProgress(jobId, currentStep, {
+        ...stepDetails,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[QueueWorker] 📍 ${ticker} - ${currentStep}: ${stepDetails.substep || stepDetails.phase}`);
+    } catch (error) {
+      console.warn(`[QueueWorker] Failed to update progress for job ${jobId}:`, error);
+    }
+  }
+
   async start() {
     if (this.running) {
       console.log("[QueueWorker] Already running");
@@ -98,7 +122,12 @@ class QueueWorker {
     console.log(`[QueueWorker] Processing job ${job.id} for ${job.ticker} (priority: ${job.priority}, attempt: ${job.retryCount + 1}/${job.maxRetries + 1})`);
 
     try {
-      // Fetch all required data for analysis
+      // PHASE 1: Fetch all required data for analysis
+      await this.updateProgress(job.id, job.ticker, "fetching_data", {
+        phase: "data_fetch",
+        substep: "Fetching fundamentals and price data",
+        progress: "0/3"
+      });
       console.log(`[QueueWorker] Fetching data for ${job.ticker}...`);
       
       const [companyOverview, balanceSheet, incomeStatement, cashFlow, dailyPrices] = await Promise.all([
@@ -109,7 +138,12 @@ class QueueWorker {
         stockService.getDailyPrices(job.ticker, 60),
       ]);
 
-      // Fetch technical indicators and news
+      await this.updateProgress(job.id, job.ticker, "fetching_data", {
+        phase: "data_fetch",
+        substep: "Fetching technical indicators and news",
+        progress: "1/3"
+      });
+
       const [technicalIndicators, newsSentiment] = await Promise.all([
         stockService.getTechnicalIndicators(job.ticker, dailyPrices),
         stockService.getNewsSentiment(job.ticker),
@@ -118,6 +152,12 @@ class QueueWorker {
       console.log(`[QueueWorker] 📊 Analyzing price-news correlation for ${job.ticker}...`);
       const priceNewsCorrelation = stockService.analyzePriceNewsCorrelation(dailyPrices, newsSentiment);
       console.log(`[QueueWorker] ✅ Price-news correlation complete`);
+
+      await this.updateProgress(job.id, job.ticker, "fetching_data", {
+        phase: "data_fetch",
+        substep: "Fetching SEC filings and fundamentals",
+        progress: "2/3"
+      });
 
       // Fetch SEC filings and comprehensive fundamentals (optional, non-blocking)
       let secFilingData = null;
@@ -169,6 +209,18 @@ class QueueWorker {
         }
       })();
       console.log(`[QueueWorker] ✅ Insider trading check complete`);
+      
+      await this.updateProgress(job.id, job.ticker, "fetching_data", {
+        phase: "data_fetch",
+        substep: "Data fetch complete",
+        progress: "3/3"
+      });
+
+      // PHASE 2: Macro Analysis (happens first - get industry context)
+      await this.updateProgress(job.id, job.ticker, "macro_analysis", {
+        phase: "macro",
+        substep: "Analyzing industry/sector conditions"
+      });
 
       // Get or create industry-specific macro analysis
       // Prefer: 1) Stock record from DB, 2) Alpha Vantage industry, 3) Alpha Vantage sector, 4) undefined
@@ -192,6 +244,16 @@ class QueueWorker {
         console.log(`[QueueWorker] Macro factor: ${macroAnalysis.macroFactor}, Macro score: ${macroAnalysis.macroScore}/100`);
       }
 
+      // Mark macro phase complete after obtaining/creating macro analysis
+      await storage.markStockAnalysisPhaseComplete(job.ticker, 'macro');
+      console.log(`[QueueWorker] ✅ Macro analysis phase complete for ${job.ticker}`);
+
+      // PHASE 3: Micro AI Analysis (analyze company fundamentals)
+      await this.updateProgress(job.id, job.ticker, "micro_analysis", {
+        phase: "micro",
+        substep: "Running fundamental analysis with AI"
+      });
+
       // Run micro AI analysis
       console.log(`[QueueWorker] Running micro AI analysis for ${job.ticker}...`);
       const analysis = await aiAnalysisService.analyzeStock({
@@ -207,6 +269,17 @@ class QueueWorker {
         secFilings,
         comprehensiveFundamentals,
       });
+      console.log(`[QueueWorker] ✅ Micro analysis complete (score: ${analysis.confidenceScore}/100)`);
+      
+      // Mark micro phase complete after AI analysis finishes
+      await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
+      console.log(`[QueueWorker] ✅ Micro analysis phase complete for ${job.ticker}`);
+
+      // PHASE 4: Score Integration
+      await this.updateProgress(job.id, job.ticker, "calculating_score", {
+        phase: "integration",
+        substep: "Calculating integrated score (micro × macro)"
+      });
 
       // Calculate integrated score (micro score × macro factor), clamped to 0-100
       const macroFactor = macroAnalysis.macroFactor ? parseFloat(macroAnalysis.macroFactor) : 1.0;
@@ -215,6 +288,7 @@ class QueueWorker {
       console.log(`[QueueWorker] Score integration: Micro ${analysis.confidenceScore} × Macro ${macroFactor} = ${rawIntegratedScore.toFixed(1)} → Clamped to ${integratedScore}/100`);
 
       // Save analysis to database with macro integration
+      console.log(`[QueueWorker] 💾 Saving integrated analysis to database...`);
       await storage.saveStockAnalysis({
         ticker: analysis.ticker,
         status: "completed",
@@ -250,16 +324,29 @@ class QueueWorker {
         integratedScore: integratedScore,
       });
 
+      // Set combined flag after integrated score is saved
+      await storage.markStockAnalysisPhaseComplete(job.ticker, 'combined');
+      console.log(`[QueueWorker] ✅ All analysis phases complete for ${job.ticker}`);
+
+      // Final progress update
+      await this.updateProgress(job.id, job.ticker, "completed", {
+        phase: "complete",
+        substep: "Analysis complete",
+        progress: "100%"
+      });
+
       // Mark job as completed
       await storage.updateJobStatus(job.id, "completed");
       
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.log(`[QueueWorker] ✅ Job ${job.id} completed successfully in ${duration}s (${job.ticker}: ${analysis.overallRating}, score: ${analysis.confidenceScore})`);
+      console.log(`[QueueWorker] ✅ Job ${job.id} completed successfully in ${duration}s (${job.ticker}: ${analysis.overallRating}, integrated score: ${integratedScore}/100)`);
 
     } catch (error) {
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
       console.error(`[QueueWorker] ❌ Job ${job.id} failed after ${duration}s:`, errorMessage);
+      console.error(`[QueueWorker] Error stack:`, errorStack);
 
       // Determine if we should retry
       if (job.retryCount < job.maxRetries) {
@@ -271,6 +358,7 @@ class QueueWorker {
           retryCount: job.retryCount + 1,
           scheduledAt,
           errorMessage,
+          lastError: errorMessage, // Set lastError for frontend visibility
         });
         
         console.log(`[QueueWorker] Job ${job.id} will retry in ${backoffMinutes} minutes (attempt ${job.retryCount + 2}/${job.maxRetries + 1})`);
@@ -278,6 +366,7 @@ class QueueWorker {
         // Max retries exceeded, mark as failed
         await storage.updateJobStatus(job.id, "failed", {
           errorMessage,
+          lastError: errorMessage, // Set lastError for frontend visibility
         });
         
         console.log(`[QueueWorker] Job ${job.id} failed permanently after ${job.maxRetries + 1} attempts`);

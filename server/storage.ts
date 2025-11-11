@@ -92,7 +92,7 @@ import {
   featureVotes,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Stocks
@@ -1435,23 +1435,14 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`[Storage] getStocksWithUserStatus called for userId: ${userId}`);
       
-      // Get all stocks with user statuses and latest active AI analysis job
-      // Uses LEFT JOINs with LATERAL for efficient latest-job-per-ticker lookup
+      // Get all stocks with user statuses (simplified - no AI jobs for now)
       const results = await db
         .select({
-          // Stock fields
           stock: stocks,
-          // User status fields
           userStatus: userStockStatuses.status,
           userApprovedAt: userStockStatuses.approvedAt,
           userRejectedAt: userStockStatuses.rejectedAt,
           userDismissedAt: userStockStatuses.dismissedAt,
-          // Latest active job fields (pending, processing, or failed)
-          jobStatus: aiAnalysisJobs.status,
-          jobCurrentStep: aiAnalysisJobs.currentStep,
-          jobStepDetails: aiAnalysisJobs.stepDetails,
-          jobLastError: aiAnalysisJobs.lastError,
-          jobCreatedAt: aiAnalysisJobs.createdAt,
         })
         .from(stocks)
         .leftJoin(
@@ -1460,37 +1451,53 @@ export class DatabaseStorage implements IStorage {
             eq(stocks.ticker, userStockStatuses.ticker),
             eq(userStockStatuses.userId, userId)
           )
-        )
-        .leftJoin(
-          sql`LATERAL (
-            SELECT * FROM ${aiAnalysisJobs}
-            WHERE ${aiAnalysisJobs.ticker} = ${stocks.ticker}
-              AND ${aiAnalysisJobs.status} IN ('pending', 'processing', 'failed')
-            ORDER BY ${aiAnalysisJobs.createdAt} DESC
-            LIMIT 1
-          ) AS ${aiAnalysisJobs}`,
-          sql`true`
         );
 
       console.log(`[Storage] Query returned ${results.length} rows`);
 
-      // Transform results to include analysisJob as optional nested object
-      const transformed = results.map(row => ({
-        ...row.stock,
-        userStatus: row.userStatus || "pending",
-        userApprovedAt: row.userApprovedAt,
-        userRejectedAt: row.userRejectedAt,
-        userDismissedAt: row.userDismissedAt,
-        analysisJob: row.jobStatus ? {
-          status: row.jobStatus,
-          currentStep: row.jobCurrentStep,
-          stepDetails: row.jobStepDetails,
-          lastError: row.jobLastError,
-          updatedAt: row.jobCreatedAt,
-        } : null,
-      }));
+      // Get latest AI jobs for all tickers
+      const allJobs = await db
+        .select()
+        .from(aiAnalysisJobs)
+        .where(
+          and(
+            inArray(aiAnalysisJobs.ticker, results.map(r => r.stock.ticker)),
+            inArray(aiAnalysisJobs.status, ['pending', 'processing', 'failed'])
+          )
+        );
+
+      console.log(`[Storage] Found ${allJobs.length} active AI jobs`);
+
+      // Create a map of ticker -> latest job
+      const jobsByTicker = new Map<string, typeof aiAnalysisJobs.$inferSelect>();
+      for (const job of allJobs) {
+        const existing = jobsByTicker.get(job.ticker);
+        if (!existing || (job.createdAt && existing.createdAt && job.createdAt > existing.createdAt)) {
+          jobsByTicker.set(job.ticker, job);
+        }
+      }
+
+      // Transform results
+      const transformed = results.map(row => {
+        const latestJob = jobsByTicker.get(row.stock.ticker);
+        return {
+          ...row.stock,
+          userStatus: row.userStatus || "pending",
+          userApprovedAt: row.userApprovedAt,
+          userRejectedAt: row.userRejectedAt,
+          userDismissedAt: row.userDismissedAt,
+          analysisJob: latestJob ? {
+            status: latestJob.status,
+            currentStep: latestJob.currentStep,
+            stepDetails: latestJob.stepDetails,
+            lastError: latestJob.lastError,
+            updatedAt: latestJob.createdAt,
+          } : null,
+        };
+      });
       
-      console.log(`[Storage] Transformed data - sample:`, transformed[0] ? {
+      console.log(`[Storage] Transformed ${transformed.length} stocks`);
+      console.log(`[Storage] Sample:`, transformed[0] ? {
         ticker: transformed[0].ticker,
         userStatus: transformed[0].userStatus,
         recommendationStatus: transformed[0].recommendationStatus

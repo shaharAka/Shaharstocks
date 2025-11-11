@@ -74,8 +74,18 @@ export default function Signup() {
 
   useEffect(() => {
     if (showPayPal && !paypalLoaded) {
+      const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
+      if (!clientId) {
+        toast({
+          title: "Configuration Error",
+          description: "PayPal is not configured. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const script = document.createElement('script');
-      script.src = 'https://www.paypal.com/sdk/js?client-id=AbxvMnD49CFQ1OmupMzmhtkXTM9OG5NI-VJ7Sff5dRiw8qM1Sb_4Ac4gVoXLB8Z8MSgnJefZJaaOmHMc&vault=true&intent=subscription';
+      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&vault=true&intent=subscription`;
       script.setAttribute('data-sdk-integration-source', 'button-factory');
       script.async = true;
       script.onload = () => {
@@ -89,10 +99,20 @@ export default function Signup() {
         }
       };
     }
-  }, [showPayPal, paypalLoaded]);
+  }, [showPayPal, paypalLoaded, toast]);
 
   useEffect(() => {
     if (paypalLoaded && window.paypal) {
+      const planId = import.meta.env.VITE_PAYPAL_PLAN_ID;
+      if (!planId) {
+        toast({
+          title: "Configuration Error",
+          description: "PayPal plan is not configured. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       window.paypal.Buttons({
         style: {
           shape: 'pill',
@@ -102,7 +122,7 @@ export default function Signup() {
         },
         createSubscription: function(data: any, actions: any) {
           return actions.subscription.create({
-            plan_id: 'P-7MD97450VP279543SNEHWHRI'
+            plan_id: planId
           });
         },
         onApprove: function(data: any, actions: any) {
@@ -121,7 +141,7 @@ export default function Signup() {
             variant: "destructive",
           });
         }
-      }).render('#paypal-button-container-P-7MD97450VP279543SNEHWHRI');
+      }).render(`#paypal-button-container-${planId}`);
     }
   }, [paypalLoaded, toast, setLocation]);
 
@@ -186,7 +206,7 @@ export default function Signup() {
                 </div>
                 
                 <div className="flex justify-center">
-                  <div id="paypal-button-container-P-7MD97450VP279543SNEHWHRI" data-testid="paypal-button-container"></div>
+                  <div id={`paypal-button-container-${import.meta.env.VITE_PAYPAL_PLAN_ID}`} data-testid="paypal-button-container"></div>
                 </div>
 
                 <div className="text-center pt-4 border-t">

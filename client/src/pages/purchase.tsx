@@ -148,10 +148,27 @@ export default function Purchase() {
 
   const { data: stocks, isLoading, error, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
+    queryFn: async () => {
+      console.log("[Frontend] Fetching stocks with user status...");
+      const response = await fetch("/api/stocks/with-user-status");
+      console.log("[Frontend] Response status:", response.status);
+      console.log("[Frontend] Response ok:", response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Frontend] API Error:", errorText);
+        throw new Error(`Failed to fetch: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log("[Frontend] API returned:", data?.length || 0, "stocks");
+      return data;
+    }
   });
 
   // Debug logging
   useEffect(() => {
+    console.log("[Frontend] currentUser:", currentUser?.email);
     console.log("[Frontend] stocks data:", stocks?.length || 0);
     console.log("[Frontend] isLoading:", isLoading);
     console.log("[Frontend] error:", error);
@@ -163,7 +180,7 @@ export default function Purchase() {
         recommendation: stocks[0].recommendation
       });
     }
-  }, [stocks, isLoading, error]);
+  }, [stocks, isLoading, error, currentUser]);
 
   // Query for rejected stocks
   const { data: rejectedStocks, isLoading: rejectedLoading, refetch: refetchRejected } = useQuery<Stock[]>({

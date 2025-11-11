@@ -2401,6 +2401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Convert transactions to stock recommendations
       let createdCount = 0;
+      let filteredCount = 0;
       const createdTickers: string[] = []; // Track newly created tickers for AI analysis
       
       for (const transaction of transactions) {
@@ -2421,6 +2422,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Fetch company profile, market cap, and news
           const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
           const data = stockData.get(transaction.ticker);
+          
+          // Apply market cap filter (must be > $500M)
+          // Note: data.marketCap is already in millions from Finnhub
+          if (!data?.marketCap || data.marketCap < 500) {
+            filteredCount++;
+            console.log(`[OpeninsiderFetch] ${transaction.ticker} market cap too low: $${data?.marketCap || 0}M (need >$500M), skipping`);
+            continue;
+          }
 
           // Create stock recommendation with complete information
           const newStock = await storage.createStock({
@@ -2510,9 +2519,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ 
         success: true, 
-        message: `Successfully created ${createdCount} new stock recommendations from ${transactions.length} transactions`,
+        message: `Successfully created ${createdCount} new stock recommendations from ${transactions.length} transactions (${filteredCount} filtered out by market cap <$500M)`,
         created: createdCount,
         total: transactions.length,
+        filtered: filteredCount,
         transactionsFetched: transactions.length
       });
     } catch (error) {

@@ -39,9 +39,9 @@ Preferred communication style: Simple, everyday language.
     - **Dual-agent AI**: Micro Agent (SEC EDGAR, Alpha Vantage fundamentals) and Macro Agent (industry-specific ETF performance).
     - **Industry-specific Macro Analysis**: Tailors market conditions to each stock's industry using sector ETFs (e.g., XLK for Tech, XLF for Financials), with comprehensive industry-to-ETF mapping.
 - **Automated Recommendation Management**: Hourly job removes old pending BUY recommendations (2 weeks), filters out options deals and data errors.
-- **Purchase Recommendation Filters**: 
+- **Purchase Recommendation Filters** (Applied to both manual fetch and hourly background job):
     - Market cap threshold: Minimum $500M (excludes small-cap stocks)
-    - Insider price ratio: 15%-200% of current price (filters out options deals where insider paid <15%, and data errors/unusual options exercises where insider paid >200%)
+    - Note: Insider price ratio filtering (15%-200%) was removed due to stock-split adjustment issues. Relying on OpenInsider's upstream filtering instead.
 - **Trading Rules**: Trigger-based system with flexible, portfolio-wide or specific-stock rules based on price changes.
 - **Collaboration**: Multi-user system with stock-specific comment threads, interest markers, and filtering options for recommendations.
 - **Admin Backoffice**: Comprehensive dashboard for user, subscription, and payment management (PayPal and manual), with audit trails for manual overrides, soft/hard user deletion, and secure password resets. Requires `isAdmin: true` for access and `x-admin-secret` for authentication.

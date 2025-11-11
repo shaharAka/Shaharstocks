@@ -520,6 +520,7 @@ function startOpeninsiderFetchJob() {
 
       // Convert transactions to stock recommendations
       let createdCount = 0;
+      let filteredCount = 0;
       for (const transaction of transactions) {
         try {
           // Check if stock already exists with pending status
@@ -553,6 +554,14 @@ function startOpeninsiderFetchJob() {
           log(`[OpeninsiderFetch] Fetching company info for ${transaction.ticker}`);
           const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
           const data = stockData.get(transaction.ticker);
+          
+          // Apply market cap filter (must be > $500M)
+          // Note: data.marketCap is already in millions from Finnhub
+          if (!data?.marketCap || data.marketCap < 500) {
+            filteredCount++;
+            log(`[OpeninsiderFetch] ${transaction.ticker} market cap too low: $${data?.marketCap || 0}M (need >$500M), skipping`);
+            continue;
+          }
 
           // Create stock recommendation with complete information
           const newStock = await storage.createStock({
@@ -610,7 +619,7 @@ function startOpeninsiderFetchJob() {
         }
       }
 
-      log(`[OpeninsiderFetch] Successfully created ${createdCount} new stock recommendations`);
+      log(`[OpeninsiderFetch] Successfully created ${createdCount} new stock recommendations from ${transactions.length} transactions (${filteredCount} filtered by market cap)`);
       await storage.updateOpeninsiderSyncStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

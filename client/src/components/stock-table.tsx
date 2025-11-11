@@ -14,6 +14,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, Trending
 import { Button } from "@/components/ui/button";
 import type { Stock, User, StockInterestWithUser } from "@shared/schema";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
+import { AnalysisPhaseIndicator } from "@/components/analysis-phase-indicator";
 
 interface StockTableProps {
   stocks: Stock[];
@@ -396,9 +397,18 @@ export function StockTable({
                     // Check if analysis is in progress
                     if (analysis.status === "pending" || analysis.status === "analyzing") {
                       return (
-                        <Badge variant="outline" className="text-xs">
-                          Analyzing...
-                        </Badge>
+                        <div className="flex items-center gap-2 justify-end">
+                          <Badge variant="outline" className="text-xs">
+                            Analyzing...
+                          </Badge>
+                          <AnalysisPhaseIndicator
+                            microCompleted={stock.microAnalysisCompleted}
+                            macroCompleted={stock.macroAnalysisCompleted}
+                            combinedCompleted={stock.combinedAnalysisCompleted}
+                            currentPhase={(stock as any).analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "complete" | null | undefined}
+                            size="sm"
+                          />
+                        </div>
                       );
                     }
                     
@@ -421,9 +431,17 @@ export function StockTable({
                     
                     return (
                       <div className="flex flex-col items-end gap-0.5">
-                        <Badge variant={badgeVariant} className="text-xs font-mono">
-                          {score}/100
-                        </Badge>
+                        <div className="flex items-center gap-1">
+                          <Badge variant={badgeVariant} className="text-xs font-mono">
+                            {score}/100
+                          </Badge>
+                          <AnalysisPhaseIndicator
+                            microCompleted={stock.microAnalysisCompleted}
+                            macroCompleted={stock.macroAnalysisCompleted}
+                            combinedCompleted={stock.combinedAnalysisCompleted}
+                            size="sm"
+                          />
+                        </div>
                         {analysis.integratedScore && analysis.confidenceScore !== analysis.integratedScore && (
                           <span className="text-[10px] text-muted-foreground">
                             (micro: {analysis.confidenceScore})

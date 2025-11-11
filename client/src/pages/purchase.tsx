@@ -142,6 +142,70 @@ export default function Purchase() {
     queryKey: ["/api/stocks/with-user-status"],
   });
 
+  // Determine if we should poll based on active jobs
+  const hasActiveJobs = stocks?.some(s => 
+    s.analysisJob?.status === "processing" || s.analysisJob?.status === "pending"
+  ) || false;
+
+  // Poll every 5 seconds when there are active jobs
+  useEffect(() => {
+    if (!hasActiveJobs) return;
+
+    const interval = setInterval(() => {
+      refetchStocks();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [hasActiveJobs, refetchStocks]);
+
+  // Track previous job statuses for notifications
+  const [prevJobStatuses, setPrevJobStatuses] = useState<Record<string, string>>({});
+
+  // Show toast notifications when analysis jobs complete or fail
+  useEffect(() => {
+    if (!stocks) return;
+
+    let hasChanges = false;
+    const newStatuses: Record<string, string> = {};
+
+    stocks.forEach(stock => {
+      const prevStatus = prevJobStatuses[stock.ticker];
+      const currentStatus = stock.analysisJob?.status;
+
+      if (currentStatus) {
+        newStatuses[stock.ticker] = currentStatus;
+      }
+
+      // Only notify on status transitions
+      if (prevStatus && prevStatus !== currentStatus) {
+        hasChanges = true;
+        
+        if (currentStatus === "completed") {
+          toast({
+            title: `${stock.ticker} Analysis Complete`,
+            description: `AI analysis finished with score ${stock.confidenceScore || 'N/A'}/100`,
+          });
+        } else if (currentStatus === "failed") {
+          toast({
+            title: `${stock.ticker} Analysis Failed`,
+            description: stock.analysisJob?.lastError || "An error occurred during analysis",
+            variant: "destructive",
+          });
+        }
+      }
+      
+      // Check if we have a new status that wasn't tracked before
+      if (!prevStatus && currentStatus) {
+        hasChanges = true;
+      }
+    });
+
+    // Only update state if there are actual changes
+    if (hasChanges) {
+      setPrevJobStatuses(newStatuses);
+    }
+  }, [stocks, toast, prevJobStatuses]);
+
   const { data: ibkrStatus } = useQuery<IbkrStatus>({
     queryKey: ["/api/ibkr/status"],
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -1006,14 +1070,30 @@ export default function Purchase() {
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
                       {analysis.status === "analyzing" ? (
-                        <Badge variant="outline" className="text-xs" data-testid={`badge-ai-analyzing-${stock.ticker}`}>
-                          <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                          Analyzing...
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs" data-testid={`badge-ai-analyzing-${stock.ticker}`}>
+                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                            Analyzing...
+                          </Badge>
+                          <AnalysisPhaseIndicator
+                            microCompleted={stock.microAnalysisCompleted}
+                            macroCompleted={stock.macroAnalysisCompleted}
+                            combinedCompleted={stock.combinedAnalysisCompleted}
+                            currentPhase={stock.analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "complete" | null | undefined}
+                            size="sm"
+                          />
+                        </div>
                       ) : analysis.status === "failed" ? (
-                        <Badge variant="destructive" className="text-xs" data-testid={`badge-ai-failed-${stock.ticker}`}>
-                          Analysis Failed
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="destructive" className="text-xs" data-testid={`badge-ai-failed-${stock.ticker}`}>
+                            Analysis Failed
+                          </Badge>
+                          {stock.analysisJob?.lastError && (
+                            <span className="text-[10px] text-destructive truncate max-w-[200px]" title={stock.analysisJob.lastError}>
+                              {stock.analysisJob.lastError}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <>
                           {(() => {
@@ -1034,6 +1114,12 @@ export default function Purchase() {
                                     (micro: {analysis.confidenceScore})
                                   </span>
                                 )}
+                                <AnalysisPhaseIndicator
+                                  microCompleted={stock.microAnalysisCompleted}
+                                  macroCompleted={stock.macroAnalysisCompleted}
+                                  combinedCompleted={stock.combinedAnalysisCompleted}
+                                  size="sm"
+                                />
                               </div>
                             );
                           })()}

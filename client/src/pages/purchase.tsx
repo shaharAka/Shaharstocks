@@ -46,12 +46,28 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Stock, type User, type StockInterestWithUser } from "@shared/schema";
+
+// Extended Stock type with user status and analysis job progress
+type StockWithUserStatus = Stock & {
+  userStatus: string;
+  userApprovedAt?: Date | null;
+  userRejectedAt?: Date | null;
+  userDismissedAt?: Date | null;
+  analysisJob?: {
+    status: string;
+    currentStep: string | null;
+    stepDetails: any;
+    lastError: string | null;
+    updatedAt: Date | null;
+  } | null;
+};
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { StockComments } from "@/components/stock-comments";
 import { StockExplorer } from "@/components/stock-explorer";
 import { StockTable } from "@/components/stock-table";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
+import { AnalysisPhaseIndicator } from "@/components/analysis-phase-indicator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { BulkActionToolbar } from "@/components/bulk-action-toolbar";
 import {
@@ -121,13 +137,6 @@ export default function Purchase() {
   useEffect(() => {
     markPurchaseAsViewed();
   }, []);
-
-  // Stock with user-specific status
-  type StockWithUserStatus = Stock & {
-    userStatus: string;
-    userApprovedAt?: Date;
-    userRejectedAt?: Date;
-  };
 
   const { data: stocks, isLoading, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],

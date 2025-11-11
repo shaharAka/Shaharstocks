@@ -827,26 +827,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get stocks with user-specific statuses for Purchase page
+  // Get stocks with user-specific statuses and AI analysis job progress
   app.get("/api/stocks/with-user-status", async (req, res) => {
     try {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const stocks = await storage.getStocks();
-      const userStatuses = await storage.getUserStockStatuses(req.session.userId);
-      
-      // Create a map of ticker -> status
-      const statusMap = new Map(userStatuses.map(s => [s.ticker, s]));
-      
-      // Merge stocks with user statuses
-      const stocksWithStatus = stocks.map(stock => ({
-        ...stock,
-        userStatus: statusMap.get(stock.ticker)?.status || "pending",
-        userApprovedAt: statusMap.get(stock.ticker)?.approvedAt,
-        userRejectedAt: statusMap.get(stock.ticker)?.rejectedAt,
-      }));
+      // Use the new storage method that includes user status and latest active job
+      const stocksWithStatus = await storage.getStocksWithUserStatus(req.session.userId);
       
       res.json(stocksWithStatus);
     } catch (error) {

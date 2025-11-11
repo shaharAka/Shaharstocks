@@ -1391,6 +1391,61 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userStockStatuses.userId, userId));
   }
 
+  async getStocksWithUserStatus(userId: string): Promise<any[]> {
+    // Get all stocks with user statuses and latest active AI analysis job
+    // Uses LEFT JOINs with LATERAL for efficient latest-job-per-ticker lookup
+    const results = await db
+      .select({
+        // Stock fields
+        stock: stocks,
+        // User status fields
+        userStatus: userStockStatuses.status,
+        userApprovedAt: userStockStatuses.approvedAt,
+        userRejectedAt: userStockStatuses.rejectedAt,
+        userDismissedAt: userStockStatuses.dismissedAt,
+        // Latest active job fields (pending, processing, or failed)
+        jobStatus: aiAnalysisJobs.status,
+        jobCurrentStep: aiAnalysisJobs.currentStep,
+        jobStepDetails: aiAnalysisJobs.stepDetails,
+        jobLastError: aiAnalysisJobs.lastError,
+        jobUpdatedAt: aiAnalysisJobs.updatedAt,
+      })
+      .from(stocks)
+      .leftJoin(
+        userStockStatuses,
+        and(
+          eq(stocks.ticker, userStockStatuses.ticker),
+          eq(userStockStatuses.userId, userId)
+        )
+      )
+      .leftJoin(
+        sql`LATERAL (
+          SELECT * FROM ${aiAnalysisJobs}
+          WHERE ${aiAnalysisJobs.ticker} = ${stocks.ticker}
+            AND ${aiAnalysisJobs.status} IN ('pending', 'processing', 'failed')
+          ORDER BY ${aiAnalysisJobs.updatedAt} DESC
+          LIMIT 1
+        ) AS ${aiAnalysisJobs}`,
+        sql`true`
+      );
+
+    // Transform results to include analysisJob as optional nested object
+    return results.map(row => ({
+      ...row.stock,
+      userStatus: row.userStatus || "pending",
+      userApprovedAt: row.userApprovedAt,
+      userRejectedAt: row.userRejectedAt,
+      userDismissedAt: row.userDismissedAt,
+      analysisJob: row.jobStatus ? {
+        status: row.jobStatus,
+        currentStep: row.jobCurrentStep,
+        stepDetails: row.jobStepDetails,
+        lastError: row.jobLastError,
+        updatedAt: row.jobUpdatedAt,
+      } : null,
+    }));
+  }
+
   async createUserStockStatus(statusData: InsertUserStockStatus): Promise<UserStockStatus> {
     const [status] = await db
       .insert(userStockStatuses)

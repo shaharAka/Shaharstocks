@@ -150,6 +150,20 @@ export default function Purchase() {
     queryKey: ["/api/stocks/with-user-status"],
   });
 
+  // Debug logging
+  useEffect(() => {
+    console.log("[Frontend] stocks data:", stocks?.length || 0);
+    console.log("[Frontend] isLoading:", isLoading);
+    console.log("[Frontend] After filter - pending stocks:", stocks?.filter(s => s.userStatus === "pending").length || 0);
+    if (stocks && stocks.length > 0) {
+      console.log("[Frontend] Sample stock:", {
+        ticker: stocks[0].ticker,
+        userStatus: stocks[0].userStatus,
+        recommendation: stocks[0].recommendation
+      });
+    }
+  }, [stocks, isLoading]);
+
   // Query for rejected stocks
   const { data: rejectedStocks, isLoading: rejectedLoading, refetch: refetchRejected } = useQuery<Stock[]>({
     queryKey: ["/api/stocks", "rejected"],

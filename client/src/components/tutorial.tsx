@@ -90,6 +90,9 @@ export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps)
       continuous
       showProgress
       showSkipButton
+      spotlightClicks={true}
+      disableOverlayClose={false}
+      disableScrolling={false}
       callback={handleJoyrideCallback}
       styles={{
         options: {

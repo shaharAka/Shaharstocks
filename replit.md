@@ -23,6 +23,7 @@ Preferred communication style: Simple, everyday language.
     - Optimized components: StockTable, BulkActionToolbar, StockComments, AppHeader, Sidebar
 - **Visuals**: Charts with auto-scaling y-axis and inline ticker labels; color-coded avatars for user interest markers.
 - **Tutorials**: Interactive guided tours using react-joyride for onboarding, with session-based tracking.
+  - **Non-blocking behavior**: Tutorials use `spotlightClicks={true}` and `disableOverlayClose={false}` to prevent blocking user interaction.
 
 ### Technical Implementations
 - **Frontend**: React 18 with TypeScript and Vite, Wouter for routing, TanStack Query for server state management (optimistic updates, cache invalidation), React Hook Form with Zod for form validation.

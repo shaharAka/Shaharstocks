@@ -77,7 +77,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LayoutGrid, LayoutList } from "lucide-react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { LayoutGrid, LayoutList, ArchiveRestore } from "lucide-react";
 import { markPurchaseAsViewed } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 
@@ -85,6 +91,7 @@ type RecommendationFilter = "all" | "buy" | "sell";
 type InterestFilter = "all" | "multiple" | string; // "all", "multiple" (all users interested), or userId
 type ViewMode = "cards" | "table";
 type DaysFilter = "all" | "7" | "14" | "30" | "60";
+type StockListTab = "pending" | "rejected";
 
 interface IbkrStatus {
   connected: boolean;
@@ -111,6 +118,7 @@ export default function Purchase() {
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<StockListTab>("pending");
 
   // Selection handlers
   const toggleSelection = (ticker: string) => {
@@ -140,6 +148,41 @@ export default function Purchase() {
 
   const { data: stocks, isLoading, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
+  });
+
+  // Query for rejected stocks
+  const { data: rejectedStocks, isLoading: rejectedLoading, refetch: refetchRejected } = useQuery<Stock[]>({
+    queryKey: ["/api/stocks", "rejected"],
+    queryFn: async () => {
+      const res = await fetch("/api/stocks?status=rejected");
+      if (!res.ok) throw new Error("Failed to fetch rejected stocks");
+      return await res.json();
+    },
+  });
+
+  // Unreject mutation
+  const unrejectMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      const response = await apiRequest("PATCH", `/api/stocks/${ticker}/unreject`, {});
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", "rejected"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      refetchStocks();
+      refetchRejected();
+      toast({
+        title: "Stock Restored",
+        description: `${data.stock.ticker} has been restored to pending recommendations`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Restore Failed",
+        description: "Unable to restore stock. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Determine if we should poll based on active jobs
@@ -903,19 +946,34 @@ export default function Purchase() {
         </div>
       </div>
 
-      <BulkActionToolbar
-        selectedCount={selectedTickers.size}
-        onClear={clearSelection}
-        onApprove={handleBulkApprove}
-        onReject={handleBulkReject}
-        onMarkInterest={handleBulkMarkInterest}
-        onRefresh={handleBulkRefresh}
-        onAnalyze={handleBulkAnalyze}
-        onSimulate={handleBulkSimulate}
-        isSimulating={bulkSimulateMutation.isPending}
-      />
+      <Tabs value={activeTab} onValueChange={(value) => {
+        setActiveTab(value as StockListTab);
+        clearSelection();
+      }} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="pending" data-testid="tab-pending">
+            Pending ({allPendingRecommendations.length})
+          </TabsTrigger>
+          <TabsTrigger value="rejected" data-testid="tab-rejected">
+            <ArchiveRestore className="h-4 w-4 mr-2" />
+            Rejected ({rejectedStocks?.length || 0})
+          </TabsTrigger>
+        </TabsList>
 
-      {pendingRecommendations.length === 0 ? (
+        <TabsContent value="pending" className="space-y-4 mt-4">
+          <BulkActionToolbar
+            selectedCount={selectedTickers.size}
+            onClear={clearSelection}
+            onApprove={handleBulkApprove}
+            onReject={handleBulkReject}
+            onMarkInterest={handleBulkMarkInterest}
+            onRefresh={handleBulkRefresh}
+            onAnalyze={handleBulkAnalyze}
+            onSimulate={handleBulkSimulate}
+            isSimulating={bulkSimulateMutation.isPending}
+          />
+
+          {pendingRecommendations.length === 0 ? (
         <Card className="p-12">
           <div className="text-center">
             <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -1278,6 +1336,85 @@ export default function Purchase() {
           </div>
         </DialogContent>
       </Dialog>
+
+        </TabsContent>
+
+        <TabsContent value="rejected" className="space-y-4 mt-4">
+          {rejectedLoading ? (
+            <Card className="p-12">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Loading rejected stocks...</p>
+              </div>
+            </Card>
+          ) : rejectedStocks && rejectedStocks.length === 0 ? (
+            <Card className="p-12">
+              <div className="text-center">
+                <ArchiveRestore className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2" data-testid="text-no-rejected">No Rejected Stocks</h3>
+                <p className="text-sm text-muted-foreground">
+                  Stocks you reject will appear here for review
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {rejectedStocks?.map((stock) => (
+                <Card key={stock.ticker} className="hover-elevate">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg" data-testid={`text-ticker-${stock.ticker}`}>
+                          {stock.ticker}
+                        </CardTitle>
+                        <CardDescription>{stock.companyName}</CardDescription>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => unrejectMutation.mutate(stock.ticker)}
+                        disabled={unrejectMutation.isPending}
+                        data-testid={`button-restore-${stock.ticker}`}
+                      >
+                        <ArchiveRestore className="h-4 w-4 mr-2" />
+                        Restore
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-muted-foreground mb-1">Current Price</p>
+                        <p className="font-medium text-lg">${parseFloat(stock.currentPrice).toFixed(2)}</p>
+                      </div>
+                      {stock.insiderPrice && (
+                        <div>
+                          <p className="text-muted-foreground mb-1">Insider Price</p>
+                          <p className="font-medium">${parseFloat(stock.insiderPrice).toFixed(2)}</p>
+                        </div>
+                      )}
+                      {stock.marketCap && (
+                        <div>
+                          <p className="text-muted-foreground mb-1">Market Cap</p>
+                          <p className="font-medium">{stock.marketCap}</p>
+                        </div>
+                      )}
+                      {stock.rejectedAt && (
+                        <div>
+                          <p className="text-muted-foreground mb-1">Rejected</p>
+                          <p className="font-medium text-xs">{new Date(stock.rejectedAt).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                    </div>
+                    {stock.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">{stock.description}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <StockExplorer
         stock={explorerStock}

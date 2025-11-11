@@ -97,11 +97,13 @@ import { eq, desc, sql, and } from "drizzle-orm";
 export interface IStorage {
   // Stocks
   getStocks(): Promise<Stock[]>;
+  getStocksByStatus(status: string): Promise<Stock[]>;
   getStock(ticker: string): Promise<Stock | undefined>;
   getAllStocksForTicker(ticker: string): Promise<Stock[]>;
   createStock(stock: InsertStock): Promise<Stock>;
   updateStock(ticker: string, stock: Partial<Stock>): Promise<Stock | undefined>;
   deleteStock(ticker: string): Promise<boolean>;
+  unrejectStock(ticker: string): Promise<Stock | undefined>;
 
   // Portfolio Holdings
   getPortfolioHoldings(userId: string, isSimulated?: boolean): Promise<PortfolioHolding[]>;
@@ -361,6 +363,23 @@ export class DatabaseStorage implements IStorage {
   async deleteStock(ticker: string): Promise<boolean> {
     const result = await db.delete(stocks).where(eq(stocks.ticker, ticker));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async getStocksByStatus(status: string): Promise<Stock[]> {
+    return await db.select().from(stocks).where(eq(stocks.recommendationStatus, status));
+  }
+
+  async unrejectStock(ticker: string): Promise<Stock | undefined> {
+    const [updatedStock] = await db
+      .update(stocks)
+      .set({ 
+        recommendationStatus: "pending",
+        rejectedAt: null,
+        lastUpdated: sql`now()` 
+      })
+      .where(eq(stocks.ticker, ticker))
+      .returning();
+    return updatedStock;
   }
 
   // Portfolio Holdings

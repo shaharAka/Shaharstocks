@@ -809,7 +809,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock routes
   app.get("/api/stocks", async (req, res) => {
     try {
-      const stocks = await storage.getStocks();
+      const { status } = req.query;
+      const stocks = status 
+        ? await storage.getStocksByStatus(status as string)
+        : await storage.getStocks();
       res.json(stocks);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stocks" });
@@ -1076,6 +1079,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ status: "rejected", stock });
     } catch (error) {
       res.status(500).json({ error: "Failed to reject recommendation" });
+    }
+  });
+
+  app.patch("/api/stocks/:ticker/unreject", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const stock = await storage.unrejectStock(req.params.ticker);
+      if (!stock) {
+        return res.status(404).json({ error: "Stock not found" });
+      }
+
+      // Also update user-specific stock status
+      await storage.ensureUserStockStatus(req.session.userId, req.params.ticker);
+      await storage.updateUserStockStatus(req.session.userId, req.params.ticker, {
+        status: "pending",
+        rejectedAt: null
+      });
+
+      console.log(`[Unreject] Restored ${req.params.ticker} to pending status`);
+      res.json({ status: "pending", stock });
+    } catch (error) {
+      console.error("Unreject stock error:", error);
+      res.status(500).json({ error: "Failed to unreject stock" });
     }
   });
 

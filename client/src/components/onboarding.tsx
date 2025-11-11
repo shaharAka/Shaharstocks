@@ -100,7 +100,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-onboarding">
         <DialogHeader>
           <div className="flex items-center justify-between mb-2">
-            <DialogTitle className="text-2xl">Welcome to TradePro!</DialogTitle>
+            <DialogTitle className="text-2xl">Welcome to signal2!</DialogTitle>
             <Badge variant="secondary" data-testid="badge-onboarding-step">
               Step {step} of {totalSteps}
             </Badge>
@@ -112,7 +112,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
           {step === 1 && (
             <>
               <DialogDescription className="text-base">
-                TradePro helps you track insider trading activity and make informed investment decisions. 
+                signal2 helps you track insider trading activity and make informed investment decisions. 
                 Follow company insiders who are buying or selling their own stock.
               </DialogDescription>
 

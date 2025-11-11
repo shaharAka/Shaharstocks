@@ -121,7 +121,7 @@ export function AppSidebar() {
             <TrendingUp className="h-6 w-6 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold">TradePro</h1>
+            <h1 className="text-lg font-semibold">signal2</h1>
             <p className="text-xs text-muted-foreground">Trading Dashboard</p>
           </div>
         </div>

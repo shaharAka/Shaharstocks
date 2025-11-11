@@ -151,7 +151,7 @@ export default function Signup() {
                     <div>
                       <h3 className="font-semibold mb-1">Professional Stock Analysis</h3>
                       <p className="text-sm text-muted-foreground">
-                        TradePro provides real-time portfolio tracking, dual-agent AI analysis powered by SEC filings and sector ETF data, and automated trading rules.
+                        signal2 provides real-time portfolio tracking, dual-agent AI analysis powered by SEC filings and sector ETF data, and automated trading rules.
                       </p>
                     </div>
                   </div>
@@ -213,7 +213,7 @@ export default function Signup() {
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <TrendingUp className="h-8 w-8 text-primary" />
-            <CardTitle className="text-3xl font-bold">TradePro</CardTitle>
+            <CardTitle className="text-3xl font-bold">signal2</CardTitle>
           </div>
           <CardDescription className="text-lg">
             Create your account

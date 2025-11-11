@@ -73,7 +73,7 @@ export default function Login() {
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <TrendingUp className="h-8 w-8 text-primary" />
-            <CardTitle className="text-3xl font-bold">TradePro</CardTitle>
+            <CardTitle className="text-3xl font-bold">signal2</CardTitle>
           </div>
           <CardDescription className="text-lg">
             Sign in to your account
@@ -134,7 +134,7 @@ export default function Login() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-sm">
-              An active subscription is required to access TradePro.
+              An active subscription is required to access signal2.
             </AlertDescription>
           </Alert>
 

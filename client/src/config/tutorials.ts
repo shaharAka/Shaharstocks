@@ -15,7 +15,7 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
     steps: [
       {
         target: "body",
-        content: "Welcome to TradePro! This is your command center for stock trading. Let's take a quick tour of the main navigation.",
+        content: "Welcome to signal2! This is your command center for stock trading. Let's take a quick tour of the main navigation.",
         placement: "center",
       },
       {
@@ -224,11 +224,11 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
   },
   onboarding: {
     id: "onboarding",
-    title: "Welcome to TradePro",
+    title: "Welcome to signal2",
     steps: [
       {
         target: "body",
-        content: "Welcome to TradePro! Let's get you started with setting up your first data source for insider trading recommendations.",
+        content: "Welcome to signal2! Let's get you started with setting up your first data source for insider trading recommendations.",
         placement: "center",
       },
       {

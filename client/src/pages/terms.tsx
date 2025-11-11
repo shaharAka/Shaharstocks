@@ -30,14 +30,14 @@ export default function Terms() {
             <section>
               <h2 className="text-xl font-semibold mb-3">1. Acceptance of Terms</h2>
               <p className="text-muted-foreground">
-                By accessing and using TradePro ("the Service"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to these terms, please do not use the Service.
+                By accessing and using signal2 ("the Service"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to these terms, please do not use the Service.
               </p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold mb-3">2. Description of Service</h2>
               <p className="text-muted-foreground">
-                TradePro is a stock trading analysis platform that provides real-time portfolio tracking, AI-powered analysis based on SEC filings and market data, automated trading rules, backtesting capabilities, and insider trading alerts. The Service integrates data from third-party sources including Alpha Vantage, Finnhub, OpenAI, and Telegram.
+                signal2 is a stock trading analysis platform that provides real-time portfolio tracking, AI-powered analysis based on SEC filings and market data, automated trading rules, backtesting capabilities, and insider trading alerts. The Service integrates data from third-party sources including Alpha Vantage, Finnhub, OpenAI, and Telegram.
               </p>
             </section>
 
@@ -46,11 +46,11 @@ export default function Terms() {
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 my-4">
                 <p className="font-semibold text-destructive mb-2">IMPORTANT DISCLAIMER:</p>
                 <p className="text-muted-foreground">
-                  TradePro is provided for informational and educational purposes only. The Service does NOT provide investment advice, financial advice, trading advice, or any other sort of advice. All information, analysis, recommendations, and data provided through the Service are for informational purposes only and should not be considered as financial or investment advice.
+                  signal2 is provided for informational and educational purposes only. The Service does NOT provide investment advice, financial advice, trading advice, or any other sort of advice. All information, analysis, recommendations, and data provided through the Service are for informational purposes only and should not be considered as financial or investment advice.
                 </p>
               </div>
               <p className="text-muted-foreground">
-                You should not make any investment decision based solely on information provided by TradePro. Before making any investment decisions, you should seek independent professional advice from a licensed financial advisor.
+                You should not make any investment decision based solely on information provided by signal2. Before making any investment decisions, you should seek independent professional advice from a licensed financial advisor.
               </p>
             </section>
 
@@ -61,13 +61,13 @@ export default function Terms() {
               </p>
               <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
                 <li>
-                  TradePro and its operators shall not be liable for any direct, indirect, incidental, special, consequential, or exemplary damages resulting from your use of the Service, including but not limited to trading losses, loss of profits, loss of data, or business interruption.
+                  signal2 and its operators shall not be liable for any direct, indirect, incidental, special, consequential, or exemplary damages resulting from your use of the Service, including but not limited to trading losses, loss of profits, loss of data, or business interruption.
                 </li>
                 <li>
                   You acknowledge that stock trading involves substantial risk of loss and that you are solely responsible for all trading decisions made based on information from the Service.
                 </li>
                 <li>
-                  TradePro makes no warranties or representations about the accuracy, reliability, completeness, or timeliness of the content, data, analysis, or recommendations provided through the Service.
+                  signal2 makes no warranties or representations about the accuracy, reliability, completeness, or timeliness of the content, data, analysis, or recommendations provided through the Service.
                 </li>
                 <li>
                   Past performance data provided through backtesting or historical analysis does not guarantee future results.
@@ -81,14 +81,14 @@ export default function Terms() {
             <section>
               <h2 className="text-xl font-semibold mb-3">5. Third-Party Data Sources</h2>
               <p className="text-muted-foreground">
-                The Service relies on data from third-party providers including Alpha Vantage, Finnhub, OpenAI, and Telegram. TradePro is not responsible for the accuracy, reliability, or availability of third-party data. Service interruptions or data inaccuracies from these providers may affect the Service's functionality.
+                The Service relies on data from third-party providers including Alpha Vantage, Finnhub, OpenAI, and Telegram. signal2 is not responsible for the accuracy, reliability, or availability of third-party data. Service interruptions or data inaccuracies from these providers may affect the Service's functionality.
               </p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold mb-3">6. Subscription and Payments</h2>
               <p className="text-muted-foreground mb-3">
-                Access to TradePro requires a paid subscription. Subscription fees cover:
+                Access to signal2 requires a paid subscription. Subscription fees cover:
               </p>
               <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
                 <li>Connections to managed premium data services (Alpha Vantage, Finnhub, OpenAI)</li>
@@ -120,7 +120,7 @@ export default function Terms() {
               <h2 className="text-xl font-semibold mb-3">8. Risk Acknowledgment</h2>
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 my-4">
                 <p className="text-muted-foreground">
-                  You acknowledge and understand that trading stocks and securities involves a high degree of risk and can result in the loss of all your invested capital. You should only invest money that you can afford to lose. TradePro is not responsible for any losses you may incur from trading decisions made using information from the Service.
+                  You acknowledge and understand that trading stocks and securities involves a high degree of risk and can result in the loss of all your invested capital. You should only invest money that you can afford to lose. signal2 is not responsible for any losses you may incur from trading decisions made using information from the Service.
                 </p>
               </div>
             </section>
@@ -128,21 +128,21 @@ export default function Terms() {
             <section>
               <h2 className="text-xl font-semibold mb-3">9. Data Privacy</h2>
               <p className="text-muted-foreground">
-                TradePro collects and processes personal information as described in our Privacy Policy. By using the Service, you consent to such processing and warrant that all data provided by you is accurate. We use industry-standard security measures to protect your data, but cannot guarantee absolute security.
+                signal2 collects and processes personal information as described in our Privacy Policy. By using the Service, you consent to such processing and warrant that all data provided by you is accurate. We use industry-standard security measures to protect your data, but cannot guarantee absolute security.
               </p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold mb-3">10. Intellectual Property</h2>
               <p className="text-muted-foreground">
-                All content, features, and functionality of the Service, including but not limited to text, graphics, logos, software, and data compilations, are the property of TradePro or its licensors and are protected by copyright, trademark, and other intellectual property laws.
+                All content, features, and functionality of the Service, including but not limited to text, graphics, logos, software, and data compilations, are the property of signal2 or its licensors and are protected by copyright, trademark, and other intellectual property laws.
               </p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold mb-3">11. Service Modifications</h2>
               <p className="text-muted-foreground">
-                TradePro reserves the right to modify, suspend, or discontinue the Service (or any part thereof) at any time with or without notice. We are not liable to you or any third party for any modification, suspension, or discontinuance of the Service.
+                signal2 reserves the right to modify, suspend, or discontinue the Service (or any part thereof) at any time with or without notice. We are not liable to you or any third party for any modification, suspension, or discontinuance of the Service.
               </p>
             </section>
 
@@ -156,7 +156,7 @@ export default function Terms() {
             <section>
               <h2 className="text-xl font-semibold mb-3">13. Governing Law</h2>
               <p className="text-muted-foreground">
-                These Terms shall be governed by and construed in accordance with the laws of the jurisdiction in which TradePro operates, without regard to its conflict of law provisions.
+                These Terms shall be governed by and construed in accordance with the laws of the jurisdiction in which signal2 operates, without regard to its conflict of law provisions.
               </p>
             </section>
 

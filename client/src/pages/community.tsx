@@ -222,7 +222,7 @@ export default function Community() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle data-testid="heading-submit-idea">Submit Your Idea</CardTitle>
-            <CardDescription>Share a feature you'd like to see in TradePro</CardDescription>
+            <CardDescription>Share a feature you'd like to see in signal2</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">

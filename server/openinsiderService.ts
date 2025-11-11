@@ -75,7 +75,7 @@ class OpenInsiderService {
       // Validate and clamp limit to prevent command injection
       // Ensure it's a finite number, otherwise use default
       const numericLimit = Number.isFinite(limit) ? limit : 100;
-      const safeLimit = Math.max(1, Math.min(Math.floor(numericLimit), 2000));
+      const safeLimit = Math.max(1, Math.min(Math.floor(numericLimit), 500));
       
       const filterInfo = filters ? ` with filters: ${JSON.stringify(filters)}` : '';
       console.log(`[OpenInsider] Fetching ${safeLimit} insider purchase transactions${filterInfo}...`);

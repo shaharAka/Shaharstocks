@@ -146,7 +146,7 @@ export default function Purchase() {
     markPurchaseAsViewed();
   }, []);
 
-  const { data: stocks, isLoading, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
+  const { data: stocks, isLoading, error, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
   });
 
@@ -154,6 +154,7 @@ export default function Purchase() {
   useEffect(() => {
     console.log("[Frontend] stocks data:", stocks?.length || 0);
     console.log("[Frontend] isLoading:", isLoading);
+    console.log("[Frontend] error:", error);
     console.log("[Frontend] After filter - pending stocks:", stocks?.filter(s => s.userStatus === "pending").length || 0);
     if (stocks && stocks.length > 0) {
       console.log("[Frontend] Sample stock:", {
@@ -162,7 +163,7 @@ export default function Purchase() {
         recommendation: stocks[0].recommendation
       });
     }
-  }, [stocks, isLoading]);
+  }, [stocks, isLoading, error]);
 
   // Query for rejected stocks
   const { data: rejectedStocks, isLoading: rejectedLoading, refetch: refetchRejected } = useQuery<Stock[]>({

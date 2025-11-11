@@ -540,12 +540,12 @@ function OpenInsiderConfigSection() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="fetch-limit">Transactions per fetch (1-100)</Label>
+                <Label htmlFor="fetch-limit">Transactions per fetch (1-500)</Label>
                 <Input
                   id="fetch-limit"
                   type="number"
                   min="1"
-                  max="100"
+                  max="500"
                   value={fetchLimit}
                   onChange={(e) => setFetchLimit(parseInt(e.target.value) || 50)}
                   disabled={!openinsiderEnabled}

@@ -2404,24 +2404,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let filteredCount = 0;
       const createdTickers: string[] = []; // Track newly created tickers for AI analysis
       
+      // Step 1: Filter out existing stocks first
+      console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions...`);
+      const newTransactions = [];
       for (const transaction of transactions) {
+        const existingStock = await storage.getStock(transaction.ticker);
+        if (!existingStock) {
+          newTransactions.push(transaction);
+        }
+      }
+      console.log(`[OpeninsiderFetch] ${newTransactions.length} new tickers after duplicate check`);
+      
+      if (newTransactions.length === 0) {
+        await storage.updateOpeninsiderSyncStatus();
+        return res.json({ 
+          success: true, 
+          message: "All transactions already exist in database",
+          created: 0,
+          total: transactions.length,
+          filtered: 0
+        });
+      }
+      
+      // Step 2: Batch fetch all quotes and company data upfront
+      const tickers = Array.from(new Set(newTransactions.map(t => t.ticker)));
+      console.log(`[OpeninsiderFetch] Fetching data for ${tickers.length} unique tickers...`);
+      
+      // Batch fetch all data at once
+      const [quotesMap, stockDataMap] = await Promise.all([
+        finnhubService.getBatchQuotes(tickers),
+        finnhubService.getBatchStockData(tickers)
+      ]);
+      console.log(`[OpeninsiderFetch] Received ${quotesMap.size} quotes and ${stockDataMap.size} company profiles`);
+      
+      // Step 3: Process transactions with cached data
+      for (const transaction of newTransactions) {
         try {
-          // Check if stock already exists
-          const existingStock = await storage.getStock(transaction.ticker);
-          
-          if (existingStock) {
-            continue;
-          }
-
-          // Get current market price from Finnhub
-          const quote = await finnhubService.getQuote(transaction.ticker);
+          // Get pre-fetched quote
+          const quote = quotesMap.get(transaction.ticker);
           if (!quote || !quote.currentPrice) {
+            console.log(`[OpeninsiderFetch] No quote for ${transaction.ticker}, skipping`);
             continue;
           }
 
-          // Fetch company profile, market cap, and news
-          const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
-          const data = stockData.get(transaction.ticker);
+          // Get pre-fetched company data
+          const data = stockDataMap.get(transaction.ticker);
           
           // Apply market cap filter (must be > $500M)
           // Note: data.marketCap is already in millions from Finnhub

@@ -1099,19 +1099,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
+      console.log(`[Unreject] Starting unreject for ${req.params.ticker} by user ${req.session.userId}`);
+
       const stock = await storage.unrejectStock(req.params.ticker);
       if (!stock) {
+        console.log(`[Unreject] Stock ${req.params.ticker} not found in stocks table`);
         return res.status(404).json({ error: "Stock not found" });
       }
 
       // Also update user-specific stock status
       await storage.ensureUserStockStatus(req.session.userId, req.params.ticker);
-      await storage.updateUserStockStatus(req.session.userId, req.params.ticker, {
+      const updatedUserStatus = await storage.updateUserStockStatus(req.session.userId, req.params.ticker, {
         status: "pending",
         rejectedAt: null
       });
 
-      console.log(`[Unreject] Restored ${req.params.ticker} to pending status`);
+      console.log(`[Unreject] Successfully restored ${req.params.ticker} to pending status`);
+      console.log(`[Unreject] Updated user stock status:`, updatedUserStatus);
       res.json({ status: "pending", stock });
     } catch (error) {
       console.error("Unreject stock error:", error);

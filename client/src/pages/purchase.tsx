@@ -167,16 +167,9 @@ export default function Purchase() {
       return await response.json();
     },
     onSuccess: async (data) => {
-      console.log('[Frontend] Unreject success:', data);
       // Use refetchQueries to force immediate refetch instead of just invalidating
       await queryClient.refetchQueries({ queryKey: ["/api/stocks", "rejected"] });
       await queryClient.refetchQueries({ queryKey: ["/api/stocks/with-user-status"] });
-      
-      // Log the updated data
-      const rejectedData = queryClient.getQueryData(["/api/stocks", "rejected"]);
-      const pendingData = queryClient.getQueryData(["/api/stocks/with-user-status"]);
-      console.log('[Frontend] After refetch - rejected stocks:', rejectedData);
-      console.log('[Frontend] After refetch - stocks with user status:', pendingData);
       
       toast({
         title: "Stock Restored",

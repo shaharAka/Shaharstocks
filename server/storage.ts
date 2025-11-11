@@ -1448,7 +1448,7 @@ export class DatabaseStorage implements IStorage {
         jobCurrentStep: aiAnalysisJobs.currentStep,
         jobStepDetails: aiAnalysisJobs.stepDetails,
         jobLastError: aiAnalysisJobs.lastError,
-        jobUpdatedAt: aiAnalysisJobs.updatedAt,
+        jobCreatedAt: aiAnalysisJobs.createdAt,
       })
       .from(stocks)
       .leftJoin(
@@ -1463,7 +1463,7 @@ export class DatabaseStorage implements IStorage {
           SELECT * FROM ${aiAnalysisJobs}
           WHERE ${aiAnalysisJobs.ticker} = ${stocks.ticker}
             AND ${aiAnalysisJobs.status} IN ('pending', 'processing', 'failed')
-          ORDER BY ${aiAnalysisJobs.updatedAt} DESC
+          ORDER BY ${aiAnalysisJobs.createdAt} DESC
           LIMIT 1
         ) AS ${aiAnalysisJobs}`,
         sql`true`
@@ -1481,7 +1481,7 @@ export class DatabaseStorage implements IStorage {
         currentStep: row.jobCurrentStep,
         stepDetails: row.jobStepDetails,
         lastError: row.jobLastError,
-        updatedAt: row.jobUpdatedAt,
+        updatedAt: row.jobCreatedAt,
       } : null,
     }));
   }

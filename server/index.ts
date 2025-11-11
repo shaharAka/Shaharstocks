@@ -153,6 +153,9 @@ app.use((req, res, next) => {
   // Start the AI analysis queue worker
   queueWorker.start();
   log("[QueueWorker] AI Analysis queue worker started");
+  
+  // Start hourly reconciliation job to re-queue incomplete analyses
+  startAnalysisReconciliationJob();
 })();
 
 /**
@@ -1077,4 +1080,67 @@ function startAIAnalysisJob() {
   // Then run every 10 minutes
   setInterval(analyzeNewStocks, TEN_MINUTES);
   log("[AIAnalysis] Background job started - analyzing new stocks every 10 minutes");
+}
+
+/**
+ * Background job to reconcile incomplete AI analyses every hour
+ * Finds stocks with missing analysis flags and re-queues them
+ */
+function startAnalysisReconciliationJob() {
+  const ONE_HOUR = 60 * 60 * 1000;
+  let isRunning = false; // Reentrancy guard
+
+  async function reconcileIncompleteAnalyses() {
+    // Prevent overlapping runs
+    if (isRunning) {
+      log("[Reconciliation] Skipping - previous job still running");
+      return;
+    }
+    
+    isRunning = true;
+    try {
+      log("[Reconciliation] Checking for incomplete AI analyses...");
+      
+      // Get stocks with incomplete analysis (missing flags)
+      const incompleteStocks = await storage.getStocksWithIncompleteAnalysis();
+      
+      if (incompleteStocks.length === 0) {
+        log("[Reconciliation] No incomplete analyses found");
+        return;
+      }
+      
+      log(`[Reconciliation] Found ${incompleteStocks.length} stocks with incomplete analyses`);
+      
+      let requeuedCount = 0;
+      let skippedCount = 0;
+      
+      for (const stock of incompleteStocks) {
+        try {
+          // enqueueAnalysisJob already checks for existing pending/processing jobs
+          // It will skip if there's already an active job for this ticker
+          await storage.enqueueAnalysisJob(stock.ticker, "reconciliation", "low");
+          requeuedCount++;
+          log(`[Reconciliation] Re-queued ${stock.ticker} (micro: ${stock.microAnalysisCompleted}, macro: ${stock.macroAnalysisCompleted}, combined: ${stock.combinedAnalysisCompleted})`);
+        } catch (error) {
+          skippedCount++;
+          console.error(`[Reconciliation] Error re-queuing ${stock.ticker}:`, error);
+        }
+      }
+      
+      log(`[Reconciliation] Job complete: re-queued ${requeuedCount}, skipped ${skippedCount}`);
+    } catch (error) {
+      console.error("[Reconciliation] Error in reconciliation job:", error);
+    } finally {
+      isRunning = false; // Release lock
+    }
+  }
+
+  // Run immediately on startup
+  reconcileIncompleteAnalyses().catch(err => {
+    console.error("[Reconciliation] Initial reconciliation failed:", err);
+  });
+
+  // Then run every hour
+  setInterval(reconcileIncompleteAnalyses, ONE_HOUR);
+  log("[Reconciliation] Background job started - reconciling incomplete analyses every hour");
 }

@@ -810,6 +810,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stocks", async (req, res) => {
     try {
       const { status } = req.query;
+      
+      // For user-specific statuses like "rejected", require authentication
+      if (status === "rejected") {
+        if (!req.session.userId) {
+          return res.status(401).json({ error: "Not authenticated" });
+        }
+        const stocks = await storage.getStocksByUserStatus(req.session.userId, status as string);
+        return res.json(stocks);
+      }
+      
+      // For global statuses or no status filter
       const stocks = status 
         ? await storage.getStocksByStatus(status as string)
         : await storage.getStocks();

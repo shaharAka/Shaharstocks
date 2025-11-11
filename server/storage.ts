@@ -98,6 +98,7 @@ export interface IStorage {
   // Stocks
   getStocks(): Promise<Stock[]>;
   getStocksByStatus(status: string): Promise<Stock[]>;
+  getStocksByUserStatus(userId: string, status: string): Promise<Stock[]>;
   getStock(ticker: string): Promise<Stock | undefined>;
   getAllStocksForTicker(ticker: string): Promise<Stock[]>;
   createStock(stock: InsertStock): Promise<Stock>;
@@ -367,6 +368,26 @@ export class DatabaseStorage implements IStorage {
 
   async getStocksByStatus(status: string): Promise<Stock[]> {
     return await db.select().from(stocks).where(eq(stocks.recommendationStatus, status));
+  }
+
+  async getStocksByUserStatus(userId: string, status: string): Promise<Stock[]> {
+    const results = await db
+      .select({
+        stock: stocks,
+      })
+      .from(stocks)
+      .leftJoin(
+        userStockStatuses,
+        and(
+          eq(stocks.ticker, userStockStatuses.ticker),
+          eq(userStockStatuses.userId, userId)
+        )
+      )
+      .where(
+        eq(userStockStatuses.status, status)
+      );
+    
+    return results.map(row => row.stock);
   }
 
   async unrejectStock(ticker: string): Promise<Stock | undefined> {

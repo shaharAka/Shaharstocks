@@ -12,6 +12,7 @@ import { backtestService } from "./backtestService";
 import { finnhubService } from "./finnhubService";
 import { openinsiderService } from "./openinsiderService";
 import { createRequireAdmin } from "./session";
+import { verifyPayPalWebhook } from "./paypalWebhookVerifier";
 
 /**
  * Check if US stock market is currently open
@@ -285,49 +286,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PayPal Webhook Handler - DISABLED FOR SECURITY
-  // This endpoint is DISABLED because it lacks PayPal signature verification
-  // DO NOT ENABLE until you implement proper PayPal webhook verification
-  // See PAYPAL_INTEGRATION.md for implementation requirements
+  // PayPal Webhook Handler - PRODUCTION READY
   app.post("/api/webhooks/paypal", async (req, res) => {
-    // SECURITY: Reject all webhook calls until signature verification is implemented
-    console.error("[PayPal Webhook] Rejected - Signature verification not implemented");
-    return res.status(501).json({ 
-      error: "PayPal webhook verification not implemented. Use admin activation endpoint for testing." 
-    });
-
-    // TODO: Implement this after adding PayPal signature verification
-    // Example verification flow:
-    // 1. Get webhook signature from headers
-    // 2. Verify signature using PayPal SDK or manual verification
-    // 3. Only if valid, process the event
-    // 4. Audit log all webhook attempts
-    
-    /*
     try {
-      // Step 1: Verify PayPal signature
       const webhookId = process.env.PAYPAL_WEBHOOK_ID;
-      const signature = req.headers['paypal-transmission-sig'];
-      const certUrl = req.headers['paypal-cert-url'];
-      const transmissionId = req.headers['paypal-transmission-id'];
-      const transmissionTime = req.headers['paypal-transmission-time'];
       
-      // Verify using PayPal SDK
+      if (!webhookId) {
+        console.error("[PayPal Webhook] PAYPAL_WEBHOOK_ID not configured");
+        return res.status(500).json({ error: "Webhook not configured" });
+      }
+
+      // Step 1: Verify PayPal signature
       const isValid = await verifyPayPalWebhook({
         webhookId,
-        signature,
-        certUrl,
-        transmissionId,
-        transmissionTime,
-        body: req.body
+        headers: {
+          'paypal-transmission-sig': req.headers['paypal-transmission-sig'] as string,
+          'paypal-cert-url': req.headers['paypal-cert-url'] as string,
+          'paypal-transmission-id': req.headers['paypal-transmission-id'] as string,
+          'paypal-transmission-time': req.headers['paypal-transmission-time'] as string,
+          'paypal-auth-algo': req.headers['paypal-auth-algo'] as string,
+        },
+        body: req.body,
       });
       
       if (!isValid) {
-        console.error("[PayPal Webhook] Invalid signature");
+        console.error("[PayPal Webhook] Invalid signature - potential security threat");
         return res.status(401).json({ error: "Invalid webhook signature" });
       }
 
       const { event_type, resource } = req.body;
+      console.log(`[PayPal Webhook] Verified event: ${event_type}`);
       
       // Step 2: Process verified events
       if (event_type === "BILLING.SUBSCRIPTION.ACTIVATED") {
@@ -348,7 +336,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
-          console.log(`[PayPal Webhook] Activated subscription for ${custom_id}`);
+          console.log(`[PayPal Webhook] ✅ Activated subscription for ${custom_id}`);
+        } else {
+          console.warn(`[PayPal Webhook] User not found for email: ${custom_id}`);
         }
       }
 
@@ -360,16 +350,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             subscriptionStatus: "cancelled",
             subscriptionEndDate: new Date(),
           });
-          console.log(`[PayPal Webhook] Cancelled subscription for ${custom_id}`);
+          console.log(`[PayPal Webhook] ❌ Cancelled subscription for ${custom_id}`);
         }
       }
 
       res.json({ received: true });
     } catch (error) {
-      console.error("PayPal webhook error:", error);
+      console.error("[PayPal Webhook] Processing error:", error);
       res.status(500).json({ error: "Webhook processing failed" });
     }
-    */
   });
 
   // ADMIN ONLY: Manual subscription activation for testing

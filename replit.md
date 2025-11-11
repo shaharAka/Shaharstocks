@@ -1,7 +1,7 @@
-# Stock Trading Dashboard - TradePro
+# Stock Trading Dashboard - signal2
 
 ## Overview
-TradePro is a professional stock trading dashboard designed for real-time portfolio tracking, automated trigger-based trading rules, and comprehensive backtesting. It features a modern, information-dense interface built with React and Express, emphasizing instant readability and quick trade execution. The system integrates real-time stock recommendations, news sentiment analysis, and automated AI-powered financial analysis from SEC EDGAR filings and Alpha Vantage fundamentals. It also includes industry-specific macro analysis by comparing stocks against relevant sector ETFs, and offers multi-user collaboration with session-based authentication and Telegram integration for insider trading alerts.
+signal2 is a professional stock trading dashboard designed for real-time portfolio tracking, automated trigger-based trading rules, and comprehensive backtesting. It features a modern, information-dense interface built with React and Express, emphasizing instant readability and quick trade execution. The system integrates real-time stock recommendations, news sentiment analysis, and automated AI-powered financial analysis from SEC EDGAR filings and Alpha Vantage fundamentals. It also includes industry-specific macro analysis by comparing stocks against relevant sector ETFs, and offers multi-user collaboration with session-based authentication, PayPal subscription payments, and Telegram integration for insider trading alerts.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -32,6 +32,11 @@ Preferred communication style: Simple, everyday language.
 - **Data Models**: Stocks, Portfolio Holdings, Trades, Trigger-based Trading Rules (with flexible scopes, conditions, actions), Backtest Jobs, Backtest Price Data, Backtest Scenarios, Telegram Config, OpenInsider Config, Users, Stock Comments.
 
 ### Feature Specifications
+- **PayPal Subscription Integration**: ✅ Production-ready automatic subscription activation with secure webhook signature verification.
+    - **Frontend**: PayPal JavaScript SDK integration with environment-based configuration (`VITE_PAYPAL_CLIENT_ID`, `VITE_PAYPAL_PLAN_ID`)
+    - **Backend**: Webhook endpoint at `/api/webhooks/paypal` with PayPal REST API signature verification (`server/paypalWebhookVerifier.ts`)
+    - **Security**: OAuth token-based verification, rejects unverified webhooks, audit logging for all webhook events
+    - **Events Handled**: `BILLING.SUBSCRIPTION.ACTIVATED`, `BILLING.SUBSCRIPTION.CANCELLED`
 - **Company Info & News**: Integrates Finnhub for company profiles, market cap, and news with negative sentiment detection. Excludes stocks below $500M market cap from purchase recommendations.
 - **Data Sources**:
     - **Telegram**: Direct client integration via GramJS for real-time channel monitoring, parsing messages for stock recommendations.
@@ -92,9 +97,28 @@ Comprehensive test coverage for the dual-agent (micro + macro) AI analysis syste
 - **Data Management**: @tanstack/react-query, react-hook-form, zod, date-fns.
 - **Development Tools**: TypeScript, Vite, ESBuild, tsx, Vitest.
 - **Integration Points**:
+    - **PayPal**: @paypal/checkout-server-sdk for subscription payments. REST API-based webhook verification for production security.
     - **Telegram**: GramJS for MTProto API communication.
     - **OpenInsider.com**: Python (BeautifulSoup4) for web scraping insider trading data.
     - **SEC EDGAR API**: For company filings (10-K/10-Q) and narrative sections (MD&A, Risk Factors, Business Overview).
     - **Alpha Vantage API**: For comprehensive financial fundamentals (Company Overview, Income Statement, Balance Sheet, Cash Flow, Technical Indicators) and News Sentiment.
     - **Finnhub API**: For real-time stock price updates, company profiles, market capitalization, and historical price data for backtesting.
 - **Design & Styling**: Tailwind CSS, class-variance-authority (CVA), clsx, tailwind-merge, Google Fonts (Inter, Geist Mono, Fira Code).
+
+## Recent Changes (November 11, 2025)
+
+### PayPal Webhook Verification - PRODUCTION READY ✅
+- **Status**: Implemented and tested, production-ready
+- **Changes**:
+  1. Created `server/paypalWebhookVerifier.ts` with REST API-based signature verification
+  2. Updated `server/routes.ts` to enable webhook endpoint with security checks
+  3. Moved PayPal credentials to environment variables (VITE_ prefix for frontend visibility)
+  4. Updated `client/src/pages/signup.tsx` to use environment-based configuration
+  5. Updated documentation (PAYPAL_INTEGRATION.md, replit.md)
+- **Security**: All webhook requests verified via PayPal REST API before processing
+- **Environment Variables Required**:
+  - `PAYPAL_CLIENT_ID` - Server-side PayPal client ID
+  - `PAYPAL_CLIENT_SECRET` - Server-side PayPal secret (never exposed to browser)
+  - `PAYPAL_WEBHOOK_ID` - Webhook ID from PayPal dashboard
+  - `VITE_PAYPAL_CLIENT_ID` - Frontend PayPal client ID (exposed to browser)
+  - `VITE_PAYPAL_PLAN_ID` - Frontend subscription plan ID (exposed to browser)

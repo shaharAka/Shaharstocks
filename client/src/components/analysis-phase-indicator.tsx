@@ -11,8 +11,14 @@ interface AnalysisPhaseIndicatorProps {
   macroCompleted: boolean;
   combinedCompleted: boolean;
   currentPhase?: "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "complete" | null;
+  stepDetails?: {
+    phase?: string;
+    substep?: string;
+    progress?: string;
+  } | null;
   size?: "sm" | "md";
   showLabels?: boolean;
+  showDetailedProgress?: boolean;
   className?: string;
 }
 
@@ -21,8 +27,10 @@ export function AnalysisPhaseIndicator({
   macroCompleted,
   combinedCompleted,
   currentPhase,
+  stepDetails,
   size = "sm",
   showLabels = false,
+  showDetailedProgress = false,
   className,
 }: AnalysisPhaseIndicatorProps) {
   const iconSize = size === "sm" ? "h-3 w-3" : "h-4 w-4";
@@ -123,6 +131,21 @@ export function AnalysisPhaseIndicator({
         <span className="text-[10px] text-muted-foreground">
           {currentPhaseLabel}
         </span>
+      )}
+
+      {showDetailedProgress && stepDetails && (stepDetails.substep || stepDetails.progress) && (
+        <div className="flex flex-col gap-0.5 mt-1">
+          {stepDetails.substep && (
+            <span className="text-[10px] text-muted-foreground italic">
+              {stepDetails.substep}
+            </span>
+          )}
+          {stepDetails.progress && (
+            <span className="text-[10px] font-mono text-muted-foreground">
+              {stepDetails.progress}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

@@ -107,6 +107,20 @@ Comprehensive test coverage for the dual-agent (micro + macro) AI analysis syste
 
 ## Recent Changes (November 11, 2025)
 
+### Stock Unreject/Restore & Detailed AI Progress Display ✅
+- **Status**: Fixed and enhanced
+- **Problem**: Rejected stock archive was not showing restored stocks in pending tab due to SQL query error in `getStocksWithUserStatus()`
+- **Root Cause**: Drizzle ORM couldn't parse LATERAL join syntax for fetching latest AI analysis jobs per stock
+- **Fix Applied**:
+  1. Rewrote `getStocksWithUserStatus()` as two separate queries (stocks+user statuses, then AI jobs)
+  2. Added `inArray` import from drizzle-orm for efficient job filtering
+  3. Map AI jobs to stocks in JavaScript instead of SQL join
+  4. Enhanced `AnalysisPhaseIndicator` component to display detailed substep and progress information
+  5. Updated stock cards to show inline AI analysis progress (e.g., "Fetching RSI", "2/7")
+- **Performance**: Two-query approach is acceptable for current ~80 stock workload; pagination can be added if volumes grow
+- **Architect Review**: ✅ Pass - No security issues, proper error handling, good UX
+- **Files Changed**: `server/storage.ts`, `server/routes.ts`, `client/src/components/analysis-phase-indicator.tsx`, `client/src/pages/purchase.tsx`
+
 ### PayPal Webhook Verification - PRODUCTION READY ✅
 - **Status**: Implemented and tested, production-ready
 - **Changes**:

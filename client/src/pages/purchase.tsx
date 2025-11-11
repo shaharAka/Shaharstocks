@@ -146,41 +146,9 @@ export default function Purchase() {
     markPurchaseAsViewed();
   }, []);
 
-  const { data: stocks, isLoading, error, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
+  const { data: stocks, isLoading, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
-    queryFn: async () => {
-      console.log("[Frontend] Fetching stocks with user status...");
-      const response = await fetch("/api/stocks/with-user-status");
-      console.log("[Frontend] Response status:", response.status);
-      console.log("[Frontend] Response ok:", response.ok);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[Frontend] API Error:", errorText);
-        throw new Error(`Failed to fetch: ${response.status} ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log("[Frontend] API returned:", data?.length || 0, "stocks");
-      return data;
-    }
   });
-
-  // Debug logging
-  useEffect(() => {
-    console.log("[Frontend] currentUser:", currentUser?.email);
-    console.log("[Frontend] stocks data:", stocks?.length || 0);
-    console.log("[Frontend] isLoading:", isLoading);
-    console.log("[Frontend] error:", error);
-    console.log("[Frontend] After filter - pending stocks:", stocks?.filter(s => s.userStatus === "pending").length || 0);
-    if (stocks && stocks.length > 0) {
-      console.log("[Frontend] Sample stock:", {
-        ticker: stocks[0].ticker,
-        userStatus: stocks[0].userStatus,
-        recommendation: stocks[0].recommendation
-      });
-    }
-  }, [stocks, isLoading, error, currentUser]);
 
   // Query for rejected stocks
   const { data: rejectedStocks, isLoading: rejectedLoading, refetch: refetchRejected } = useQuery<Stock[]>({
@@ -1163,18 +1131,22 @@ export default function Purchase() {
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
                       {analysis.status === "analyzing" ? (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs" data-testid={`badge-ai-analyzing-${stock.ticker}`}>
-                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                            Analyzing...
-                          </Badge>
-                          <AnalysisPhaseIndicator
-                            microCompleted={stock.microAnalysisCompleted}
-                            macroCompleted={stock.macroAnalysisCompleted}
-                            combinedCompleted={stock.combinedAnalysisCompleted}
-                            currentPhase={stock.analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "complete" | null | undefined}
-                            size="sm"
-                          />
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs" data-testid={`badge-ai-analyzing-${stock.ticker}`}>
+                              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                              Analyzing...
+                            </Badge>
+                            <AnalysisPhaseIndicator
+                              microCompleted={stock.microAnalysisCompleted}
+                              macroCompleted={stock.macroAnalysisCompleted}
+                              combinedCompleted={stock.combinedAnalysisCompleted}
+                              currentPhase={stock.analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "complete" | null | undefined}
+                              stepDetails={stock.analysisJob?.stepDetails}
+                              size="sm"
+                              showDetailedProgress={true}
+                            />
+                          </div>
                         </div>
                       ) : analysis.status === "failed" ? (
                         <div className="flex items-center gap-2">

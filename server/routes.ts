@@ -848,9 +848,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[with-user-status] Rejected stocks: ${stocksWithStatus.filter(s => s.userStatus === 'rejected').length}`);
       
       res.json(stocksWithStatus);
-    } catch (error) {
-      console.error("[with-user-status] ERROR:", error);
-      res.status(500).json({ error: "Failed to fetch stocks with user status" });
+    } catch (error: any) {
+      console.error("[with-user-status] ERROR:");
+      console.error("Message:", error?.message);
+      console.error("Stack:", error?.stack);
+      console.error("Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      res.status(500).json({ 
+        error: "Failed to fetch stocks with user status",
+        details: error?.message || "Unknown error"
+      });
     }
   });
 

@@ -1154,9 +1154,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : new Date();
       const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
       
-      // Fetch price history if missing or empty
+      // Ensure price history is available - convert from candlesticks if needed
       let priceHistory = stock.priceHistory || [];
-      if (priceHistory.length === 0 && stock.insiderTradeDate) {
+      
+      if (priceHistory.length === 0 && stock.candlesticks && stock.candlesticks.length > 0) {
+        // Convert candlesticks to price history format
+        console.log(`[Simulation] Converting ${stock.candlesticks.length} candlesticks to price history for ${stock.ticker}`);
+        priceHistory = stock.candlesticks.map(candle => ({
+          date: candle.date,
+          price: candle.close
+        }));
+        
+        // Update stock with converted price history
+        await storage.updateStock(stock.ticker, { priceHistory });
+      } else if (priceHistory.length === 0 && stock.insiderTradeDate) {
+        // Fall back to fetching if no candlesticks available
         console.log(`[Simulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
         try {
           const fetchedPrices = await backtestService.fetchHistoricalPrices(
@@ -1166,19 +1178,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           );
           
           if (fetchedPrices.length > 0) {
-            // Convert to stock price history format
             priceHistory = fetchedPrices.map(p => ({
               date: p.date,
               price: p.close
             }));
             
-            // Update stock with fetched price history
             await storage.updateStock(stock.ticker, { priceHistory });
             console.log(`[Simulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
           }
         } catch (error) {
           console.error(`[Simulation] Failed to fetch price history for ${stock.ticker}:`, error);
-          // Continue with empty price history
         }
       }
       
@@ -2247,9 +2256,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             : new Date();
           const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
           
-          // Fetch price history if missing or empty
+          // Ensure price history is available - convert from candlesticks if needed
           let priceHistory = stock.priceHistory || [];
-          if (priceHistory.length === 0 && stock.insiderTradeDate) {
+          
+          if (priceHistory.length === 0 && stock.candlesticks && stock.candlesticks.length > 0) {
+            // Convert candlesticks to price history format
+            console.log(`[BulkSimulation] Converting ${stock.candlesticks.length} candlesticks to price history for ${stock.ticker}`);
+            priceHistory = stock.candlesticks.map(candle => ({
+              date: candle.date,
+              price: candle.close
+            }));
+            
+            // Update stock with converted price history
+            await storage.updateStock(stock.ticker, { priceHistory });
+          } else if (priceHistory.length === 0 && stock.insiderTradeDate) {
+            // Fall back to fetching if no candlesticks available
             console.log(`[BulkSimulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
             try {
               const fetchedPrices = await backtestService.fetchHistoricalPrices(
@@ -2259,19 +2280,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               );
               
               if (fetchedPrices.length > 0) {
-                // Convert to stock price history format
                 priceHistory = fetchedPrices.map(p => ({
                   date: p.date,
                   price: p.close
                 }));
                 
-                // Update stock with fetched price history
                 await storage.updateStock(stock.ticker, { priceHistory });
                 console.log(`[BulkSimulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
               }
             } catch (error) {
               console.error(`[BulkSimulation] Failed to fetch price history for ${stock.ticker}:`, error);
-              // Continue with empty price history
             }
           }
           

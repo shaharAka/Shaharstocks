@@ -60,8 +60,18 @@ export default function Signup() {
       });
       return response.json();
     },
-    onSuccess: () => {
-      setShowPayPal(true);
+    onSuccess: async () => {
+      // Auto-login successful - invalidate and refetch user
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/current-user"] });
+      
+      toast({
+        title: "Welcome to signal2!",
+        description: "Your 30-day free trial has started. Enjoy full access to all features!",
+      });
+      
+      // Redirect to dashboard
+      setLocation("/");
     },
     onError: (error: Error) => {
       toast({

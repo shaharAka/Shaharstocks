@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Tutorial } from "./tutorial";
 import { getTutorialIdFromRoute, TutorialId } from "@/config/tutorials";
@@ -6,7 +6,8 @@ import { getTutorialIdFromRoute, TutorialId } from "@/config/tutorials";
 export function TutorialManager() {
   const [location] = useLocation();
   const [forceTutorialId, setForceTutorialId] = useState<TutorialId | null>(null);
-  const [runTutorial, setRunTutorial] = useState(false);
+  const [manualTrigger, setManualTrigger] = useState(false);
+  const prevTutorialIdRef = useRef<TutorialId | null>(null);
 
   // Get tutorial ID from current route
   const currentTutorialId = getTutorialIdFromRoute(location);
@@ -23,11 +24,11 @@ export function TutorialManager() {
       // If a specific tutorial is requested, use that
       if (requestedTutorialId) {
         setForceTutorialId(requestedTutorialId);
-        setRunTutorial(true);
+        setManualTrigger(true);
       } else if (currentTutorialId) {
         // Otherwise, use the tutorial for the current route
         setForceTutorialId(null);
-        setRunTutorial(true);
+        setManualTrigger(true);
       }
     };
 
@@ -35,11 +36,14 @@ export function TutorialManager() {
     return () => window.removeEventListener('replay-tutorial', handleReplayTutorial);
   }, [currentTutorialId]);
 
-  // Reset forced tutorial when route changes
+  // Only reset when the current route's tutorial changes (not when forced tutorial is set)
   useEffect(() => {
-    setForceTutorialId(null);
-    setRunTutorial(false);
-  }, [location]);
+    if (currentTutorialId !== prevTutorialIdRef.current && !forceTutorialId) {
+      // Route's tutorial ID changed and we're not in forced mode, reset state
+      setManualTrigger(false);
+      prevTutorialIdRef.current = currentTutorialId;
+    }
+  }, [currentTutorialId, forceTutorialId]);
 
   // Don't render if no tutorial is available
   if (!activeTutorialId) {
@@ -49,9 +53,9 @@ export function TutorialManager() {
   return (
     <Tutorial
       tutorialId={activeTutorialId}
-      run={runTutorial}
+      run={manualTrigger}
       onComplete={() => {
-        setRunTutorial(false);
+        setManualTrigger(false);
         setForceTutorialId(null);
       }}
     />

@@ -60,6 +60,8 @@ type StockWithUserStatus = Stock & {
     lastError: string | null;
     updatedAt: Date | null;
   } | null;
+  isStale?: boolean;
+  ageDays?: number;
 };
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { StockComments } from "@/components/stock-comments";
@@ -1088,6 +1090,11 @@ export default function Purchase() {
                       {isNewStock(stock.ticker, stock.insiderTradeDate) && (
                         <Badge variant="default" className="text-xs px-1.5 py-0" data-testid={`badge-new-${stock.ticker}`}>
                           NEW
+                        </Badge>
+                      )}
+                      {stock.isStale && (
+                        <Badge variant="secondary" className="text-xs px-1.5 py-0" data-testid={`badge-stale-${stock.ticker}`}>
+                          {stock.ageDays}d old
                         </Badge>
                       )}
                     </div>

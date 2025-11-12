@@ -93,7 +93,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
-import { isStockStale, getStockAgeDays } from "@shared/time";
+import { isStockStale, getStockAgeInDays } from "@shared/time";
 
 export interface IStorage {
   // Stocks
@@ -1597,7 +1597,7 @@ export class DatabaseStorage implements IStorage {
         return {
           ...row.stock,
           isStale: isStockStale(lastUpdated),
-          ageDays: getStockAgeDays(lastUpdated),
+          ageDays: getStockAgeInDays(lastUpdated),
           userStatus: row.userStatus || "pending",
           userApprovedAt: row.userApprovedAt,
           userRejectedAt: row.userRejectedAt,

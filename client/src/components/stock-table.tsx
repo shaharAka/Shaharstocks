@@ -342,6 +342,11 @@ export function StockTable({
                         NEW
                       </Badge>
                     )}
+                    {(stock as any).isStale && (
+                      <Badge variant="secondary" className="text-xs px-1.5 py-0" data-testid={`badge-stale-${stock.ticker}`}>
+                        {(stock as any).ageDays}d old
+                      </Badge>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell className="hidden md:table-cell max-w-xs truncate text-sm text-muted-foreground" data-testid={`cell-company-${stock.ticker}`}>

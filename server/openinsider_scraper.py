@@ -29,7 +29,8 @@ class OpenInsiderScraper:
         limit: int = 100,
         insider_titles: List[str] = None,
         min_transaction_value: int = None,
-        previous_day_only: bool = False
+        previous_day_only: bool = False,
+        insider_name: str = None
     ) -> List[Dict[str, Any]]:
         """
         Fetch recent insider purchase transactions with pagination and retry logic
@@ -39,6 +40,7 @@ class OpenInsiderScraper:
             insider_titles: Filter by insider titles (e.g., ["CEO", "CFO", "Director"])
             min_transaction_value: Minimum transaction value in dollars
             previous_day_only: Only fetch transactions from previous day
+            insider_name: Filter by specific insider name (case-insensitive partial match)
         
         Returns:
             List of insider trading transactions
@@ -136,7 +138,7 @@ class OpenInsiderScraper:
                                 
                                 # Insider name
                                 insider_cell = cells[5] if len(cells) > 5 else None
-                                insider_name = insider_cell.get_text(strip=True) if insider_cell else ""
+                                scraped_insider_name = insider_cell.get_text(strip=True) if insider_cell else ""
                                 
                                 # Insider title
                                 insider_title_cell = cells[6] if len(cells) > 6 else None
@@ -172,10 +174,14 @@ class OpenInsiderScraper:
                                 if min_transaction_value and value < min_transaction_value:
                                     continue
                                 
+                                # Filter by insider name (case-insensitive partial match)
+                                if insider_name and insider_name.upper() not in scraped_insider_name.upper():
+                                    continue
+                                
                                 transaction = {
                                     "ticker": ticker,
                                     "companyName": company_name,
-                                    "insiderName": insider_name,
+                                    "insiderName": scraped_insider_name,
                                     "insiderTitle": insider_title,
                                     "tradeDate": trade_date_text,
                                     "filingDate": filing_date_text,

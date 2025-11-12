@@ -72,6 +72,33 @@ export const insertUserStockStatusSchema = createInsertSchema(userStockStatuses)
 export type InsertUserStockStatus = z.infer<typeof insertUserStockStatusSchema>;
 export type UserStockStatus = typeof userStockStatuses.$inferSelect;
 
+// Insider profiles - tracks individual insider trading performance
+export const insiderProfiles = pgTable("insider_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  insiderName: text("insider_name").notNull().unique(),
+  totalTrades: integer("total_trades").notNull().default(0),
+  successfulTrades: integer("successful_trades").notNull().default(0), // Trades that resulted in profit
+  winLossRatio: decimal("win_loss_ratio", { precision: 5, scale: 2 }), // % of successful trades (0-100)
+  confidenceScore: integer("confidence_score").notNull().default(50), // 0-100, based on track record
+  averageReturn: decimal("average_return", { precision: 10, scale: 2 }), // Average % return across all trades
+  previousDeals: jsonb("previous_deals").$type<{
+    ticker: string;
+    companyName: string;
+    tradeDate: string;
+    price: number;
+    quantity: number;
+    currentPrice?: number;
+    currentReturn?: number; // % return
+    status: "winning" | "losing" | "neutral";
+  }[]>().default([]),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertInsiderProfileSchema = createInsertSchema(insiderProfiles).omit({ id: true, createdAt: true, lastUpdated: true });
+export type InsertInsiderProfile = z.infer<typeof insertInsiderProfileSchema>;
+export type InsiderProfile = typeof insiderProfiles.$inferSelect;
+
 // AI Financial Analysis - cached results from OpenAI analysis
 export const stockAnalyses = pgTable("stock_analyses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

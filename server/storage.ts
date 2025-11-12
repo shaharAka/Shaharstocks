@@ -63,6 +63,8 @@ import {
   type InsertFeatureVote,
   type Notification,
   type InsertNotification,
+  type InsiderProfile,
+  type InsertInsiderProfile,
   stocks,
   portfolioHoldings,
   trades,
@@ -93,6 +95,7 @@ import {
   featureSuggestions,
   featureVotes,
   notifications,
+  insiderProfiles,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";

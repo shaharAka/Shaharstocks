@@ -92,7 +92,7 @@ import {
   featureVotes,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
 
 export interface IStorage {
   // Stocks
@@ -104,6 +104,7 @@ export interface IStorage {
   createStock(stock: InsertStock): Promise<Stock>;
   updateStock(ticker: string, stock: Partial<Stock>): Promise<Stock | undefined>;
   deleteStock(ticker: string): Promise<boolean>;
+  deleteExpiredPendingStocks(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
   unrejectStock(ticker: string): Promise<Stock | undefined>;
 
   // Portfolio Holdings
@@ -364,6 +365,113 @@ export class DatabaseStorage implements IStorage {
   async deleteStock(ticker: string): Promise<boolean> {
     const result = await db.delete(stocks).where(eq(stocks.ticker, ticker));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async deleteExpiredPendingStocks(ageInDays: number): Promise<{ count: number; tickers: string[] }> {
+    const startTime = Date.now();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - ageInDays);
+    
+    console.log(`[CLEANUP] Starting cleanup: deleting pending stocks older than ${ageInDays} days (before ${cutoffDate.toISOString()})`);
+    
+    // Use transaction to ensure atomicity
+    const result = await db.transaction(async (tx) => {
+      // 1. Find candidate stocks (pending + older than cutoff)
+      const candidates = await tx
+        .select({ ticker: stocks.ticker })
+        .from(stocks)
+        .where(and(
+          lt(stocks.lastUpdated, cutoffDate),
+          eq(stocks.recommendationStatus, 'pending')
+        ))
+        .for('update'); // Lock rows for deletion
+      
+      if (candidates.length === 0) {
+        console.log('[CLEANUP] No expired pending stocks found');
+        return { count: 0, tickers: [] };
+      }
+      
+      const candidateTickers = candidates.map(c => c.ticker);
+      console.log(`[CLEANUP] Found ${candidateTickers.length} candidates: ${candidateTickers.join(', ')}`);
+      
+      // 2. Safety check: verify no portfolio holdings or trades exist for these tickers
+      const holdings = await tx
+        .select({ ticker: portfolioHoldings.ticker })
+        .from(portfolioHoldings)
+        .where(inArray(portfolioHoldings.ticker, candidateTickers));
+      
+      const trades = await tx
+        .select({ ticker: trades.ticker })
+        .from(trades)
+        .where(inArray(trades.ticker, candidateTickers));
+      
+      if (holdings.length > 0 || trades.length > 0) {
+        const conflictTickers = [...new Set([...holdings.map(h => h.ticker), ...trades.map(t => t.ticker)])];
+        console.error(`[CLEANUP] ABORT: Found portfolio/trade data for tickers: ${conflictTickers.join(', ')}`);
+        throw new Error(`Cannot delete stocks with existing holdings/trades: ${conflictTickers.join(', ')}`);
+      }
+      
+      // 3. Delete child records in safe order (ticker-based foreign keys)
+      const deleteCounts = {
+        aiJobs: 0,
+        analyses: 0,
+        interests: 0,
+        views: 0,
+        userStatuses: 0,
+        comments: 0,
+      };
+      
+      // Delete AI analysis jobs
+      const deletedJobs = await tx.delete(aiAnalysisJobs)
+        .where(inArray(aiAnalysisJobs.ticker, candidateTickers))
+        .returning({ ticker: aiAnalysisJobs.ticker });
+      deleteCounts.aiJobs = deletedJobs.length;
+      
+      // Delete stock analyses
+      const deletedAnalyses = await tx.delete(stockAnalyses)
+        .where(inArray(stockAnalyses.ticker, candidateTickers))
+        .returning({ ticker: stockAnalyses.ticker });
+      deleteCounts.analyses = deletedAnalyses.length;
+      
+      // Delete stock interests
+      const deletedInterests = await tx.delete(stockInterests)
+        .where(inArray(stockInterests.ticker, candidateTickers))
+        .returning({ ticker: stockInterests.ticker });
+      deleteCounts.interests = deletedInterests.length;
+      
+      // Delete stock views
+      const deletedViews = await tx.delete(stockViews)
+        .where(inArray(stockViews.ticker, candidateTickers))
+        .returning({ ticker: stockViews.ticker });
+      deleteCounts.views = deletedViews.length;
+      
+      // Delete user stock statuses
+      const deletedStatuses = await tx.delete(userStockStatuses)
+        .where(inArray(userStockStatuses.ticker, candidateTickers))
+        .returning({ ticker: userStockStatuses.ticker });
+      deleteCounts.userStatuses = deletedStatuses.length;
+      
+      // Delete stock comments
+      const deletedComments = await tx.delete(stockComments)
+        .where(inArray(stockComments.ticker, candidateTickers))
+        .returning({ ticker: stockComments.ticker });
+      deleteCounts.comments = deletedComments.length;
+      
+      // 4. Finally, delete the stocks themselves
+      const deletedStocks = await tx.delete(stocks)
+        .where(inArray(stocks.ticker, candidateTickers))
+        .returning({ ticker: stocks.ticker });
+      
+      console.log(`[CLEANUP] Deleted child records:`, deleteCounts);
+      console.log(`[CLEANUP] Deleted ${deletedStocks.length} stocks: ${deletedStocks.map(s => s.ticker).join(', ')}`);
+      
+      return { count: deletedStocks.length, tickers: deletedStocks.map(s => s.ticker) };
+    });
+    
+    const elapsedMs = Date.now() - startTime;
+    console.log(`[CLEANUP] Cleanup completed in ${elapsedMs}ms - Deleted ${result.count} stocks`);
+    
+    return result;
   }
 
   async getStocksByStatus(status: string): Promise<Stock[]> {

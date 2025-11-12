@@ -1,11 +1,40 @@
 import { Step } from "react-joyride";
 
-export type TutorialId = "portfolio" | "purchase" | "management" | "history" | "rules" | "backtesting" | "settings" | "trading" | "onboarding";
+export type TutorialId = "portfolio" | "purchase" | "management" | "history" | "rules" | "backtesting" | "settings" | "trading" | "onboarding" | "dashboard";
 
 export interface TutorialConfig {
   id: TutorialId;
   title: string;
   steps: Step[];
+}
+
+// Route-to-Tutorial mapping
+export interface RouteMapping {
+  path: string;
+  tutorialId: TutorialId;
+  // Optional tab parameter for pages with tabs
+  tab?: string;
+}
+
+export const routeToTutorialMap: RouteMapping[] = [
+  { path: "/", tutorialId: "portfolio" },
+  { path: "/portfolio", tutorialId: "portfolio" },
+  { path: "/recommendations", tutorialId: "purchase" },
+  { path: "/trading", tutorialId: "trading" },
+  { path: "/community", tutorialId: "dashboard" },
+  { path: "/settings", tutorialId: "settings" },
+];
+
+// Helper function to get tutorial ID from current route and tab
+export function getTutorialIdFromRoute(pathname: string, searchParams?: URLSearchParams): TutorialId | null {
+  // Check for exact path match first
+  const exactMatch = routeToTutorialMap.find(mapping => mapping.path === pathname);
+  if (exactMatch) {
+    return exactMatch.tutorialId;
+  }
+  
+  // Default fallback
+  return null;
 }
 
 export const tutorials: Record<TutorialId, TutorialConfig> = {
@@ -239,6 +268,27 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       {
         target: '[data-testid="button-fetch-openinsider"]',
         content: "Click here to start fetching insider trading data. This will get you the latest 500 transactions.",
+        placement: "top",
+      },
+    ],
+  },
+  dashboard: {
+    id: "dashboard",
+    title: "Community Dashboard",
+    steps: [
+      {
+        target: "body",
+        content: "Welcome to the Community page! Share ideas, vote on features, and see what's being built.",
+        placement: "center",
+      },
+      {
+        target: '[data-testid="button-new-idea"]',
+        content: "Submit your own feature ideas and suggestions",
+        placement: "bottom",
+      },
+      {
+        target: '[data-testid^="card-idea-"]',
+        content: "Vote on ideas you'd like to see implemented. Each user gets one vote per idea.",
         placement: "top",
       },
     ],

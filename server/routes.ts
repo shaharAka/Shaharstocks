@@ -1154,8 +1154,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : new Date();
       const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
       
+      // Fetch price history if missing or empty
+      let priceHistory = stock.priceHistory || [];
+      if (priceHistory.length === 0 && stock.insiderTradeDate) {
+        console.log(`[Simulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
+        try {
+          const fetchedPrices = await backtestService.fetchHistoricalPrices(
+            stock.ticker,
+            new Date(stock.insiderTradeDate),
+            new Date()
+          );
+          
+          if (fetchedPrices.length > 0) {
+            // Convert to stock price history format
+            priceHistory = fetchedPrices.map(p => ({
+              date: p.date,
+              price: p.close
+            }));
+            
+            // Update stock with fetched price history
+            await storage.updateStock(stock.ticker, { priceHistory });
+            console.log(`[Simulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
+          }
+        } catch (error) {
+          console.error(`[Simulation] Failed to fetch price history for ${stock.ticker}:`, error);
+          // Continue with empty price history
+        }
+      }
+      
       // Try to find historical price for the purchase date
-      const priceHistory = stock.priceHistory || [];
       const historicalPricePoint = priceHistory.find(p => p.date === purchaseDateStr);
       
       // Use historical price if available, otherwise current price
@@ -2220,8 +2247,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
             : new Date();
           const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
           
+          // Fetch price history if missing or empty
+          let priceHistory = stock.priceHistory || [];
+          if (priceHistory.length === 0 && stock.insiderTradeDate) {
+            console.log(`[BulkSimulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
+            try {
+              const fetchedPrices = await backtestService.fetchHistoricalPrices(
+                stock.ticker,
+                new Date(stock.insiderTradeDate),
+                new Date()
+              );
+              
+              if (fetchedPrices.length > 0) {
+                // Convert to stock price history format
+                priceHistory = fetchedPrices.map(p => ({
+                  date: p.date,
+                  price: p.close
+                }));
+                
+                // Update stock with fetched price history
+                await storage.updateStock(stock.ticker, { priceHistory });
+                console.log(`[BulkSimulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
+              }
+            } catch (error) {
+              console.error(`[BulkSimulation] Failed to fetch price history for ${stock.ticker}:`, error);
+              // Continue with empty price history
+            }
+          }
+          
           // Try to find historical price for the purchase date
-          const priceHistory = stock.priceHistory || [];
           const historicalPricePoint = priceHistory.find(p => p.date === purchaseDateStr);
           
           // Use historical price if available, otherwise current price

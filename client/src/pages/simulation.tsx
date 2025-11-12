@@ -353,7 +353,7 @@ export default function Simulation() {
     setSelectedTickers(new Set());
   };
 
-  // Combine all price histories into a single dataset - filtered by selection and trade dates
+  // Combine all price histories into a single dataset with continuous timeline
   const combinedChartData = useMemo(() => {
     if (!holdings || !stocks || !trades || selectedTickers.size === 0) return [];
 
@@ -362,7 +362,7 @@ export default function Simulation() {
 
     if (filteredStocks.length === 0) return [];
 
-    // Get purchase dates from trades to determine chart window
+    // Get purchase dates from trades for each ticker
     const tickerPurchaseDates = new Map<string, Date>();
     filteredStocks.forEach(stock => {
       const buyTrades = trades.filter(t => t.ticker === stock.ticker && t.type === "buy" && t.executedAt);
@@ -377,41 +377,81 @@ export default function Simulation() {
       }
     });
 
-    // Collect dates with window filtering (show 10 days before purchase + all days after)
-    const allDates = new Set<string>();
-    const DAYS_BEFORE_PURCHASE = 10;
-    
-    filteredStocks.forEach((stock) => {
-      const purchaseDate = tickerPurchaseDates.get(stock.ticker);
-      const purchaseTime = purchaseDate?.getTime();
-      
-      stock.priceHistory?.forEach((point) => {
-        if (purchaseTime) {
-          const pointDate = new Date(point.date);
-          const daysDiff = (pointDate.getTime() - purchaseTime) / (1000 * 60 * 60 * 24);
-          
-          // Include data from N days before purchase onwards
-          if (daysDiff >= -DAYS_BEFORE_PURCHASE) {
-            allDates.add(point.date);
-          }
-        } else {
-          // No purchase date found, include all data
-          allDates.add(point.date);
+    // Find the global date range: earliest insider trade to latest price data
+    let minDate: Date | null = null;
+    let maxDate: Date | null = null;
+
+    // Get earliest trade date across all selected stocks
+    tickerPurchaseDates.forEach(purchaseDate => {
+      if (!minDate || purchaseDate < minDate) {
+        minDate = purchaseDate;
+      }
+    });
+
+    // Get latest price data date
+    filteredStocks.forEach(stock => {
+      stock.priceHistory?.forEach(point => {
+        const pointDate = new Date(point.date);
+        if (!maxDate || pointDate > maxDate) {
+          maxDate = pointDate;
         }
       });
     });
 
-    const sortedDates = Array.from(allDates).sort();
-
-    // Build combined data
-    return sortedDates.map((date) => {
-      const dataPoint: any = { date };
-      filteredStocks.forEach((stock) => {
-        const pricePoint = stock.priceHistory?.find((p) => p.date === date);
-        if (pricePoint) {
-          dataPoint[stock.ticker] = pricePoint.price;
-        }
+    // If no trade dates found, fall back to using all available price data
+    if (!minDate) {
+      filteredStocks.forEach(stock => {
+        stock.priceHistory?.forEach(point => {
+          const pointDate = new Date(point.date);
+          if (!minDate || pointDate < minDate) {
+            minDate = pointDate;
+          }
+        });
       });
+    }
+
+    if (!minDate || !maxDate) return [];
+
+    // Build continuous date axis from min to max
+    const allDates: string[] = [];
+    const currentDate = new Date(minDate);
+    currentDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(maxDate);
+    endDate.setHours(0, 0, 0, 0);
+
+    // Collect all actual dates from price histories for efficient lookup
+    const availableDates = new Set<string>();
+    filteredStocks.forEach(stock => {
+      stock.priceHistory?.forEach(point => {
+        availableDates.add(point.date);
+      });
+    });
+
+    // Use only dates that exist in the price data
+    const sortedAvailableDates = Array.from(availableDates)
+      .map(dateStr => ({ dateStr, date: new Date(dateStr) }))
+      .filter(({ date }) => date >= minDate! && date <= maxDate!)
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .map(({ dateStr }) => dateStr);
+
+    // Build combined data - each stock only shows data from its trade date onward
+    return sortedAvailableDates.map((date) => {
+      const dataPoint: any = { date };
+      const currentDateObj = new Date(date);
+      
+      filteredStocks.forEach((stock) => {
+        const purchaseDate = tickerPurchaseDates.get(stock.ticker);
+        
+        // Only include price if date >= purchase date (or no purchase date = show all)
+        if (!purchaseDate || currentDateObj >= purchaseDate) {
+          const pricePoint = stock.priceHistory?.find((p) => p.date === date);
+          if (pricePoint) {
+            dataPoint[stock.ticker] = pricePoint.price;
+          }
+        }
+        // Otherwise leave as undefined (stock line won't show before purchase)
+      });
+      
       return dataPoint;
     });
   }, [holdings, stocks, trades, holdingStocks, selectedTickers]);

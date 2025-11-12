@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,12 +43,14 @@ const CHART_COLORS = [
 ];
 
 export default function Simulation() {
-  const [location] = useLocation();
-  const urlParams = new URLSearchParams(location.split('?')[1] || '');
-  const initialTab = urlParams.get('tab') === 'whatif' ? 'whatif' : 'realtime';
+  // Read tab from URL query params
+  const urlParams = new URLSearchParams(window.location.search);
+  const tabFromUrl = urlParams.get('tab');
   
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"realtime" | "whatif">(initialTab);
+  const [activeTab, setActiveTab] = useState<"realtime" | "whatif">(
+    tabFromUrl === 'whatif' ? 'whatif' : 'realtime'
+  );
   const [viewMode, setViewMode] = useState<"actual" | "normalized">("actual");
   const [messageCount, setMessageCount] = useState(20);
   const [dataSource, setDataSource] = useState<"telegram" | "openinsider">("openinsider");

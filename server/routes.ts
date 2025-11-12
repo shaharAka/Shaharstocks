@@ -150,6 +150,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Version endpoint
+  app.get("/api/version", async (req, res) => {
+    const packageJson = await import("../package.json", { assert: { type: "json" } });
+    res.json({
+      version: packageJson.default.version,
+      name: packageJson.default.name,
+    });
+  });
+
   // User authentication routes
   app.get("/api/auth/current-user", async (req, res) => {
     try {

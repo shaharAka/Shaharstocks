@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Activity,
@@ -22,6 +23,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
   SidebarHeader,
+  SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
@@ -76,6 +78,12 @@ export function AppSidebar() {
   
   // State to track current tab for reactive updates
   const [currentTab, setCurrentTab] = useState(new URLSearchParams(window.location.search).get('tab'));
+
+  // Fetch version info
+  const { data: versionInfo } = useQuery<{ version: string; name: string }>({
+    queryKey: ["/api/version"],
+    staleTime: Infinity, // Version doesn't change during runtime
+  });
 
   const handleNavClick = () => {
     // Close sidebar on mobile after navigation
@@ -231,6 +239,13 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
+      <SidebarFooter className="p-4 border-t">
+        <div className="text-xs text-muted-foreground text-center">
+          <div className="font-mono" data-testid="text-version">
+            v{versionInfo?.version || "1.0.0"}
+          </div>
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

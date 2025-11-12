@@ -40,6 +40,19 @@ export function AnnouncementBell() {
   const markAllAsReadMutation = useMutation({
     mutationFn: () =>
       apiRequest("/api/announcements/mark-all-read", "POST", {}),
+    onMutate: async () => {
+      // Optimistically update the unread count to 0 immediately
+      await queryClient.cancelQueries({ queryKey: ["/api/announcements/unread-count"] });
+      const previousCount = queryClient.getQueryData(["/api/announcements/unread-count"]);
+      queryClient.setQueryData(["/api/announcements/unread-count"], { count: 0 });
+      return { previousCount };
+    },
+    onError: (err, variables, context) => {
+      // Revert on error
+      if (context?.previousCount) {
+        queryClient.setQueryData(["/api/announcements/unread-count"], context.previousCount);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
       queryClient.invalidateQueries({

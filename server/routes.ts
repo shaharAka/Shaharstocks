@@ -2561,15 +2561,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({
           insiderName,
           count: 0,
-          trades: []
+          trades: [],
+          score: null
         });
       }
 
-      // Return structured response
+      // Calculate trade scores (2-week P&L performance)
+      const scoredTrades = await openinsiderService.calculateTradeScores(trades);
+      
+      // Calculate aggregate insider score
+      const insiderScore = openinsiderService.calculateInsiderScore(scoredTrades);
+
+      // Return structured response with scores
       res.json({
         insiderName,
-        count: trades.length,
-        trades
+        count: scoredTrades.length,
+        trades: scoredTrades,
+        score: insiderScore
       });
     } catch (error: any) {
       console.error("[InsiderHistory] ERROR occurred:");

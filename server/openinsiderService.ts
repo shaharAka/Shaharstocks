@@ -8,6 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createHash } from "crypto";
 import { existsSync } from "fs";
+import { finnhubService } from "./finnhubService.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,6 +29,18 @@ export interface OpenInsiderTransaction {
   value: number;
   recommendation: string;
   confidence: number;
+  twoWeekPriceChange?: number;  // Price change after 2 weeks (percentage)
+  twoWeekPnL?: number;  // P&L after 2 weeks in dollars
+  isProfitable?: boolean;  // Whether the trade was profitable after 2 weeks
+}
+
+export interface InsiderScore {
+  insiderName: string;
+  totalTrades: number;
+  profitableTrades: number;
+  successRate: number;  // Percentage of profitable trades
+  averageGain: number;  // Average percentage gain across all trades
+  totalPnL: number;  // Total P&L in dollars
 }
 
 export interface OpenInsiderFilters {
@@ -203,6 +216,173 @@ class OpenInsiderService {
   ): Promise<any[]> {
     const transactions = await this.fetchInsiderPurchases(limit, filters);
     return transactions.map(t => this.transactionToMessage(t));
+  }
+
+  /**
+   * Calculate trade scores by fetching price 2 weeks after trade date
+   * @param transactions Array of insider transactions
+   * @returns Transactions with score data added
+   */
+  async calculateTradeScores(
+    transactions: OpenInsiderTransaction[]
+  ): Promise<OpenInsiderTransaction[]> {
+    console.log(`[OpenInsider] Calculating scores for ${transactions.length} trades...`);
+
+    const scoredTransactions = await Promise.all(
+      transactions.map(async (transaction) => {
+        try {
+          // Parse trade date (format: YYYY-MM-DD)
+          const tradeDate = new Date(transaction.tradeDate);
+          
+          // Calculate date 2 weeks later
+          const twoWeeksLater = new Date(tradeDate);
+          twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
+          
+          // Don't calculate scores for trades that haven't reached 2 weeks yet
+          const now = new Date();
+          if (twoWeeksLater > now) {
+            return transaction; // Return without score data
+          }
+
+          // Fetch historical price 2 weeks after trade
+          const twoWeeksLaterPrice = await this.getPriceOnDate(
+            transaction.ticker,
+            twoWeeksLater
+          );
+
+          if (!twoWeeksLaterPrice) {
+            console.log(`[OpenInsider] Could not fetch price for ${transaction.ticker} on ${twoWeeksLater.toISOString().split('T')[0]}`);
+            return transaction;
+          }
+
+          // Calculate percentage change
+          const priceChange = ((twoWeeksLaterPrice - transaction.price) / transaction.price) * 100;
+          
+          // Calculate P&L in dollars
+          const pnl = (twoWeeksLaterPrice - transaction.price) * transaction.quantity;
+          
+          // Determine if profitable
+          const isProfitable = priceChange > 0;
+
+          return {
+            ...transaction,
+            twoWeekPriceChange: priceChange,
+            twoWeekPnL: pnl,
+            isProfitable,
+          };
+        } catch (error) {
+          console.error(`[OpenInsider] Error calculating score for ${transaction.ticker}:`, error);
+          return transaction; // Return without score data on error
+        }
+      })
+    );
+
+    const scoredCount = scoredTransactions.filter(t => t.twoWeekPriceChange !== undefined).length;
+    console.log(`[OpenInsider] Successfully scored ${scoredCount}/${transactions.length} trades`);
+
+    return scoredTransactions;
+  }
+
+  /**
+   * Get stock price on a specific date
+   * Uses Finnhub to fetch historical candles
+   */
+  private async getPriceOnDate(ticker: string, date: Date): Promise<number | null> {
+    try {
+      // Fetch historical data for a 5-day window around the target date
+      // (to account for weekends/holidays)
+      const fromDate = new Date(date);
+      fromDate.setDate(fromDate.getDate() - 3);
+      
+      const toDate = new Date(date);
+      toDate.setDate(toDate.getDate() + 3);
+
+      const candles = await finnhubService.getHistoricalCandles(
+        ticker,
+        fromDate,
+        toDate
+      );
+
+      if (!candles || candles.length === 0) {
+        return null;
+      }
+
+      // Find the closest trading day to our target date
+      const targetDateStr = date.toISOString().split('T')[0];
+      
+      // Try exact match first
+      const exactMatch = candles.find(c => c.date === targetDateStr);
+      if (exactMatch) {
+        return exactMatch.close;
+      }
+
+      // Find closest date (prefer later dates if exact match not found)
+      const targetTime = date.getTime();
+      const closest = candles.reduce((prev, curr) => {
+        const prevDiff = Math.abs(new Date(prev.date).getTime() - targetTime);
+        const currDiff = Math.abs(new Date(curr.date).getTime() - targetTime);
+        return currDiff < prevDiff ? curr : prev;
+      });
+
+      return closest.close;
+    } catch (error) {
+      console.error(`[OpenInsider] Error fetching price for ${ticker} on ${date}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Calculate aggregate score for an insider based on their trades
+   * @param transactions Array of transactions by the same insider
+   * @returns Insider score summary
+   */
+  calculateInsiderScore(transactions: OpenInsiderTransaction[]): InsiderScore {
+    if (transactions.length === 0) {
+      return {
+        insiderName: "",
+        totalTrades: 0,
+        profitableTrades: 0,
+        successRate: 0,
+        averageGain: 0,
+        totalPnL: 0,
+      };
+    }
+
+    const insiderName = transactions[0].insiderName;
+    
+    // Filter only trades that have been scored (2 weeks have passed)
+    const scoredTrades = transactions.filter(t => 
+      t.twoWeekPriceChange !== undefined && 
+      t.twoWeekPnL !== undefined
+    );
+
+    if (scoredTrades.length === 0) {
+      return {
+        insiderName,
+        totalTrades: transactions.length,
+        profitableTrades: 0,
+        successRate: 0,
+        averageGain: 0,
+        totalPnL: 0,
+      };
+    }
+
+    const profitableTrades = scoredTrades.filter(t => t.isProfitable === true).length;
+    const successRate = (profitableTrades / scoredTrades.length) * 100;
+    
+    const totalPriceChange = scoredTrades.reduce((sum, t) => sum + (t.twoWeekPriceChange || 0), 0);
+    const averageGain = totalPriceChange / scoredTrades.length;
+    
+    const totalPnL = scoredTrades.reduce((sum, t) => sum + (t.twoWeekPnL || 0), 0);
+
+    return {
+      insiderName,
+      totalTrades: scoredTrades.length,
+      profitableTrades,
+      successRate,
+      averageGain,
+      totalPnL,
+    };
   }
 }
 

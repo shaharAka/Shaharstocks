@@ -35,11 +35,11 @@ import {
 
 // Color palette for different stocks
 const CHART_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
+  "oklch(var(--chart-1))",
+  "oklch(var(--chart-2))",
+  "oklch(var(--chart-3))",
+  "oklch(var(--chart-4))",
+  "oklch(var(--chart-5))",
 ];
 
 export default function Simulation() {
@@ -936,10 +936,10 @@ export default function Simulation() {
                 data={displayChartData}
                 margin={{ top: 30, right: 80, left: 20, bottom: 20 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid strokeDasharray="3 3" stroke="oklch(var(--border))" />
                 <XAxis
                   dataKey={viewMode === "normalized" ? "day" : "date"}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="oklch(var(--muted-foreground))"
                   fontSize={12}
                   tickFormatter={(value) => {
                     if (viewMode === "normalized") {
@@ -950,7 +950,7 @@ export default function Simulation() {
                   }}
                 />
                 <YAxis
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="oklch(var(--muted-foreground))"
                   fontSize={12}
                   domain={yAxisDomain as [number, number]}
                   tickFormatter={(value) => viewMode === "normalized" ? `${value.toFixed(0)}%` : `$${value.toFixed(0)}`}
@@ -958,18 +958,18 @@ export default function Simulation() {
                 {viewMode === "normalized" && (
                   <ReferenceLine
                     y={0}
-                    stroke="hsl(var(--muted-foreground))"
+                    stroke="oklch(var(--muted-foreground))"
                     strokeDasharray="5 5"
                     strokeWidth={1.5}
                   />
                 )}
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
+                    backgroundColor: "oklch(var(--popover))",
+                    border: "1px solid oklch(var(--border))",
                     borderRadius: "6px",
                   }}
-                  labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+                  labelStyle={{ color: "oklch(var(--popover-foreground))" }}
                   formatter={(value: number, name: string) => [
                     viewMode === "normalized" ? `${value.toFixed(2)}%` : `$${value.toFixed(2)}`,
                     name
@@ -982,7 +982,7 @@ export default function Simulation() {
                   }}
                   iconType="line"
                   formatter={(value) => (
-                    <span style={{ color: "hsl(var(--foreground))", fontSize: "12px", fontWeight: 600 }}>
+                    <span style={{ color: "oklch(var(--foreground))", fontSize: "12px", fontWeight: 600 }}>
                       {value}
                     </span>
                   )}
@@ -1031,7 +1031,7 @@ export default function Simulation() {
 
                 {/* Trading rule boundary lines - only in actual mode */}
                 {viewMode === "actual" && sellRuleLines.map((line, index) => {
-                  const color = line.isLower ? "hsl(var(--destructive))" : "hsl(var(--success))";
+                  const color = line.isLower ? "oklch(var(--destructive))" : "oklch(var(--success))";
                   const label = line.isLower ? "Stop Loss" : "Take Profit";
                   
                   return (
@@ -1061,13 +1061,13 @@ export default function Simulation() {
                       <ReferenceLine
                         key={`purchase-${holding.ticker}`}
                         y={purchasePrice}
-                        stroke="hsl(var(--muted-foreground))"
+                        stroke="oklch(var(--muted-foreground))"
                         strokeWidth={2}
                         strokeDasharray="3 3"
                         label={{
                           value: `${holding.ticker} Purchase: $${purchasePrice.toFixed(2)}`,
                           position: "insideTopLeft",
-                          fill: "hsl(var(--muted-foreground))",
+                          fill: "oklch(var(--muted-foreground))",
                           fontSize: 11,
                           fontWeight: "500",
                         }}
@@ -1077,7 +1077,7 @@ export default function Simulation() {
 
                 {/* Trading rule boundary lines - normalized mode */}
                 {viewMode === "normalized" && sellRuleLinesNormalized.map((line, index) => {
-                  const color = line.isLower ? "hsl(var(--destructive))" : "hsl(var(--success))";
+                  const color = line.isLower ? "oklch(var(--destructive))" : "oklch(var(--success))";
                   const label = line.isLower ? "Stop Loss" : "Take Profit";
                   
                   return (

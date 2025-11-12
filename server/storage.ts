@@ -504,7 +504,8 @@ export class DatabaseStorage implements IStorage {
         .from(stocks)
         .where(and(
           lt(stocks.rejectedAt, cutoffDate),
-          sql`${stocks.rejectedAt} IS NOT NULL`
+          sql`${stocks.rejectedAt} IS NOT NULL`,
+          eq(stocks.recommendationStatus, 'rejected')
         ))
         .for('update'); // Lock rows for deletion
       

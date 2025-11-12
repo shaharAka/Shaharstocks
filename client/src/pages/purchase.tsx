@@ -807,13 +807,13 @@ export default function Purchase() {
     
     // Filter by AI score range
     if (aiScoreFilter !== "all") {
-      const analysis = allAnalyses.find(a => a.ticker === stock.ticker);
+      const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
       if (analysis && analysis.status === "completed" && analysis.integratedScore !== null) {
         const score = analysis.integratedScore;
         if (aiScoreFilter === "0-50" && (score < 0 || score > 50)) return false;
         if (aiScoreFilter === "50-75" && (score < 50 || score > 75)) return false;
         if (aiScoreFilter === "75-100" && (score < 75 || score > 100)) return false;
-      } else if (aiScoreFilter !== "all") {
+      } else {
         // If AI score filter is active but stock has no score, exclude it
         return false;
       }

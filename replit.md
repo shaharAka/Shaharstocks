@@ -105,6 +105,34 @@ Comprehensive test coverage for the dual-agent (micro + macro) AI analysis syste
     - **Finnhub API**: For real-time stock price updates, company profiles, market capitalization, and historical price data for backtesting.
 - **Design & Styling**: Tailwind CSS, class-variance-authority (CVA), clsx, tailwind-merge, Google Fonts (Inter, Geist Mono, Fira Code).
 
+## Recent Changes (November 12, 2025)
+
+### Stale Stock Filtering & Cleanup System ✅
+- **Status**: Fully implemented and production-ready
+- **Features**:
+  1. **Visual Indicators**: Stocks older than 5 days show a "{ageDays}d old" badge (secondary variant) in both card and table views
+  2. **Automated Cleanup**: Daily background job deletes pending stocks older than 10 days
+  3. **AI Score Filter**: New dropdown filter on purchase page (0-50 Low, 50-75 Medium, 75-100 High)
+- **Backend Implementation**:
+  - `shared/time.ts`: Utility functions for stock age calculations (`isStockStale`, `getStockAgeInDays`, `isStockExpired`)
+  - `server/storage.ts`: Transactional `deleteExpiredPendingStocks()` with dependency checks and cascade deletes
+  - `server/jobs/cleanupStaleStocks.ts`: Daily cleanup scheduler (runs on startup + every 24 hours)
+  - API enhancement: `/api/stocks/with-user-status` now includes `isStale` and `ageDays` fields
+- **Data Integrity**:
+  - Transactional deletion with row-level locking (FOR UPDATE)
+  - Pre-checks for portfolio/trade dependencies (aborts if conflicts found)
+  - Cascade deletes across 6 child tables: aiAnalysisJobs → stockAnalyses → interests/views/userStatuses/comments → stocks
+  - Structured logging with elapsed time, ticker lists, and child record counts
+- **UI/UX**:
+  - Stale badge appears next to "NEW" badge in ticker column
+  - AI score filter excludes stocks without completed AI analysis when active
+  - All elements have data-testid attributes for testing
+- **Phase 2 Backlog**:
+  - Audit log table for deleted stocks
+  - Composite DB index on (recommendation_status, last_updated)
+  - Retry logic and alerting for cleanup job failures
+- **Architect Review**: ✅ Pass - Production-ready, no blocking defects
+
 ## Recent Changes (November 11, 2025)
 
 ### Stock Unreject/Restore & Detailed AI Progress Display ✅

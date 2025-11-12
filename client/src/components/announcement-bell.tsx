@@ -1,4 +1,4 @@
-import { Gift } from "lucide-react";
+import { Gift, Sparkles, RefreshCw, Wrench, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -58,13 +58,13 @@ export function AnnouncementBell() {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "feature":
-        return "✨";
+        return Sparkles;
       case "update":
-        return "🔄";
+        return RefreshCw;
       case "maintenance":
-        return "🔧";
+        return Wrench;
       default:
-        return "📢";
+        return Megaphone;
     }
   };
 
@@ -104,39 +104,50 @@ export function AnnouncementBell() {
             </div>
           ) : (
             <div className="divide-y" data-testid="list-announcements">
-              {announcements.map((announcement) => (
-                <button
-                  key={announcement.id}
-                  onClick={() => handleAnnouncementClick(announcement)}
-                  className={`w-full text-left p-4 hover-elevate transition-colors ${
-                    !announcement.readAt ? "bg-accent/50" : ""
-                  }`}
-                  data-testid={`announcement-${announcement.id}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{getTypeIcon(announcement.type)}</span>
-                        <span className="font-semibold">{announcement.title}</span>
-                        <Badge variant={getTypeColor(announcement.type)} className="capitalize">
-                          {announcement.type}
-                        </Badge>
+              {announcements.map((announcement) => {
+                const TypeIcon = getTypeIcon(announcement.type);
+                return (
+                  <div
+                    key={announcement.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleAnnouncementClick(announcement)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleAnnouncementClick(announcement);
+                      }
+                    }}
+                    className={`p-4 cursor-pointer hover-elevate focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                      !announcement.readAt ? "bg-accent/50" : ""
+                    }`}
+                    data-testid={`announcement-${announcement.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <TypeIcon className="h-4 w-4 shrink-0" />
+                          <span className="font-semibold">{announcement.title}</span>
+                          <Badge variant={getTypeColor(announcement.type)} className="capitalize">
+                            {announcement.type}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {announcement.content}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(announcement.createdAt), {
+                            addSuffix: true,
+                          })}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {announcement.content}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(announcement.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </p>
+                      {!announcement.readAt && (
+                        <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
+                      )}
                     </div>
-                    {!announcement.readAt && (
-                      <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
-                    )}
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </ScrollArea>

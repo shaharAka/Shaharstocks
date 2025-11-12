@@ -35,8 +35,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Redirect } from "wouter";
 import { format } from "date-fns";
-import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle } from "lucide-react";
+import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle, Gift } from "lucide-react";
 import { useState } from "react";
+import type { Announcement } from "@shared/schema";
 
 interface User {
   id: string;
@@ -99,6 +100,7 @@ export default function AdminPage() {
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [createPaymentDialogOpen, setCreatePaymentDialogOpen] = useState(false);
   const [viewPaymentsDialogOpen, setViewPaymentsDialogOpen] = useState(false);
+  const [createAnnouncementDialogOpen, setCreateAnnouncementDialogOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [extendMonths, setExtendMonths] = useState("1");
@@ -107,6 +109,10 @@ export default function AdminPage() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("manual");
   const [paymentNotes, setPaymentNotes] = useState("");
+  
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementContent, setAnnouncementContent] = useState("");
+  const [announcementType, setAnnouncementType] = useState<"feature" | "update" | "maintenance" | "announcement">("announcement");
 
   const handleSetAdminSecret = () => {
     if (secretInput) {

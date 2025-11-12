@@ -3502,6 +3502,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/announcements/mark-all-read", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      await storage.markAllAnnouncementsAsRead(req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to mark all announcements as read:", error);
+      res.status(500).json({ error: "Failed to mark all announcements as read" });
+    }
+  });
+
   app.post("/api/announcements", async (req, res) => {
     try {
       if (!req.session.userId) {
@@ -3569,6 +3583,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to deactivate announcement:", error);
       res.status(500).json({ error: "Failed to deactivate announcement" });
+    }
+  });
+
+  app.delete("/api/announcements/:id", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Super admin access required" });
+      }
+
+      await storage.deleteAnnouncement(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete announcement:", error);
+      res.status(500).json({ error: "Failed to delete announcement" });
     }
   });
 

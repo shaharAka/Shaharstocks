@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Redirect } from "wouter";
 import { format } from "date-fns";
-import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle, Gift } from "lucide-react";
+import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle, Gift, Pencil } from "lucide-react";
 import { useState } from "react";
 import type { Announcement } from "@shared/schema";
 
@@ -101,6 +102,7 @@ export default function AdminPage() {
   const [createPaymentDialogOpen, setCreatePaymentDialogOpen] = useState(false);
   const [viewPaymentsDialogOpen, setViewPaymentsDialogOpen] = useState(false);
   const [createAnnouncementDialogOpen, setCreateAnnouncementDialogOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [extendMonths, setExtendMonths] = useState("1");
@@ -430,9 +432,131 @@ export default function AdminPage() {
     },
   });
 
+  const editAnnouncementMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { title: string; content: string; type: string } }) => {
+      const res = await fetch(`/api/announcements/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to update announcement");
+      }
+      
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+      setEditingAnnouncement(null);
+      setCreateAnnouncementDialogOpen(false);
+      setAnnouncementTitle("");
+      setAnnouncementContent("");
+      setAnnouncementType("announcement");
+      toast({
+        title: "Success",
+        description: "Announcement updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteAnnouncementMutation = useMutation({
+    mutationFn: async (announcementId: string) => {
+      const res = await fetch(`/api/announcements/${announcementId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to delete announcement");
+      }
+      
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+      toast({
+        title: "Success",
+        description: "Announcement deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleAnnouncementActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const res = await fetch(`/api/announcements/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isActive }),
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to toggle announcement status");
+      }
+      
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateAnnouncement = () => {
     if (!announcementTitle || !announcementContent) return;
     createAnnouncementMutation.mutate();
+  };
+
+  const handleEditAnnouncement = () => {
+    if (!editingAnnouncement) return;
+    editAnnouncementMutation.mutate({
+      id: editingAnnouncement.id,
+      data: {
+        title: announcementTitle,
+        content: announcementContent,
+        type: announcementType,
+      },
+    });
+  };
+
+  const openEditDialog = (announcement: Announcement) => {
+    setEditingAnnouncement(announcement);
+    setAnnouncementTitle(announcement.title);
+    setAnnouncementContent(announcement.content);
+    setAnnouncementType(announcement.type as "feature" | "update" | "maintenance" | "announcement");
+    setCreateAnnouncementDialogOpen(true);
   };
 
   if (userLoading) {
@@ -554,6 +678,9 @@ export default function AdminPage() {
                       } className="capitalize">
                         {announcement.type}
                       </Badge>
+                      <Badge variant={announcement.isActive ? "default" : "outline"}>
+                        {announcement.isActive ? "Published" : "Draft"}
+                      </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">
                       {announcement.content}
@@ -562,16 +689,41 @@ export default function AdminPage() {
                       {format(new Date(announcement.createdAt), "MMM d, yyyy 'at' h:mm a")}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => deactivateAnnouncementMutation.mutate(announcement.id)}
-                    disabled={deactivateAnnouncementMutation.isPending}
-                    data-testid={`button-deactivate-${announcement.id}`}
-                  >
-                    <Archive className="w-4 h-4 mr-1" />
-                    Deactivate
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor={`active-${announcement.id}`} className="text-xs text-muted-foreground">
+                        {announcement.isActive ? "Active" : "Inactive"}
+                      </Label>
+                      <Switch
+                        id={`active-${announcement.id}`}
+                        checked={announcement.isActive}
+                        onCheckedChange={(checked) => 
+                          toggleAnnouncementActiveMutation.mutate({ id: announcement.id, isActive: checked })
+                        }
+                        disabled={toggleAnnouncementActiveMutation.isPending}
+                        data-testid={`switch-active-${announcement.id}`}
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditDialog(announcement)}
+                      data-testid={`button-edit-${announcement.id}`}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    {currentUser?.isSuperAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteAnnouncementMutation.mutate(announcement.id)}
+                        disabled={deleteAnnouncementMutation.isPending}
+                        data-testid={`button-delete-${announcement.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1081,12 +1233,23 @@ export default function AdminPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={createAnnouncementDialogOpen} onOpenChange={setCreateAnnouncementDialogOpen}>
+      <Dialog open={createAnnouncementDialogOpen} onOpenChange={(open) => {
+        setCreateAnnouncementDialogOpen(open);
+        if (!open) {
+          setEditingAnnouncement(null);
+          setAnnouncementTitle("");
+          setAnnouncementContent("");
+          setAnnouncementType("announcement");
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Announcement</DialogTitle>
+            <DialogTitle>{editingAnnouncement ? "Edit Announcement" : "Create Announcement"}</DialogTitle>
             <DialogDescription>
-              Create a new announcement that will be visible to all users
+              {editingAnnouncement 
+                ? "Update the announcement details" 
+                : "Create a new announcement that will be visible to all users"
+              }
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1126,15 +1289,21 @@ export default function AdminPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateAnnouncementDialogOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              setCreateAnnouncementDialogOpen(false);
+              setEditingAnnouncement(null);
+              setAnnouncementTitle("");
+              setAnnouncementContent("");
+              setAnnouncementType("announcement");
+            }}>
               Cancel
             </Button>
             <Button 
-              onClick={handleCreateAnnouncement} 
-              disabled={!announcementTitle || !announcementContent || createAnnouncementMutation.isPending}
+              onClick={editingAnnouncement ? handleEditAnnouncement : handleCreateAnnouncement} 
+              disabled={!announcementTitle || !announcementContent || (editingAnnouncement ? editAnnouncementMutation.isPending : createAnnouncementMutation.isPending)}
               data-testid="button-confirm-announcement"
             >
-              Create Announcement
+              {editingAnnouncement ? "Update Announcement" : "Create Announcement"}
             </Button>
           </DialogFooter>
         </DialogContent>

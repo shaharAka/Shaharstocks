@@ -34,11 +34,28 @@ export function AnnouncementBell() {
     },
   });
 
+  const markAllAsReadMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("/api/announcements/mark-all-read", "POST", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/announcements/unread-count"],
+      });
+    },
+  });
+
   const unreadCount = unreadData?.count || 0;
 
   const handleAnnouncementClick = (announcement: AnnouncementWithReadStatus) => {
     if (!announcement.readAt) {
       markAsReadMutation.mutate(announcement.id);
+    }
+  };
+
+  const handlePopoverOpenChange = (open: boolean) => {
+    if (open && unreadCount > 0) {
+      markAllAsReadMutation.mutate();
     }
   };
 
@@ -69,7 +86,7 @@ export function AnnouncementBell() {
   };
 
   return (
-    <Popover>
+    <Popover onOpenChange={handlePopoverOpenChange}>
       <PopoverTrigger asChild>
         <Button
           size="icon"
@@ -77,7 +94,7 @@ export function AnnouncementBell() {
           className="relative h-11 w-11"
           data-testid="button-announcements"
         >
-          <Gift className="h-5 w-5" />
+          <Gift className={`h-5 w-5 ${unreadCount > 0 ? "text-primary" : ""}`} />
           {unreadCount > 0 && (
             <Badge
               variant="default"

@@ -296,10 +296,13 @@ export interface IStorage {
   // Announcements
   getAnnouncements(userId: string): Promise<(Announcement & { readAt?: Date | null })[]>;
   getUnreadAnnouncementCount(userId: string): Promise<number>;
+  getAllAnnouncements(): Promise<Announcement[]>;
   createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement>;
   updateAnnouncement(id: string, updates: Partial<Announcement>): Promise<Announcement | undefined>;
   deactivateAnnouncement(id: string): Promise<Announcement | undefined>;
+  deleteAnnouncement(id: string): Promise<void>;
   markAnnouncementAsRead(userId: string, announcementId: string): Promise<void>;
+  markAllAnnouncementsAsRead(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2447,6 +2450,29 @@ export class DatabaseStorage implements IStorage {
       .insert(announcementReads)
       .values({ userId, announcementId })
       .onConflictDoNothing();
+  }
+
+  async markAllAnnouncementsAsRead(userId: string): Promise<void> {
+    const activeAnnouncements = await db
+      .select({ id: announcements.id })
+      .from(announcements)
+      .where(eq(announcements.isActive, true));
+
+    if (activeAnnouncements.length > 0) {
+      const values = activeAnnouncements.map(a => ({ userId, announcementId: a.id }));
+      await db.insert(announcementReads).values(values).onConflictDoNothing();
+    }
+  }
+
+  async getAllAnnouncements(): Promise<Announcement[]> {
+    return await db
+      .select()
+      .from(announcements)
+      .orderBy(sql`${announcements.createdAt} DESC`);
+  }
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    await db.delete(announcements).where(eq(announcements.id, id));
   }
 }
 

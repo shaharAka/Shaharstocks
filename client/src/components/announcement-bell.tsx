@@ -95,15 +95,6 @@ export function AnnouncementBell() {
           data-testid="button-announcements"
         >
           <Gift className={`h-5 w-5 ${unreadCount > 0 ? "text-primary" : ""}`} />
-          {unreadCount > 0 && (
-            <Badge
-              variant="default"
-              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-              data-testid="badge-announcements-unread-count"
-            >
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </Badge>
-          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-96 p-0" align="end" data-testid="popover-announcements">

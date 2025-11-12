@@ -29,7 +29,6 @@ import type { PortfolioHolding, Stock } from "@shared/schema";
 import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Tutorial } from "@/components/tutorial";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -120,7 +119,6 @@ export default function Dashboard() {
 
   return (
     <>
-      <Tutorial tutorialId="dashboard" />
       <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
         <div>
           <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">

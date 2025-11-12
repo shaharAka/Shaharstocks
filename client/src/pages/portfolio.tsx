@@ -12,7 +12,6 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
-import { Tutorial } from "@/components/tutorial";
 import { Onboarding } from "@/components/onboarding";
 import { useUser } from "@/contexts/UserContext";
 import { usePortfolioHoldings, useStocks, useTradingRules, useTrades } from "@/hooks/use-portfolio-data";
@@ -132,10 +131,6 @@ export default function Portfolio() {
         onOpenChange={setShowOnboarding}
         onComplete={() => setOnboardingComplete(true)}
       />
-      {/* Only show tutorial after onboarding is complete or if user has already seen it */}
-      {(onboardingComplete || user?.hasSeenOnboarding) && (
-        <Tutorial tutorialId="portfolio" />
-      )}
       <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-2xl mx-auto">
         <div>
           <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">

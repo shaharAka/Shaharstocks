@@ -37,17 +37,26 @@ interface InsiderHistoryResponse {
 
 interface InsiderHistoryDialogProps {
   insiderName: string | null;
+  ticker: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function InsiderHistoryDialog({
   insiderName,
+  ticker,
   open,
   onOpenChange,
 }: InsiderHistoryDialogProps) {
   const { data, isLoading, error } = useQuery<InsiderHistoryResponse>({
-    queryKey: [`/api/insider/history/${encodeURIComponent(insiderName || '')}`],
+    queryKey: [`/api/insider/history/${encodeURIComponent(insiderName || '')}`, ticker],
+    queryFn: () => {
+      const url = `/api/insider/history/${encodeURIComponent(insiderName || '')}${ticker ? `?ticker=${ticker}` : ''}`;
+      return fetch(url, { credentials: 'include' }).then(res => {
+        if (!res.ok) throw new Error('Failed to fetch insider trading history');
+        return res.json();
+      });
+    },
     enabled: open && !!insiderName,
   });
 

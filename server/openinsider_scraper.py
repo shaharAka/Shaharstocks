@@ -31,7 +31,8 @@ class OpenInsiderScraper:
         insider_titles: List[str] | None = None,
         min_transaction_value: int | None = None,
         previous_day_only: bool = False,
-        insider_name: str | None = None
+        insider_name: str | None = None,
+        ticker: str | None = None
     ) -> List[Dict[str, Any]]:
         """
         Fetch recent insider purchase transactions with pagination and retry logic
@@ -42,6 +43,7 @@ class OpenInsiderScraper:
             min_transaction_value: Minimum transaction value in dollars
             previous_day_only: Only fetch transactions from previous day
             insider_name: Filter by specific insider name (case-insensitive partial match)
+            ticker: Filter by specific stock ticker (uses OpenInsider's screener endpoint)
         
         Returns:
             List of insider trading transactions matching the filters
@@ -49,16 +51,26 @@ class OpenInsiderScraper:
         all_transactions = []
         filtered_transactions = []
         page = 1
-        # When filtering by insider name, fetch more pages to find enough matches
-        max_pages = 50 if insider_name else 20
+        # When filtering by insider name without ticker, fetch more pages
+        max_pages = 50 if (insider_name and not ticker) else 20
         
-        if insider_name:
+        if insider_name and ticker:
+            print(f"[OpenInsider] Searching for insider: {insider_name} in {ticker}", file=sys.stderr)
+        elif insider_name:
             print(f"[OpenInsider] Searching for insider: {insider_name}", file=sys.stderr)
+        elif ticker:
+            print(f"[OpenInsider] Fetching trades for {ticker}", file=sys.stderr)
         
         # Fetch multiple pages until we have enough filtered results
         while len(filtered_transactions) < limit and page <= max_pages:
-            # Always use the reliable latest-insider-purchases-25k endpoint
-            url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
+            # Use ticker-specific screener if provided (much faster!)
+            if ticker:
+                url = f"{self.base_url}/screener?s={ticker.upper()}"
+                if page > 1:
+                    url += f"&page={page}"
+            else:
+                # Use the reliable latest-insider-purchases-25k endpoint
+                url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
             
             last_error = None
             page_transactions = None
@@ -100,11 +112,32 @@ class OpenInsiderScraper:
                             try:
                                 # Find ticker link
                                 ticker_cell = cells[3] if len(cells) > 3 else None
-                                ticker = ticker_cell.get_text(strip=True) if ticker_cell else ""
+                                ticker_text = ticker_cell.get_text(strip=True) if ticker_cell else ""
                                 
-                                # Company name
-                                company_cell = cells[4] if len(cells) > 4 else None
-                                company_name = company_cell.get_text(strip=True) if company_cell else ""
+                                # Detect page layout by checking if cell 4 contains company name or insider name
+                                # Screener page (with ticker filter): no company name column, Cell 4 = insider name
+                                # General page: Cell 4 = company name, Cell 5 = insider name
+                                is_screener_layout = bool(ticker)  # If we're filtering by ticker, it's screener layout
+                                
+                                if is_screener_layout:
+                                    # Screener layout (no company name column)
+                                    company_name = ""  # Not available on screener page
+                                    insider_name_idx = 4
+                                    insider_title_idx = 5
+                                    trade_type_idx = 6
+                                    price_idx = 7
+                                    quantity_idx = 8
+                                    value_idx = 11
+                                else:
+                                    # General layout (with company name column)
+                                    company_cell = cells[4] if len(cells) > 4 else None
+                                    company_name = company_cell.get_text(strip=True) if company_cell else ""
+                                    insider_name_idx = 5
+                                    insider_title_idx = 6
+                                    trade_type_idx = 7
+                                    price_idx = 8
+                                    quantity_idx = 9
+                                    value_idx = 12
                                 
                                 # Trade date
                                 trade_date_cell = cells[2] if len(cells) > 2 else None
@@ -115,11 +148,11 @@ class OpenInsiderScraper:
                                 filing_date_text = filing_date_cell.get_text(strip=True) if filing_date_cell else ""
                                 
                                 # Trade type (should be P for Purchase)
-                                trade_type_cell = cells[7] if len(cells) > 7 else None
+                                trade_type_cell = cells[trade_type_idx] if len(cells) > trade_type_idx else None
                                 trade_type = trade_type_cell.get_text(strip=True) if trade_type_cell else ""
                                 
                                 # Price
-                                price_cell = cells[8] if len(cells) > 8 else None
+                                price_cell = cells[price_idx] if len(cells) > price_idx else None
                                 price_text = price_cell.get_text(strip=True).replace('$', '').replace(',', '') if price_cell else "0"
                                 try:
                                     price = float(price_text) if price_text else 0.0
@@ -127,7 +160,7 @@ class OpenInsiderScraper:
                                     price = 0.0
                                 
                                 # Quantity
-                                qty_cell = cells[9] if len(cells) > 9 else None
+                                qty_cell = cells[quantity_idx] if len(cells) > quantity_idx else None
                                 qty_text = qty_cell.get_text(strip=True).replace(',', '').replace('+', '') if qty_cell else "0"
                                 try:
                                     quantity = int(qty_text) if qty_text else 0
@@ -135,7 +168,7 @@ class OpenInsiderScraper:
                                     quantity = 0
                                 
                                 # Value
-                                value_cell = cells[12] if len(cells) > 12 else None
+                                value_cell = cells[value_idx] if len(cells) > value_idx else None
                                 value_text = value_cell.get_text(strip=True).replace('$', '').replace(',', '').replace('+', '') if value_cell else "0"
                                 try:
                                     value = float(value_text) if value_text else 0.0
@@ -143,15 +176,15 @@ class OpenInsiderScraper:
                                     value = 0.0
                                 
                                 # Insider name
-                                insider_cell = cells[5] if len(cells) > 5 else None
+                                insider_cell = cells[insider_name_idx] if len(cells) > insider_name_idx else None
                                 scraped_insider_name = insider_cell.get_text(strip=True) if insider_cell else ""
                                 
                                 # Insider title
-                                insider_title_cell = cells[6] if len(cells) > 6 else None
+                                insider_title_cell = cells[insider_title_idx] if len(cells) > insider_title_idx else None
                                 insider_title = insider_title_cell.get_text(strip=True) if insider_title_cell else ""
                                 
                                 # Only include purchases (P or "P - Purchase") with valid data
-                                if not (trade_type.startswith("P") and ticker and price > 0):
+                                if not (trade_type.startswith("P") and ticker_text and price > 0):
                                     continue
                                 
                                 # Apply filters
@@ -185,8 +218,8 @@ class OpenInsiderScraper:
                                     continue
                                 
                                 transaction = {
-                                    "ticker": ticker,
-                                    "companyName": company_name,
+                                    "ticker": ticker_text,
+                                    "companyName": company_name or ticker_text,  # Use ticker if company name not available
                                     "insiderName": scraped_insider_name,
                                     "insiderTitle": insider_title,
                                     "tradeDate": trade_date_text,
@@ -271,6 +304,7 @@ def main():
     min_transaction_value = None
     previous_day_only = False
     insider_name = None
+    ticker = None
     
     if len(sys.argv) >= 3:
         try:
@@ -279,6 +313,7 @@ def main():
             min_transaction_value = filters.get("minTransactionValue")
             previous_day_only = filters.get("previousDayOnly", False)
             insider_name = filters.get("insiderName")
+            ticker = filters.get("ticker")
         except json.JSONDecodeError as e:
             print(f"Warning: Invalid filters JSON: {e}", file=sys.stderr)
     
@@ -288,7 +323,8 @@ def main():
         insider_titles=insider_titles,
         min_transaction_value=min_transaction_value,
         previous_day_only=previous_day_only,
-        insider_name=insider_name
+        insider_name=insider_name,
+        ticker=ticker
     )
     
     # Output as JSON to stdout

@@ -2529,26 +2529,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Insider name is required" });
       }
 
-      // Parse and validate limit parameter (default: 20, max: 100 for insider search)
-      // Lower limits for insider name searches because they require more pages
+      // Get optional ticker parameter (for filtering to specific stock)
+      const ticker = (req.query.ticker as string)?.trim().toUpperCase();
+
+      // Parse and validate limit parameter (default: 50 when ticker provided, 20 otherwise)
       const limitParam = req.query.limit as string | undefined;
-      let limit = 20; // Reduced from 50 to avoid timeouts
+      let limit = ticker ? 50 : 20; // Higher limit when filtering by ticker (faster)
       if (limitParam) {
         const parsed = parseInt(limitParam, 10);
         if (isNaN(parsed) || parsed < 1) {
           return res.status(400).json({ error: "Invalid limit parameter" });
         }
-        limit = Math.min(parsed, 100); // Cap at 100 to avoid timeouts
+        limit = Math.min(parsed, ticker ? 200 : 100); // Higher cap when filtering by ticker
       }
 
       // Sanitize name for logging
       const sanitizedName = insiderName.replace(/[\n\r]/g, ' ').substring(0, 100);
-      console.log(`[InsiderHistory] Fetching history for "${sanitizedName}" (limit: ${limit})`);
+      const tickerInfo = ticker ? ` for ${ticker}` : '';
+      console.log(`[InsiderHistory] Fetching history for "${sanitizedName}"${tickerInfo} (limit: ${limit})`);
 
       // Fetch insider trading history
       const trades = await openinsiderService.fetchInsiderPurchases(
         limit,
-        { insider_name: insiderName }
+        { insider_name: insiderName, ticker }
       );
 
       console.log(`[InsiderHistory] Found ${trades.length} trades for "${sanitizedName}"`);

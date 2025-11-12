@@ -448,6 +448,7 @@ export function StockExplorer({
       {/* Insider History Dialog */}
       <InsiderHistoryDialog
         insiderName={selectedInsider}
+        ticker={stock?.ticker || null}
         open={insiderHistoryOpen}
         onOpenChange={setInsiderHistoryOpen}
       />

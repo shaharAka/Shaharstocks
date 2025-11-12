@@ -249,19 +249,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const avatarColors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
       const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
 
+      // Set up 30-day trial with payment required at day 14
+      const now = new Date();
+      const trialEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+      const paymentRequiredAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000); // 14 days from now
+
       const newUser = await storage.createUser({
         name,
         email,
         passwordHash,
         avatarColor,
-        subscriptionStatus: "inactive", // Default to inactive until PayPal subscription is confirmed
+        subscriptionStatus: "trial", // Start with trial
+        subscriptionStartDate: now,
+        trialEndsAt,
+        paymentRequiredAt,
       });
 
-      res.json({ 
-        user: {
-          ...newUser,
-          passwordHash: undefined, // Don't send password hash to client
+      // Log them in immediately
+      req.session.userId = newUser.id;
+      
+      // Explicitly save session before sending response
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error during signup:", err);
+          return res.status(500).json({ error: "Failed to save session" });
         }
+        
+        res.json({ 
+          user: {
+            ...newUser,
+            passwordHash: undefined, // Don't send password hash to client
+          }
+        });
       });
     } catch (error) {
       console.error("Signup error:", error);

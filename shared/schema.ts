@@ -278,8 +278,7 @@ export const trades = pgTable("trades", {
 });
 
 export const insertTradeSchema = createInsertSchema(trades).omit({ 
-  id: true, 
-  executedAt: true 
+  id: true 
 });
 export type InsertTrade = z.infer<typeof insertTradeSchema>;
 export type Trade = typeof trades.$inferSelect;

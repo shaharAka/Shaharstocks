@@ -1147,24 +1147,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const simulationCapital = 1000;
-      const currentPrice = parseFloat(stock.currentPrice);
-      const quantity = Math.floor(simulationCapital / currentPrice);
-      const total = currentPrice * quantity;
-
-      // Add initial price point to history for the simulation start
-      const now = new Date();
-      const initialPricePoint = {
-        date: now.toISOString().split('T')[0],
-        price: currentPrice,
-      };
-
-      // Get existing price history or initialize empty array
-      const priceHistory = stock.priceHistory || [];
       
-      // Only add if this date doesn't already exist in history
-      const dateExists = priceHistory.some(p => p.date === initialPricePoint.date);
-      if (!dateExists) {
-        priceHistory.push(initialPricePoint);
+      // Use insider trade date if available, otherwise use today
+      const purchaseDate = stock.insiderTradeDate 
+        ? new Date(stock.insiderTradeDate)
+        : new Date();
+      const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
+      
+      // Try to find historical price for the purchase date
+      const priceHistory = stock.priceHistory || [];
+      const historicalPricePoint = priceHistory.find(p => p.date === purchaseDateStr);
+      
+      // Use historical price if available, otherwise current price
+      const purchasePrice = historicalPricePoint 
+        ? historicalPricePoint.price 
+        : parseFloat(stock.currentPrice);
+      
+      const quantity = Math.floor(simulationCapital / purchasePrice);
+      const total = purchasePrice * quantity;
+
+      console.log(`[Simulation] Creating simulation for ${stock.ticker}:`);
+      console.log(`[Simulation] - Purchase date: ${purchaseDateStr} (${stock.insiderTradeDate ? 'insider trade date' : 'today'})`);
+      console.log(`[Simulation] - Purchase price: $${purchasePrice.toFixed(2)} (${historicalPricePoint ? 'historical' : 'current'})`);
+      console.log(`[Simulation] - Quantity: ${quantity} shares`);
+
+      // Add initial price point to history if it doesn't exist
+      if (!historicalPricePoint) {
+        priceHistory.push({
+          date: purchaseDateStr,
+          price: purchasePrice,
+        });
         
         // Update stock with new price history
         await storage.updateStock(stock.ticker, {
@@ -1178,17 +1190,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Simulated holding already exists for this stock" });
       }
 
-      // Create simulated trade (this automatically creates the portfolio holding)
+      // Create simulated trade with the purchase date
       const trade = {
         userId: req.session.userId,
         ticker: stock.ticker,
         type: "buy" as const,
         quantity,
-        price: currentPrice.toFixed(2),
+        price: purchasePrice.toFixed(2),
         total: total.toFixed(2),
         status: "completed" as const,
         broker: "simulation",
         isSimulated: true,
+        executedAt: purchaseDate, // Set execution date to purchase date
       };
       const createdTrade = await storage.createTrade(trade);
 
@@ -1207,7 +1220,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stock, 
         trade: createdTrade,
         holding,
-        message: `Simulation created: ${quantity} shares at $${currentPrice.toFixed(2)} = $${total.toFixed(2)}`
+        message: stock.insiderTradeDate
+          ? `Simulation created: ${quantity} shares purchased on ${purchaseDateStr} at $${purchasePrice.toFixed(2)} = $${total.toFixed(2)}`
+          : `Simulation created: ${quantity} shares at $${purchasePrice.toFixed(2)} = $${total.toFixed(2)}`
       });
     } catch (error) {
       console.error("Simulate recommendation error:", error);
@@ -2198,31 +2213,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           const simulationCapital = 1000;
-          const currentPrice = parseFloat(stock.currentPrice);
-          const quantity = Math.floor(simulationCapital / currentPrice);
-          const total = currentPrice * quantity;
+          
+          // Use insider trade date if available, otherwise use today
+          const purchaseDate = stock.insiderTradeDate 
+            ? new Date(stock.insiderTradeDate)
+            : new Date();
+          const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
+          
+          // Try to find historical price for the purchase date
+          const priceHistory = stock.priceHistory || [];
+          const historicalPricePoint = priceHistory.find(p => p.date === purchaseDateStr);
+          
+          // Use historical price if available, otherwise current price
+          const purchasePrice = historicalPricePoint 
+            ? historicalPricePoint.price 
+            : parseFloat(stock.currentPrice);
+          
+          const quantity = Math.floor(simulationCapital / purchasePrice);
+          const total = purchasePrice * quantity;
 
-          // Create simulated trade (purchase)
+          // Create simulated trade with the purchase date
           const trade = await storage.createTrade({
             userId: req.session.userId,
             ticker,
             type: "buy",
             quantity,
-            price: stock.currentPrice,
-            total: total.toString(),
+            price: purchasePrice.toFixed(2),
+            total: total.toFixed(2),
+            status: "completed",
+            broker: "simulation",
             isSimulated: true,
+            executedAt: purchaseDate,
           });
 
-          // Create simulated portfolio holding
-          const holding = await storage.createPortfolioHolding({
-            userId: req.session.userId,
-            ticker,
-            quantity,
-            averagePurchasePrice: stock.currentPrice,
-            isSimulated: true,
+          // Get the created holding (automatically created by trade)
+          const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, true);
+
+          // Update user-specific stock status to approved (simulated)
+          await storage.ensureUserStockStatus(req.session.userId, ticker);
+          await storage.updateUserStockStatus(req.session.userId, ticker, {
+            status: "approved",
+            approvedAt: new Date()
           });
 
-          createdHoldings.push({ ticker, holdingId: holding.id, tradeId: trade.id });
+          createdHoldings.push({ ticker, holdingId: holding?.id, tradeId: trade.id });
         } catch (error) {
           errors.push({ ticker, error: error instanceof Error ? error.message : "Unknown error" });
         }

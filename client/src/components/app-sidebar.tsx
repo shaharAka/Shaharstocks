@@ -165,6 +165,7 @@ export function AppSidebar() {
                                     isActive={isSubItemActive}
                                     data-testid={subItem.testId}
                                     onClick={() => handleSubMenuClick(subItem.url)}
+                                    className="cursor-pointer"
                                   >
                                     <span>{subItem.title}</span>
                                   </SidebarMenuSubButton>

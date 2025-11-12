@@ -23,6 +23,7 @@ interface StockTableProps {
   commentCounts: { ticker: string; count: number }[];
   analyses?: any[];
   selectedTickers?: Set<string>;
+  simulatedTickers?: Set<string>;
   onToggleSelection?: (ticker: string) => void;
   onSelectAll?: (tickers: string[]) => void;
   onStockClick: (stock: Stock) => void;
@@ -39,6 +40,7 @@ export function StockTable({
   commentCounts, 
   analyses = [], 
   selectedTickers = new Set(),
+  simulatedTickers = new Set(),
   onToggleSelection,
   onSelectAll,
   onStockClick,
@@ -340,6 +342,11 @@ export function StockTable({
                     {isNewStock(stock.ticker, stock.insiderTradeDate) && (
                       <Badge variant="default" className="text-xs px-1.5 py-0" data-testid={`badge-new-${stock.ticker}`}>
                         NEW
+                      </Badge>
+                    )}
+                    {simulatedTickers.has(stock.ticker) && (
+                      <Badge variant="outline" className="text-xs px-1.5 py-0 bg-accent/50" data-testid={`badge-simulated-${stock.ticker}`}>
+                        SIMULATION
                       </Badge>
                     )}
                     {(stock as any).isStale && (

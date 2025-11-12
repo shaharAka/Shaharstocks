@@ -68,11 +68,13 @@ export default function Simulation() {
       return response.json();
     },
     refetchInterval: 300000, // Refetch every 5 minutes
+    staleTime: 0, // Always fetch fresh data
   });
 
   const { data: stocks, isLoading: stocksLoading } = useQuery<Stock[]>({
     queryKey: ["/api/stocks"],
     refetchInterval: 300000, // Refetch every 5 minutes
+    staleTime: 0, // Always fetch fresh data
   });
 
   const { data: rules, isLoading: rulesLoading } = useQuery<TradingRule[]>({

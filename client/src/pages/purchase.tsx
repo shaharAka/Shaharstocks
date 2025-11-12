@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Stock, type User, type StockInterestWithUser } from "@shared/schema";
+import { type Stock, type User, type StockInterestWithUser, type PortfolioHolding } from "@shared/schema";
 
 // Extended Stock type with user status and analysis job progress
 type StockWithUserStatus = Stock & {
@@ -163,6 +163,20 @@ export default function Purchase() {
       return await res.json();
     },
   });
+
+  // Query for simulated holdings to show which stocks are in simulation
+  const { data: simulatedHoldings } = useQuery<PortfolioHolding[]>({
+    queryKey: ["/api/portfolio/holdings", "simulated"],
+    queryFn: async () => {
+      const response = await fetch("/api/portfolio/holdings?simulated=true");
+      if (!response.ok) return [];
+      return response.json();
+    },
+    staleTime: 0, // Always fetch fresh data
+  });
+
+  // Create a set of tickers that are in simulation for quick lookup
+  const simulatedTickers = new Set(simulatedHoldings?.map(h => h.ticker) || []);
 
   // Unreject mutation
   const unrejectMutation = useMutation({
@@ -767,11 +781,16 @@ export default function Purchase() {
   };
 
   const allPendingRecommendations = stocks?.filter(
-    stock => 
-      stock.userStatus === "pending" &&
-      stock.recommendation && 
-      (stock.recommendation.toLowerCase().includes("buy") || 
-       stock.recommendation.toLowerCase().includes("sell"))
+    stock => {
+      // Include stocks that are pending OR in simulation (even if approved)
+      const isInSimulation = simulatedTickers.has(stock.ticker);
+      const isPending = stock.userStatus === "pending";
+      const hasRecommendation = stock.recommendation && 
+        (stock.recommendation.toLowerCase().includes("buy") || 
+         stock.recommendation.toLowerCase().includes("sell"));
+      
+      return hasRecommendation && (isPending || isInSimulation);
+    }
   ) || [];
 
   const pendingRecommendations = allPendingRecommendations.filter(stock => {
@@ -1052,6 +1071,7 @@ export default function Purchase() {
           commentCounts={commentCounts}
           analyses={analyses}
           selectedTickers={selectedTickers}
+          simulatedTickers={simulatedTickers}
           onToggleSelection={toggleSelection}
           onSelectAll={selectAll}
           viewedTickers={viewedTickers}
@@ -1117,6 +1137,11 @@ export default function Purchase() {
                       {isNewStock(stock.ticker, stock.insiderTradeDate) && (
                         <Badge variant="default" className="text-xs px-1.5 py-0" data-testid={`badge-new-${stock.ticker}`}>
                           NEW
+                        </Badge>
+                      )}
+                      {simulatedTickers.has(stock.ticker) && (
+                        <Badge variant="outline" className="text-xs px-1.5 py-0 bg-accent/50" data-testid={`badge-simulated-${stock.ticker}`}>
+                          SIMULATION
                         </Badge>
                       )}
                       {stock.isStale && (

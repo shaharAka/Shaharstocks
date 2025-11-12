@@ -847,3 +847,23 @@ export const insertFeatureVoteSchema = createInsertSchema(featureVotes).omit({
 });
 export type InsertFeatureVote = z.infer<typeof insertFeatureVoteSchema>;
 export type FeatureVote = typeof featureVotes.$inferSelect;
+
+// Notifications - alerts for high-value stock opportunities
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ticker: text("ticker").notNull(),
+  score: integer("score").notNull(), // AI integrated score
+  message: text("message").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: uniqueIndex("notifications_user_id_idx").on(table.userId, table.isRead, table.createdAt),
+}));
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;

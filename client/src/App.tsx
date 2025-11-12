@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { UserProfile } from "@/components/user-profile";
+import { NotificationBell } from "@/components/notification-bell";
 import { HelpCircle, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -108,6 +109,7 @@ function AuthenticatedApp() {
               >
                 <SettingsIcon className="h-5 w-5" />
               </Button>
+              <NotificationBell />
               <UserProfile />
               <ThemeToggle />
             </div>

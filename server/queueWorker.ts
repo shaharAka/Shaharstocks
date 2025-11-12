@@ -328,6 +328,24 @@ class QueueWorker {
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'combined');
       console.log(`[QueueWorker] ✅ All analysis phases complete for ${job.ticker}`);
 
+      // Create notifications for high-value opportunities (score > 75)
+      if (integratedScore > 75) {
+        console.log(`[QueueWorker] 🔔 High-value stock detected (${integratedScore}/100), creating notifications...`);
+        const allUsers = await storage.getUsers();
+        const activeUsers = allUsers.filter(u => u.subscriptionStatus === 'active' && !u.archived);
+        
+        for (const user of activeUsers) {
+          await storage.createNotification({
+            userId: user.id,
+            ticker: job.ticker,
+            score: integratedScore,
+            message: `${job.ticker} received a high AI score of ${integratedScore}/100 - Strong ${analysis.overallRating || 'buy'} opportunity`,
+            isRead: false,
+          });
+        }
+        console.log(`[QueueWorker] ✅ Created ${activeUsers.length} notifications for ${job.ticker}`);
+      }
+
       // Final progress update
       await this.updateProgress(job.id, job.ticker, "completed", {
         phase: "complete",

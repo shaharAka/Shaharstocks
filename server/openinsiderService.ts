@@ -37,10 +37,13 @@ export interface OpenInsiderTransaction {
 export interface InsiderScore {
   insiderName: string;
   totalTrades: number;
+  scoredTrades: number;  // Number of trades that were successfully scored
   profitableTrades: number;
   successRate: number;  // Percentage of profitable trades
   averageGain: number;  // Average percentage gain across all trades
   totalPnL: number;  // Total P&L in dollars
+  isPartialData: boolean;  // True if some trades couldn't be scored
+  unscoredCount: number;  // Number of trades that couldn't be scored
 }
 
 export interface OpenInsiderFilters {
@@ -288,47 +291,45 @@ class OpenInsiderService {
   }
 
   /**
-   * Get stock price on a specific date
-   * Uses Finnhub to fetch historical candles
+   * Get stock price on a specific date with caching and rate limiting
+   * Uses Alpha Vantage for historical data
    */
   private async getPriceOnDate(ticker: string, date: Date): Promise<number | null> {
+    // Create cache key (YYYY-MM-DD format)
+    const dateStr = date.toISOString().split('T')[0];
+    const cacheKey = `${ticker}:${dateStr}`;
+    
+    // Check cache first
+    const cached = this.priceCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+      return cached.price;
+    }
+
     try {
-      // Fetch historical data for a 5-day window around the target date
-      // (to account for weekends/holidays)
-      const fromDate = new Date(date);
-      fromDate.setDate(fromDate.getDate() - 3);
+      // Rate limiting: ensure minimum interval between API calls
+      const now = Date.now();
+      const timeSinceLastCall = now - this.lastFinnhubCall;
+      if (timeSinceLastCall < this.MIN_CALL_INTERVAL_MS) {
+        await new Promise(resolve => 
+          setTimeout(resolve, this.MIN_CALL_INTERVAL_MS - timeSinceLastCall)
+        );
+      }
+      this.lastFinnhubCall = Date.now();
+
+      // Convert YYYY-MM-DD to DD.MM.YYYY format for Alpha Vantage
+      const [year, month, day] = dateStr.split('-');
+      const alphaVantageDateStr = `${day}.${month}.${year}`;
+
+      // Use Alpha Vantage to fetch historical price
+      const price = await finnhubService.getHistoricalPrice(ticker, alphaVantageDateStr);
       
-      const toDate = new Date(date);
-      toDate.setDate(toDate.getDate() + 3);
-
-      const candles = await finnhubService.getHistoricalCandles(
-        ticker,
-        fromDate,
-        toDate
-      );
-
-      if (!candles || candles.length === 0) {
-        return null;
+      if (price !== null) {
+        // Cache the result
+        this.priceCache.set(cacheKey, { price, timestamp: Date.now() });
+        return price;
       }
 
-      // Find the closest trading day to our target date
-      const targetDateStr = date.toISOString().split('T')[0];
-      
-      // Try exact match first
-      const exactMatch = candles.find(c => c.date === targetDateStr);
-      if (exactMatch) {
-        return exactMatch.close;
-      }
-
-      // Find closest date (prefer later dates if exact match not found)
-      const targetTime = date.getTime();
-      const closest = candles.reduce((prev, curr) => {
-        const prevDiff = Math.abs(new Date(prev.date).getTime() - targetTime);
-        const currDiff = Math.abs(new Date(curr.date).getTime() - targetTime);
-        return currDiff < prevDiff ? curr : prev;
-      });
-
-      return closest.close;
+      return null;
     } catch (error) {
       console.error(`[OpenInsider] Error fetching price for ${ticker} on ${date}:`, error);
       return null;
@@ -338,36 +339,49 @@ class OpenInsiderService {
   /**
    * Calculate aggregate score for an insider based on their trades
    * @param transactions Array of transactions by the same insider
-   * @returns Insider score summary
+   * @returns Insider score summary with partial data indicators
    */
   calculateInsiderScore(transactions: OpenInsiderTransaction[]): InsiderScore {
     if (transactions.length === 0) {
       return {
         insiderName: "",
         totalTrades: 0,
+        scoredTrades: 0,
         profitableTrades: 0,
         successRate: 0,
         averageGain: 0,
         totalPnL: 0,
+        isPartialData: false,
+        unscoredCount: 0,
       };
     }
 
     const insiderName = transactions[0].insiderName;
     
-    // Filter only trades that have been scored (2 weeks have passed)
+    // Filter only PURCHASE trades that have been scored (2 weeks have passed)
+    // Ignore sells as we're tracking insider buying patterns
     const scoredTrades = transactions.filter(t => 
+      t.tradeType.startsWith("P") &&  // Only purchases
       t.twoWeekPriceChange !== undefined && 
       t.twoWeekPnL !== undefined
     );
+
+    // Count trades that couldn't be scored (future trades or API failures)
+    const purchaseTrades = transactions.filter(t => t.tradeType.startsWith("P"));
+    const unscoredCount = purchaseTrades.length - scoredTrades.length;
+    const isPartialData = unscoredCount > 0;
 
     if (scoredTrades.length === 0) {
       return {
         insiderName,
         totalTrades: transactions.length,
+        scoredTrades: 0,
         profitableTrades: 0,
         successRate: 0,
         averageGain: 0,
         totalPnL: 0,
+        isPartialData,
+        unscoredCount,
       };
     }
 
@@ -381,11 +395,14 @@ class OpenInsiderService {
 
     return {
       insiderName,
-      totalTrades: scoredTrades.length,
+      totalTrades: transactions.length,
+      scoredTrades: scoredTrades.length,
       profitableTrades,
       successRate,
       averageGain,
       totalPnL,
+      isPartialData,
+      unscoredCount,
     };
   }
 }

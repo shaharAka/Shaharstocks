@@ -3442,11 +3442,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Admin access required" });
       }
 
-      const announcements = await db
-        .select()
-        .from(schema.announcements)
-        .where(eq(schema.announcements.isActive, true))
-        .orderBy(desc(schema.announcements.createdAt));
+      // Admins see ALL announcements (drafts + published)
+      const announcements = await storage.getAllAnnouncements();
       
       res.json(announcements);
     } catch (error) {

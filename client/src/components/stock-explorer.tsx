@@ -201,8 +201,8 @@ export function StockExplorer({
                       <p className="text-muted-foreground">Insider</p>
                       {stock.insiderName ? (
                         <Button
-                          variant="link"
-                          className="h-auto p-0 font-medium text-primary hover:underline"
+                          variant="ghost"
+                          className="h-auto p-0 font-medium text-primary hover:underline justify-start"
                           onClick={() => {
                             setSelectedInsider(stock.insiderName);
                             setInsiderHistoryOpen(true);

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -46,14 +47,7 @@ export function InsiderHistoryDialog({
   onOpenChange,
 }: InsiderHistoryDialogProps) {
   const { data, isLoading, error } = useQuery<InsiderHistoryResponse>({
-    queryKey: ["/api/insider/history", insiderName],
-    queryFn: async () => {
-      const response = await fetch(`/api/insider/history/${encodeURIComponent(insiderName!)}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch insider history");
-      }
-      return response.json();
-    },
+    queryKey: [`/api/insider/history/${encodeURIComponent(insiderName || '')}`],
     enabled: open && !!insiderName,
   });
 
@@ -67,6 +61,9 @@ export function InsiderHistoryDialog({
             <TrendingUp className="h-5 w-5 text-primary" />
             <span>Trading History: {insiderName}</span>
           </DialogTitle>
+          <DialogDescription>
+            View historical purchase transactions for this insider
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

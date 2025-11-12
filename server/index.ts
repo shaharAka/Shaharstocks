@@ -7,6 +7,7 @@ import { finnhubService } from "./finnhubService";
 import { telegramNotificationService } from "./telegramNotificationService";
 import { openinsiderService } from "./openinsiderService";
 import { aiAnalysisService } from "./aiAnalysisService";
+import { startCleanupScheduler } from "./jobs/cleanupStaleStocks";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
 import { sessionMiddleware } from "./session";
@@ -126,6 +127,9 @@ app.use((req, res, next) => {
 
   // Start automatic stock price updates every 5 minutes
   startPriceUpdateJob();
+  
+  // Start daily cleanup of stale pending stocks (> 10 days old)
+  startCleanupScheduler(storage);
   
   // Start automatic candlestick data fetching for purchase candidates (once a day)
   startCandlestickDataJob();

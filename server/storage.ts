@@ -395,18 +395,21 @@ export class DatabaseStorage implements IStorage {
       console.log(`[CLEANUP] Found ${candidateTickers.length} candidates: ${candidateTickers.join(', ')}`);
       
       // 2. Safety check: verify no portfolio holdings or trades exist for these tickers
-      const holdings = await tx
+      const holdingsCheck = await tx
         .select({ ticker: portfolioHoldings.ticker })
         .from(portfolioHoldings)
         .where(inArray(portfolioHoldings.ticker, candidateTickers));
       
-      const trades = await tx
+      const tradesCheck = await tx
         .select({ ticker: trades.ticker })
         .from(trades)
         .where(inArray(trades.ticker, candidateTickers));
       
-      if (holdings.length > 0 || trades.length > 0) {
-        const conflictTickers = [...new Set([...holdings.map(h => h.ticker), ...trades.map(t => t.ticker)])];
+      if (holdingsCheck.length > 0 || tradesCheck.length > 0) {
+        const conflictTickers = Array.from(new Set([
+          ...holdingsCheck.map(h => h.ticker),
+          ...tradesCheck.map(t => t.ticker)
+        ]));
         console.error(`[CLEANUP] ABORT: Found portfolio/trade data for tickers: ${conflictTickers.join(', ')}`);
         throw new Error(`Cannot delete stocks with existing holdings/trades: ${conflictTickers.join(', ')}`);
       }

@@ -53,6 +53,10 @@ export interface OpenInsiderFilters {
 
 class OpenInsiderService {
   private pythonScriptPath: string;
+  private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
+  private readonly CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour cache
+  private lastFinnhubCall = 0;
+  private readonly MIN_CALL_INTERVAL_MS = 1200; // ~50 calls/minute to stay under 60/min limit
 
   constructor() {
     // Try multiple locations for the Python script

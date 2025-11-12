@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
-  TrendingUp,
+  Activity,
   ShoppingCart,
   LineChart,
   ShieldCheck,
@@ -118,7 +118,7 @@ export function AppSidebar() {
       <SidebarHeader className="p-6">
         <div className="flex items-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
-            <TrendingUp className="h-6 w-6 text-primary-foreground" />
+            <Activity className="h-6 w-6 text-primary-foreground" />
           </div>
           <div>
             <h1 className="text-lg font-semibold">signal2</h1>

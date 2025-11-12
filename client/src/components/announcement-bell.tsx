@@ -38,22 +38,30 @@ export function AnnouncementBell() {
   });
 
   const markAllAsReadMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("/api/announcements/mark-all-read", "POST", {}),
+    mutationFn: async () => {
+      console.log("API call: mark-all-read starting");
+      const result = await apiRequest("/api/announcements/mark-all-read", "POST", {});
+      console.log("API call: mark-all-read completed", result);
+      return result;
+    },
     onMutate: async () => {
+      console.log("onMutate: Setting unread count to 0");
       // Optimistically update the unread count to 0 immediately
       await queryClient.cancelQueries({ queryKey: ["/api/announcements/unread-count"] });
       const previousCount = queryClient.getQueryData(["/api/announcements/unread-count"]);
+      console.log("onMutate: Previous count was", previousCount);
       queryClient.setQueryData(["/api/announcements/unread-count"], { count: 0 });
       return { previousCount };
     },
     onError: (err, variables, context) => {
+      console.error("onError: API call failed", err);
       // Revert on error
       if (context?.previousCount) {
         queryClient.setQueryData(["/api/announcements/unread-count"], context.previousCount);
       }
     },
     onSuccess: () => {
+      console.log("onSuccess: Invalidating queries");
       queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
       queryClient.invalidateQueries({
         queryKey: ["/api/announcements/unread-count"],
@@ -70,8 +78,10 @@ export function AnnouncementBell() {
   };
 
   const handleOpenChange = (newOpen: boolean) => {
+    console.log("handleOpenChange called:", { newOpen, unreadCount });
     // When opening the popover, mark all as read first
     if (newOpen && unreadCount > 0) {
+      console.log("Calling markAllAsReadMutation");
       markAllAsReadMutation.mutate();
     }
     setOpen(newOpen);

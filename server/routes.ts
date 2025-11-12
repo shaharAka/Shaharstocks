@@ -2529,15 +2529,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Insider name is required" });
       }
 
-      // Parse and validate limit parameter (default: 50, max: 500)
+      // Parse and validate limit parameter (default: 20, max: 100 for insider search)
+      // Lower limits for insider name searches because they require more pages
       const limitParam = req.query.limit as string | undefined;
-      let limit = 50;
+      let limit = 20; // Reduced from 50 to avoid timeouts
       if (limitParam) {
         const parsed = parseInt(limitParam, 10);
         if (isNaN(parsed) || parsed < 1) {
           return res.status(400).json({ error: "Invalid limit parameter" });
         }
-        limit = Math.min(parsed, 500); // Cap at 500
+        limit = Math.min(parsed, 100); // Cap at 100 to avoid timeouts
       }
 
       // Sanitize name for logging

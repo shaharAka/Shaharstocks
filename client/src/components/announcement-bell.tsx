@@ -56,13 +56,12 @@ export function AnnouncementBell() {
     }
   };
 
-  const handleGiftIconClick = () => {
-    // Mark all as read when clicking the icon (before opening)
-    if (unreadCount > 0) {
+  const handleOpenChange = (newOpen: boolean) => {
+    // When opening the popover, mark all as read first
+    if (newOpen && unreadCount > 0) {
       markAllAsReadMutation.mutate();
     }
-    // Toggle the popover
-    setOpen(!open);
+    setOpen(newOpen);
   };
 
   const getTypeColor = (type: string) => {
@@ -92,14 +91,13 @@ export function AnnouncementBell() {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           size="icon"
           variant="ghost"
           className="relative h-11 w-11"
           data-testid="button-announcements"
-          onClick={handleGiftIconClick}
         >
           <Gift className={`h-5 w-5 ${unreadCount > 0 ? "text-orange-500 dark:text-orange-400" : ""}`} />
         </Button>

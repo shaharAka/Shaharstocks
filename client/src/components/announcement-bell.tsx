@@ -28,7 +28,7 @@ export function AnnouncementBell() {
 
   const markAsReadMutation = useMutation({
     mutationFn: (announcementId: string) =>
-      apiRequest("/api/announcements/mark-read", "POST", { announcementId }),
+      apiRequest("POST", "/api/announcements/mark-read", { announcementId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
       queryClient.invalidateQueries({
@@ -40,7 +40,7 @@ export function AnnouncementBell() {
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
       console.log("API call: mark-all-read starting");
-      const result = await apiRequest("/api/announcements/mark-all-read", "POST", {});
+      const result = await apiRequest("POST", "/api/announcements/mark-all-read", {});
       console.log("API call: mark-all-read completed", result);
       return result;
     },

@@ -2568,7 +2568,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         trades
       });
     } catch (error: any) {
-      console.error("[InsiderHistory] Error:", error);
+      console.error("[InsiderHistory] ERROR occurred:");
+      console.error("[InsiderHistory] Error message:", error.message);
+      console.error("[InsiderHistory] Error stack:", error.stack);
+      if (error.stdout) console.error("[InsiderHistory] stdout:", error.stdout);
+      if (error.stderr) console.error("[InsiderHistory] stderr:", error.stderr);
       
       // Map errors to appropriate HTTP status codes
       if (error.message?.includes("timeout") || error.message?.includes("network")) {

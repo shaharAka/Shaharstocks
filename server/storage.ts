@@ -93,6 +93,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
+import { isStockStale, getStockAgeDays } from "@shared/time";
 
 export interface IStorage {
   // Stocks
@@ -1591,8 +1592,12 @@ export class DatabaseStorage implements IStorage {
       // Transform results
       const transformed = results.map(row => {
         const latestJob = jobsByTicker.get(row.stock.ticker);
+        const lastUpdated = row.stock.lastUpdated || new Date();
+        
         return {
           ...row.stock,
+          isStale: isStockStale(lastUpdated),
+          ageDays: getStockAgeDays(lastUpdated),
           userStatus: row.userStatus || "pending",
           userApprovedAt: row.userApprovedAt,
           userRejectedAt: row.userRejectedAt,

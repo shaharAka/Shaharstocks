@@ -51,8 +51,14 @@ class OpenInsiderScraper:
         
         # Fetch multiple pages until we have enough filtered results
         while len(transactions) < limit and page <= max_pages:
-            # OpenInsider URL for latest purchases with pagination
-            url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
+            # OpenInsider URL - use screener if filtering by insider name, otherwise latest purchases
+            if insider_name:
+                # Use screener with insider name filter
+                # xp=1 means exclude purchases=false (show purchases), o= is insider name/CIK
+                url = f"{self.base_url}/screener?s=&o={insider_name}&pl=&ph=&ll=&lh=&fd=730&fdr=&td=0&tdr=&fdlyl=&fdlyh=&daysago=&xp=1&vl=&vh=&ocl=&och=&sic1=-1&sicl=100&sich=9999&grp=0&nfl=&nfh=&nil=&nih=&nol=&noh=&v2l=&v2h=&oc2l=&oc2h=&sortcol=0&cnt=100&page={page}"
+            else:
+                # Default: latest purchases with pagination
+                url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
             
             last_error = None
             page_transactions = None
@@ -174,9 +180,8 @@ class OpenInsiderScraper:
                                 if min_transaction_value and value < min_transaction_value:
                                     continue
                                 
-                                # Filter by insider name (case-insensitive partial match)
-                                if insider_name and insider_name.upper() not in scraped_insider_name.upper():
-                                    continue
+                                # Note: Insider name filtering is now done via URL parameter (o=)
+                                # No need for client-side filtering when using screener
                                 
                                 transaction = {
                                     "ticker": ticker,
@@ -264,6 +269,7 @@ def main():
     insider_titles = None
     min_transaction_value = None
     previous_day_only = False
+    insider_name = None
     
     if len(sys.argv) >= 3:
         try:
@@ -271,6 +277,7 @@ def main():
             insider_titles = filters.get("insiderTitles")
             min_transaction_value = filters.get("minTransactionValue")
             previous_day_only = filters.get("previousDayOnly", False)
+            insider_name = filters.get("insiderName")
         except json.JSONDecodeError as e:
             print(f"Warning: Invalid filters JSON: {e}", file=sys.stderr)
     
@@ -279,7 +286,8 @@ def main():
         limit=limit,
         insider_titles=insider_titles,
         min_transaction_value=min_transaction_value,
-        previous_day_only=previous_day_only
+        previous_day_only=previous_day_only,
+        insider_name=insider_name
     )
     
     # Output as JSON to stdout

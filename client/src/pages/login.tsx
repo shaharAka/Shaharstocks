@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Link, useLocation } from "wouter";
-import { TrendingUp, AlertCircle } from "lucide-react";
+import { TrendingUp, AlertCircle, TrendingUpIcon, Zap, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -69,17 +69,60 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <TrendingUp className="h-8 w-8 text-primary" />
-            <CardTitle className="text-3xl font-bold">signal2</CardTitle>
-          </div>
-          <CardDescription className="text-lg">
-            Sign in to your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6">
+        <Card className="md:flex md:flex-col md:justify-center">
+          <CardHeader>
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="h-8 w-8 text-primary" />
+              <CardTitle className="text-3xl font-bold">signal2</CardTitle>
+            </div>
+            <CardDescription className="text-base">
+              Professional stock trading dashboard with AI-powered analysis
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <TrendingUpIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Dual-Agent AI Analysis</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Micro agent analyzes SEC filings and fundamentals, macro agent evaluates industry trends using sector ETFs
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Automated Trading & Backtesting</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Set trigger-based rules, simulate strategies with historical data, track portfolio in real-time
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Insider Trading Alerts</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Telegram integration for real-time stock recommendations and insider transaction monitoring
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Sign In</CardTitle>
+            <CardDescription>
+              Access your trading dashboard
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -148,6 +191,7 @@ export default function Login() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

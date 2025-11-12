@@ -229,17 +229,60 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <TrendingUp className="h-8 w-8 text-primary" />
-            <CardTitle className="text-3xl font-bold">signal2</CardTitle>
-          </div>
-          <CardDescription className="text-lg">
-            Create your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6">
+        <Card className="md:flex md:flex-col md:justify-center">
+          <CardHeader>
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="h-8 w-8 text-primary" />
+              <CardTitle className="text-3xl font-bold">signal2</CardTitle>
+            </div>
+            <CardDescription className="text-base">
+              Professional stock trading dashboard with AI-powered analysis
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <TrendingUpIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Dual-Agent AI Analysis</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Micro agent analyzes SEC filings and fundamentals, macro agent evaluates industry trends using sector ETFs
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Automated Trading & Backtesting</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Set trigger-based rules, simulate strategies with historical data, track portfolio in real-time
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Insider Trading Alerts</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Telegram integration for real-time stock recommendations and insider transaction monitoring
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Create Your Account</CardTitle>
+            <CardDescription>
+              Start your subscription to access all features
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -339,6 +382,7 @@ export default function Signup() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

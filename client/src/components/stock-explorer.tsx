@@ -30,6 +30,7 @@ import {
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { StockComments } from "@/components/stock-comments";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
+import { InsiderHistoryDialog } from "@/components/insider-history-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
@@ -58,6 +59,8 @@ export function StockExplorer({
 }: StockExplorerProps) {
   const { toast } = useToast();
   const { user: currentUser } = useUser();
+  const [insiderHistoryOpen, setInsiderHistoryOpen] = useState(false);
+  const [selectedInsider, setSelectedInsider] = useState<string | null>(null);
 
   const { data: comments = [] } = useQuery<StockCommentWithUser[]>({
     queryKey: ["/api/stocks", stock?.ticker, "comments"],
@@ -196,7 +199,21 @@ export function StockExplorer({
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-muted-foreground">Insider</p>
-                      <p className="font-medium">{stock.insiderName || "N/A"}</p>
+                      {stock.insiderName ? (
+                        <Button
+                          variant="link"
+                          className="h-auto p-0 font-medium text-primary hover:underline"
+                          onClick={() => {
+                            setSelectedInsider(stock.insiderName);
+                            setInsiderHistoryOpen(true);
+                          }}
+                          data-testid="button-insider-name"
+                        >
+                          {stock.insiderName}
+                        </Button>
+                      ) : (
+                        <p className="font-medium">N/A</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-muted-foreground">Title</p>
@@ -427,6 +444,13 @@ export function StockExplorer({
           </TabsContent>
         </Tabs>
       </DialogContent>
+
+      {/* Insider History Dialog */}
+      <InsiderHistoryDialog
+        insiderName={selectedInsider}
+        open={insiderHistoryOpen}
+        onOpenChange={setInsiderHistoryOpen}
+      />
     </Dialog>
   );
 }

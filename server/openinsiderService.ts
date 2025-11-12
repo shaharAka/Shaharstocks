@@ -34,6 +34,7 @@ export interface OpenInsiderFilters {
   insiderTitles?: string[];
   minTransactionValue?: number;
   previousDayOnly?: boolean;
+  insider_name?: string;
 }
 
 class OpenInsiderService {
@@ -84,8 +85,15 @@ class OpenInsiderService {
       const args = [this.pythonScriptPath, safeLimit.toString()];
       
       // Add filters as JSON argument if provided
-      if (filters && (filters.insiderTitles || filters.minTransactionValue || filters.previousDayOnly)) {
-        args.push(JSON.stringify(filters));
+      if (filters && (filters.insiderTitles || filters.minTransactionValue || filters.previousDayOnly || filters.insider_name)) {
+        // Convert insider_name to insiderName for Python script
+        const pythonFilters: any = {};
+        if (filters.insiderTitles) pythonFilters.insiderTitles = filters.insiderTitles;
+        if (filters.minTransactionValue) pythonFilters.minTransactionValue = filters.minTransactionValue;
+        if (filters.previousDayOnly) pythonFilters.previousDayOnly = filters.previousDayOnly;
+        if (filters.insider_name) pythonFilters.insiderName = filters.insider_name;
+        
+        args.push(JSON.stringify(pythonFilters));
       }
 
       const { stdout, stderr } = await execFileAsync(

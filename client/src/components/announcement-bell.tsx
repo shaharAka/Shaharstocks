@@ -94,7 +94,7 @@ export function AnnouncementBell() {
           className="relative h-11 w-11"
           data-testid="button-announcements"
         >
-          <Gift className={`h-5 w-5 ${unreadCount > 0 ? "text-primary" : ""}`} />
+          <Gift className={`h-5 w-5 ${unreadCount > 0 ? "text-orange-500 dark:text-orange-400" : ""}`} />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-96 p-0" align="end" data-testid="popover-announcements">

@@ -39,6 +39,7 @@ import { format } from "date-fns";
 import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle, Gift, Pencil } from "lucide-react";
 import { useState } from "react";
 import type { Announcement } from "@shared/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface User {
   id: string;
@@ -590,7 +591,20 @@ export default function AdminPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4 mb-8">
+      <Tabs defaultValue="users" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="users" data-testid="tab-user-management">
+            <Users className="w-4 h-4 mr-2" />
+            User Management
+          </TabsTrigger>
+          <TabsTrigger value="announcements" data-testid="tab-announcements">
+            <Gift className="w-4 h-4 mr-2" />
+            Announcements
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="users" className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -642,94 +656,6 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </div>
-
-      <Card className="mb-8">
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle>Announcements</CardTitle>
-          <Button
-            onClick={() => setCreateAnnouncementDialogOpen(true)}
-            data-testid="button-create-announcement"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Create Announcement
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {announcements.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No announcements yet. Create one to notify all users.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {announcements.map((announcement) => (
-                <div
-                  key={announcement.id}
-                  className="flex items-start justify-between gap-4 p-4 border rounded-lg hover-elevate"
-                  data-testid={`announcement-${announcement.id}`}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold">{announcement.title}</span>
-                      <Badge variant={
-                        announcement.type === "feature" ? "default" :
-                        announcement.type === "update" ? "secondary" :
-                        announcement.type === "maintenance" ? "destructive" :
-                        "outline"
-                      } className="capitalize">
-                        {announcement.type}
-                      </Badge>
-                      <Badge variant={announcement.isActive ? "default" : "outline"}>
-                        {announcement.isActive ? "Published" : "Draft"}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      {announcement.content}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(announcement.createdAt), "MMM d, yyyy 'at' h:mm a")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor={`active-${announcement.id}`} className="text-xs text-muted-foreground">
-                        {announcement.isActive ? "Active" : "Inactive"}
-                      </Label>
-                      <Switch
-                        id={`active-${announcement.id}`}
-                        checked={announcement.isActive}
-                        onCheckedChange={(checked) => 
-                          toggleAnnouncementActiveMutation.mutate({ id: announcement.id, isActive: checked })
-                        }
-                        disabled={toggleAnnouncementActiveMutation.isPending}
-                        data-testid={`switch-active-${announcement.id}`}
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEditDialog(announcement)}
-                      data-testid={`button-edit-${announcement.id}`}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    {currentUser?.isSuperAdmin && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteAnnouncementMutation.mutate(announcement.id)}
-                        disabled={deleteAnnouncementMutation.isPending}
-                        data-testid={`button-delete-${announcement.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -971,6 +897,98 @@ export default function AdminPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="announcements" className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle>Announcements</CardTitle>
+              <Button
+                onClick={() => setCreateAnnouncementDialogOpen(true)}
+                data-testid="button-create-announcement"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Create Announcement
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {announcements.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No announcements yet. Create one to notify all users.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {announcements.map((announcement) => (
+                    <div
+                      key={announcement.id}
+                      className="flex items-start justify-between gap-4 p-4 border rounded-lg hover-elevate"
+                      data-testid={`announcement-${announcement.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold">{announcement.title}</span>
+                          <Badge variant={
+                            announcement.type === "feature" ? "default" :
+                            announcement.type === "update" ? "secondary" :
+                            announcement.type === "maintenance" ? "destructive" :
+                            "outline"
+                          } className="capitalize">
+                            {announcement.type}
+                          </Badge>
+                          <Badge variant={announcement.isActive ? "default" : "outline"}>
+                            {announcement.isActive ? "Published" : "Draft"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {announcement.content}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(announcement.createdAt), "MMM d, yyyy 'at' h:mm a")}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`active-${announcement.id}`} className="text-xs text-muted-foreground">
+                            {announcement.isActive ? "Active" : "Inactive"}
+                          </Label>
+                          <Switch
+                            id={`active-${announcement.id}`}
+                            checked={announcement.isActive}
+                            onCheckedChange={(checked) => 
+                              toggleAnnouncementActiveMutation.mutate({ id: announcement.id, isActive: checked })
+                            }
+                            disabled={toggleAnnouncementActiveMutation.isPending}
+                            data-testid={`switch-active-${announcement.id}`}
+                          />
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(announcement)}
+                          data-testid={`button-edit-${announcement.id}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        {currentUser?.isSuperAdmin && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => deleteAnnouncementMutation.mutate(announcement.id)}
+                            disabled={deleteAnnouncementMutation.isPending}
+                            data-testid={`button-delete-${announcement.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={extendDialogOpen} onOpenChange={setExtendDialogOpen}>
         <DialogContent>

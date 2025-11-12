@@ -27,6 +27,7 @@ The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tai
 - **Trading Rules**: Trigger-based system for portfolio-wide or stock-specific rules based on price changes.
 - **Collaboration**: Multi-user system with stock-specific comment threads, interest markers, and recommendation filtering.
 - **Admin Backoffice**: Comprehensive dashboard for user, subscription, and payment management with audit trails, soft/hard user deletion, and secure password resets.
+- **Announcement System**: Beamer-like notification system allowing admins to create platform-wide announcements (feature, update, maintenance, general types) visible to all users via Gift icon popover in header. Users can mark announcements as read, with unread badge count. Admin panel provides full announcement lifecycle management with create/deactivate capabilities.
 - **Version Display**: Version number displayed in sidebar footer (from package.json) for deployment verification via `/api/version` endpoint.
 
 ## External Dependencies

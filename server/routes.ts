@@ -2550,6 +2550,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { insider_name: insiderName }
       );
 
+      console.log(`[InsiderHistory] Found ${trades.length} trades for "${sanitizedName}"`);
+
+      // Handle empty results gracefully
+      if (!trades || trades.length === 0) {
+        return res.json({
+          insiderName,
+          count: 0,
+          trades: []
+        });
+      }
+
       // Return structured response
       res.json({
         insiderName,

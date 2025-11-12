@@ -34,6 +34,13 @@ export default function Login() {
   const loginMutation = useMutation({
     mutationFn: async (data: LoginForm) => {
       const response = await apiRequest("POST", "/api/auth/login", data);
+      if (!response.ok) {
+        const errorData = await response.json();
+        const error: any = new Error(errorData.error || "Login failed");
+        error.trialExpired = errorData.trialExpired;
+        error.subscriptionStatus = errorData.subscriptionStatus;
+        throw error;
+      }
       return response.json();
     },
     onSuccess: async (data) => {
@@ -50,16 +57,27 @@ export default function Login() {
       await queryClient.refetchQueries({ queryKey: ["/api/auth/current-user"] });
       toast({
         title: "Welcome back!",
-        description: "You have successfully logged in.",
+        description: data.subscriptionStatus === "trial" 
+          ? "Enjoy your free trial!"
+          : "You have successfully logged in.",
       });
       setLocation("/");
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Login failed",
-        description: error.message || "Invalid email or password.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      if (error.trialExpired) {
+        // Show special message for expired trials
+        toast({
+          title: "Free Trial Expired",
+          description: "Your 30-day trial has ended. Subscribe now to continue using signal2.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Login failed",
+          description: error.message || "Invalid email or password.",
+          variant: "destructive",
+        });
+      }
     },
   });
 

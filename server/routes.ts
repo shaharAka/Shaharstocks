@@ -176,6 +176,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Trial status endpoint
+  app.get("/api/auth/trial-status", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (user.subscriptionStatus !== "trial") {
+        return res.json({
+          status: user.subscriptionStatus,
+          isTrialActive: false,
+          daysRemaining: 0,
+          showPaymentReminder: false,
+        });
+      }
+
+      const now = new Date();
+      const trialEnd = user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+      
+      if (!trialEnd) {
+        return res.json({
+          status: "trial",
+          isTrialActive: true,
+          daysRemaining: 0,
+          showPaymentReminder: true,
+        });
+      }
+
+      const msRemaining = trialEnd.getTime() - now.getTime();
+      const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+      const isTrialActive = msRemaining > 0; // Active if any time remains
+      const showPaymentReminder = daysRemaining <= 16 && isTrialActive; // Show reminder at day 14 (16 days remaining) but only if still active
+
+      res.json({
+        status: "trial",
+        isTrialActive,
+        daysRemaining,
+        trialEndsAt: trialEnd.toISOString(),
+        showPaymentReminder,
+        isExpired: !isTrialActive && daysRemaining === 0,
+      });
+    } catch (error) {
+      console.error("Trial status error:", error);
+      res.status(500).json({ error: "Failed to get trial status" });
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -195,11 +247,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // Check subscription status
-      if (user.subscriptionStatus !== "active") {
+      // Check subscription status - allow trial and active users
+      if (user.subscriptionStatus === "trial") {
+        // Only check trial expiration for users with a trialEndsAt date
+        if (user.trialEndsAt) {
+          const now = new Date();
+          const trialEnd = new Date(user.trialEndsAt);
+          
+          if (now > trialEnd) {
+            // Trial expired - update status and block login
+            await storage.updateUser(user.id, { subscriptionStatus: "expired" });
+            return res.status(403).json({ 
+              error: "Your free trial has expired. Please subscribe to continue.",
+              subscriptionStatus: "expired",
+              trialExpired: true
+            });
+          }
+        }
+        // Trial still active or no expiration date - allow login
+      } else if (user.subscriptionStatus === "active") {
+        // Active subscription - allow login
+      } else {
+        // Inactive, cancelled, or expired - block login
         return res.status(403).json({ 
-          error: "Subscription required",
-          subscriptionStatus: user.subscriptionStatus 
+          error: user.subscriptionStatus === "expired" 
+            ? "Your free trial has expired. Please subscribe to continue."
+            : "Subscription required",
+          subscriptionStatus: user.subscriptionStatus,
+          trialExpired: user.subscriptionStatus === "expired"
         });
       }
 
@@ -249,10 +324,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const avatarColors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
       const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
 
-      // Set up 30-day trial with payment required at day 14
+      // Set up 30-day trial
       const now = new Date();
       const trialEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
-      const paymentRequiredAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000); // 14 days from now
 
       const newUser = await storage.createUser({
         name,
@@ -262,7 +336,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscriptionStatus: "trial", // Start with trial
         subscriptionStartDate: now,
         trialEndsAt,
-        paymentRequiredAt,
       });
 
       // Log them in immediately
@@ -352,11 +425,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const user = await storage.getUserByEmail(custom_id);
         if (user) {
-          await storage.updateUser(user.id, {
+          // Transition from trial to active subscription
+          const now = new Date();
+          
+          // Calculate bonus extension if user was on trial
+          let bonusDays = 0;
+          if (user.subscriptionStatus === "trial" && user.trialEndsAt) {
+            const trialEnd = new Date(user.trialEndsAt);
+            const daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+            // Give remaining trial days + 14 bonus days
+            bonusDays = daysRemaining + 14;
+            console.log(`[PayPal Webhook] User had ${daysRemaining} trial days left, granting ${bonusDays} bonus days`);
+          }
+
+          // Set up ongoing paid subscription (PayPal billing handles renewal)
+          // subscriptionEndDate is just for the initial bonus period, actual billing continues via PayPal
+          const subscriptionEndDate = bonusDays > 0 
+            ? new Date(now.getTime() + bonusDays * 24 * 60 * 60 * 1000)
+            : undefined;
+
+          const updateData: any = {
             subscriptionStatus: "active",
             paypalSubscriptionId: subscriptionId,
-            subscriptionStartDate: new Date(),
-          });
+            subscriptionStartDate: now,
+            subscriptionEndDate: subscriptionEndDate || null,
+            trialEndsAt: null, // Clear trial end date - this is now a paid subscription
+          };
+
+          await storage.updateUser(user.id, updateData);
+          console.log(`[PayPal Webhook] ✅ Activated paid subscription for ${custom_id}${bonusDays > 0 ? ` with ${bonusDays} bonus days` : ''}`);
 
           if (!user.initialDataFetched) {
             fetchInitialDataForUser(user.id).catch(err => {

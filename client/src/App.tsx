@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { UserProfile } from "@/components/user-profile";
 import { NotificationBell } from "@/components/notification-bell";
+import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { HelpCircle, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -120,6 +121,7 @@ function AuthenticatedApp() {
             </DialogContent>
           </Dialog>
           <main className="flex-1 overflow-auto">
+            <TrialStatusBanner />
             <Router />
           </main>
         </div>

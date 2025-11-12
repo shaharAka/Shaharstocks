@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Gift, Sparkles, RefreshCw, Wrench, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,8 @@ import type { Announcement } from "@shared/schema";
 type AnnouncementWithReadStatus = Announcement & { readAt?: Date | null };
 
 export function AnnouncementBell() {
+  const [open, setOpen] = useState(false);
+  
   const { data: announcements = [] } = useQuery<AnnouncementWithReadStatus[]>({
     queryKey: ["/api/announcements"],
   });
@@ -54,9 +57,12 @@ export function AnnouncementBell() {
   };
 
   const handleGiftIconClick = () => {
+    // Mark all as read when clicking the icon (before opening)
     if (unreadCount > 0) {
       markAllAsReadMutation.mutate();
     }
+    // Toggle the popover
+    setOpen(!open);
   };
 
   const getTypeColor = (type: string) => {
@@ -86,7 +92,7 @@ export function AnnouncementBell() {
   };
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           size="icon"

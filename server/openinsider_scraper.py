@@ -12,6 +12,7 @@ import sys
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import time
+from urllib.parse import quote
 
 class OpenInsiderScraper:
     def __init__(self):
@@ -54,8 +55,11 @@ class OpenInsiderScraper:
             # OpenInsider URL - use screener if filtering by insider name, otherwise latest purchases
             if insider_name:
                 # Use screener with insider name filter
-                # xp=1 means exclude purchases=false (show purchases), o= is insider name/CIK
-                url = f"{self.base_url}/screener?s=&o={insider_name}&pl=&ph=&ll=&lh=&fd=730&fdr=&td=0&tdr=&fdlyl=&fdlyh=&daysago=&xp=1&vl=&vh=&ocl=&och=&sic1=-1&sicl=100&sich=9999&grp=0&nfl=&nfh=&nil=&nih=&nol=&noh=&v2l=&v2h=&oc2l=&oc2h=&sortcol=0&cnt=100&page={page}"
+                # URL encode the insider name for proper HTTP request  
+                # xp=0&xs=1 means: exclude purchases=no, exclude sales=yes => only purchases
+                encoded_name = quote(insider_name)
+                url = f"{self.base_url}/screener?s=&o={encoded_name}&pl=&ph=&ll=&lh=&fd=730&fdr=&td=0&tdr=&fdlyl=&fdlyh=&daysago=&xp=0&xs=1&vl=&vh=&ocl=&och=&sic1=-1&sicl=100&sich=9999&grp=0&nfl=&nfh=&nil=&nih=&nol=&noh=&v2l=&v2h=&oc2l=&oc2h=&sortcol=0&cnt=100&page={page}"
+                print(f"[OpenInsider] Searching for insider: {insider_name}, URL: {url[:150]}...", file=sys.stderr)
             else:
                 # Default: latest purchases with pagination
                 url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"

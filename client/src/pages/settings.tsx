@@ -684,7 +684,7 @@ function BillingManagementSection() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Crown className="h-4 w-4" />
-                <span>Subscribe to Pro Plan - $29/month</span>
+                <span>Subscribe to Pro Plan - $10/month</span>
               </div>
               <div id="paypal-subscription-button" data-testid="container-paypal-button"></div>
             </div>

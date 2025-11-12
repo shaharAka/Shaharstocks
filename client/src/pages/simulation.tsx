@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +44,12 @@ const CHART_COLORS = [
 ];
 
 export default function Simulation() {
+  const [location] = useLocation();
+  const urlParams = new URLSearchParams(location.split('?')[1] || '');
+  const initialTab = urlParams.get('tab') === 'whatif' ? 'whatif' : 'realtime';
+  
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<"realtime" | "whatif">(initialTab);
   const [viewMode, setViewMode] = useState<"actual" | "normalized">("actual");
   const [messageCount, setMessageCount] = useState(20);
   const [dataSource, setDataSource] = useState<"telegram" | "openinsider">("openinsider");
@@ -517,7 +523,8 @@ export default function Simulation() {
             dayDataMap.set(daysSincePurchase, { day: daysSincePurchase });
           }
           
-          const percentChange = ((dataPoint[ticker] - stockBasePrices[ticker]) / stockBasePrices[ticker]) * 100;
+          // At day 0, force percentage to be exactly 0% to ensure baseline alignment
+          const percentChange = daysSincePurchase === 0 ? 0 : ((dataPoint[ticker] - stockBasePrices[ticker]) / stockBasePrices[ticker]) * 100;
           dayDataMap.get(daysSincePurchase)![ticker] = percentChange;
         }
       });
@@ -888,7 +895,7 @@ export default function Simulation() {
         </p>
       </div>
 
-      <Tabs defaultValue="realtime" className="space-y-6" data-testid="tabs-simulation">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "realtime" | "whatif")} className="space-y-6" data-testid="tabs-simulation">
         <TabsList>
           <TabsTrigger value="realtime" data-testid="tab-realtime">Real-time</TabsTrigger>
           <TabsTrigger value="whatif" data-testid="tab-whatif">What-if</TabsTrigger>
@@ -1620,58 +1627,80 @@ export default function Simulation() {
                         return (
                           <div key={stockData.ticker} className="border rounded-lg p-4 space-y-4" data-testid={`stock-price-${stockData.ticker}`}>
                             <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-semibold text-lg">{stockData.ticker}</h4>
-                                  {purchasePrice && latestPrice && (
-                                    <Badge
-                                      variant={isPositiveChange ? "default" : "destructive"}
-                                      className="text-xs"
-                                      data-testid={`badge-price-change-${stockData.ticker}`}
-                                    >
-                                      {isPositiveChange ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                                      {isPositiveChange ? "+" : ""}{priceChangePercent.toFixed(2)}%
-                                    </Badge>
-                                  )}
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold text-lg">{stockData.ticker}</h4>
+                                <Badge variant="outline">
+                                  {chartData.length} days
+                                </Badge>
+                              </div>
+                              {purchasePrice && latestPrice && (
+                                <Badge
+                                  variant={isPositiveChange ? "default" : "destructive"}
+                                  className="text-xs"
+                                  data-testid={`badge-price-change-${stockData.ticker}`}
+                                >
+                                  {isPositiveChange ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                                  {isPositiveChange ? "+" : ""}{priceChangePercent.toFixed(2)}%
+                                </Badge>
+                              )}
+                            </div>
+
+                            {candidate && (
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-3 bg-muted/50 rounded-md">
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Market Cap</p>
+                                  <p className="text-sm font-medium">{candidate.marketCap}</p>
                                 </div>
-                                {candidate && (
-                                  <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
-                                    <p>Market Cap: {candidate.marketCap}</p>
-                                    <p>Purchase Date (Alert Received): {insiderBuyDate.toLocaleDateString()}</p>
-                                    <p>Insider Price: ${candidate.insiderPrice?.toFixed(2)}</p>
-                                    <p>Market Price at Alert: ${purchasePrice?.toFixed(2)}</p>
-                                    {latestPrice && (
-                                      <p className={isPositiveChange ? "text-success font-medium" : "text-destructive font-medium"}>
-                                        Latest Price: ${latestPrice.toFixed(2)} ({isPositiveChange ? "+" : ""}${priceChange.toFixed(2)})
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Purchase Date</p>
+                                  <p className="text-sm font-medium">{insiderBuyDate.toLocaleDateString()}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Insider Price</p>
+                                  <p className="text-sm font-medium font-mono">${candidate.insiderPrice?.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Entry Price</p>
+                                  <p className="text-sm font-medium font-mono">${purchasePrice?.toFixed(2)}</p>
+                                </div>
+                                {latestPrice && (
+                                  <>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Latest Price</p>
+                                      <p className={`text-sm font-medium font-mono ${isPositiveChange ? 'text-success' : 'text-destructive'}`}>
+                                        ${latestPrice.toFixed(2)}
                                       </p>
-                                    )}
-                                  </div>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">P&L</p>
+                                      <p className={`text-sm font-medium font-mono ${isPositiveChange ? 'text-success' : 'text-destructive'}`}>
+                                        {isPositiveChange ? "+" : ""}${priceChange.toFixed(2)}
+                                      </p>
+                                    </div>
+                                  </>
                                 )}
                               </div>
-                              <Badge variant="outline">
-                                {chartData.length} days
-                              </Badge>
-                            </div>
+                            )}
 
                             <div className="h-64">
                               <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={chartData}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(var(--border))" />
                                   <XAxis 
                                     dataKey="dateLabel" 
                                     tick={{ fontSize: 11 }}
-                                    stroke="hsl(var(--muted-foreground))"
+                                    stroke="oklch(var(--muted-foreground))"
                                   />
                                   <YAxis 
                                     domain={['auto', 'auto']}
                                     tick={{ fontSize: 11 }}
-                                    stroke="hsl(var(--muted-foreground))"
+                                    stroke="oklch(var(--muted-foreground))"
                                     tickFormatter={(value) => `$${value.toFixed(2)}`}
                                   />
                                   <Tooltip
                                     contentStyle={{
-                                      backgroundColor: "hsl(var(--card))",
-                                      border: "1px solid hsl(var(--border))",
+                                      backgroundColor: "oklch(var(--card))",
+                                      border: "1px solid oklch(var(--border))",
                                       borderRadius: "0.5rem",
                                     }}
                                     formatter={(value: any) => [`$${value.toFixed(2)}`, "Price"]}
@@ -1683,7 +1712,7 @@ export default function Simulation() {
                                   <Line
                                     type="monotone"
                                     dataKey="price"
-                                    stroke="hsl(var(--chart-1))"
+                                    stroke="oklch(var(--chart-1))"
                                     strokeWidth={2}
                                     dot={(props) => {
                                       const { cx, cy, payload } = props;
@@ -1693,26 +1722,26 @@ export default function Simulation() {
                                             cx={cx}
                                             cy={cy}
                                             r={6}
-                                            fill="hsl(var(--primary))"
-                                            stroke="hsl(var(--background))"
+                                            fill="oklch(var(--primary))"
+                                            stroke="oklch(var(--background))"
                                             strokeWidth={2}
                                           />
                                         );
                                       }
-                                      return <circle cx={cx} cy={cy} r={2} fill="hsl(var(--chart-1))" />;
+                                      return <circle cx={cx} cy={cy} r={2} fill="oklch(var(--chart-1))" />;
                                     }}
                                   />
                                   {/* Your purchase date reference line */}
                                   {chartData.find((d: any) => d.isInsiderBuy) && (
                                     <ReferenceLine
                                       x={chartData.find((d: any) => d.isInsiderBuy)?.dateLabel}
-                                      stroke="hsl(var(--primary))"
+                                      stroke="oklch(var(--primary))"
                                       strokeWidth={2}
                                       strokeDasharray="5 5"
                                       label={{
                                         value: "Your Purchase",
                                         position: "top",
-                                        fill: "hsl(var(--primary))",
+                                        fill: "oklch(var(--primary))",
                                         fontSize: 11,
                                         fontWeight: "600",
                                       }}
@@ -1800,9 +1829,9 @@ export default function Simulation() {
 
                           <div className="space-y-2">
                             <p className="text-sm font-medium">Sell Conditions:</p>
-                            <div className="space-y-1">
+                            <div className="space-y-2">
                               {scenario.sellConditions && scenario.sellConditions.map((condition: any, idx: number) => (
-                                <div key={idx} className="text-sm text-muted-foreground flex items-center gap-2">
+                                <div key={idx} className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap">
                                   <span className="font-mono text-xs px-2 py-0.5 bg-muted rounded">
                                     {condition.metric.replace(/_/g, ' ')} {condition.operator} {condition.value}
                                   </span>

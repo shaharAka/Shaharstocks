@@ -453,8 +453,8 @@ export default function Purchase() {
         title: "Simulation Created",
         description: data.message || `Created $1000 simulated trade for ${data.stock?.ticker}`,
       });
-      // Redirect to simulation page
-      setLocation("/simulation");
+      // Redirect to simulation page backtesting tab
+      setLocation("/simulation?tab=whatif");
     },
     onError: () => {
       toast({

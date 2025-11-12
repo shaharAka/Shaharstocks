@@ -2515,6 +2515,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get insider trading history by name
+  app.get("/api/insider/history/:insiderName", async (req, res) => {
+    try {
+      // Require authentication
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      // Decode and validate insider name
+      const insiderName = decodeURIComponent(req.params.insiderName).trim();
+      if (!insiderName) {
+        return res.status(400).json({ error: "Insider name is required" });
+      }
+
+      // Parse and validate limit parameter (default: 50, max: 500)
+      const limitParam = req.query.limit as string | undefined;
+      let limit = 50;
+      if (limitParam) {
+        const parsed = parseInt(limitParam, 10);
+        if (isNaN(parsed) || parsed < 1) {
+          return res.status(400).json({ error: "Invalid limit parameter" });
+        }
+        limit = Math.min(parsed, 500); // Cap at 500
+      }
+
+      // Sanitize name for logging
+      const sanitizedName = insiderName.replace(/[\n\r]/g, ' ').substring(0, 100);
+      console.log(`[InsiderHistory] Fetching history for "${sanitizedName}" (limit: ${limit})`);
+
+      // Fetch insider trading history
+      const trades = await openinsiderService.fetchInsiderPurchases(
+        limit,
+        { insider_name: insiderName }
+      );
+
+      // Return structured response
+      res.json({
+        insiderName,
+        count: trades.length,
+        trades
+      });
+    } catch (error: any) {
+      console.error("[InsiderHistory] Error:", error);
+      
+      // Map errors to appropriate HTTP status codes
+      if (error.message?.includes("timeout") || error.message?.includes("network")) {
+        return res.status(502).json({ 
+          error: "Failed to fetch insider data from OpenInsider",
+          details: "The service may be temporarily unavailable"
+        });
+      }
+      
+      res.status(500).json({ 
+        error: "Failed to fetch insider trading history",
+        details: error.message || "Unknown error"
+      });
+    }
+  });
+
   app.post("/api/openinsider/fetch", async (req, res) => {
     try {
       // Get OpenInsider config

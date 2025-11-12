@@ -28,10 +28,10 @@ class OpenInsiderScraper:
     def fetch_insider_purchases(
         self, 
         limit: int = 100,
-        insider_titles: List[str] = None,
-        min_transaction_value: int = None,
+        insider_titles: List[str] | None = None,
+        min_transaction_value: int | None = None,
         previous_day_only: bool = False,
-        insider_name: str = None
+        insider_name: str | None = None
     ) -> List[Dict[str, Any]]:
         """
         Fetch recent insider purchase transactions with pagination and retry logic

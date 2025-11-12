@@ -351,6 +351,90 @@ export default function AdminPage() {
     });
   };
 
+  const { data: announcements = [] } = useQuery<Announcement[]>({
+    queryKey: ["/api/announcements/all"],
+    enabled: !!currentUser?.isAdmin,
+  });
+
+  const createAnnouncementMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/announcements", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: announcementTitle,
+          content: announcementContent,
+          type: announcementType,
+        }),
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to create announcement");
+      }
+      
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+      setCreateAnnouncementDialogOpen(false);
+      setAnnouncementTitle("");
+      setAnnouncementContent("");
+      setAnnouncementType("announcement");
+      toast({
+        title: "Success",
+        description: "Announcement created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deactivateAnnouncementMutation = useMutation({
+    mutationFn: async (announcementId: string) => {
+      const res = await fetch(`/api/announcements/${announcementId}/deactivate`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to deactivate announcement");
+      }
+      
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+      toast({
+        title: "Success",
+        description: "Announcement deactivated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateAnnouncement = () => {
+    if (!announcementTitle || !announcementContent) return;
+    createAnnouncementMutation.mutate();
+  };
+
   if (userLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -434,6 +518,66 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mb-8">
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle>Announcements</CardTitle>
+          <Button
+            onClick={() => setCreateAnnouncementDialogOpen(true)}
+            data-testid="button-create-announcement"
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Create Announcement
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {announcements.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No announcements yet. Create one to notify all users.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {announcements.map((announcement) => (
+                <div
+                  key={announcement.id}
+                  className="flex items-start justify-between gap-4 p-4 border rounded-lg hover-elevate"
+                  data-testid={`announcement-${announcement.id}`}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold">{announcement.title}</span>
+                      <Badge variant={
+                        announcement.type === "feature" ? "default" :
+                        announcement.type === "update" ? "secondary" :
+                        announcement.type === "maintenance" ? "destructive" :
+                        "outline"
+                      } className="capitalize">
+                        {announcement.type}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {announcement.content}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(announcement.createdAt), "MMM d, yyyy 'at' h:mm a")}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => deactivateAnnouncementMutation.mutate(announcement.id)}
+                    disabled={deactivateAnnouncementMutation.isPending}
+                    data-testid={`button-deactivate-${announcement.id}`}
+                  >
+                    <Archive className="w-4 h-4 mr-1" />
+                    Deactivate
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -934,6 +1078,65 @@ export default function AdminPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createAnnouncementDialogOpen} onOpenChange={setCreateAnnouncementDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Announcement</DialogTitle>
+            <DialogDescription>
+              Create a new announcement that will be visible to all users
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="announcementTitle">Title</Label>
+              <Input
+                id="announcementTitle"
+                placeholder="Announcement title"
+                value={announcementTitle}
+                onChange={(e) => setAnnouncementTitle(e.target.value)}
+                data-testid="input-announcement-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="announcementContent">Content</Label>
+              <Textarea
+                id="announcementContent"
+                placeholder="Announcement message"
+                value={announcementContent}
+                onChange={(e) => setAnnouncementContent(e.target.value)}
+                data-testid="input-announcement-content"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="announcementType">Type</Label>
+              <Select value={announcementType} onValueChange={(value: any) => setAnnouncementType(value)}>
+                <SelectTrigger data-testid="select-announcement-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="feature">Feature</SelectItem>
+                  <SelectItem value="update">Update</SelectItem>
+                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="announcement">Announcement</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateAnnouncementDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateAnnouncement} 
+              disabled={!announcementTitle || !announcementContent || createAnnouncementMutation.isPending}
+              data-testid="button-confirm-announcement"
+            >
+              Create Announcement
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -3431,6 +3431,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Announcements routes
+  app.get("/api/announcements/all", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const announcements = await db
+        .select()
+        .from(schema.announcements)
+        .where(eq(schema.announcements.isActive, true))
+        .orderBy(desc(schema.announcements.createdAt));
+      
+      res.json(announcements);
+    } catch (error) {
+      console.error("Failed to fetch all announcements:", error);
+      res.status(500).json({ error: "Failed to fetch all announcements" });
+    }
+  });
+
   app.get("/api/announcements", async (req, res) => {
     try {
       if (!req.session.userId) {

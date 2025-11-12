@@ -353,20 +353,51 @@ export default function Simulation() {
     setSelectedTickers(new Set());
   };
 
-  // Combine all price histories into a single dataset - filtered by selection
+  // Combine all price histories into a single dataset - filtered by selection and trade dates
   const combinedChartData = useMemo(() => {
-    if (!holdings || !stocks || selectedTickers.size === 0) return [];
+    if (!holdings || !stocks || !trades || selectedTickers.size === 0) return [];
 
     const filteredStocks = holdingStocks
       .filter((stock) => selectedTickers.has(stock.ticker) && stock.priceHistory);
 
     if (filteredStocks.length === 0) return [];
 
-    // Collect all unique dates
+    // Get purchase dates from trades to determine chart window
+    const tickerPurchaseDates = new Map<string, Date>();
+    filteredStocks.forEach(stock => {
+      const buyTrades = trades.filter(t => t.ticker === stock.ticker && t.type === "buy" && t.executedAt);
+      if (buyTrades.length > 0) {
+        const firstBuyTrade = buyTrades.sort((a, b) => 
+          new Date(a.executedAt!).getTime() - new Date(b.executedAt!).getTime()
+        )[0];
+        
+        if (firstBuyTrade?.executedAt) {
+          tickerPurchaseDates.set(stock.ticker, new Date(firstBuyTrade.executedAt));
+        }
+      }
+    });
+
+    // Collect dates with window filtering (show 10 days before purchase + all days after)
     const allDates = new Set<string>();
+    const DAYS_BEFORE_PURCHASE = 10;
+    
     filteredStocks.forEach((stock) => {
+      const purchaseDate = tickerPurchaseDates.get(stock.ticker);
+      const purchaseTime = purchaseDate?.getTime();
+      
       stock.priceHistory?.forEach((point) => {
-        allDates.add(point.date);
+        if (purchaseTime) {
+          const pointDate = new Date(point.date);
+          const daysDiff = (pointDate.getTime() - purchaseTime) / (1000 * 60 * 60 * 24);
+          
+          // Include data from N days before purchase onwards
+          if (daysDiff >= -DAYS_BEFORE_PURCHASE) {
+            allDates.add(point.date);
+          }
+        } else {
+          // No purchase date found, include all data
+          allDates.add(point.date);
+        }
       });
     });
 
@@ -383,13 +414,13 @@ export default function Simulation() {
       });
       return dataPoint;
     });
-  }, [holdings, stocks, holdingStocks, selectedTickers]);
+  }, [holdings, stocks, trades, holdingStocks, selectedTickers]);
 
   // Transform data for normalized view (percentage change from user's actual purchase price)
   const normalizedChartData = useMemo(() => {
-    if (combinedChartData.length === 0 || !holdingStocks || !holdings) return [];
+    if (combinedChartData.length === 0 || !holdingStocks || !holdings || !trades) return [];
 
-    // Use user's actual purchase date and price from holdings
+    // Use user's actual purchase date and price from trades
     const stockPurchaseDates: Record<string, Date> = {};
     const stockBasePrices: Record<string, number> = {};
     
@@ -403,12 +434,25 @@ export default function Simulation() {
       // Use the user's actual average purchase price as baseline
       stockBasePrices[stock.ticker] = parseFloat(holding.averagePurchasePrice);
 
-      // Find the earliest purchase date from price history (use first available data point)
-      // In the future, this could be derived from trades table for more accuracy
-      for (const dataPoint of combinedChartData) {
-        if (dataPoint[stock.ticker] != null) {
-          stockPurchaseDates[stock.ticker] = new Date(dataPoint.date);
-          break;
+      // Find the first buy trade for this stock to get the actual purchase date
+      const buyTrades = trades.filter(t => t.ticker === stock.ticker && t.type === "buy" && t.executedAt);
+      if (buyTrades.length > 0) {
+        const firstBuyTrade = buyTrades.sort((a, b) => 
+          new Date(a.executedAt!).getTime() - new Date(b.executedAt!).getTime()
+        )[0];
+        
+        if (firstBuyTrade?.executedAt) {
+          stockPurchaseDates[stock.ticker] = new Date(firstBuyTrade.executedAt);
+        }
+      }
+      
+      if (!stockPurchaseDates[stock.ticker]) {
+        // Fallback to first available data point if no trade found
+        for (const dataPoint of combinedChartData) {
+          if (dataPoint[stock.ticker] != null) {
+            stockPurchaseDates[stock.ticker] = new Date(dataPoint.date);
+            break;
+          }
         }
       }
     });
@@ -439,7 +483,44 @@ export default function Simulation() {
 
     // Convert map to sorted array
     return Array.from(dayDataMap.values()).sort((a, b) => a.day - b.day);
-  }, [combinedChartData, holdingStocks, selectedTickers, holdings]);
+  }, [combinedChartData, holdingStocks, selectedTickers, holdings, trades]);
+
+  // Collect purchase markers for reference lines
+  const purchaseMarkers = useMemo(() => {
+    if (!holdings || !trades || !holdingStocks) return [];
+
+    const markers: Array<{
+      ticker: string;
+      color: string;
+      executedAt: Date;
+      dateString: string;
+    }> = [];
+
+    holdingStocks.forEach((stock, index) => {
+      if (!selectedTickers.has(stock.ticker)) return;
+
+      const buyTrades = trades.filter(t => t.ticker === stock.ticker && t.type === "buy" && t.executedAt);
+      if (buyTrades.length > 0) {
+        const firstBuyTrade = buyTrades.sort((a, b) => 
+          new Date(a.executedAt!).getTime() - new Date(b.executedAt!).getTime()
+        )[0];
+        
+        if (firstBuyTrade?.executedAt) {
+          const executedAt = new Date(firstBuyTrade.executedAt);
+          const dateString = executedAt.toISOString().split('T')[0]; // YYYY-MM-DD format
+          
+          markers.push({
+            ticker: stock.ticker,
+            color: CHART_COLORS[index % CHART_COLORS.length],
+            executedAt,
+            dateString,
+          });
+        }
+      }
+    });
+
+    return markers;
+  }, [holdings, trades, holdingStocks, selectedTickers]);
 
   // Select which data to display based on view mode
   const displayChartData = viewMode === "normalized" ? normalizedChartData : combinedChartData;
@@ -961,6 +1042,40 @@ export default function Simulation() {
                     stroke="oklch(var(--muted-foreground))"
                     strokeDasharray="5 5"
                     strokeWidth={1.5}
+                  />
+                )}
+                {/* Purchase date markers */}
+                {viewMode === "actual" && purchaseMarkers.map((marker) => (
+                  <ReferenceLine
+                    key={marker.ticker}
+                    x={marker.dateString}
+                    stroke={marker.color}
+                    strokeDasharray="3 3"
+                    strokeWidth={2}
+                    label={{
+                      value: `${marker.ticker} Buy`,
+                      position: "top",
+                      fill: marker.color,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                    data-testid={`purchase-marker-${marker.ticker}`}
+                  />
+                ))}
+                {viewMode === "normalized" && (
+                  <ReferenceLine
+                    x={0}
+                    stroke="oklch(var(--primary))"
+                    strokeDasharray="3 3"
+                    strokeWidth={2}
+                    label={{
+                      value: "Purchase",
+                      position: "top",
+                      fill: "oklch(var(--primary))",
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                    data-testid="purchase-marker-normalized"
                   />
                 )}
                 <Tooltip

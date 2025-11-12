@@ -37,32 +37,28 @@ class OpenInsiderScraper:
         Fetch recent insider purchase transactions with pagination and retry logic
         
         Args:
-            limit: Maximum number of transactions to fetch
+            limit: Maximum number of transactions to fetch (after filtering)
             insider_titles: Filter by insider titles (e.g., ["CEO", "CFO", "Director"])
             min_transaction_value: Minimum transaction value in dollars
             previous_day_only: Only fetch transactions from previous day
             insider_name: Filter by specific insider name (case-insensitive partial match)
         
         Returns:
-            List of insider trading transactions
+            List of insider trading transactions matching the filters
         """
-        transactions = []
+        all_transactions = []
+        filtered_transactions = []
         page = 1
-        max_pages = 20  # Safety limit: ~1000 raw transactions (50 per page)
+        # When filtering by insider name, fetch more pages to find enough matches
+        max_pages = 50 if insider_name else 20
+        
+        if insider_name:
+            print(f"[OpenInsider] Searching for insider: {insider_name}", file=sys.stderr)
         
         # Fetch multiple pages until we have enough filtered results
-        while len(transactions) < limit and page <= max_pages:
-            # OpenInsider URL - use screener if filtering by insider name, otherwise latest purchases
-            if insider_name:
-                # Use screener with insider name filter
-                # URL encode the insider name for proper HTTP request  
-                # xp=0&xs=1 means: exclude purchases=no, exclude sales=yes => only purchases
-                encoded_name = quote(insider_name)
-                url = f"{self.base_url}/screener?s=&o={encoded_name}&pl=&ph=&ll=&lh=&fd=730&fdr=&td=0&tdr=&fdlyl=&fdlyh=&daysago=&xp=0&xs=1&vl=&vh=&ocl=&och=&sic1=-1&sicl=100&sich=9999&grp=0&nfl=&nfh=&nil=&nih=&nol=&noh=&v2l=&v2h=&oc2l=&oc2h=&sortcol=0&cnt=100&page={page}"
-                print(f"[OpenInsider] Searching for insider: {insider_name}, URL: {url[:150]}...", file=sys.stderr)
-            else:
-                # Default: latest purchases with pagination
-                url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
+        while len(filtered_transactions) < limit and page <= max_pages:
+            # Always use the reliable latest-insider-purchases-25k endpoint
+            url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
             
             last_error = None
             page_transactions = None
@@ -78,7 +74,7 @@ class OpenInsiderScraper:
                     table = soup.find('table', {'class': 'tinytable'})
                     if not table:
                         print(f"No data table found on page {page}, stopping pagination", file=sys.stderr)
-                        return transactions
+                        return filtered_transactions
                     
                     # Parse table rows
                     page_transactions = []
@@ -89,11 +85,11 @@ class OpenInsiderScraper:
                         # If no rows, we've reached the end
                         if len(rows) == 0:
                             print(f"No more data on page {page}, stopping pagination", file=sys.stderr)
-                            return transactions
+                            return filtered_transactions
                         
                         for row in rows:
                             # Check if we have enough transactions already
-                            if len(transactions) >= limit:
+                            if len(filtered_transactions) >= limit:
                                 break
                             
                             cells = row.find_all('td')
@@ -184,8 +180,9 @@ class OpenInsiderScraper:
                                 if min_transaction_value and value < min_transaction_value:
                                     continue
                                 
-                                # Note: Insider name filtering is now done via URL parameter (o=)
-                                # No need for client-side filtering when using screener
+                                # Filter by insider name (case-insensitive partial match)
+                                if insider_name and insider_name.lower() not in scraped_insider_name.lower():
+                                    continue
                                 
                                 transaction = {
                                     "ticker": ticker,
@@ -208,8 +205,8 @@ class OpenInsiderScraper:
                                 continue
                     
                     # Successfully fetched page, add to results and break retry loop
-                    transactions.extend(page_transactions)
-                    print(f"Page {page}: fetched {len(page_transactions)} filtered transactions ({len(transactions)} total)", file=sys.stderr)
+                    filtered_transactions.extend(page_transactions)
+                    print(f"Page {page}: fetched {len(page_transactions)} filtered transactions ({len(filtered_transactions)} total)", file=sys.stderr)
                     break  # Success, exit retry loop
                 
                 except requests.exceptions.Timeout as e:
@@ -248,14 +245,14 @@ class OpenInsiderScraper:
             if last_error:
                 # All retries failed for this page, stop pagination
                 print(f"Failed to fetch page {page} after {self.max_retries} attempts. Last error: {last_error}", file=sys.stderr)
-                return transactions
+                return filtered_transactions
             
             # Move to next page
             page += 1
             time.sleep(1)  # Be nice to the server
         
         # Pagination complete
-        return transactions
+        return filtered_transactions
 
 def main():
     """Main entry point for the scraper"""

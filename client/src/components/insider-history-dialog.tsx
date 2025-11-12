@@ -51,6 +51,12 @@ export function InsiderHistoryDialog({
     enabled: open && !!insiderName,
   });
 
+  // Debug logging
+  console.log('[InsiderHistory] Dialog state:', { insiderName, open, isLoading, hasError: !!error, hasData: !!data });
+  if (error) {
+    console.error('[InsiderHistory] Error:', error);
+  }
+
   const totalValue = data?.trades.reduce((sum, trade) => sum + trade.value, 0) || 0;
 
   return (

@@ -53,8 +53,8 @@ export function AnnouncementBell() {
     }
   };
 
-  const handlePopoverOpenChange = (open: boolean) => {
-    if (open && unreadCount > 0) {
+  const handleGiftIconClick = () => {
+    if (unreadCount > 0) {
       markAllAsReadMutation.mutate();
     }
   };
@@ -86,13 +86,14 @@ export function AnnouncementBell() {
   };
 
   return (
-    <Popover onOpenChange={handlePopoverOpenChange}>
+    <Popover>
       <PopoverTrigger asChild>
         <Button
           size="icon"
           variant="ghost"
           className="relative h-11 w-11"
           data-testid="button-announcements"
+          onClick={handleGiftIconClick}
         >
           <Gift className={`h-5 w-5 ${unreadCount > 0 ? "text-orange-500 dark:text-orange-400" : ""}`} />
         </Button>

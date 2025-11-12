@@ -894,3 +894,38 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 });
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+// Announcements - admin-created platform updates/notifications
+export const announcements = pgTable("announcements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  type: text("type").notNull().default("update"), // "feature", "update", "maintenance", "announcement"
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+});
+
+export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
+export type Announcement = typeof announcements.$inferSelect;
+
+// Announcement Reads - track which users have read which announcements
+export const announcementReads = pgTable("announcement_reads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  announcementId: varchar("announcement_id").notNull().references(() => announcements.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at").notNull().defaultNow(),
+}, (table) => ({
+  userAnnouncementUnique: uniqueIndex("user_announcement_unique_idx").on(table.userId, table.announcementId),
+}));
+
+export const insertAnnouncementReadSchema = createInsertSchema(announcementReads).omit({ 
+  id: true, 
+  readAt: true 
+});
+export type InsertAnnouncementRead = z.infer<typeof insertAnnouncementReadSchema>;
+export type AnnouncementRead = typeof announcementReads.$inferSelect;

@@ -12,6 +12,7 @@ import { UserProfile } from "@/components/user-profile";
 import { NotificationBell } from "@/components/notification-bell";
 import { AnnouncementBell } from "@/components/announcement-bell";
 import { TrialStatusBanner } from "@/components/trial-status-banner";
+import { TutorialManager } from "@/components/TutorialManager";
 import { HelpCircle, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -85,6 +86,7 @@ function AuthenticatedApp() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
+      <TutorialManager />
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">

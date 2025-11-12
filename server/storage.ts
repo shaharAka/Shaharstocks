@@ -65,6 +65,10 @@ import {
   type InsertNotification,
   type InsiderProfile,
   type InsertInsiderProfile,
+  type Announcement,
+  type InsertAnnouncement,
+  type AnnouncementRead,
+  type InsertAnnouncementRead,
   stocks,
   portfolioHoldings,
   trades,
@@ -96,6 +100,8 @@ import {
   featureVotes,
   notifications,
   insiderProfiles,
+  announcements,
+  announcementReads,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
@@ -286,6 +292,14 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationAsRead(id: string, userId: string): Promise<Notification | undefined>;
   markAllNotificationsAsRead(userId: string): Promise<number>;
+
+  // Announcements
+  getAnnouncements(userId: string): Promise<(Announcement & { readAt?: Date | null })[]>;
+  getUnreadAnnouncementCount(userId: string): Promise<number>;
+  createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement>;
+  updateAnnouncement(id: string, updates: Partial<Announcement>): Promise<Announcement | undefined>;
+  deactivateAnnouncement(id: string): Promise<Announcement | undefined>;
+  markAnnouncementAsRead(userId: string, announcementId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2359,6 +2373,80 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return result.rowCount || 0;
+  }
+
+  async getAnnouncements(userId: string): Promise<(Announcement & { readAt?: Date | null })[]> {
+    const result = await db
+      .select({
+        id: announcements.id,
+        title: announcements.title,
+        content: announcements.content,
+        type: announcements.type,
+        isActive: announcements.isActive,
+        createdAt: announcements.createdAt,
+        createdBy: announcements.createdBy,
+        readAt: announcementReads.readAt,
+      })
+      .from(announcements)
+      .leftJoin(
+        announcementReads,
+        and(
+          eq(announcementReads.announcementId, announcements.id),
+          eq(announcementReads.userId, userId)
+        )
+      )
+      .where(eq(announcements.isActive, true))
+      .orderBy(desc(announcements.createdAt));
+    
+    return result;
+  }
+
+  async getUnreadAnnouncementCount(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(announcements)
+      .leftJoin(
+        announcementReads,
+        and(
+          eq(announcementReads.announcementId, announcements.id),
+          eq(announcementReads.userId, userId)
+        )
+      )
+      .where(
+        and(
+          eq(announcements.isActive, true),
+          sql`${announcementReads.id} IS NULL`
+        )
+      );
+    return result[0]?.count || 0;
+  }
+
+  async createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement> {
+    const [newAnnouncement] = await db
+      .insert(announcements)
+      .values(announcement)
+      .returning();
+    return newAnnouncement;
+  }
+
+  async updateAnnouncement(id: string, updates: Partial<Announcement>): Promise<Announcement | undefined> {
+    const [updated] = await db
+      .update(announcements)
+      .set(updates)
+      .where(eq(announcements.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deactivateAnnouncement(id: string): Promise<Announcement | undefined> {
+    return this.updateAnnouncement(id, { isActive: false });
+  }
+
+  async markAnnouncementAsRead(userId: string, announcementId: string): Promise<void> {
+    await db
+      .insert(announcementReads)
+      .values({ userId, announcementId })
+      .onConflictDoNothing();
   }
 }
 

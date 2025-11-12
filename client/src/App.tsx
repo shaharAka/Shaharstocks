@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { UserProfile } from "@/components/user-profile";
 import { NotificationBell } from "@/components/notification-bell";
+import { AnnouncementBell } from "@/components/announcement-bell";
 import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { HelpCircle, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -111,6 +112,7 @@ function AuthenticatedApp() {
                 <SettingsIcon className="h-5 w-5" />
               </Button>
               <NotificationBell />
+              <AnnouncementBell />
               <UserProfile />
               <ThemeToggle />
             </div>

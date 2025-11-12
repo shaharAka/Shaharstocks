@@ -1,0 +1,146 @@
+import { Gift } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { formatDistanceToNow } from "date-fns";
+import type { Announcement } from "@shared/schema";
+
+type AnnouncementWithReadStatus = Announcement & { readAt?: Date | null };
+
+export function AnnouncementBell() {
+  const { data: announcements = [] } = useQuery<AnnouncementWithReadStatus[]>({
+    queryKey: ["/api/announcements"],
+  });
+
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/announcements/unread-count"],
+  });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: (announcementId: string) =>
+      apiRequest("/api/announcements/mark-read", "POST", { announcementId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/announcements"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/announcements/unread-count"],
+      });
+    },
+  });
+
+  const unreadCount = unreadData?.count || 0;
+
+  const handleAnnouncementClick = (announcement: AnnouncementWithReadStatus) => {
+    if (!announcement.readAt) {
+      markAsReadMutation.mutate(announcement.id);
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case "feature":
+        return "default";
+      case "update":
+        return "secondary";
+      case "maintenance":
+        return "destructive";
+      default:
+        return "outline";
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case "feature":
+        return "✨";
+      case "update":
+        return "🔄";
+      case "maintenance":
+        return "🔧";
+      default:
+        return "📢";
+    }
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="relative h-11 w-11"
+          data-testid="button-announcements"
+        >
+          <Gift className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <Badge
+              variant="default"
+              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+              data-testid="badge-announcements-unread-count"
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-96 p-0" align="end" data-testid="popover-announcements">
+        <div className="flex items-center justify-between border-b p-4">
+          <h3 className="font-semibold">Announcements</h3>
+        </div>
+        <ScrollArea className="h-80">
+          {announcements.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Gift className="h-12 w-12 text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground">No announcements yet</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Check back for updates and new features
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y" data-testid="list-announcements">
+              {announcements.map((announcement) => (
+                <button
+                  key={announcement.id}
+                  onClick={() => handleAnnouncementClick(announcement)}
+                  className={`w-full text-left p-4 hover-elevate transition-colors ${
+                    !announcement.readAt ? "bg-accent/50" : ""
+                  }`}
+                  data-testid={`announcement-${announcement.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{getTypeIcon(announcement.type)}</span>
+                        <span className="font-semibold">{announcement.title}</span>
+                        <Badge variant={getTypeColor(announcement.type)} className="capitalize">
+                          {announcement.type}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {announcement.content}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(announcement.createdAt), {
+                          addSuffix: true,
+                        })}
+                      </p>
+                    </div>
+                    {!announcement.readAt && (
+                      <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  );
+}

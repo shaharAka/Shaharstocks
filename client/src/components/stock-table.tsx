@@ -190,123 +190,124 @@ export function StockTable({
   };
 
   return (
-    <div className="rounded-md border overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">
-              {onSelectAll && (
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={handleSelectAll}
-                  aria-label="Select all"
-                  data-testid="checkbox-select-all"
-                />
-              )}
-            </TableHead>
-            <TableHead>
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => handleSort("ticker")}
-                className="px-2"
-                data-testid="sort-ticker"
-              >
-                Ticker
-                <SortIcon field="ticker" />
-              </Button>
-            </TableHead>
-            <TableHead className="hidden md:table-cell">Company</TableHead>
-            <TableHead>
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => handleSort("recommendation")}
-                className="px-2"
-                data-testid="sort-recommendation"
-              >
-                Rec.
-                <SortIcon field="recommendation" />
-              </Button>
-            </TableHead>
-            <TableHead className="text-right">
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => handleSort("price")}
-                className="px-2"
-                data-testid="sort-price"
-              >
-                Price
-                <SortIcon field="price" />
-              </Button>
-            </TableHead>
-            <TableHead className="hidden lg:table-cell">Trend (2wk)</TableHead>
-            <TableHead className="text-right">
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => handleSort("change")}
-                className="px-2"
-                data-testid="sort-change"
-              >
-                Change
-                <SortIcon field="change" />
-              </Button>
-            </TableHead>
-            <TableHead className="text-right hidden xl:table-cell">
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => handleSort("insiderPrice")}
-                className="px-2"
-                data-testid="sort-insider-price"
-              >
-                Insider $
-                <SortIcon field="insiderPrice" />
-              </Button>
-            </TableHead>
-            <TableHead className="hidden xl:table-cell">
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => handleSort("marketCap")}
-                className="px-2"
-                data-testid="sort-market-cap"
-              >
-                Mkt Cap
-                <SortIcon field="marketCap" />
-              </Button>
-            </TableHead>
-            <TableHead className="text-right hidden lg:table-cell">
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => handleSort("aiScore")}
-                className="px-2"
-                data-testid="sort-ai-score"
-              >
-                AI Score
-                <SortIcon field="aiScore" />
-              </Button>
-            </TableHead>
-            <TableHead className="hidden lg:table-cell">
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => handleSort("daysFromBuy")}
-                className="px-2"
-                data-testid="sort-days-from-buy"
-              >
-                Days
-                <SortIcon field="daysFromBuy" />
-              </Button>
-            </TableHead>
-            <TableHead className="hidden sm:table-cell">Interest</TableHead>
-            <TableHead className="hidden sm:table-cell">Comments</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+    <div className="rounded-md border">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-12">
+                {onSelectAll && (
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Select all"
+                    data-testid="checkbox-select-all"
+                  />
+                )}
+              </TableHead>
+              <TableHead className="min-w-[80px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("ticker")}
+                  className="px-2"
+                  data-testid="sort-ticker"
+                >
+                  Ticker
+                  <SortIcon field="ticker" />
+                </Button>
+              </TableHead>
+              <TableHead className="hidden md:table-cell min-w-[120px]">Company</TableHead>
+              <TableHead className="min-w-[70px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("recommendation")}
+                  className="px-2"
+                  data-testid="sort-recommendation"
+                >
+                  Rec.
+                  <SortIcon field="recommendation" />
+                </Button>
+              </TableHead>
+              <TableHead className="text-right min-w-[80px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("price")}
+                  className="px-2"
+                  data-testid="sort-price"
+                >
+                  Price
+                  <SortIcon field="price" />
+                </Button>
+              </TableHead>
+              <TableHead className="hidden lg:table-cell min-w-[120px]">Trend (2wk)</TableHead>
+              <TableHead className="text-right min-w-[90px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("change")}
+                  className="px-2"
+                  data-testid="sort-change"
+                >
+                  Change
+                  <SortIcon field="change" />
+                </Button>
+              </TableHead>
+              <TableHead className="text-right hidden xl:table-cell min-w-[90px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("insiderPrice")}
+                  className="px-2"
+                  data-testid="sort-insider-price"
+                >
+                  Insider $
+                  <SortIcon field="insiderPrice" />
+                </Button>
+              </TableHead>
+              <TableHead className="hidden xl:table-cell min-w-[90px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("marketCap")}
+                  className="px-2"
+                  data-testid="sort-market-cap"
+                >
+                  Mkt Cap
+                  <SortIcon field="marketCap" />
+                </Button>
+              </TableHead>
+              <TableHead className="text-right hidden lg:table-cell min-w-[90px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("aiScore")}
+                  className="px-2"
+                  data-testid="sort-ai-score"
+                >
+                  AI Score
+                  <SortIcon field="aiScore" />
+                </Button>
+              </TableHead>
+              <TableHead className="hidden lg:table-cell min-w-[70px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("daysFromBuy")}
+                  className="px-2"
+                  data-testid="sort-days-from-buy"
+                >
+                  Days
+                  <SortIcon field="daysFromBuy" />
+                </Button>
+              </TableHead>
+              <TableHead className="hidden sm:table-cell min-w-[80px]">Interest</TableHead>
+              <TableHead className="hidden sm:table-cell min-w-[80px]">Comments</TableHead>
+            </TableRow>
+            </TableHeader>
+          <TableBody>
           {sortedStocks.map((stock) => {
             const currentPrice = parseFloat(stock.currentPrice);
             const previousPrice = parseFloat(stock.previousClose || stock.currentPrice);
@@ -505,6 +506,7 @@ export function StockTable({
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }

@@ -190,20 +190,20 @@ export default function History() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="min-w-[140px]">Date</TableHead>
+                    <TableHead className="min-w-[70px]">Stock</TableHead>
+                    <TableHead className="min-w-[70px]">Type</TableHead>
+                    <TableHead className="text-right hidden md:table-cell min-w-[80px]">Quantity</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell min-w-[80px]">Price</TableHead>
+                    <TableHead className="text-right min-w-[90px]">Total</TableHead>
+                    <TableHead className="min-w-[90px]">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredTrades.map((trade) => (
                     <TableRow key={trade.id} data-testid={`row-trade-${trade.id}`}>
                       <TableCell className="text-sm">
-                        {format(new Date(trade.executedAt), "MMM dd, yyyy HH:mm")}
+                        {trade.executedAt ? format(new Date(trade.executedAt), "MMM dd, yyyy HH:mm") : "-"}
                       </TableCell>
                       <TableCell className="font-medium">{trade.ticker}</TableCell>
                       <TableCell>
@@ -214,10 +214,10 @@ export default function History() {
                           {trade.type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-right font-mono hidden md:table-cell">
                         {trade.quantity}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-right font-mono hidden sm:table-cell">
                         ${parseFloat(trade.price).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right font-mono font-medium">

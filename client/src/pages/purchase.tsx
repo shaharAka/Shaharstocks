@@ -93,6 +93,7 @@ type RecommendationFilter = "all" | "buy" | "sell";
 type InterestFilter = "all" | "multiple" | string; // "all", "multiple" (all users interested), or userId
 type ViewMode = "cards" | "table";
 type DaysFilter = "all" | "7" | "14" | "30" | "60";
+type AIScoreFilter = "all" | "0-50" | "50-75" | "75-100";
 type StockListTab = "pending" | "rejected";
 
 interface IbkrStatus {
@@ -116,6 +117,7 @@ export default function Purchase() {
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
   const [interestFilter, setInterestFilter] = useState<InterestFilter>("all");
   const [daysFilter, setDaysFilter] = useState<DaysFilter>("all");
+  const [aiScoreFilter, setAiScoreFilter] = useState<AIScoreFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
@@ -803,6 +805,20 @@ export default function Purchase() {
       if (daysSincePurchase > maxDays) return false;
     }
     
+    // Filter by AI score range
+    if (aiScoreFilter !== "all") {
+      const analysis = allAnalyses.find(a => a.ticker === stock.ticker);
+      if (analysis && analysis.status === "completed" && analysis.integratedScore !== null) {
+        const score = analysis.integratedScore;
+        if (aiScoreFilter === "0-50" && (score < 0 || score > 50)) return false;
+        if (aiScoreFilter === "50-75" && (score < 50 || score > 75)) return false;
+        if (aiScoreFilter === "75-100" && (score < 75 || score > 100)) return false;
+      } else if (aiScoreFilter !== "all") {
+        // If AI score filter is active but stock has no score, exclude it
+        return false;
+      }
+    }
+    
     // Automatically exclude small cap stocks (< $500M)
     const marketCapInMillions = getMarketCapValue(stock.marketCap);
     if (marketCapInMillions > 0 && marketCapInMillions < 500) {
@@ -953,6 +969,17 @@ export default function Purchase() {
               <SelectItem value="14">Last 14 Days</SelectItem>
               <SelectItem value="30">Last 30 Days</SelectItem>
               <SelectItem value="60">Last 60 Days</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={aiScoreFilter} onValueChange={(value: AIScoreFilter) => setAiScoreFilter(value)}>
+            <SelectTrigger className="w-full sm:w-48" data-testid="select-ai-score-filter">
+              <SelectValue placeholder="Filter by AI score" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Scores</SelectItem>
+              <SelectItem value="0-50">0-50 (Low)</SelectItem>
+              <SelectItem value="50-75">50-75 (Medium)</SelectItem>
+              <SelectItem value="75-100">75-100 (High)</SelectItem>
             </SelectContent>
           </Select>
           <div className="flex gap-1">

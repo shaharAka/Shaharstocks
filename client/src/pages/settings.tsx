@@ -466,7 +466,9 @@ function BillingManagementSection() {
 
   // Load PayPal SDK if user needs subscription
   useEffect(() => {
-    if (user && (user.subscriptionStatus === "trial" || user.subscriptionStatus === "inactive" || user.subscriptionStatus === "expired") && !paypalLoaded) {
+    const needsSubscription = user && (user.subscriptionStatus === "trial" || user.subscriptionStatus === "inactive" || user.subscriptionStatus === "expired" || user.subscriptionStatus === "cancelled");
+    
+    if (needsSubscription && !paypalLoaded) {
       const clientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
       if (!clientId) {
         console.error("PayPal client ID not configured");
@@ -488,7 +490,13 @@ function BillingManagementSection() {
         }
       };
     }
-  }, [user, paypalLoaded]);
+    
+    // Reset button state if user no longer needs subscription
+    if (!needsSubscription && paypalButtonRendered) {
+      setPaypalButtonRendered(false);
+      setPaypalLoaded(false);
+    }
+  }, [user, paypalLoaded, paypalButtonRendered]);
 
   // Render PayPal button when SDK is ready
   useEffect(() => {
@@ -561,7 +569,7 @@ function BillingManagementSection() {
     }
   };
 
-  const showSubscribeButton = user.subscriptionStatus === "trial" || user.subscriptionStatus === "inactive" || user.subscriptionStatus === "expired";
+  const showSubscribeButton = user.subscriptionStatus === "trial" || user.subscriptionStatus === "inactive" || user.subscriptionStatus === "expired" || user.subscriptionStatus === "cancelled";
   const showManageLink = user.subscriptionStatus === "active" && user.paypalSubscriptionId;
 
   return (
@@ -614,6 +622,19 @@ function BillingManagementSection() {
               <h4 className="font-semibold text-sm mb-1">Trial Expired</h4>
               <AlertDescription className="text-xs">
                 Your 30-day free trial has ended. Subscribe now to regain access to your portfolio and recommendations.
+              </AlertDescription>
+            </div>
+          </Alert>
+        )}
+
+        {/* Cancelled Subscription Message */}
+        {user.subscriptionStatus === "cancelled" && (
+          <Alert className="border-2">
+            <XCircle className="h-5 w-5" />
+            <div className="ml-2">
+              <h4 className="font-semibold text-sm mb-1">Subscription Cancelled</h4>
+              <AlertDescription className="text-xs">
+                Your subscription has been cancelled. You can resubscribe anytime to regain access to all features.
               </AlertDescription>
             </div>
           </Alert>

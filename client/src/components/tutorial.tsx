@@ -17,6 +17,14 @@ export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps)
   
   const tutorial = tutorials[tutorialId];
 
+  // Get computed CSS variable values at runtime
+  const getComputedColor = (variable: string) => {
+    if (typeof window === 'undefined') return '';
+    const root = document.documentElement;
+    const value = getComputedStyle(root).getPropertyValue(variable).trim();
+    return value ? `hsl(${value})` : '';
+  };
+
   // Check if user has completed this tutorial
   useEffect(() => {
     const checkTutorialStatus = async () => {
@@ -96,31 +104,33 @@ export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps)
       callback={handleJoyrideCallback}
       styles={{
         options: {
-          primaryColor: "hsl(var(--primary))",
-          textColor: "hsl(var(--foreground))",
-          backgroundColor: "hsl(var(--card))",
+          primaryColor: getComputedColor('--primary'),
+          textColor: getComputedColor('--card-foreground'),
+          backgroundColor: getComputedColor('--card'),
           overlayColor: "rgba(0, 0, 0, 0.5)",
-          arrowColor: "hsl(var(--card))",
+          arrowColor: getComputedColor('--card'),
           zIndex: 10000,
         },
         tooltip: {
-          borderRadius: "var(--radius)",
-          backgroundColor: "hsl(var(--card))",
-          color: "hsl(var(--card-foreground))",
+          borderRadius: "8px",
+          backgroundColor: getComputedColor('--card'),
+          color: getComputedColor('--card-foreground'),
+          border: `1px solid ${getComputedColor('--border')}`,
         },
         tooltipContent: {
-          color: "hsl(var(--card-foreground))",
+          color: getComputedColor('--card-foreground'),
           padding: "16px",
         },
         tooltipTitle: {
-          color: "hsl(var(--card-foreground))",
+          color: getComputedColor('--card-foreground'),
           fontSize: "18px",
           marginBottom: "8px",
+          fontWeight: "600",
         },
         buttonNext: {
-          backgroundColor: "hsl(var(--primary))",
-          color: "hsl(var(--primary-foreground))",
-          borderRadius: "var(--radius)",
+          backgroundColor: getComputedColor('--primary'),
+          color: getComputedColor('--primary-foreground'),
+          borderRadius: "8px",
           padding: "12px 24px",
           minHeight: "44px",
           minWidth: "88px",
@@ -132,9 +142,9 @@ export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps)
           fontWeight: "500",
         },
         buttonBack: {
-          backgroundColor: "hsl(var(--secondary))",
-          color: "hsl(var(--secondary-foreground))",
-          borderRadius: "var(--radius)",
+          backgroundColor: getComputedColor('--secondary'),
+          color: getComputedColor('--secondary-foreground'),
+          borderRadius: "8px",
           marginRight: "8px",
           minHeight: "44px",
           minWidth: "88px",
@@ -148,20 +158,20 @@ export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps)
         },
         buttonSkip: {
           backgroundColor: "transparent",
-          color: "hsl(var(--muted-foreground))",
+          color: getComputedColor('--muted-foreground'),
           minHeight: "44px",
           minWidth: "88px",
           padding: "12px 24px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          border: "1px solid hsl(var(--border))",
-          borderRadius: "var(--radius)",
+          border: `1px solid ${getComputedColor('--border')}`,
+          borderRadius: "8px",
           fontSize: "14px",
           fontWeight: "500",
         },
         buttonClose: {
-          color: "hsl(var(--muted-foreground))",
+          color: getComputedColor('--muted-foreground'),
           minHeight: "44px",
           minWidth: "44px",
           display: "flex",

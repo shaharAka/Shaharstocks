@@ -1032,7 +1032,7 @@ export default function Purchase() {
       }} className="space-y-4">
         <TabsList>
           <TabsTrigger value="pending" data-testid="tab-pending">
-            Pending ({allPendingRecommendations.length})
+            Pending ({pendingRecommendations.length})
           </TabsTrigger>
           <TabsTrigger value="rejected" data-testid="tab-rejected">
             <ArchiveRestore className="h-4 w-4 mr-2" />

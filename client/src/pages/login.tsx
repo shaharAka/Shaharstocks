@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Link, useLocation } from "wouter";
-import { TrendingUp, AlertCircle, TrendingUpIcon, Zap, ShieldAlert } from "lucide-react";
+import { Activity, AlertCircle, TrendingUpIcon, Zap, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -73,7 +73,7 @@ export default function Login() {
         <Card className="md:flex md:flex-col md:justify-center">
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="h-8 w-8 text-primary" />
+              <Activity className="h-8 w-8 text-primary" />
               <CardTitle className="text-3xl font-bold">signal2</CardTitle>
             </div>
             <CardDescription className="text-base">

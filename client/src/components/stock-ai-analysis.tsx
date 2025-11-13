@@ -347,26 +347,6 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                     </div>
                   )}
 
-                  {macroAnalysis.sectorPerformance && macroAnalysis.sectorPerformance.length > 0 && (
-                    <div className="pt-1 border-t border-border/50">
-                      <div className="text-xs font-medium mb-1">Sector Analysis</div>
-                      {macroAnalysis.sectorPerformance.map((sector: any, index: number) => (
-                        <div key={index} className="text-xs flex items-center justify-between">
-                          <span className="text-muted-foreground">{sector.sector}: </span>
-                          <div className="flex items-center gap-1">
-                            <span className="font-medium capitalize">{sector.performance}</span>
-                            <span className={`${
-                              sector.trend === 'up' ? 'text-success' : 
-                              sector.trend === 'down' ? 'text-destructive' : 'text-muted-foreground'
-                            }`}>
-                              {sector.trend === 'up' ? '↑' : sector.trend === 'down' ? '↓' : '→'}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
                   {macroAnalysis.summary && (
                     <p className="text-xs text-muted-foreground italic pt-2 border-t border-border/50">
                       {macroAnalysis.summary}

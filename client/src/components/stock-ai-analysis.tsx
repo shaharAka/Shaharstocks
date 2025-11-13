@@ -378,14 +378,14 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   </div>
                   <div className="flex items-center justify-between gap-2 pl-3">
                     <span className="text-xs text-muted-foreground">↳ Financial Health Component</span>
-                    <span className={`text-xs font-semibold shrink-0 ${getScoreLabel(analysis.financialHealthScore).color}`}>
+                    <span className="text-xs font-medium shrink-0 text-foreground/70">
                       {getScoreLabel(analysis.financialHealthScore).label}
                     </span>
                   </div>
                   {analysis.technicalAnalysisScore !== undefined && analysis.technicalAnalysisScore !== null && (
                     <div className="flex items-center justify-between gap-2 pl-3">
                       <span className="text-xs text-muted-foreground">↳ Technical Analysis Component</span>
-                      <span className={`text-xs font-semibold shrink-0 ${getScoreLabel(analysis.technicalAnalysisScore).color}`}>
+                      <span className="text-xs font-medium shrink-0 text-foreground/70">
                         {getScoreLabel(analysis.technicalAnalysisScore).label}
                       </span>
                     </div>
@@ -393,7 +393,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   {analysis.sentimentAnalysisScore !== undefined && analysis.sentimentAnalysisScore !== null && (
                     <div className="flex items-center justify-between gap-2 pl-3">
                       <span className="text-xs text-muted-foreground">↳ Sentiment Analysis Component</span>
-                      <span className={`text-xs font-semibold shrink-0 ${getScoreLabel(analysis.sentimentAnalysisScore).color}`}>
+                      <span className="text-xs font-medium shrink-0 text-foreground/70">
                         {getScoreLabel(analysis.sentimentAnalysisScore).label}
                       </span>
                     </div>

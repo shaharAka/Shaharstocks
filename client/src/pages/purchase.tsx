@@ -930,40 +930,6 @@ export default function Purchase() {
           </div>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <div className="flex gap-1 flex-wrap">
-              <Button
-                variant={recommendationFilter === "buy" ? "default" : "outline"}
-                size="lg"
-                onClick={() => setRecommendationFilter("buy")}
-                data-testid="button-filter-buy"
-                className="toggle-elevate"
-              >
-                <ArrowUpRight className="h-3 w-3 mr-1" />
-                Buy
-              </Button>
-              <Button
-                variant={recommendationFilter === "sell" ? "default" : "outline"}
-                size="lg"
-                onClick={() => setRecommendationFilter("sell")}
-                data-testid="button-filter-sell"
-                className="toggle-elevate"
-              >
-                <ArrowDownRight className="h-3 w-3 mr-1" />
-                Sell
-              </Button>
-              <Button
-                variant={recommendationFilter === "all" ? "default" : "outline"}
-                size="lg"
-                onClick={() => setRecommendationFilter("all")}
-                data-testid="button-filter-all"
-                className="toggle-elevate"
-              >
-                All
-              </Button>
-            </div>
-          </div>
           <Select value={interestFilter} onValueChange={(value: InterestFilter) => setInterestFilter(value)}>
             <SelectTrigger className="w-full sm:w-48" data-testid="select-interest-filter">
               <SelectValue placeholder="Filter by interest" />

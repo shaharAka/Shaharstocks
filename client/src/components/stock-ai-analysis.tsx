@@ -412,6 +412,13 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                       </span>
                     </div>
                   )}
+                  
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <p className="text-xs text-muted-foreground/80 italic">
+                      Overall Company Score is a weighted combination of the above components, 
+                      determined by AI analysis based on signal strength and reliability.
+                    </p>
+                  </div>
                 </>
               ) : (
                 <div className="flex items-center justify-between gap-2">

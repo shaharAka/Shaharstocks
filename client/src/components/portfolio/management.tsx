@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,21 +12,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Activity, TrendingUp, TrendingDown, Edit2 } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, Edit2, AlertTriangle, Check, Eye, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type PortfolioHolding, type Stock, type TradingRule } from "@shared/schema";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-  LabelList,
-} from "recharts";
 
 interface PortfolioManagementProps {
   holdings: PortfolioHolding[];
@@ -40,8 +29,6 @@ export function PortfolioManagement({ holdings, stocks, rules, isLoading }: Port
   const [editingRule, setEditingRule] = useState<TradingRule | null>(null);
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [newTriggerValue, setNewTriggerValue] = useState<number>(0);
-  const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
-  const isInitialized = useRef(false);
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<PortfolioHolding | null>(null);
   const [sellQuantity, setSellQuantity] = useState<string>("");
@@ -106,19 +93,6 @@ export function PortfolioManagement({ holdings, stocks, rules, isLoading }: Port
     },
   });
 
-  const holdingStocks = useMemo(() => {
-    if (!holdings || !stocks) return [];
-    return holdings
-      .map((holding) => stocks.find((s) => s.ticker === holding.ticker))
-      .filter((stock): stock is Stock => stock !== undefined);
-  }, [holdings, stocks]);
-
-  useEffect(() => {
-    if (holdingStocks.length > 0 && !isInitialized.current) {
-      setSelectedTickers(new Set(holdingStocks.map(s => s.ticker)));
-      isInitialized.current = true;
-    }
-  }, [holdingStocks]);
 
   const handleEditRule = (rule: TradingRule) => {
     if (!rule.conditions || rule.conditions.length === 0) return;
@@ -154,172 +128,6 @@ export function PortfolioManagement({ holdings, stocks, rules, isLoading }: Port
     sellMutation.mutate({ ticker: selectedHolding.ticker, quantity });
   };
 
-  const toggleTicker = (ticker: string) => {
-    setSelectedTickers(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(ticker)) {
-        newSet.delete(ticker);
-      } else {
-        newSet.add(ticker);
-      }
-      return newSet;
-    });
-  };
-
-  const selectAllTickers = () => {
-    setSelectedTickers(new Set(holdingStocks.map(s => s.ticker)));
-  };
-
-  const deselectAllTickers = () => {
-    setSelectedTickers(new Set());
-  };
-
-  const combinedChartData = useMemo(() => {
-    if (!holdings || !stocks || selectedTickers.size === 0) return [];
-
-    const filteredStocks = holdingStocks
-      .filter((stock) => selectedTickers.has(stock.ticker) && stock.priceHistory);
-
-    if (filteredStocks.length === 0) return [];
-
-    const allDates = new Set<string>();
-    filteredStocks.forEach((stock) => {
-      stock.priceHistory?.forEach((point) => {
-        allDates.add(point.date);
-      });
-    });
-
-    const sortedDates = Array.from(allDates).sort();
-
-    return sortedDates.map((date) => {
-      const dataPoint: any = { date };
-      filteredStocks.forEach((stock) => {
-        const pricePoint = stock.priceHistory?.find((p) => p.date === date);
-        if (pricePoint) {
-          dataPoint[stock.ticker] = pricePoint.price;
-        }
-      });
-      return dataPoint;
-    });
-  }, [holdings, stocks, holdingStocks, selectedTickers]);
-
-  const sellRuleLines = useMemo(() => {
-    if (!holdings || !stocks || !rules || selectedTickers.size === 0) return [];
-
-    const lines: Array<{
-      ticker: string;
-      rule: TradingRule;
-      price: number;
-      isLower: boolean;
-    }> = [];
-
-    holdings.forEach((holding) => {
-      const stock = stocks.find((s) => s.ticker === holding.ticker);
-      if (!stock || !selectedTickers.has(stock.ticker)) return;
-
-      const purchasePrice = parseFloat(holding.averagePurchasePrice);
-
-      const applicableRules = rules.filter(
-        (rule) =>
-          rule.enabled &&
-          (rule.action === "sell" || rule.action === "sell_all") &&
-          (rule.scope === "all_holdings" || 
-           (rule.scope === "specific_stock" && rule.ticker === stock.ticker))
-      );
-
-      applicableRules.forEach((rule) => {
-        if (!rule.conditions || rule.conditions.length === 0) return;
-        
-        const condition = rule.conditions[0];
-        let boundaryPrice = 0;
-
-        if (condition.metric === "price_change_percent") {
-          boundaryPrice = purchasePrice * (1 + condition.value / 100);
-        } else if (condition.metric === "price_change_from_close_percent") {
-          const previousClose = parseFloat(stock.previousClose || stock.currentPrice);
-          boundaryPrice = previousClose * (1 + condition.value / 100);
-        } else if (condition.metric === "price_absolute") {
-          boundaryPrice = condition.value;
-        }
-
-        const isLower = (condition.operator === "<" || condition.operator === "<=");
-
-        lines.push({
-          ticker: stock.ticker,
-          rule,
-          price: boundaryPrice,
-          isLower,
-        });
-      });
-    });
-
-    return lines;
-  }, [holdings, stocks, rules, selectedTickers]);
-
-  const yAxisDomain = useMemo(() => {
-    const allPrices: number[] = [];
-
-    combinedChartData.forEach((dataPoint) => {
-      Object.keys(dataPoint).forEach((key) => {
-        if (key !== 'date' && typeof dataPoint[key] === 'number') {
-          allPrices.push(dataPoint[key]);
-        }
-      });
-    });
-
-    sellRuleLines.forEach((line) => {
-      allPrices.push(line.price);
-    });
-
-    holdings?.forEach((holding) => {
-      if (!holding.isSimulated && selectedTickers.has(holding.ticker)) {
-        allPrices.push(parseFloat(holding.averagePurchasePrice));
-      }
-    });
-
-    if (allPrices.length === 0) return ['auto', 'auto'];
-
-    const minPrice = Math.min(...allPrices);
-    const maxPrice = Math.max(...allPrices);
-    
-    let padding = (maxPrice - minPrice) * 0.1;
-    if (padding === 0) {
-      padding = maxPrice * 0.01 || 1;
-    }
-    
-    return [
-      Math.floor(minPrice - padding),
-      Math.ceil(maxPrice + padding),
-    ];
-  }, [combinedChartData, sellRuleLines, holdings, selectedTickers]);
-
-  const portfolioSummary = useMemo(() => {
-    if (!holdings || !stocks) return null;
-
-    let totalValue = 0;
-    let totalCost = 0;
-
-    holdings.forEach((holding) => {
-      const stock = stocks.find((s) => s.ticker === holding.ticker);
-      if (stock) {
-        const currentPrice = parseFloat(stock.currentPrice);
-        const purchasePrice = parseFloat(holding.averagePurchasePrice);
-        totalValue += currentPrice * holding.quantity;
-        totalCost += purchasePrice * holding.quantity;
-      }
-    });
-
-    const profitLoss = totalValue - totalCost;
-    const profitLossPercent = (profitLoss / totalCost) * 100;
-
-    return {
-      totalValue,
-      totalCost,
-      profitLoss,
-      profitLossPercent,
-      isPositive: profitLoss >= 0,
-    };
-  }, [holdings, stocks]);
 
   if (!holdings || holdings.length === 0) {
     return (
@@ -335,256 +143,279 @@ export function PortfolioManagement({ holdings, stocks, rules, isLoading }: Port
     );
   }
 
+  // Calculate active alerts (triggered and near-trigger)
+  const alerts = useMemo(() => {
+    if (!holdings || !stocks || !rules) return { triggered: [], nearTrigger: [] };
+    
+    const triggered: Array<{
+      ticker: string;
+      companyName: string;
+      currentPrice: number;
+      triggerPrice: number;
+      alertType: 'stop_loss' | 'take_profit';
+      rule: TradingRule;
+      percentFromTrigger: number;
+      holding: PortfolioHolding;
+    }> = [];
+    
+    const nearTrigger: Array<{
+      ticker: string;
+      companyName: string;
+      currentPrice: number;
+      triggerPrice: number;
+      alertType: 'stop_loss' | 'take_profit';
+      rule: TradingRule;
+      percentFromTrigger: number;
+      holding: PortfolioHolding;
+    }> = [];
+    
+    holdings.forEach((holding) => {
+      const stock = stocks.find((s) => s.ticker === holding.ticker);
+      if (!stock) return;
+      
+      const currentPrice = parseFloat(stock.currentPrice);
+      const purchasePrice = parseFloat(holding.averagePurchasePrice);
+      
+      const applicableRules = rules.filter(
+        (rule) =>
+          rule.enabled &&
+          (rule.action === "sell" || rule.action === "sell_all") &&
+          (rule.scope === "all_holdings" || 
+           (rule.scope === "specific_stock" && rule.ticker === stock.ticker))
+      );
+      
+      applicableRules.forEach((rule) => {
+        if (!rule.conditions || rule.conditions.length === 0) return;
+        
+        const condition = rule.conditions[0];
+        let triggerPrice = 0;
+        
+        if (condition.metric === "price_change_percent") {
+          triggerPrice = purchasePrice * (1 + condition.value / 100);
+        } else if (condition.metric === "price_change_from_close_percent") {
+          const previousClose = parseFloat(stock.previousClose || stock.currentPrice);
+          triggerPrice = previousClose * (1 + condition.value / 100);
+        } else if (condition.metric === "price_absolute") {
+          triggerPrice = condition.value;
+        }
+        
+        const isStopLoss = (condition.operator === "<" || condition.operator === "<=");
+        const isTakeProfit = (condition.operator === ">" || condition.operator === ">=");
+        
+        const percentFromTrigger = ((currentPrice - triggerPrice) / triggerPrice) * 100;
+        const nearTriggerThreshold = 5; // 5% from trigger
+        
+        // Check if alert is triggered
+        let isTriggered = false;
+        let isNearTrigger = false;
+        
+        if (isStopLoss) {
+          if (currentPrice <= triggerPrice) {
+            isTriggered = true;
+          } else if (Math.abs(percentFromTrigger) <= nearTriggerThreshold) {
+            isNearTrigger = true;
+          }
+        } else if (isTakeProfit) {
+          if (currentPrice >= triggerPrice) {
+            isTriggered = true;
+          } else if (Math.abs(percentFromTrigger) <= nearTriggerThreshold) {
+            isNearTrigger = true;
+          }
+        }
+        
+        const alertData = {
+          ticker: stock.ticker,
+          companyName: stock.companyName,
+          currentPrice,
+          triggerPrice,
+          alertType: isStopLoss ? 'stop_loss' as const : 'take_profit' as const,
+          rule,
+          percentFromTrigger,
+          holding,
+        };
+        
+        if (isTriggered) {
+          triggered.push(alertData);
+        } else if (isNearTrigger) {
+          nearTrigger.push(alertData);
+        }
+      });
+    });
+    
+    return { triggered, nearTrigger };
+  }, [holdings, stocks, rules]);
+
+  const [showNearTrigger, setShowNearTrigger] = useState(true);
+
   return (
     <>
-      {portfolioSummary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-xs text-muted-foreground mb-1">Total Value</div>
-              <div className="text-2xl font-mono font-semibold" data-testid="text-total-value">
-                ${portfolioSummary.totalValue.toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-xs text-muted-foreground mb-1">Total Cost</div>
-              <div className="text-2xl font-mono font-semibold" data-testid="text-total-cost">
-                ${portfolioSummary.totalCost.toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-xs text-muted-foreground mb-1">P&L</div>
-              <div
-                className={`text-2xl font-mono font-semibold ${
-                  portfolioSummary.isPositive ? "text-success" : "text-destructive"
-                }`}
-                data-testid="text-total-pl"
-              >
-                {portfolioSummary.isPositive ? "+" : ""}${portfolioSummary.profitLoss.toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-xs text-muted-foreground mb-1">Return</div>
-              <div
-                className={`text-2xl font-mono font-semibold ${
-                  portfolioSummary.isPositive ? "text-success" : "text-destructive"
-                }`}
-                data-testid="text-total-return"
-              >
-                {portfolioSummary.isPositive ? "+" : ""}{portfolioSummary.profitLossPercent.toFixed(2)}%
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      <Card data-testid="card-unified-chart">
-        <CardHeader className="space-y-3">
+      <Card data-testid="card-active-alerts">
+        <CardHeader>
           <div className="flex flex-row items-center justify-between gap-2">
             <div>
-              <CardTitle>Portfolio Price History</CardTitle>
+              <CardTitle>Active Alerts</CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                Stock prices with trading rule boundaries
+                Stocks that have triggered or are approaching your trading rules
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={selectAllTickers}
-                data-testid="button-select-all"
-              >
-                Select All
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={deselectAllTickers}
-                data-testid="button-deselect-all"
-              >
-                Clear All
-              </Button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground mr-1">Filter:</span>
-            {holdingStocks.map((stock) => {
-              const isSelected = selectedTickers.has(stock.ticker);
-              return (
-                <Badge
-                  key={stock.ticker}
-                  variant={isSelected ? "default" : "outline"}
-                  className="cursor-pointer hover-elevate"
-                  onClick={() => toggleTicker(stock.ticker)}
-                  data-testid={`badge-filter-${stock.ticker}`}
-                >
-                  {stock.ticker}
-                </Badge>
-              );
-            })}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowNearTrigger(!showNearTrigger)}
+              data-testid="button-toggle-near-trigger"
+            >
+              {showNearTrigger ? "Hide" : "Show"} Near-Trigger
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="h-[500px] w-full" data-testid="chart-unified">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={combinedChartData}
-                margin={{ top: 30, right: 80, left: 20, bottom: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="date"
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                  tickFormatter={(value) => {
-                    const date = new Date(value);
-                    return `${date.getMonth() + 1}/${date.getDate()}`;
-                  }}
-                />
-                <YAxis
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                  domain={yAxisDomain as [number, number]}
-                  tickFormatter={(value) => `$${value.toFixed(0)}`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "6px",
-                  }}
-                  labelStyle={{ color: "hsl(var(--popover-foreground))" }}
-                  formatter={(value: number, name: string) => [`$${value.toFixed(2)}`, name]}
-                  labelFormatter={(label) => `Date: ${label}`}
-                />
-
-                {holdingStocks
-                  .filter((stock) => selectedTickers.has(stock.ticker))
-                  .map((stock) => (
-                    <Line
-                      key={stock.ticker}
-                      type="monotone"
-                      dataKey={stock.ticker}
-                      stroke="hsl(var(--chart-1))"
-                      strokeWidth={2}
-                      dot={false}
-                      name={stock.ticker}
-                    >
-                      <LabelList
-                        dataKey={stock.ticker}
-                        position="right"
-                        content={({ x, y, value, index }) => {
-                          if (index === undefined || !combinedChartData[index]) return null;
-                          const isLastPoint = index === combinedChartData.length - 1;
-                          if (!isLastPoint) return null;
-                          
-                          return (
-                            <text
-                              x={Number(x) + 10}
-                              y={Number(y)}
-                              fill="hsl(var(--chart-1))"
-                              fontSize={12}
-                              fontWeight={600}
-                              textAnchor="start"
-                            >
-                              {stock.ticker}
-                            </text>
-                          );
-                        }}
-                      />
-                    </Line>
-                  ))}
-
-                {sellRuleLines.map((line, index) => {
-                  const color = line.isLower ? "hsl(var(--destructive))" : "hsl(var(--success))";
-                  const label = line.isLower ? "Stop Loss" : "Take Profit";
-                  
-                  return (
-                    <ReferenceLine
-                      key={`rule-${index}`}
-                      y={line.price}
-                      stroke={color}
-                      strokeWidth={3}
-                      strokeDasharray="5 5"
-                      label={{
-                        value: `${line.ticker}: ${label} $${line.price.toFixed(2)}`,
-                        position: line.isLower ? "insideBottomLeft" : "insideTopLeft",
-                        fill: color,
-                        fontSize: 12,
-                        fontWeight: "600",
-                      }}
-                      data-testid={`reference-line-${line.rule.id}`}
-                    />
-                  );
-                })}
-
-                {holdings
-                  ?.filter((holding) => !holding.isSimulated && selectedTickers.has(holding.ticker))
-                  .map((holding) => {
-                    const purchasePrice = parseFloat(holding.averagePurchasePrice);
-                    return (
-                      <ReferenceLine
-                        key={`purchase-${holding.ticker}`}
-                        y={purchasePrice}
-                        stroke="hsl(var(--muted-foreground))"
-                        strokeWidth={2}
-                        strokeDasharray="3 3"
-                        label={{
-                          value: `${holding.ticker} Purchase: $${purchasePrice.toFixed(2)}`,
-                          position: "insideTopLeft",
-                          fill: "hsl(var(--muted-foreground))",
-                          fontSize: 11,
-                          fontWeight: "500",
-                        }}
-                      />
-                    );
-                  })}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {sellRuleLines.length > 0 && (
-            <div className="mt-4 pt-4 border-t">
-              <div className="flex items-start gap-4 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground mb-2">Sell Boundaries (Click to adjust)</p>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {sellRuleLines.map((line, index) => (
+          {/* Triggered Alerts */}
+          {alerts.triggered.length > 0 && (
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <h3 className="text-sm font-semibold">Triggered Alerts ({alerts.triggered.length})</h3>
+              </div>
+              <div className="space-y-2">
+                {alerts.triggered.map((alert, index) => (
+                  <div
+                    key={`triggered-${index}`}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 rounded-md border bg-card hover-elevate"
+                    data-testid={`alert-triggered-${alert.ticker}`}
+                  >
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold">{alert.ticker}</h4>
+                            <Badge variant={alert.alertType === 'stop_loss' ? 'destructive' : 'default'}>
+                              {alert.alertType === 'stop_loss' ? 'Stop Loss' : 'Take Profit'}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{alert.companyName}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Current:</span>
+                          <span className="ml-1 font-mono font-semibold">${alert.currentPrice.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Trigger:</span>
+                          <span className="ml-1 font-mono">${alert.triggerPrice.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">From Trigger:</span>
+                          <span className={`ml-1 font-mono font-semibold ${
+                            alert.alertType === 'stop_loss' ? 'text-destructive' : 'text-success'
+                          }`}>
+                            {alert.percentFromTrigger > 0 ? '+' : ''}{alert.percentFromTrigger.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Shares:</span>
+                          <span className="ml-1 font-mono">{alert.holding.quantity}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
                       <Button
-                        key={`rule-btn-${index}`}
                         variant="outline"
                         size="sm"
-                        onClick={() => handleEditRule(line.rule)}
-                        className="h-8"
-                        data-testid={`button-boundary-${line.rule.id}`}
+                        onClick={() => handleEditRule(alert.rule)}
+                        data-testid={`button-edit-rule-${alert.ticker}`}
                       >
-                        <span className={line.isLower ? "text-destructive" : "text-success"}>
-                          {line.isLower ? "▼" : "▲"}
-                        </span>
-                        <span className="mx-1">{line.ticker}</span>
-                        <span className="font-mono">${line.price.toFixed(2)}</span>
-                        <Edit2 className="h-3 w-3 ml-1" />
+                        <Edit2 className="h-3 w-3 mr-1" />
+                        Edit Rule
                       </Button>
-                    ))}
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleSellClick(alert.holding)}
+                        data-testid={`button-sell-${alert.ticker}`}
+                      >
+                        Sell
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col gap-1 text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-0.5 bg-destructive" style={{ borderTop: "3px dashed" }} />
-                    <span className="text-muted-foreground">Stop Loss</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-0.5 bg-success" style={{ borderTop: "3px dashed" }} />
-                    <span className="text-muted-foreground">Take Profit</span>
-                  </div>
-                </div>
+                ))}
               </div>
+            </div>
+          )}
+
+          {/* Near-Trigger Alerts */}
+          {showNearTrigger && alerts.nearTrigger.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">Near-Trigger Alerts ({alerts.nearTrigger.length})</h3>
+                <span className="text-xs text-muted-foreground">(Within 5% of trigger)</span>
+              </div>
+              <div className="space-y-2">
+                {alerts.nearTrigger.map((alert, index) => (
+                  <div
+                    key={`near-${index}`}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 rounded-md border bg-card hover-elevate"
+                    data-testid={`alert-near-${alert.ticker}`}
+                  >
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold">{alert.ticker}</h4>
+                            <Badge variant="outline">
+                              {alert.alertType === 'stop_loss' ? 'Stop Loss' : 'Take Profit'}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{alert.companyName}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">Current:</span>
+                          <span className="ml-1 font-mono font-semibold">${alert.currentPrice.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Trigger:</span>
+                          <span className="ml-1 font-mono">${alert.triggerPrice.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">From Trigger:</span>
+                          <span className="ml-1 font-mono">
+                            {alert.percentFromTrigger > 0 ? '+' : ''}{alert.percentFromTrigger.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Shares:</span>
+                          <span className="ml-1 font-mono">{alert.holding.quantity}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditRule(alert.rule)}
+                        data-testid={`button-edit-rule-${alert.ticker}`}
+                      >
+                        <Edit2 className="h-3 w-3 mr-1" />
+                        Edit Rule
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {alerts.triggered.length === 0 && (showNearTrigger ? alerts.nearTrigger.length === 0 : true) && (
+            <div className="text-center py-12">
+              <Check className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2" data-testid="text-no-alerts">No Active Alerts</h3>
+              <p className="text-sm text-muted-foreground">
+                All your stocks are within safe trading ranges. Check back regularly for updates.
+              </p>
             </div>
           )}
         </CardContent>

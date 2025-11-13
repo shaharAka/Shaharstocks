@@ -151,15 +151,7 @@ export default function Purchase() {
   }, []);
 
   const { data: stocks, isLoading, refetch: refetchStocks } = useQuery<StockWithUserStatus[]>({
-    queryKey: ["/api/stocks/with-user-status", { recommendation: recommendationFilter }],
-    queryFn: async () => {
-      const url = recommendationFilter === "all" 
-        ? "/api/stocks/with-user-status"
-        : `/api/stocks/with-user-status?recommendation=${recommendationFilter}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch stocks");
-      return await res.json();
-    },
+    queryKey: ["/api/stocks/with-user-status"],
   });
 
   // Query for rejected stocks

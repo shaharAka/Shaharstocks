@@ -12,13 +12,14 @@ interface UserProgress {
   tutorialCompletions: Record<string, boolean>;
 }
 
-type ExperienceState = "onboarding_pending" | "tutorial_pending" | "complete";
+type ExperienceState = "loading" | "onboarding_pending" | "tutorial_pending" | "complete";
 
 interface UserContextType {
   user: User | null;
   isLoading: boolean;
   progress: UserProgress | null;
   progressLoading: boolean;
+  progressFetched: boolean;
   experienceState: ExperienceState;
   completeOnboarding: () => Promise<void>;
   completeTutorial: (tutorialId: string) => Promise<void>;
@@ -32,7 +33,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     queryKey: ["/api/auth/current-user"],
   });
 
-  const { data: progressData, isLoading: progressLoading } = useQuery<UserProgress>({
+  const { data: progressData, isLoading: progressLoading, isFetched: progressFetched } = useQuery<UserProgress>({
     queryKey: ["/api/user/progress"],
     enabled: !!data?.user,
   });
@@ -56,10 +57,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
   });
 
   const experienceState: ExperienceState = (() => {
-    // While loading, assume complete to avoid showing onboarding prematurely
-    if (!data?.user || progressLoading) return "complete";
+    // No user (guest/anonymous) - complete state, tutorials won't fire without progress data
+    if (!data?.user) return "complete";
     
-    // If no progress data yet, treat as complete (safety fallback)
+    // User is logged in, but progress hasn't been fetched yet - loading state
+    if (!progressFetched || progressLoading) return "loading";
+    
+    // Progress data not available after fetch - treat as complete for safety
     if (!progressData) return "complete";
     
     // Check onboarding completion - handle legacy users
@@ -88,6 +92,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isLoading,
         progress: progressData || null,
         progressLoading,
+        progressFetched,
         experienceState,
         completeOnboarding: async () => {
           await completeOnboardingMutation.mutateAsync();

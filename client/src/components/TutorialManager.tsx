@@ -9,7 +9,7 @@ export function TutorialManager() {
   const [forceTutorialId, setForceTutorialId] = useState<TutorialId | null>(null);
   const [manualTrigger, setManualTrigger] = useState(false);
   const prevTutorialIdRef = useRef<TutorialId | null>(null);
-  const { experienceState, isTutorialCompleted, completeTutorial, progressLoading } = useUser();
+  const { experienceState, isTutorialCompleted, completeTutorial, progressLoading, progressFetched } = useUser();
 
   // Get tutorial ID from current route
   const currentTutorialId = getTutorialIdFromRoute(location);
@@ -40,10 +40,11 @@ export function TutorialManager() {
 
   // Auto-start tutorial for first-time visitors (only after onboarding is complete)
   useEffect(() => {
-    if (progressLoading) return;
+    // Don't auto-start while data is loading or hasn't been fetched yet
+    if (progressLoading || experienceState === "loading" || !progressFetched) return;
     
     // Only auto-start if:
-    // 1. Onboarding is complete
+    // 1. Onboarding is complete (experienceState === "complete")
     // 2. There's a tutorial for this route
     // 3. This tutorial hasn't been completed yet
     // 4. We're not in forced mode (manual replay)
@@ -61,7 +62,7 @@ export function TutorialManager() {
       setManualTrigger(false);
       prevTutorialIdRef.current = currentTutorialId;
     }
-  }, [currentTutorialId, forceTutorialId, experienceState, isTutorialCompleted, progressLoading]);
+  }, [currentTutorialId, forceTutorialId, experienceState, isTutorialCompleted, progressLoading, progressFetched]);
 
   // Don't render if no tutorial is available or if onboarding isn't complete (and not manual trigger)
   if (!activeTutorialId) {

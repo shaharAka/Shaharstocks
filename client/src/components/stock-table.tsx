@@ -255,7 +255,7 @@ export function StockTable({
                   <SortIcon field="change" />
                 </Button>
               </TableHead>
-              <TableHead className="text-right hidden xl:table-cell min-w-[70px]">
+              <TableHead className="text-right hidden xl:table-cell w-[90px]">
                 <Button
                   variant="ghost"
                   size="lg"
@@ -267,7 +267,7 @@ export function StockTable({
                   <SortIcon field="insiderPrice" />
                 </Button>
               </TableHead>
-              <TableHead className="hidden xl:table-cell min-w-[90px]">
+              <TableHead className="hidden xl:table-cell w-[100px]">
                 <Button
                   variant="ghost"
                   size="lg"
@@ -279,7 +279,7 @@ export function StockTable({
                   <SortIcon field="marketCap" />
                 </Button>
               </TableHead>
-              <TableHead className="text-right hidden lg:table-cell min-w-[90px]">
+              <TableHead className="text-right hidden lg:table-cell w-[90px]">
                 <Button
                   variant="ghost"
                   size="lg"

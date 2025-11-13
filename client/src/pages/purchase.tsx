@@ -42,6 +42,7 @@ import {
   MessageSquare,
   ChevronDown,
   Sparkles,
+  Search,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -123,6 +124,7 @@ export default function Purchase() {
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<StockListTab>("pending");
+  const [tickerSearch, setTickerSearch] = useState<string>("");
 
   // Selection handlers
   const toggleSelection = (ticker: string) => {
@@ -794,6 +796,14 @@ export default function Purchase() {
   ) || [];
 
   const pendingRecommendations = allPendingRecommendations.filter(stock => {
+    // Filter by ticker search
+    if (tickerSearch.trim() !== "") {
+      const searchTerm = tickerSearch.trim().toLowerCase();
+      const tickerMatch = stock.ticker.toLowerCase().includes(searchTerm);
+      const companyMatch = stock.companyName?.toLowerCase().includes(searchTerm);
+      if (!tickerMatch && !companyMatch) return false;
+    }
+    
     // Filter by recommendation type
     if (recommendationFilter !== "all") {
       if (recommendationFilter === "buy" && !stock.recommendation?.toLowerCase().includes("buy")) return false;
@@ -930,6 +940,17 @@ export default function Purchase() {
           </div>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-3 flex-wrap">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search ticker or company..."
+              value={tickerSearch}
+              onChange={(e) => setTickerSearch(e.target.value)}
+              className="pl-9 w-full"
+              data-testid="input-ticker-search"
+            />
+          </div>
           <Select value={interestFilter} onValueChange={(value: InterestFilter) => setInterestFilter(value)}>
             <SelectTrigger className="w-full sm:w-48" data-testid="select-interest-filter">
               <SelectValue placeholder="Filter by interest" />

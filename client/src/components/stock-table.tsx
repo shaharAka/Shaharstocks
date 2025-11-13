@@ -255,12 +255,12 @@ export function StockTable({
                   <SortIcon field="change" />
                 </Button>
               </TableHead>
-              <TableHead className="text-right hidden xl:table-cell min-w-[90px]">
+              <TableHead className="text-right hidden xl:table-cell min-w-[70px]">
                 <Button
                   variant="ghost"
                   size="lg"
                   onClick={() => handleSort("insiderPrice")}
-                  className="px-2"
+                  className="px-1"
                   data-testid="sort-insider-price"
                 >
                   Insider $

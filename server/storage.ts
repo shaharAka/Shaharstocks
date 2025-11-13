@@ -69,6 +69,8 @@ import {
   type InsertAnnouncement,
   type AnnouncementRead,
   type InsertAnnouncementRead,
+  type AdminNotification,
+  type InsertAdminNotification,
   stocks,
   portfolioHoldings,
   trades,
@@ -102,6 +104,7 @@ import {
   insiderProfiles,
   announcements,
   announcementReads,
+  adminNotifications,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
@@ -303,6 +306,13 @@ export interface IStorage {
   deleteAnnouncement(id: string): Promise<void>;
   markAnnouncementAsRead(userId: string, announcementId: string): Promise<void>;
   markAllAnnouncementsAsRead(userId: string): Promise<void>;
+
+  // Admin Notifications
+  getAdminNotifications(): Promise<AdminNotification[]>;
+  getUnreadAdminNotificationCount(): Promise<number>;
+  createAdminNotification(notification: InsertAdminNotification): Promise<AdminNotification>;
+  markAdminNotificationAsRead(id: string): Promise<AdminNotification | undefined>;
+  markAllAdminNotificationsAsRead(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2473,6 +2483,45 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAnnouncement(id: string): Promise<void> {
     await db.delete(announcements).where(eq(announcements.id, id));
+  }
+
+  async getAdminNotifications(): Promise<AdminNotification[]> {
+    return await db
+      .select()
+      .from(adminNotifications)
+      .orderBy(sql`${adminNotifications.createdAt} DESC`);
+  }
+
+  async getUnreadAdminNotificationCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(adminNotifications)
+      .where(eq(adminNotifications.isRead, false));
+    return result[0]?.count || 0;
+  }
+
+  async createAdminNotification(notification: InsertAdminNotification): Promise<AdminNotification> {
+    const [created] = await db
+      .insert(adminNotifications)
+      .values(notification)
+      .returning();
+    return created;
+  }
+
+  async markAdminNotificationAsRead(id: string): Promise<AdminNotification | undefined> {
+    const [updated] = await db
+      .update(adminNotifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(adminNotifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markAllAdminNotificationsAsRead(): Promise<void> {
+    await db
+      .update(adminNotifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(adminNotifications.isRead, false));
   }
 }
 

@@ -930,3 +930,28 @@ export const insertAnnouncementReadSchema = createInsertSchema(announcementReads
 });
 export type InsertAnnouncementRead = z.infer<typeof insertAnnouncementReadSchema>;
 export type AnnouncementRead = typeof announcementReads.$inferSelect;
+
+// Admin Notifications - system events for super admins (user signups, etc.)
+export const adminNotifications = pgTable("admin_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // "user_signup", etc.
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  metadata: jsonb("metadata").$type<{
+    userId?: string;
+    userName?: string;
+    userEmail?: string;
+    [key: string]: any;
+  }>(),
+  isRead: boolean("is_read").notNull().default(false),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAdminNotificationSchema = createInsertSchema(adminNotifications).omit({ 
+  id: true, 
+  createdAt: true,
+  readAt: true
+});
+export type InsertAdminNotification = z.infer<typeof insertAdminNotificationSchema>;
+export type AdminNotification = typeof adminNotifications.$inferSelect;

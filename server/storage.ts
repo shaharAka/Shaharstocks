@@ -39,6 +39,8 @@ import {
   type StockInterest,
   type InsertStockInterest,
   type StockInterestWithUser,
+  type UserStockPin,
+  type InsertUserStockPin,
   type StockView,
   type InsertStockView,
   type StockAnalysis,
@@ -89,6 +91,7 @@ import {
   users,
   stockComments,
   stockInterests,
+  userStockPins,
   stockViews,
   stockAnalyses,
   macroAnalyses,
@@ -241,6 +244,11 @@ export interface IStorage {
   getAllStockInterests(): Promise<StockInterestWithUser[]>;
   createStockInterest(interest: InsertStockInterest): Promise<StockInterest>;
   deleteStockInterest(ticker: string, userId: string): Promise<boolean>;
+
+  // Stock Pins
+  getUserStockPins(userId: string): Promise<UserStockPin[]>;
+  createStockPin(pin: InsertUserStockPin): Promise<UserStockPin>;
+  deleteStockPin(ticker: string, userId: string): Promise<boolean>;
 
   // User Stock Statuses
   getUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus | undefined>;
@@ -1708,6 +1716,32 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(stockInterests.ticker, ticker),
           eq(stockInterests.userId, userId)
+        )
+      );
+    return true;
+  }
+
+  // Stock Pins
+  async getUserStockPins(userId: string): Promise<UserStockPin[]> {
+    return await db
+      .select()
+      .from(userStockPins)
+      .where(eq(userStockPins.userId, userId))
+      .orderBy(desc(userStockPins.pinnedAt));
+  }
+
+  async createStockPin(pin: InsertUserStockPin): Promise<UserStockPin> {
+    const [newPin] = await db.insert(userStockPins).values(pin).returning();
+    return newPin;
+  }
+
+  async deleteStockPin(ticker: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(userStockPins)
+      .where(
+        and(
+          eq(userStockPins.ticker, ticker),
+          eq(userStockPins.userId, userId)
         )
       );
     return true;

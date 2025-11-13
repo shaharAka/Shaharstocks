@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Database, TrendingUp, Rocket } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useUser } from "@/contexts/UserContext";
 
 interface OnboardingProps {
   open: boolean;
@@ -27,6 +28,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
   const [step, setStep] = useState(1);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { completeOnboarding } = useUser();
 
   const fetchOpeninsiderMutation = useMutation({
     mutationFn: async () => {
@@ -70,24 +72,15 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
     fetchOpeninsiderMutation.mutate();
   };
 
-  const markOnboardingCompleteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/mark-onboarding-complete", {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
-    },
-  });
-
-  const handleViewRecommendations = () => {
-    markOnboardingCompleteMutation.mutate();
+  const handleViewRecommendations = async () => {
+    await completeOnboarding();
     onOpenChange(false);
     setLocation("/recommendations");
     onComplete();
   };
 
-  const handleSkip = () => {
-    markOnboardingCompleteMutation.mutate();
+  const handleSkip = async () => {
+    await completeOnboarding();
     onOpenChange(false);
     onComplete();
   };

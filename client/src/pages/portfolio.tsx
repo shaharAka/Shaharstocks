@@ -22,9 +22,8 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 
 export default function Portfolio() {
   const [, setLocation] = useLocation();
-  const { user } = useUser();
-  const [showOnboarding, setShowOnboarding] = useState(!user?.hasSeenOnboarding);
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const { user, experienceState } = useUser();
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   
   // Read tab from URL query parameter
   const searchParams = new URLSearchParams(window.location.search);
@@ -58,12 +57,12 @@ export default function Portfolio() {
     window.dispatchEvent(new Event('urlchange'));
   };
   
-  // Ensure onboarding dialog closes permanently once user has seen it
+  // Show onboarding if user hasn't completed it
   useEffect(() => {
-    if (user?.hasSeenOnboarding) {
-      setShowOnboarding(false);
+    if (experienceState === "onboarding_pending") {
+      setOnboardingOpen(true);
     }
-  }, [user?.hasSeenOnboarding]);
+  }, [experienceState]);
   
   const { data: holdings, isLoading: holdingsLoading } = usePortfolioHoldings();
   const { data: stocks, isLoading: stocksLoading } = useStocks();
@@ -127,9 +126,9 @@ export default function Portfolio() {
   return (
     <>
       <Onboarding 
-        open={showOnboarding && !user?.hasSeenOnboarding} 
-        onOpenChange={setShowOnboarding}
-        onComplete={() => setOnboardingComplete(true)}
+        open={onboardingOpen} 
+        onOpenChange={setOnboardingOpen}
+        onComplete={() => setOnboardingOpen(false)}
       />
       <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-2xl mx-auto">
         <div>

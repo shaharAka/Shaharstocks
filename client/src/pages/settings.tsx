@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Settings as SettingsIcon, Send, Save, RefreshCw, CheckCircle2, XCircle, CreditCard, Clock, AlertTriangle, ExternalLink, Crown } from "lucide-react";
+import { Settings as SettingsIcon, Send, Save, RefreshCw, CheckCircle2, XCircle, CreditCard, Clock, AlertTriangle, ExternalLink, Crown, Copy, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type TelegramConfig, type OpeninsiderConfig } from "@shared/schema";
@@ -25,6 +25,53 @@ export default function Settings() {
   const [phoneCodeHash, setPhoneCodeHash] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [authStep, setAuthStep] = useState<'idle' | 'code-sent' | 'authenticated'>('idle');
+
+  // Fetch logging system
+  type FetchLog = {
+    timestamp: string;
+    source: 'telegram' | 'openinsider';
+    action: 'attempt' | 'success' | 'error';
+    details: string;
+    data?: any;
+  };
+  
+  const [fetchLogs, setFetchLogs] = useState<FetchLog[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  
+  const addLog = (source: 'telegram' | 'openinsider', action: 'attempt' | 'success' | 'error', details: string, data?: any) => {
+    const log: FetchLog = {
+      timestamp: new Date().toISOString(),
+      source,
+      action,
+      details,
+      data
+    };
+    setFetchLogs(prev => [log, ...prev].slice(0, 50)); // Keep last 50 logs
+  };
+  
+  const copyLogsToClipboard = () => {
+    const logsText = fetchLogs.map(log => {
+      let text = `[${new Date(log.timestamp).toLocaleString()}] ${log.source.toUpperCase()} - ${log.action.toUpperCase()}: ${log.details}`;
+      if (log.data) {
+        text += `\nData: ${JSON.stringify(log.data, null, 2)}`;
+      }
+      return text;
+    }).join('\n\n' + '='.repeat(80) + '\n\n');
+    
+    navigator.clipboard.writeText(logsText);
+    toast({
+      title: "Logs copied",
+      description: "Fetch logs have been copied to clipboard",
+    });
+  };
+  
+  const clearLogs = () => {
+    setFetchLogs([]);
+    toast({
+      title: "Logs cleared",
+      description: "All fetch logs have been cleared",
+    });
+  };
 
   // Feature flags
   const { data: featureFlags } = useQuery<{ enableTelegram: boolean }>({
@@ -80,8 +127,16 @@ export default function Settings() {
 
   const fetchMessagesMutation = useMutation({
     mutationFn: async (limit: number = 10) => {
-      const res = await apiRequest("POST", "/api/telegram/fetch", { limit });
-      return await res.json();
+      addLog('telegram', 'attempt', `Attempting to fetch ${limit} messages`, { limit });
+      try {
+        const res = await apiRequest("POST", "/api/telegram/fetch", { limit });
+        const data = await res.json();
+        addLog('telegram', 'success', `Successfully fetched ${data.messagesFetched || 0} messages`, data);
+        return data;
+      } catch (error: any) {
+        addLog('telegram', 'error', `Fetch failed: ${error.message}`, { error: error.toString(), stack: error.stack });
+        throw error;
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/stocks"] });
@@ -90,10 +145,10 @@ export default function Settings() {
         description: data.message || `Fetched ${data.messagesFetched} messages`,
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to fetch Telegram messages.",
+        description: error.message || "Failed to fetch Telegram messages.",
         variant: "destructive",
       });
     },
@@ -417,7 +472,104 @@ export default function Settings() {
       </Card>
       )}
 
-      <OpenInsiderConfigSection />
+      <OpenInsiderConfigSection addLog={addLog} />
+
+      {/* Fetch Logs Viewer */}
+      <Card data-testid="card-fetch-logs">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Fetch Logs</CardTitle>
+              <CardDescription>
+                Debug fetch attempts and errors (last 50 entries)
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {fetchLogs.length > 0 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={copyLogsToClipboard}
+                    data-testid="button-copy-logs"
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Logs
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearLogs}
+                    data-testid="button-clear-logs"
+                  >
+                    Clear
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowLogs(!showLogs)}
+                data-testid="button-toggle-logs"
+              >
+                {showLogs ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        {showLogs && (
+          <CardContent>
+            {fetchLogs.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No logs yet. Logs will appear here when you attempt to fetch data.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {fetchLogs.map((log: any, index: number) => (
+                  <div
+                    key={index}
+                    className={`p-3 rounded text-xs font-mono border ${
+                      log.action === 'error' ? 'bg-destructive/10 border-destructive' :
+                      log.action === 'success' ? 'bg-success/10 border-success' :
+                      'bg-muted border-border'
+                    }`}
+                    data-testid={`log-entry-${index}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={log.source === 'telegram' ? 'default' : 'secondary'}>
+                          {log.source.toUpperCase()}
+                        </Badge>
+                        <Badge variant={
+                          log.action === 'error' ? 'destructive' :
+                          log.action === 'success' ? 'default' :
+                          'outline'
+                        }>
+                          {log.action.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <span className="text-muted-foreground text-[10px]">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-foreground/90 mb-2">{log.details}</p>
+                    {log.data && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                          View data
+                        </summary>
+                        <pre className="mt-2 p-2 bg-background rounded overflow-x-auto text-[10px]">
+                          {JSON.stringify(log.data, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
     </div>
   );
 }
@@ -719,7 +871,7 @@ function BillingManagementSection() {
   );
 }
 
-function OpenInsiderConfigSection() {
+function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'openinsider', action: 'attempt' | 'success' | 'error', details: string, data?: any) => void }) {
   const { toast } = useToast();
   const [openinsiderEnabled, setOpeninsiderEnabled] = useState(false);
   const [fetchLimit, setFetchLimit] = useState(50);
@@ -775,8 +927,16 @@ function OpenInsiderConfigSection() {
 
   const fetchOpeninsiderDataMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/openinsider/fetch", {});
-      return await res.json();
+      addLog('openinsider', 'attempt', 'Attempting to fetch insider trading data from OpenInsider.com', {});
+      try {
+        const res = await apiRequest("POST", "/api/openinsider/fetch", {});
+        const data = await res.json();
+        addLog('openinsider', 'success', `Successfully created ${data.created || 0} new recommendations from ${data.total || 0} transactions`, data);
+        return data;
+      } catch (error: any) {
+        addLog('openinsider', 'error', `Fetch failed: ${error.message}`, { error: error.toString(), stack: error.stack });
+        throw error;
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/openinsider/config"] });

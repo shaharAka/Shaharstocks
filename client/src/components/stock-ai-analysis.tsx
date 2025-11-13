@@ -284,13 +284,32 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
               <Brain className="h-3.5 w-3.5" />
               <div className="text-xs font-medium">MICRO AGENT: Stock-Specific Analysis</div>
             </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">Financial Health</span>
-              <span className={`text-sm font-mono font-semibold shrink-0 ${getScoreColor(analysis.financialHealthScore)}`}>
-                {analysis.financialHealthScore}/100
-              </span>
+            <div className="space-y-1.5">
+              {analysis.confidenceScore !== undefined && analysis.confidenceScore !== null ? (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">Overall Company Score</span>
+                    <span className={`text-sm font-mono font-semibold shrink-0 ${getScoreColor(analysis.confidenceScore)}`}>
+                      {analysis.confidenceScore}/100
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pl-3">
+                    <span className="text-xs text-muted-foreground">↳ Financial Health Component</span>
+                    <span className={`text-xs font-mono shrink-0 ${getScoreColor(analysis.financialHealthScore)}`}>
+                      {analysis.financialHealthScore}/100
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Financial Health</span>
+                  <span className={`text-sm font-mono font-semibold shrink-0 ${getScoreColor(analysis.financialHealthScore)}`}>
+                    {analysis.financialHealthScore}/100
+                  </span>
+                </div>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground w-full" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal' }} data-testid={`text-analysis-summary-${ticker}`}>
+            <p className="text-xs text-muted-foreground w-full pt-1" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal' }} data-testid={`text-analysis-summary-${ticker}`}>
               {analysis.summary}
             </p>
           </div>

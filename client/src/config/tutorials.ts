@@ -1,6 +1,6 @@
 import { Step } from "react-joyride";
 
-export type TutorialId = "portfolio" | "purchase" | "management" | "history" | "rules" | "backtesting" | "settings" | "trading" | "onboarding" | "dashboard";
+export type TutorialId = "watchlist" | "recommendations" | "management" | "history" | "rules" | "backtesting" | "settings" | "analysis" | "onboarding" | "dashboard";
 
 export interface TutorialConfig {
   id: TutorialId;
@@ -17,10 +17,11 @@ export interface RouteMapping {
 }
 
 export const routeToTutorialMap: RouteMapping[] = [
-  { path: "/", tutorialId: "portfolio" },
-  { path: "/portfolio", tutorialId: "portfolio" },
-  { path: "/recommendations", tutorialId: "purchase" },
-  { path: "/trading", tutorialId: "trading" },
+  { path: "/", tutorialId: "recommendations" },
+  { path: "/recommendations", tutorialId: "recommendations" },
+  { path: "/watchlist", tutorialId: "watchlist" },
+  { path: "/portfolio", tutorialId: "watchlist" },
+  { path: "/trading", tutorialId: "analysis" },
   { path: "/community", tutorialId: "dashboard" },
   { path: "/settings", tutorialId: "settings" },
 ];
@@ -38,23 +39,23 @@ export function getTutorialIdFromRoute(pathname: string, searchParams?: URLSearc
 }
 
 export const tutorials: Record<TutorialId, TutorialConfig> = {
-  portfolio: {
-    id: "portfolio",
-    title: "Portfolio Tour",
+  watchlist: {
+    id: "watchlist",
+    title: "Watchlist Tour",
     steps: [
       {
         target: "body",
-        content: "Welcome to signal2! This is your command center for stock trading. Let's take a quick tour of the main navigation.",
+        content: "Welcome to your Watchlist! This is where you track stocks and manage alerts. Let's take a quick tour of the main navigation.",
         placement: "center",
       },
       {
         target: '[data-testid="link-recommendations"]',
-        content: "Recommendations: Review and approve insider trading recommendations from company insiders",
+        content: "Recommendations: Review AI-analyzed stock recommendations with insider trading signals",
         placement: "right",
       },
       {
-        target: '[data-testid="link-trading"]',
-        content: "Trading: Create automated trading rules and test strategies with backtesting simulations",
+        target: '[data-testid="link-analysis"]',
+        content: "Analysis: Run simulations and create what-if trading rules to optimize your strategy",
         placement: "right",
       },
       {
@@ -68,13 +69,13 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
         placement: "left",
       },
       {
-        target: '[data-testid="tab-overview"]',
-        content: "Overview tab: Your dashboard showing portfolio summary and holdings",
+        target: '[data-testid="tab-tracked-stocks"]',
+        content: "Tracked Stocks tab: Monitor the stocks you're tracking with current prices",
         placement: "bottom",
       },
       {
-        target: '[data-testid="tab-management"]',
-        content: "Management tab: Monitor positions with real-time charts and trading rules",
+        target: '[data-testid="tab-active-alerts"]',
+        content: "Active Alerts tab: View triggered sell alerts based on your trading rules",
         placement: "bottom",
       },
       {
@@ -84,9 +85,9 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       },
     ],
   },
-  purchase: {
-    id: "purchase",
-    title: "Purchase Recommendations",
+  recommendations: {
+    id: "recommendations",
+    title: "Stock Recommendations",
     steps: [
       {
         target: "body",
@@ -162,23 +163,23 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       },
     ],
   },
-  trading: {
-    id: "trading",
-    title: "Trading Tools",
+  analysis: {
+    id: "analysis",
+    title: "Analysis Tools",
     steps: [
       {
         target: "body",
-        content: "The Trading page has two powerful tools: automated trading rules and backtesting simulations",
+        content: "The Analysis page has two powerful tools: simulation and what-if rules to optimize your trading strategy",
         placement: "center",
       },
       {
-        target: '[data-testid="tab-rules"]',
-        content: "Trading Rules tab: Create automated rules to manage positions without constant monitoring",
+        target: '[data-testid="tab-simulation"]',
+        content: "Simulation tab: Run backtests on historical data to see how strategies would have performed",
         placement: "bottom",
       },
       {
-        target: '[data-testid="tab-simulation"]',
-        content: "Backtesting tab: Test strategies on historical data to see how they would have performed",
+        target: '[data-testid="tab-rules"]',
+        content: "What-If Rules tab: Test different trading rules to find the best approach",
         placement: "bottom",
       },
     ],

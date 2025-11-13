@@ -52,7 +52,7 @@ export default function Portfolio() {
   // Update URL when tab changes via UI
   const handleTabChange = (newTab: string) => {
     setActiveTab(newTab);
-    setLocation(`/?tab=${newTab}`);
+    setLocation(`/watchlist?tab=${newTab}`);
     // Dispatch custom event for other components
     window.dispatchEvent(new Event('urlchange'));
   };
@@ -133,24 +133,24 @@ export default function Portfolio() {
       <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-2xl mx-auto">
         <div>
           <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">
-            Portfolio
+            Watchlist
           </h1>
           <p className="text-sm text-muted-foreground">
-            Track your investments, manage holdings, and view trade history
+            Monitor tracked stocks, view active alerts, and review trading history
           </p>
         </div>
 
-        {/* Portfolio Summary Cards */}
+        {/* Watchlist Summary Cards */}
         <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Portfolio Value
+                Tracked Value
               </CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl md:text-3xl font-mono font-semibold" data-testid="text-portfolio-value">
+              <div className="text-2xl md:text-3xl font-mono font-semibold" data-testid="text-tracked-value">
                 ${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div className="mt-2 md:mt-3 h-8 md:h-12">
@@ -209,16 +209,16 @@ export default function Portfolio() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Holdings
+                Tracked Stocks
               </CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl md:text-3xl font-mono font-semibold" data-testid="text-holdings-count">
+              <div className="text-2xl md:text-3xl font-mono font-semibold" data-testid="text-tracked-count">
                 {holdings?.length || 0}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Active positions
+                Currently tracking
               </p>
             </CardContent>
           </Card>
@@ -243,12 +243,12 @@ export default function Portfolio() {
 
         {/* Tabbed Content */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 md:space-y-6">
-          <TabsList className="w-full grid grid-cols-3" data-testid="tabs-portfolio">
-            <TabsTrigger value="overview" data-testid="tab-overview" title="View portfolio performance and holdings summary">
-              Overview
+          <TabsList className="w-full grid grid-cols-3" data-testid="tabs-watchlist">
+            <TabsTrigger value="overview" data-testid="tab-tracked-stocks" title="View tracked stocks and current values">
+              Tracked Stocks
             </TabsTrigger>
-            <TabsTrigger value="management" data-testid="tab-management" title="Buy, sell, and manage your stock positions">
-              Management
+            <TabsTrigger value="management" data-testid="tab-active-alerts" title="Monitor stocks with triggered sell alerts">
+              Active Alerts
             </TabsTrigger>
             <TabsTrigger value="history" data-testid="tab-history" title="View complete trade history and transactions">
               History

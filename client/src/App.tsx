@@ -34,13 +34,15 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/terms" component={Terms} />
-      <Route path="/" component={Portfolio} />
+      <Route path="/" component={Purchase} />
       <Route path="/recommendations" component={Purchase} />
+      <Route path="/watchlist" component={Portfolio} />
       <Route path="/trading" component={Trading} />
       <Route path="/community" component={Community} />
       <Route path="/admin" component={AdminPage} />
       {/* Legacy redirects for backwards compatibility */}
       <Route path="/purchase" component={Purchase} />
+      <Route path="/portfolio" component={Portfolio} />
       <Route path="/management" component={Portfolio} />
       <Route path="/history" component={Portfolio} />
       <Route path="/dashboard" component={Portfolio} />

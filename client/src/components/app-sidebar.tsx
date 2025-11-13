@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  LayoutDashboard,
+  Star,
   Activity,
   ShoppingCart,
   LineChart,
@@ -36,30 +36,30 @@ import { useUser } from "@/contexts/UserContext";
 
 const menuItems = [
   {
-    title: "Portfolio",
-    url: "/",
-    icon: LayoutDashboard,
-    testId: "link-portfolio",
-    subItems: [
-      { title: "Overview", url: "/?tab=overview", testId: "link-portfolio-overview" },
-      { title: "Management", url: "/?tab=management", testId: "link-portfolio-management" },
-      { title: "History", url: "/?tab=history", testId: "link-portfolio-history" },
-    ],
-  },
-  {
     title: "Recommendations",
     url: "/recommendations",
     icon: ShoppingCart,
     testId: "link-recommendations",
   },
   {
-    title: "Trading",
+    title: "Analysis",
     url: "/trading",
     icon: LineChart,
-    testId: "link-trading",
+    testId: "link-analysis",
     subItems: [
-      { title: "Trading Rules", url: "/trading?tab=rules", testId: "link-trading-rules" },
-      { title: "Backtesting", url: "/trading?tab=simulation", testId: "link-trading-backtesting" },
+      { title: "Simulation", url: "/trading?tab=simulation", testId: "link-analysis-simulation" },
+      { title: "What-If Rules", url: "/trading?tab=rules", testId: "link-analysis-rules" },
+    ],
+  },
+  {
+    title: "Watchlist",
+    url: "/watchlist",
+    icon: Star,
+    testId: "link-watchlist",
+    subItems: [
+      { title: "Tracked Stocks", url: "/watchlist?tab=overview", testId: "link-watchlist-tracked" },
+      { title: "Active Alerts", url: "/watchlist?tab=management", testId: "link-watchlist-alerts" },
+      { title: "History", url: "/watchlist?tab=history", testId: "link-watchlist-history" },
     ],
   },
   {
@@ -76,8 +76,8 @@ export function AppSidebar() {
   const { user } = useUser();
   const { setOpenMobile, isMobile, state } = useSidebar();
   
-  // State to track current tab for reactive updates
-  const [currentTab, setCurrentTab] = useState(new URLSearchParams(window.location.search).get('tab'));
+  // State to track current tab for reactive updates (default to 'overview' if no tab param)
+  const [currentTab, setCurrentTab] = useState(new URLSearchParams(window.location.search).get('tab') || 'overview');
 
   // Fetch version info
   const { data: versionInfo } = useQuery<{ version: string; name: string }>({
@@ -104,7 +104,7 @@ export function AppSidebar() {
   useEffect(() => {
     const handleUrlChange = () => {
       const params = new URLSearchParams(window.location.search);
-      setCurrentTab(params.get('tab'));
+      setCurrentTab(params.get('tab') || 'overview');
     };
     
     window.addEventListener('urlchange', handleUrlChange);
@@ -118,8 +118,8 @@ export function AppSidebar() {
 
   const isCollapsed = state === "collapsed";
   
-  // Get current path for active state detection
-  const currentPath = location;
+  // Get current path for active state detection (without query params)
+  const currentPath = location.split('?')[0];
 
   return (
     <Sidebar>
@@ -140,8 +140,11 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
-                // Check if current page matches this menu item
-                const isPageActive = currentPath === item.url;
+                // Check if current page matches this menu item (compare paths without query strings)
+                const itemPath = item.url.split('?')[0];
+                // Treat "/" and "/recommendations" as equivalent (both show Recommendations page)
+                const isPageActive = currentPath === itemPath || 
+                                      (itemPath === "/recommendations" && currentPath === "/");
                 const showBadge = item.url === "/recommendations" && newStocksCount > 0;
                 
                 // If item has sub-items, render as collapsible

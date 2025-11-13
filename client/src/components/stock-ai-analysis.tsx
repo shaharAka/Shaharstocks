@@ -82,6 +82,12 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     return "text-destructive";
   };
 
+  const getScoreLabel = (score: number) => {
+    if (score >= 70) return { label: "Strong", color: "text-success" };
+    if (score >= 40) return { label: "Moderate", color: "text-warning" };
+    return { label: "Weak", color: "text-destructive" };
+  };
+
   if (isLoadingExisting) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -392,23 +398,23 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   </div>
                   <div className="flex items-center justify-between gap-2 pl-3">
                     <span className="text-xs text-muted-foreground">↳ Financial Health Component</span>
-                    <span className={`text-xs font-mono shrink-0 ${getScoreColor(analysis.financialHealthScore)}`}>
-                      {analysis.financialHealthScore}/100
+                    <span className={`text-xs font-semibold shrink-0 ${getScoreLabel(analysis.financialHealthScore).color}`}>
+                      {getScoreLabel(analysis.financialHealthScore).label}
                     </span>
                   </div>
                   {analysis.technicalAnalysisScore !== undefined && analysis.technicalAnalysisScore !== null && (
                     <div className="flex items-center justify-between gap-2 pl-3">
                       <span className="text-xs text-muted-foreground">↳ Technical Analysis Component</span>
-                      <span className={`text-xs font-mono shrink-0 ${getScoreColor(analysis.technicalAnalysisScore)}`}>
-                        {analysis.technicalAnalysisScore}/100
+                      <span className={`text-xs font-semibold shrink-0 ${getScoreLabel(analysis.technicalAnalysisScore).color}`}>
+                        {getScoreLabel(analysis.technicalAnalysisScore).label}
                       </span>
                     </div>
                   )}
                   {analysis.sentimentAnalysisScore !== undefined && analysis.sentimentAnalysisScore !== null && (
                     <div className="flex items-center justify-between gap-2 pl-3">
                       <span className="text-xs text-muted-foreground">↳ Sentiment Analysis Component</span>
-                      <span className={`text-xs font-mono shrink-0 ${getScoreColor(analysis.sentimentAnalysisScore)}`}>
-                        {analysis.sentimentAnalysisScore}/100
+                      <span className={`text-xs font-semibold shrink-0 ${getScoreLabel(analysis.sentimentAnalysisScore).color}`}>
+                        {getScoreLabel(analysis.sentimentAnalysisScore).label}
                       </span>
                     </div>
                   )}

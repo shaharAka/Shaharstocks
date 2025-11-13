@@ -190,10 +190,10 @@ export function StockTable({
   };
 
   return (
-    <div className="rounded-md border">
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
+    <div className="rounded-md border max-h-[calc(100vh-16rem)] overflow-hidden flex flex-col">
+      <div className="overflow-x-auto overflow-y-auto flex-1">
+        <Table className="text-sm">
+          <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
               <TableHead className="w-12">
                 {onSelectAll && (
@@ -319,12 +319,12 @@ export function StockTable({
             return (
               <TableRow
                 key={stock.id}
-                className="cursor-pointer hover-elevate"
+                className="cursor-pointer hover-elevate h-12"
                 onClick={() => onStockClick(stock)}
                 data-testid={`row-stock-${stock.ticker}`}
               >
                 <TableCell 
-                  className="w-12" 
+                  className="w-12 py-2" 
                   onClick={(e) => e.stopPropagation()}
                 >
                   {onToggleSelection && (
@@ -336,7 +336,7 @@ export function StockTable({
                     />
                   )}
                 </TableCell>
-                <TableCell className="font-medium font-mono" data-testid={`cell-ticker-${stock.ticker}`}>
+                <TableCell className="font-medium font-mono py-2" data-testid={`cell-ticker-${stock.ticker}`}>
                   <div className="flex items-center gap-2">
                     <span>{stock.ticker}</span>
                     {isNewStock(stock.ticker, stock.insiderTradeDate) && (
@@ -356,7 +356,7 @@ export function StockTable({
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="hidden md:table-cell max-w-xs truncate text-sm text-muted-foreground" data-testid={`cell-company-${stock.ticker}`}>
+                <TableCell className="hidden md:table-cell max-w-xs truncate text-xs text-muted-foreground py-2" data-testid={`cell-company-${stock.ticker}`}>
                   {stock.companyName}
                 </TableCell>
                 <TableCell className="hidden">
@@ -375,10 +375,10 @@ export function StockTable({
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell className="text-right font-mono" data-testid={`cell-price-${stock.ticker}`}>
+                <TableCell className="text-right font-mono text-sm py-2" data-testid={`cell-price-${stock.ticker}`}>
                   ${currentPrice.toFixed(2)}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell w-32" data-testid={`cell-chart-${stock.ticker}`}>
+                <TableCell className="hidden lg:table-cell w-32 py-2" data-testid={`cell-chart-${stock.ticker}`}>
                   {stock.candlesticks && stock.candlesticks.length > 0 ? (
                     <div className="h-12">
                       <MiniCandlestickChart data={stock.candlesticks} height={48} />
@@ -387,7 +387,7 @@ export function StockTable({
                     <span className="text-xs text-muted-foreground">-</span>
                   )}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right py-2">
                   <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-success" : "text-destructive"}`}>
                     {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                     <span className="text-xs font-mono font-medium">
@@ -395,13 +395,13 @@ export function StockTable({
                     </span>
                   </div>
                 </TableCell>
-                <TableCell className="text-right font-mono text-sm text-muted-foreground hidden xl:table-cell">
+                <TableCell className="text-right font-mono text-xs text-muted-foreground hidden xl:table-cell py-2">
                   {insiderPrice ? `$${insiderPrice.toFixed(2)}` : "-"}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground hidden xl:table-cell">
+                <TableCell className="text-xs text-muted-foreground hidden xl:table-cell py-2">
                   {stock.marketCap || "-"}
                 </TableCell>
-                <TableCell className="text-right hidden lg:table-cell" data-testid={`cell-ai-score-${stock.ticker}`}>
+                <TableCell className="text-right hidden lg:table-cell py-2" data-testid={`cell-ai-score-${stock.ticker}`}>
                   {(() => {
                     const analysis = getAIAnalysis(stock.ticker);
                     if (!analysis) return <span className="text-xs text-muted-foreground">-</span>;
@@ -463,7 +463,7 @@ export function StockTable({
                     );
                   })()}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell">
+                <TableCell className="hidden lg:table-cell py-2">
                   {stock.insiderTradeDate && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`text-days-from-buy-${stock.ticker}`}>
                       <Clock className="h-3 w-3" />
@@ -471,7 +471,7 @@ export function StockTable({
                     </div>
                   )}
                 </TableCell>
-                <TableCell className="hidden sm:table-cell">
+                <TableCell className="hidden sm:table-cell py-2">
                   <div className="flex items-center gap-2">
                     {stockInterests.length > 0 && (
                       <div className="flex gap-1">

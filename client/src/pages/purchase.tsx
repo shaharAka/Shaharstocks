@@ -252,7 +252,7 @@ export default function Purchase() {
         if (currentStatus === "completed") {
           toast({
             title: `${stock.ticker} Analysis Complete`,
-            description: `AI analysis finished with score ${stock.confidenceScore || 'N/A'}/100`,
+            description: `Micro Agent analysis complete. View the expanded card for detailed results.`,
           });
         } else if (currentStatus === "failed") {
           toast({

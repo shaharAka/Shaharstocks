@@ -950,7 +950,8 @@ export default function Purchase() {
   // Filter pinned stocks from pending recommendations
   const pinnedStocks = pendingRecommendations.filter(stock => stock.isPinned === true);
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | undefined) => {
+    if (!name) return "?";
     return name
       .split(" ")
       .map((n) => n[0])
@@ -1618,7 +1619,7 @@ export default function Purchase() {
                             {stockInterests.slice(0, 3).map((interest) => (
                               <Avatar key={interest.userId} className="h-6 w-6 border-2 border-background">
                                 <AvatarFallback className="text-xs">
-                                  {getInitials(interest.user.username)}
+                                  {getInitials(interest.user.name)}
                                 </AvatarFallback>
                               </Avatar>
                             ))}

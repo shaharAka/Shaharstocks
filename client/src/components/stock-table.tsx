@@ -303,8 +303,7 @@ export function StockTable({
                   <SortIcon field="daysFromBuy" />
                 </Button>
               </TableHead>
-              <TableHead className="hidden sm:table-cell min-w-[80px]">Interest</TableHead>
-              <TableHead className="hidden sm:table-cell min-w-[80px]">Comments</TableHead>
+              <TableHead className="hidden sm:table-cell min-w-[100px]">Community</TableHead>
             </TableRow>
             </TableHeader>
           <TableBody>
@@ -473,33 +472,35 @@ export function StockTable({
                   )}
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
-                  <div className="flex gap-1">
-                    {stockInterests.map((interest) => (
-                      <Avatar
-                        key={interest.id}
-                        className="h-6 w-6"
-                        style={{ backgroundColor: interest.user.avatarColor }}
-                        data-testid={`avatar-interest-${stock.ticker}-${interest.user.name.toLowerCase()}`}
-                      >
-                        <AvatarFallback
-                          className="text-white text-xs"
-                          style={{ backgroundColor: interest.user.avatarColor }}
-                        >
-                          {getInitials(interest.user.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
+                  <div className="flex items-center gap-2">
+                    {stockInterests.length > 0 && (
+                      <div className="flex gap-1">
+                        {stockInterests.map((interest) => (
+                          <Avatar
+                            key={interest.id}
+                            className="h-6 w-6"
+                            style={{ backgroundColor: interest.user.avatarColor }}
+                            data-testid={`avatar-interest-${stock.ticker}-${interest.user.name.toLowerCase()}`}
+                          >
+                            <AvatarFallback
+                              className="text-white text-xs"
+                              style={{ backgroundColor: interest.user.avatarColor }}
+                            >
+                              {getInitials(interest.user.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        ))}
+                      </div>
+                    )}
+                    {getCommentCount(stock.ticker) > 0 && (
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <MessageSquare className="h-4 w-4" />
+                        <span className="text-sm" data-testid={`text-comment-count-${stock.ticker}`}>
+                          {getCommentCount(stock.ticker)}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  {getCommentCount(stock.ticker) > 0 && (
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <MessageSquare className="h-4 w-4" />
-                      <span className="text-sm" data-testid={`text-comment-count-${stock.ticker}`}>
-                        {getCommentCount(stock.ticker)}
-                      </span>
-                    </div>
-                  )}
                 </TableCell>
               </TableRow>
             );

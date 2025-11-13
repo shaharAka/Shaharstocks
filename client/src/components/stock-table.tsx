@@ -338,7 +338,7 @@ export function StockTable({
                 </TableCell>
                 <TableCell className="font-medium font-mono py-2" data-testid={`cell-ticker-${stock.ticker}`}>
                   <div className="flex items-center gap-2">
-                    {stock.isPinned && (
+                    {(stock as any).isPinned && (
                       <Pin className="h-3.5 w-3.5 text-primary fill-current" data-testid={`icon-pinned-${stock.ticker}`} />
                     )}
                     <span>{stock.ticker}</span>
@@ -401,7 +401,7 @@ export function StockTable({
                 <TableCell className="text-right font-mono text-xs text-muted-foreground hidden xl:table-cell py-2">
                   {insiderPrice ? `$${insiderPrice.toFixed(2)}` : "-"}
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground hidden xl:table-cell py-2">
+                <TableCell className="text-right text-xs text-muted-foreground hidden xl:table-cell py-2">
                   {stock.marketCap || "-"}
                 </TableCell>
                 <TableCell className="text-right hidden lg:table-cell py-2" data-testid={`cell-ai-score-${stock.ticker}`}>

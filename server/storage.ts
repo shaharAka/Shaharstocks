@@ -206,6 +206,9 @@ export interface IStorage {
   unarchiveUser(userId: string): Promise<User | undefined>;
   updateUserSubscriptionStatus(userId: string, status: string, endDate?: Date): Promise<User | undefined>;
   markUserHasSeenOnboarding(userId: string): Promise<void>;
+  completeUserOnboarding(userId: string): Promise<void>;
+  getUserProgress(userId: string): Promise<{ onboardingCompletedAt: Date | null; tutorialCompletions: Record<string, boolean> }>;
+  completeTutorial(userId: string, tutorialId: string): Promise<void>;
 
   // Payments
   getUserPayments(userId: string): Promise<Payment[]>;
@@ -1424,6 +1427,52 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(users)
       .set({ hasSeenOnboarding: true })
+      .where(eq(users.id, userId));
+  }
+
+  async completeUserOnboarding(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        onboardingCompletedAt: new Date(),
+        hasSeenOnboarding: true
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async getUserProgress(userId: string): Promise<{ onboardingCompletedAt: Date | null; tutorialCompletions: Record<string, boolean> }> {
+    const [user] = await db
+      .select({
+        onboardingCompletedAt: users.onboardingCompletedAt,
+        tutorialCompletions: users.tutorialCompletions,
+      })
+      .from(users)
+      .where(eq(users.id, userId));
+    
+    if (!user) {
+      return { onboardingCompletedAt: null, tutorialCompletions: {} };
+    }
+
+    return {
+      onboardingCompletedAt: user.onboardingCompletedAt,
+      tutorialCompletions: (user.tutorialCompletions as Record<string, boolean>) || {},
+    };
+  }
+
+  async completeTutorial(userId: string, tutorialId: string): Promise<void> {
+    const [user] = await db
+      .select({ tutorialCompletions: users.tutorialCompletions })
+      .from(users)
+      .where(eq(users.id, userId));
+    
+    if (!user) return;
+
+    const completions = (user.tutorialCompletions as Record<string, boolean>) || {};
+    completions[tutorialId] = true;
+
+    await db
+      .update(users)
+      .set({ tutorialCompletions: completions })
       .where(eq(users.id, userId));
   }
 

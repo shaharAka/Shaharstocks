@@ -891,7 +891,7 @@ export default function Purchase() {
               Purchase Recommendations
             </h1>
             <p className="text-sm text-muted-foreground">
-              Review and approve stock recommendations from the Telegram channel
+              Review and approve stocks based on insider trading activity
             </p>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -1025,7 +1025,7 @@ export default function Purchase() {
             <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2" data-testid="text-no-recommendations">No Pending Recommendations</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Stock recommendations from the Telegram channel will appear here
+              Stocks based on insider trading activity will appear here
             </p>
           </div>
         </Card>

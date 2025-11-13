@@ -89,7 +89,7 @@ import { LayoutGrid, LayoutList, ArchiveRestore } from "lucide-react";
 import { markPurchaseAsViewed } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 
-type RecommendationFilter = "all" | "buy" | "sell";
+type RecommendationFilter = "buy";
 type InterestFilter = "all" | "multiple" | string; // "all", "multiple" (all users interested), or userId
 type ViewMode = "cards" | "table";
 type DaysFilter = "all" | "7" | "14" | "30" | "60";

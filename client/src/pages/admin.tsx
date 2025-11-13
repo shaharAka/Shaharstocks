@@ -40,6 +40,7 @@ import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive
 import { useState } from "react";
 import type { Announcement } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AdminNotificationBell } from "@/components/admin-notification-bell";
 
 interface User {
   id: string;
@@ -582,13 +583,20 @@ export default function AdminPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2" data-testid="text-admin-title">
-          Super Admin Dashboard
-        </h1>
-        <p className="text-muted-foreground">
-          Comprehensive user management, subscriptions, and payment tracking
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold mb-2" data-testid="text-admin-title">
+            Super Admin Dashboard
+          </h1>
+          <p className="text-muted-foreground">
+            Comprehensive user management, subscriptions, and payment tracking
+          </p>
+        </div>
+        {currentUser?.isSuperAdmin && (
+          <div className="flex items-center gap-2">
+            <AdminNotificationBell />
+          </div>
+        )}
       </div>
 
       <Tabs defaultValue="users" className="space-y-6">

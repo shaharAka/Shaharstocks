@@ -30,7 +30,7 @@ interface StockTableProps {
   viewedTickers?: string[];
 }
 
-type SortField = "ticker" | "price" | "change" | "insiderPrice" | "marketCap" | "recommendation" | "aiScore" | "daysFromBuy";
+type SortField = "ticker" | "price" | "change" | "insiderPrice" | "marketCap" | "aiScore" | "daysFromBuy";
 type SortDirection = "asc" | "desc";
 
 export function StockTable({ 
@@ -154,10 +154,6 @@ export function StockTable({
         compareA = getMarketCapValue(a.marketCap);
         compareB = getMarketCapValue(b.marketCap);
         break;
-      case "recommendation":
-        compareA = a.recommendation || "";
-        compareB = b.recommendation || "";
-        break;
       case "aiScore":
         const analysisA = getAIAnalysis(a.ticker);
         const analysisB = getAIAnalysis(b.ticker);
@@ -218,18 +214,6 @@ export function StockTable({
                 </Button>
               </TableHead>
               <TableHead className="hidden md:table-cell min-w-[120px]">Company</TableHead>
-              <TableHead className="min-w-[70px]">
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  onClick={() => handleSort("recommendation")}
-                  className="px-2"
-                  data-testid="sort-recommendation"
-                >
-                  Rec.
-                  <SortIcon field="recommendation" />
-                </Button>
-              </TableHead>
               <TableHead className="text-right min-w-[80px]">
                 <Button
                   variant="ghost"
@@ -359,22 +343,6 @@ export function StockTable({
                 </TableCell>
                 <TableCell className="hidden md:table-cell max-w-xs truncate text-sm text-muted-foreground" data-testid={`cell-company-${stock.ticker}`}>
                   {stock.companyName}
-                </TableCell>
-                <TableCell>
-                  {stock.recommendation && (
-                    <Badge
-                      variant={stock.recommendation.toLowerCase().includes("buy") ? "default" : "destructive"}
-                      className="text-xs"
-                      data-testid={`badge-rec-${stock.ticker}`}
-                    >
-                      {stock.recommendation.toLowerCase().includes("buy") ? (
-                        <ArrowUpRight className="h-3 w-3 mr-1" />
-                      ) : (
-                        <ArrowDownRight className="h-3 w-3 mr-1" />
-                      )}
-                      {stock.recommendation.replace("_", " ").toUpperCase()}
-                    </Badge>
-                  )}
                 </TableCell>
                 <TableCell className="text-right font-mono" data-testid={`cell-price-${stock.ticker}`}>
                   ${currentPrice.toFixed(2)}

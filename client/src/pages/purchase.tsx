@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -91,6 +91,7 @@ import {
 import { LayoutGrid, LayoutList, ArchiveRestore } from "lucide-react";
 import { markPurchaseAsViewed } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
+import { PinButton } from "@/components/pin-button";
 
 type RecommendationFilter = "all" | "buy" | "sell";
 type InterestFilter = "all" | "multiple" | string; // "all", "multiple" (all users interested), or userId
@@ -1386,6 +1387,16 @@ export default function Purchase() {
                     </div>
                   )}
                 </CardContent>
+                <CardFooter className="pt-3 pb-3">
+                  <div className="flex items-center justify-end w-full" onClick={(e) => e.stopPropagation()}>
+                    <PinButton
+                      ticker={stock.ticker}
+                      isPinned={stock.isPinned || false}
+                      variant="ghost"
+                      size="sm"
+                    />
+                  </div>
+                </CardFooter>
               </Card>
             );
           })}
@@ -1641,6 +1652,16 @@ export default function Purchase() {
                         View Details
                       </Button>
                     </CardContent>
+                    <CardFooter className="pt-3 pb-3">
+                      <div className="flex items-center justify-end w-full" onClick={(e) => e.stopPropagation()}>
+                        <PinButton
+                          ticker={stock.ticker}
+                          isPinned={stock.isPinned || false}
+                          variant="ghost"
+                          size="sm"
+                        />
+                      </div>
+                    </CardFooter>
                   </Card>
                 );
               })}

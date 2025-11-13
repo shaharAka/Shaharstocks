@@ -251,6 +251,17 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                 </div>
                 
                 <div className="space-y-1.5">
+                  {macroAnalysis.industry && (
+                    <div className="pb-1 border-b border-border/50">
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Industry Segment: </span>
+                        <Badge variant="secondary" className="font-semibold">
+                          {macroAnalysis.industry}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <span className="text-muted-foreground">Recommendation: </span>

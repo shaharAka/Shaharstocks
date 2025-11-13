@@ -43,10 +43,11 @@ import {
   ChevronDown,
   Sparkles,
   Search,
+  Pin,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Stock, type User, type StockInterestWithUser, type PortfolioHolding } from "@shared/schema";
+import { type Stock, type User, type StockInterestWithUser, type PortfolioHolding, type UserStockPin } from "@shared/schema";
 
 // Extended Stock type with user status and analysis job progress
 type StockWithUserStatus = Stock & {
@@ -54,6 +55,7 @@ type StockWithUserStatus = Stock & {
   userApprovedAt?: Date | null;
   userRejectedAt?: Date | null;
   userDismissedAt?: Date | null;
+  isPinned?: boolean;
   analysisJob?: {
     status: string;
     currentStep: string | null;
@@ -95,7 +97,7 @@ type InterestFilter = "all" | "multiple" | string; // "all", "multiple" (all use
 type ViewMode = "cards" | "table";
 type DaysFilter = "all" | "7" | "14" | "30" | "60";
 type AIScoreFilter = "all" | "0-50" | "50-75" | "75-100";
-type StockListTab = "pending" | "rejected";
+type StockListTab = "pending" | "pinned" | "rejected";
 
 interface IbkrStatus {
   connected: boolean;
@@ -871,6 +873,9 @@ export default function Purchase() {
     return true;
   });
 
+  // Filter pinned stocks from pending recommendations
+  const pinnedStocks = pendingRecommendations.filter(stock => stock.isPinned === true);
+
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -1020,6 +1025,10 @@ export default function Purchase() {
         <TabsList>
           <TabsTrigger value="pending" data-testid="tab-pending">
             Pending ({pendingRecommendations.length})
+          </TabsTrigger>
+          <TabsTrigger value="pinned" data-testid="tab-pinned">
+            <Pin className="h-4 w-4 mr-2" />
+            Pinned ({pinnedStocks.length})
           </TabsTrigger>
           <TabsTrigger value="rejected" data-testid="tab-rejected">
             <ArchiveRestore className="h-4 w-4 mr-2" />
@@ -1419,6 +1428,145 @@ export default function Purchase() {
         </DialogContent>
       </Dialog>
 
+        </TabsContent>
+
+        <TabsContent value="pinned" className="space-y-4 mt-4">
+          {pinnedStocks.length === 0 ? (
+            <Card className="p-12">
+              <div className="text-center">
+                <Pin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2" data-testid="text-no-pinned">No Pinned Stocks</h3>
+                <p className="text-sm text-muted-foreground">
+                  Pin stocks from the Pending tab to keep track of your favorites
+                </p>
+              </div>
+            </Card>
+          ) : viewMode === "table" ? (
+            <StockTable
+              stocks={pinnedStocks}
+              users={users}
+              interests={allInterests}
+              commentCounts={commentCounts}
+              analyses={analyses}
+              selectedTickers={selectedTickers}
+              simulatedTickers={simulatedTickers}
+              onToggleSelection={toggleSelection}
+              onSelectAll={selectAll}
+              viewedTickers={viewedTickers}
+              onStockClick={(stock) => {
+                setExplorerStock(stock);
+                setExplorerOpen(true);
+                if (currentUser) {
+                  markViewedMutation.mutate({ ticker: stock.ticker });
+                }
+              }}
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {pinnedStocks.map((stock) => {
+                const currentPrice = parseFloat(stock.currentPrice);
+                const previousPrice = parseFloat(stock.previousClose || stock.currentPrice);
+                const priceChange = currentPrice - previousPrice;
+                const priceChangePercent = (priceChange / previousPrice) * 100;
+                const isPositive = priceChange >= 0;
+                const insiderPrice = stock.insiderPrice ? parseFloat(stock.insiderPrice) : currentPrice;
+                const insiderQuantity = stock.insiderQuantity || 0;
+                const priceDiff = currentPrice - insiderPrice;
+                const stockInterests = getStockInterests(stock.ticker);
+                const isSelected = selectedTickers.has(stock.ticker);
+                const isSimulated = simulatedTickers.has(stock.ticker);
+                const aiAnalysis = getAIAnalysis(stock.ticker);
+
+                return (
+                  <Card key={stock.ticker} className={`hover-elevate ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+                    <CardHeader className="space-y-0 pb-3">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelection(stock.ticker)}
+                            data-testid={`checkbox-select-${stock.ticker}`}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <CardTitle className="text-base truncate" data-testid={`text-ticker-${stock.ticker}`}>
+                              {stock.ticker}
+                            </CardTitle>
+                          </div>
+                        </div>
+                        <Badge variant={isSimulated ? "default" : isPositive ? "default" : "destructive"} className="shrink-0">
+                          {isSimulated ? "SIMULATED" : `${isPositive ? "+" : ""}${priceChangePercent.toFixed(2)}%`}
+                        </Badge>
+                      </div>
+                      {stock.companyName && (
+                        <p className="text-sm text-muted-foreground line-clamp-1">{stock.companyName}</p>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Current</span>
+                        <span className="font-medium">${currentPrice.toFixed(2)}</span>
+                      </div>
+                      {stock.insiderPrice && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">Insider</span>
+                            <span className="font-medium">${insiderPrice.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">Diff</span>
+                            <span className={`font-medium ${priceDiff >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              ${priceDiff.toFixed(2)} ({((priceDiff / insiderPrice) * 100).toFixed(1)}%)
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {stockInterests.length > 0 && (
+                          <div className="flex -space-x-2">
+                            {stockInterests.slice(0, 3).map((interest) => (
+                              <Avatar key={interest.userId} className="h-6 w-6 border-2 border-background">
+                                <AvatarFallback className="text-xs">
+                                  {getInitials(interest.user.username)}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                          </div>
+                        )}
+                        {getCommentCount(stock.ticker) > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            <MessageSquare className="h-3 w-3 mr-1" />
+                            {getCommentCount(stock.ticker)}
+                          </Badge>
+                        )}
+                        {aiAnalysis && aiAnalysis.status === "completed" && aiAnalysis.integratedScore !== null && (
+                          <Badge variant="outline" className="text-xs">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            {aiAnalysis.integratedScore}
+                          </Badge>
+                        )}
+                      </div>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          setExplorerStock(stock);
+                          setExplorerOpen(true);
+                          if (currentUser) {
+                            markViewedMutation.mutate({ ticker: stock.ticker });
+                          }
+                        }}
+                        data-testid={`button-view-${stock.ticker}`}
+                      >
+                        View Details
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="rejected" className="space-y-4 mt-4">

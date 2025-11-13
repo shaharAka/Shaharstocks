@@ -1782,7 +1782,7 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`[Storage] getStocksWithUserStatus called for userId: ${userId}`);
       
-      // Get all stocks with user statuses (simplified - no AI jobs for now)
+      // Get all stocks with user statuses and pin status
       const results = await db
         .select({
           stock: stocks,
@@ -1790,6 +1790,7 @@ export class DatabaseStorage implements IStorage {
           userApprovedAt: userStockStatuses.approvedAt,
           userRejectedAt: userStockStatuses.rejectedAt,
           userDismissedAt: userStockStatuses.dismissedAt,
+          isPinned: userStockPins.ticker,
         })
         .from(stocks)
         .leftJoin(
@@ -1797,6 +1798,13 @@ export class DatabaseStorage implements IStorage {
           and(
             eq(stocks.ticker, userStockStatuses.ticker),
             eq(userStockStatuses.userId, userId)
+          )
+        )
+        .leftJoin(
+          userStockPins,
+          and(
+            eq(stocks.ticker, userStockPins.ticker),
+            eq(userStockPins.userId, userId)
           )
         );
 
@@ -1837,6 +1845,7 @@ export class DatabaseStorage implements IStorage {
           userApprovedAt: row.userApprovedAt,
           userRejectedAt: row.userRejectedAt,
           userDismissedAt: row.userDismissedAt,
+          isPinned: row.isPinned !== null,
           analysisJob: latestJob ? {
             status: latestJob.status,
             currentStep: latestJob.currentStep,

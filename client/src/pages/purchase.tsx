@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1211,6 +1211,14 @@ export default function Purchase() {
                       <CardTitle className="text-lg font-semibold" data-testid={`text-ticker-${stock.ticker}`}>
                         {stock.ticker}
                       </CardTitle>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <PinButton
+                          ticker={stock.ticker}
+                          isPinned={stock.isPinned || false}
+                          variant="ghost"
+                          size="icon"
+                        />
+                      </div>
                       {isNewStock(stock.ticker, stock.insiderTradeDate) && (
                         <Badge variant="default" className="text-xs px-1.5 py-0" data-testid={`badge-new-${stock.ticker}`}>
                           NEW
@@ -1388,17 +1396,6 @@ export default function Purchase() {
                     </div>
                   )}
                 </CardContent>
-                <CardFooter className="pt-3 pb-3 border-t">
-                  <div className="flex items-center justify-end w-full" onClick={(e) => e.stopPropagation()}>
-                    <PinButton
-                      ticker={stock.ticker}
-                      isPinned={stock.isPinned || false}
-                      variant="ghost"
-                      size="sm"
-                      showLabel={true}
-                    />
-                  </div>
-                </CardFooter>
               </Card>
             );
           })}
@@ -1585,6 +1582,14 @@ export default function Purchase() {
                               {stock.ticker}
                             </CardTitle>
                           </div>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <PinButton
+                              ticker={stock.ticker}
+                              isPinned={stock.isPinned || false}
+                              variant="ghost"
+                              size="icon"
+                            />
+                          </div>
                         </div>
                         <Badge variant={isSimulated ? "default" : isPositive ? "default" : "destructive"} className="shrink-0">
                           {isSimulated ? "SIMULATED" : `${isPositive ? "+" : ""}${priceChangePercent.toFixed(2)}%`}
@@ -1654,17 +1659,6 @@ export default function Purchase() {
                         View Details
                       </Button>
                     </CardContent>
-                    <CardFooter className="pt-3 pb-3 border-t">
-                      <div className="flex items-center justify-end w-full" onClick={(e) => e.stopPropagation()}>
-                        <PinButton
-                          ticker={stock.ticker}
-                          isPinned={stock.isPinned || false}
-                          variant="ghost"
-                          size="sm"
-                          showLabel={true}
-                        />
-                      </div>
-                    </CardFooter>
                   </Card>
                 );
               })}

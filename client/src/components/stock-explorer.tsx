@@ -31,13 +31,14 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { StockComments } from "@/components/stock-comments";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
 import { InsiderHistoryDialog } from "@/components/insider-history-dialog";
+import { PinButton } from "@/components/pin-button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import type { Stock, User, StockInterestWithUser, StockCommentWithUser } from "@shared/schema";
 
 interface StockExplorerProps {
-  stock: Stock | null;
+  stock: (Stock & { isPinned?: boolean }) | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onApprove?: (stock: Stock) => void;
@@ -126,9 +127,17 @@ export function StockExplorer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden" data-testid="dialog-stock-explorer">
         <DialogHeader className="pr-6">
-          <DialogTitle className="text-2xl font-semibold break-words" data-testid={`text-explorer-title-${stock.ticker}`}>
-            {stock.ticker} - {stock.companyName}
-          </DialogTitle>
+          <div className="flex items-start justify-between gap-3">
+            <DialogTitle className="text-2xl font-semibold break-words flex-1" data-testid={`text-explorer-title-${stock.ticker}`}>
+              {stock.ticker} - {stock.companyName}
+            </DialogTitle>
+            <PinButton
+              ticker={stock.ticker}
+              isPinned={stock.isPinned || false}
+              variant="ghost"
+              size="icon"
+            />
+          </div>
           {stock.source && (
             <div className="mt-1">
               <Badge variant="outline">

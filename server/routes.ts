@@ -3620,6 +3620,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin Notifications routes (for super admins only)
+  app.get("/api/admin/notifications", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Super admin access required" });
+      }
+
+      const notifications = await storage.getAdminNotifications();
+      res.json(notifications);
+    } catch (error) {
+      console.error("Failed to fetch admin notifications:", error);
+      res.status(500).json({ error: "Failed to fetch admin notifications" });
+    }
+  });
+
+  app.get("/api/admin/notifications/unread-count", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Super admin access required" });
+      }
+
+      const count = await storage.getUnreadAdminNotificationCount();
+      res.json({ count });
+    } catch (error) {
+      console.error("Failed to fetch unread admin notification count:", error);
+      res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+  });
+
+  app.post("/api/admin/notifications/:id/read", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Super admin access required" });
+      }
+
+      const notification = await storage.markAdminNotificationAsRead(req.params.id);
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+
+      res.json(notification);
+    } catch (error) {
+      console.error("Failed to mark admin notification as read:", error);
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  app.post("/api/admin/notifications/mark-all-read", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user?.isSuperAdmin) {
+        return res.status(403).json({ error: "Super admin access required" });
+      }
+
+      await storage.markAllAdminNotificationsAsRead();
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to mark all admin notifications as read:", error);
+      res.status(500).json({ error: "Failed to mark all notifications as read" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

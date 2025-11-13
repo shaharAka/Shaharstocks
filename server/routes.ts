@@ -338,6 +338,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         trialEndsAt,
       });
 
+      // Create admin notification for super admins
+      try {
+        await storage.createAdminNotification({
+          type: "user_signup",
+          title: "New User Signup",
+          message: `${name} (${email}) has signed up for a 30-day trial`,
+          metadata: {
+            userId: newUser.id,
+            userName: name,
+            userEmail: email,
+          },
+          isRead: false,
+        });
+      } catch (notifError) {
+        // Don't fail signup if notification creation fails
+        console.error("Failed to create admin notification for new signup:", notifError);
+      }
+
       // Log them in immediately
       req.session.userId = newUser.id;
       

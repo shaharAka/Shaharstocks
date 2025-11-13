@@ -443,17 +443,9 @@ export function StockTable({
                     
                     return (
                       <div className="flex flex-col items-end gap-0.5">
-                        <div className="flex items-center gap-1">
-                          <Badge variant={badgeVariant} className="text-xs font-mono">
-                            {score}/100
-                          </Badge>
-                          <AnalysisPhaseIndicator
-                            microCompleted={stock.microAnalysisCompleted}
-                            macroCompleted={stock.macroAnalysisCompleted}
-                            combinedCompleted={stock.combinedAnalysisCompleted}
-                            size="sm"
-                          />
-                        </div>
+                        <Badge variant={badgeVariant} className="text-xs font-mono">
+                          {score}/100
+                        </Badge>
                         {analysis.integratedScore && analysis.confidenceScore !== analysis.integratedScore && (
                           <span className="text-[10px] text-muted-foreground">
                             (micro: {analysis.confidenceScore})

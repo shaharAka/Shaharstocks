@@ -21,7 +21,7 @@ export const stocks = pgTable("stocks", {
   recommendation: text("recommendation"), // "buy", "sell" (from insider action)
   recommendationStatus: text("recommendation_status").default("pending"), // "pending", "approved", "rejected"
   source: text("source"), // "telegram" or "openinsider" - data source
-  confidenceScore: integer("confidence_score"), // 0-100
+  confidenceScore: integer("confidence_score"), // 0-100 INSIDER SIGNAL confidence (not AI analysis score) - measures reliability of the insider trading recommendation source
   priceHistory: jsonb("price_history").$type<{ date: string; price: number }[]>().default([]), // Last 7 days of prices
   candlesticks: jsonb("candlesticks").$type<{ date: string; open: number; high: number; low: number; close: number; volume: number }[]>().default([]), // Last 2 weeks of OHLCV data for charts
   // Company information from Finnhub
@@ -93,7 +93,7 @@ export const insiderProfiles = pgTable("insider_profiles", {
   totalTrades: integer("total_trades").notNull().default(0),
   successfulTrades: integer("successful_trades").notNull().default(0), // Trades that resulted in profit
   winLossRatio: decimal("win_loss_ratio", { precision: 5, scale: 2 }), // % of successful trades (0-100)
-  confidenceScore: integer("confidence_score").notNull().default(50), // 0-100, based on track record
+  confidenceScore: integer("confidence_score").notNull().default(50), // 0-100 INSIDER TRACK RECORD - calculated from historical win/loss ratio of this specific insider's past trades
   averageReturn: decimal("average_return", { precision: 10, scale: 2 }), // Average % return across all trades
   previousDeals: jsonb("previous_deals").$type<{
     ticker: string;
@@ -119,9 +119,9 @@ export const stockAnalyses = pgTable("stock_analyses", {
   ticker: text("ticker").notNull().unique(),
   status: text("status").notNull().default("pending"), // "pending", "analyzing", "completed", "failed"
   overallRating: text("overall_rating"), // "strong_buy", "buy", "hold", "avoid", "strong_avoid"
-  confidenceScore: integer("confidence_score"), // 0-100
+  confidenceScore: integer("confidence_score"), // 0-100 MICRO AGENT overall score - LLM analysis of SEC filings, Alpha Vantage fundamentals, technical indicators, and news sentiment
   summary: text("summary"),
-  financialHealthScore: integer("financial_health_score"), // 0-100
+  financialHealthScore: integer("financial_health_score"), // 0-100 MICRO AGENT financial health component - LLM assessment of balance sheet, income statement, and cash flow strength
   strengths: jsonb("strengths").$type<string[]>(),
   weaknesses: jsonb("weaknesses").$type<string[]>(),
   redFlags: jsonb("red_flags").$type<string[]>(),

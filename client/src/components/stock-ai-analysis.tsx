@@ -249,27 +249,113 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   <Globe className="h-3.5 w-3.5" />
                   <div className="text-xs font-medium">MACRO AGENT: Market & Sector Analysis (1-2 week outlook)</div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">Factor: </span>
-                    <Badge variant={
-                      macroAnalysis.recommendation === 'good' ? 'default' : 
-                      macroAnalysis.recommendation === 'neutral' ? 'secondary' :
-                      macroAnalysis.recommendation === 'risky' ? 'outline' : 'destructive'
-                    } className="font-semibold">
-                      {macroAnalysis.recommendation?.toUpperCase() || 'NEUTRAL'} (×{macroAnalysis.macroFactor})
-                    </Badge>
+                
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-muted-foreground">Recommendation: </span>
+                      <Badge variant={
+                        macroAnalysis.recommendation === 'good' ? 'default' : 
+                        macroAnalysis.recommendation === 'neutral' ? 'secondary' :
+                        macroAnalysis.recommendation === 'risky' ? 'outline' : 'destructive'
+                      } className="font-semibold">
+                        {macroAnalysis.recommendation?.toUpperCase() || 'NEUTRAL'} (×{macroAnalysis.macroFactor})
+                      </Badge>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Market: </span>
+                      <span className="font-medium capitalize">{macroAnalysis.marketCondition || "Neutral"}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Market: </span>
-                    <span className="font-medium">{macroAnalysis.marketCondition || "Neutral"}</span>
-                  </div>
+
+                  {(macroAnalysis.sp500Level || macroAnalysis.vixLevel) && (
+                    <div className="pt-1 border-t border-border/50">
+                      <div className="text-xs font-medium mb-1">Market Indices</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {macroAnalysis.sp500Level && (
+                          <div>
+                            <span className="text-muted-foreground">S&P 500: </span>
+                            <span className="font-mono">{parseFloat(macroAnalysis.sp500Level).toFixed(2)}</span>
+                            {macroAnalysis.sp500Change && (
+                              <span className={`ml-1 ${parseFloat(macroAnalysis.sp500Change) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                                ({parseFloat(macroAnalysis.sp500Change) >= 0 ? '+' : ''}{parseFloat(macroAnalysis.sp500Change).toFixed(2)}%)
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {macroAnalysis.vixLevel && (
+                          <div>
+                            <span className="text-muted-foreground">VIX: </span>
+                            <span className="font-mono">{parseFloat(macroAnalysis.vixLevel).toFixed(2)}</span>
+                            {macroAnalysis.vixInterpretation && (
+                              <span className="ml-1 text-muted-foreground capitalize">
+                                ({macroAnalysis.vixInterpretation.replace(/_/g, ' ')})
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {macroAnalysis.economicIndicators && Object.keys(macroAnalysis.economicIndicators).length > 0 && (
+                    <div className="pt-1 border-t border-border/50">
+                      <div className="text-xs font-medium mb-1">Economic Indicators</div>
+                      <div className="grid grid-cols-2 gap-1.5 text-xs">
+                        {macroAnalysis.economicIndicators.interestRate && (
+                          <div>
+                            <span className="text-muted-foreground">Interest Rate: </span>
+                            <span className="font-mono">{macroAnalysis.economicIndicators.interestRate}%</span>
+                          </div>
+                        )}
+                        {macroAnalysis.economicIndicators.inflation && (
+                          <div>
+                            <span className="text-muted-foreground">Inflation: </span>
+                            <span className="font-mono">{macroAnalysis.economicIndicators.inflation}%</span>
+                          </div>
+                        )}
+                        {macroAnalysis.economicIndicators.unemploymentRate && (
+                          <div>
+                            <span className="text-muted-foreground">Unemployment: </span>
+                            <span className="font-mono">{macroAnalysis.economicIndicators.unemploymentRate}%</span>
+                          </div>
+                        )}
+                        {macroAnalysis.economicIndicators.gdpGrowth && (
+                          <div>
+                            <span className="text-muted-foreground">GDP Growth: </span>
+                            <span className="font-mono">{macroAnalysis.economicIndicators.gdpGrowth}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {macroAnalysis.sectorPerformance && macroAnalysis.sectorPerformance.length > 0 && (
+                    <div className="pt-1 border-t border-border/50">
+                      <div className="text-xs font-medium mb-1">Sector Analysis</div>
+                      {macroAnalysis.sectorPerformance.map((sector: any, index: number) => (
+                        <div key={index} className="text-xs flex items-center justify-between">
+                          <span className="text-muted-foreground">{sector.sector}: </span>
+                          <div className="flex items-center gap-1">
+                            <span className="font-medium capitalize">{sector.performance}</span>
+                            <span className={`${
+                              sector.trend === 'up' ? 'text-success' : 
+                              sector.trend === 'down' ? 'text-destructive' : 'text-muted-foreground'
+                            }`}>
+                              {sector.trend === 'up' ? '↑' : sector.trend === 'down' ? '↓' : '→'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {macroAnalysis.summary && (
+                    <p className="text-xs text-muted-foreground italic pt-2 border-t border-border/50">
+                      {macroAnalysis.summary}
+                    </p>
+                  )}
                 </div>
-                {macroAnalysis.summary && (
-                  <p className="text-xs text-muted-foreground italic pt-1">
-                    {macroAnalysis.summary}
-                  </p>
-                )}
               </div>
 
               <div className="text-xs">
@@ -299,6 +385,22 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                       {analysis.financialHealthScore}/100
                     </span>
                   </div>
+                  {analysis.technicalAnalysisScore !== undefined && analysis.technicalAnalysisScore !== null && (
+                    <div className="flex items-center justify-between gap-2 pl-3">
+                      <span className="text-xs text-muted-foreground">↳ Technical Analysis Component</span>
+                      <span className={`text-xs font-mono shrink-0 ${getScoreColor(analysis.technicalAnalysisScore)}`}>
+                        {analysis.technicalAnalysisScore}/100
+                      </span>
+                    </div>
+                  )}
+                  {analysis.sentimentAnalysisScore !== undefined && analysis.sentimentAnalysisScore !== null && (
+                    <div className="flex items-center justify-between gap-2 pl-3">
+                      <span className="text-xs text-muted-foreground">↳ Sentiment Analysis Component</span>
+                      <span className={`text-xs font-mono shrink-0 ${getScoreColor(analysis.sentimentAnalysisScore)}`}>
+                        {analysis.sentimentAnalysisScore}/100
+                      </span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex items-center justify-between gap-2">
@@ -312,6 +414,73 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
             <p className="text-xs text-muted-foreground w-full pt-1" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal' }} data-testid={`text-analysis-summary-${ticker}`}>
               {analysis.summary}
             </p>
+
+            {/* Technical Analysis Details */}
+            {analysis.confidenceScore !== undefined && analysis.confidenceScore !== null && 
+             analysis.technicalAnalysisScore !== undefined && analysis.technicalAnalysisScore !== null && (
+              <div className="mt-3 p-2 bg-muted/30 rounded space-y-1.5">
+                <div className="text-xs font-medium">Technical Analysis Evidence</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {analysis.technicalAnalysisTrend && (
+                    <div>
+                      <span className="text-muted-foreground">Trend: </span>
+                      <span className="font-medium capitalize">{analysis.technicalAnalysisTrend}</span>
+                    </div>
+                  )}
+                  {analysis.technicalAnalysisMomentum && (
+                    <div>
+                      <span className="text-muted-foreground">Momentum: </span>
+                      <span className="font-medium capitalize">{analysis.technicalAnalysisMomentum}</span>
+                    </div>
+                  )}
+                </div>
+                {analysis.technicalAnalysisSignals && analysis.technicalAnalysisSignals.length > 0 && (
+                  <ul className="space-y-0.5">
+                    {analysis.technicalAnalysisSignals.map((signal: string, index: number) => (
+                      <li key={index} className="text-xs text-muted-foreground flex items-start gap-1">
+                        <span className="shrink-0">•</span>
+                        <span className="flex-1">{signal}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* Sentiment Analysis Details */}
+            {analysis.confidenceScore !== undefined && analysis.confidenceScore !== null && 
+             analysis.sentimentAnalysisScore !== undefined && analysis.sentimentAnalysisScore !== null && (
+              <div className="mt-2 p-2 bg-muted/30 rounded space-y-1.5">
+                <div className="text-xs font-medium">Sentiment Analysis Evidence</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {analysis.sentimentAnalysisTrend && (
+                    <div>
+                      <span className="text-muted-foreground">Trend: </span>
+                      <span className="font-medium capitalize">{analysis.sentimentAnalysisTrend}</span>
+                    </div>
+                  )}
+                  {analysis.sentimentAnalysisNewsVolume && (
+                    <div>
+                      <span className="text-muted-foreground">News Volume: </span>
+                      <span className="font-medium capitalize">{analysis.sentimentAnalysisNewsVolume}</span>
+                    </div>
+                  )}
+                </div>
+                {analysis.sentimentAnalysisKeyThemes && analysis.sentimentAnalysisKeyThemes.length > 0 && (
+                  <>
+                    <div className="text-xs text-muted-foreground">Key Themes:</div>
+                    <ul className="space-y-0.5">
+                      {analysis.sentimentAnalysisKeyThemes.map((theme: string, index: number) => (
+                        <li key={index} className="text-xs text-muted-foreground flex items-start gap-1">
+                          <span className="shrink-0">•</span>
+                          <span className="flex-1">{theme}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {analysis.redFlags && analysis.redFlags.length > 0 && (

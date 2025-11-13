@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import type { Stock, User, StockInterestWithUser } from "@shared/schema";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { AnalysisPhaseIndicator } from "@/components/analysis-phase-indicator";
+import { PinButton } from "@/components/pin-button";
 
 interface StockTableProps {
   stocks: Stock[];
@@ -303,6 +304,7 @@ export function StockTable({
                   <SortIcon field="daysFromBuy" />
                 </Button>
               </TableHead>
+              <TableHead className="w-12"></TableHead>
               <TableHead className="hidden sm:table-cell min-w-[100px]">Community</TableHead>
             </TableRow>
             </TableHeader>
@@ -462,6 +464,14 @@ export function StockTable({
                       <span>{getDaysFromBuy(stock.insiderTradeDate)}d</span>
                     </div>
                   )}
+                </TableCell>
+                <TableCell className="w-12 py-2" onClick={(e) => e.stopPropagation()}>
+                  <PinButton 
+                    ticker={stock.ticker} 
+                    isPinned={stock.isPinned || false}
+                    variant="ghost"
+                    size="icon"
+                  />
                 </TableCell>
                 <TableCell className="hidden sm:table-cell py-2">
                   <div className="flex items-center gap-2">

@@ -49,6 +49,7 @@ export const stocks = pgTable("stocks", {
   rejectedAt: timestamp("rejected_at"), // When the recommendation was rejected
 });
 
+export const stockSchema = createSelectSchema(stocks);
 export const insertStockSchema = createInsertSchema(stocks).omit({ id: true, lastUpdated: true, recommendationStatus: true, rejectedAt: true });
 export type InsertStock = z.infer<typeof insertStockSchema>;
 export type Stock = typeof stocks.$inferSelect;

@@ -13,12 +13,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Package, Trash2 } from "lucide-react";
+import { Package, Edit, Settings, X } from "lucide-react";
 import { Link } from "wouter";
 import type { PortfolioHolding, Stock } from "@shared/schema";
+import { stockSchema } from "@shared/schema";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { StockExplorer } from "@/components/stock-explorer";
 
 interface PortfolioOverviewProps {
   holdings: PortfolioHolding[];
@@ -30,6 +32,60 @@ export function PortfolioOverview({ holdings, stocks, isLoading }: PortfolioOver
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [holdingToDelete, setHoldingToDelete] = useState<PortfolioHolding | null>(null);
+  const [stockDetailsOpen, setStockDetailsOpen] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+  const [loadingTicker, setLoadingTicker] = useState<string | null>(null);
+
+  const fetchStockMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      const stockData = await apiRequest("GET", `/api/stocks/${ticker}`, {});
+      return stockSchema.parse(stockData);
+    },
+    onSuccess: (stock) => {
+      // Update the stocks cache with the validated lazy-loaded stock
+      queryClient.setQueryData<Stock[]>(["/api/stocks"], (oldData) => {
+        if (!oldData) return [stock];
+        const exists = oldData.some(s => s.ticker === stock.ticker);
+        return exists ? oldData.map(s => s.ticker === stock.ticker ? stock : s) : [...oldData, stock];
+      });
+      
+      setSelectedStock(stock);
+      setStockDetailsOpen(true);
+      setLoadingTicker(null);
+    },
+    onError: (error: Error, ticker) => {
+      setLoadingTicker(null);
+      toast({
+        title: "Unable to load stock details",
+        description: `Could not find data for ${ticker}. It may not be in our system yet.`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCardClick = (ticker: string, existingStock: Stock | undefined) => {
+    if (loadingTicker === ticker) {
+      return; // Prevent double-clicks
+    }
+    
+    // Always source from validated cache first
+    const cachedStocks = queryClient.getQueryData<Stock[]>(["/api/stocks"]);
+    const cachedStock = cachedStocks?.find(s => s.ticker === ticker);
+    
+    if (cachedStock) {
+      // Use validated cached version
+      setSelectedStock(cachedStock);
+      setStockDetailsOpen(true);
+    } else if (existingStock) {
+      // Fallback to prop but still open dialog
+      setSelectedStock(existingStock);
+      setStockDetailsOpen(true);
+    } else {
+      // Lazy load if no data available
+      setLoadingTicker(ticker);
+      fetchStockMutation.mutate(ticker);
+    }
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (holdingId: string) => {
@@ -88,7 +144,12 @@ export function PortfolioOverview({ holdings, stocks, isLoading }: PortfolioOver
               const miniChartData = stock?.priceHistory?.slice(-7) || [];
 
               return (
-                <Card key={holding.id} className="hover-elevate" data-testid={`card-holding-${holding.ticker}`}>
+                <Card 
+                  key={holding.id} 
+                  className={`hover-elevate cursor-pointer ${loadingTicker === holding.ticker ? 'opacity-50' : ''}`}
+                  data-testid={`card-holding-${holding.ticker}`}
+                  onClick={() => handleCardClick(holding.ticker, stock)}
+                >
                   <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-3">
                     <div>
                       <CardTitle className="text-lg font-semibold">
@@ -156,27 +217,31 @@ export function PortfolioOverview({ holdings, stocks, isLoading }: PortfolioOver
                       </div>
                     </div>
 
-                    <div className="flex gap-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1" asChild data-testid={`button-buy-${holding.ticker}`}>
-                        <Link href={`/recommendations?ticker=${holding.ticker}&action=buy`}>
-                          Buy More
-                        </Link>
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1" asChild data-testid={`button-sell-${holding.ticker}`}>
-                        <Link href={`/recommendations?ticker=${holding.ticker}&action=sell`}>
-                          Sell
+                    <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        asChild 
+                        data-testid={`button-view-rules-${holding.ticker}`}
+                      >
+                        <Link href={`/trading?tab=rules&ticker=${holding.ticker}`}>
+                          <Settings className="h-4 w-4 mr-1" />
+                          Rules
                         </Link>
                       </Button>
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setHoldingToDelete(holding);
                           setDeleteDialogOpen(true);
                         }}
-                        data-testid={`button-delete-${holding.ticker}`}
+                        data-testid={`button-remove-${holding.ticker}`}
+                        title="Remove from watchlist"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <X className="h-4 w-4" />
                       </Button>
                     </div>
                   </CardContent>
@@ -190,10 +255,10 @@ export function PortfolioOverview({ holdings, stocks, isLoading }: PortfolioOver
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Holding?</AlertDialogTitle>
+            <AlertDialogTitle>Remove from Watchlist?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove <strong>{holdingToDelete?.ticker}</strong> from your portfolio? 
-              This will delete the holding record but won't affect your trade history.
+              Are you sure you want to remove <strong>{holdingToDelete?.ticker}</strong> from your watchlist? 
+              You can always add it back later. Your trade history will not be affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -211,6 +276,12 @@ export function PortfolioOverview({ holdings, stocks, isLoading }: PortfolioOver
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <StockExplorer
+        stock={selectedStock}
+        open={stockDetailsOpen}
+        onOpenChange={setStockDetailsOpen}
+      />
     </>
   );
 }

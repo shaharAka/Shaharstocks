@@ -502,6 +502,8 @@ export const users = pgTable("users", {
   trialEndsAt: timestamp("trial_ends_at"), // When the 30-day trial ends
   initialDataFetched: boolean("initial_data_fetched").notNull().default(false), // Track if initial 500 OpenInsider transactions have been fetched
   hasSeenOnboarding: boolean("has_seen_onboarding").notNull().default(false), // Track if user has completed the onboarding flow
+  onboardingCompletedAt: timestamp("onboarding_completed_at"), // When user completed the unified onboarding flow
+  tutorialCompletions: jsonb("tutorial_completions").$type<Record<string, boolean>>().default({}), // Track which tutorials have been completed
   archived: boolean("archived").notNull().default(false), // Soft delete for hiding users from admin list
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by"), // Which admin archived this user

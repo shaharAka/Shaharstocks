@@ -67,11 +67,8 @@ export function AdminNotificationBell() {
     }
   };
 
-  const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && unreadCount > 0) {
-      markAllAsReadMutation.mutate();
-    }
-    setOpen(newOpen);
+  const handleMarkAllAsRead = () => {
+    markAllAsReadMutation.mutate();
   };
 
   const getTypeIcon = (type: string) => {
@@ -84,7 +81,7 @@ export function AdminNotificationBell() {
   };
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           size="icon"
@@ -106,11 +103,24 @@ export function AdminNotificationBell() {
       </PopoverTrigger>
       <PopoverContent className="w-96 p-0" align="end" data-testid="popover-admin-notifications">
         <div className="flex items-center justify-between border-b p-4">
-          <h3 className="font-semibold">Admin Notifications</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="font-semibold">Admin Notifications</h3>
+            {unreadCount > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {unreadCount} unread
+              </Badge>
+            )}
+          </div>
           {unreadCount > 0 && (
-            <span className="text-xs text-muted-foreground">
-              {unreadCount} unread
-            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleMarkAllAsRead}
+              disabled={markAllAsReadMutation.isPending}
+              data-testid="button-mark-all-notifications-read"
+            >
+              Mark all read
+            </Button>
           )}
         </div>
         <ScrollArea className="h-80">

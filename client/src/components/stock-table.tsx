@@ -218,7 +218,7 @@ export function StockTable({
                 </Button>
               </TableHead>
               <TableHead className="hidden md:table-cell min-w-[120px]">Company</TableHead>
-              <TableHead className="min-w-[70px]">
+              <TableHead className="hidden min-w-[70px]">
                 <Button
                   variant="ghost"
                   size="lg"
@@ -360,7 +360,7 @@ export function StockTable({
                 <TableCell className="hidden md:table-cell max-w-xs truncate text-sm text-muted-foreground" data-testid={`cell-company-${stock.ticker}`}>
                   {stock.companyName}
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden">
                   {stock.recommendation && (
                     <Badge
                       variant={stock.recommendation.toLowerCase().includes("buy") ? "default" : "destructive"}

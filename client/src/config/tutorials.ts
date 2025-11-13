@@ -90,33 +90,28 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
     steps: [
       {
         target: "body",
-        content: "This page shows insider trading recommendations. Each recommendation comes from company insiders buying or selling their own stock.",
+        content: "This page shows insider trading recommendations. Each recommendation comes from company insiders buying or selling their own stock. Use the filters above to find the most relevant opportunities.",
         placement: "center",
       },
       {
         target: '[data-testid="select-recommendation-filter"]',
-        content: "Filter recommendations by Buy or Sell",
+        content: "Step 1: Filter by Buy or Sell recommendations to focus on the type of trade you're interested in.",
         placement: "bottom",
       },
       {
         target: '[data-testid="select-interest-filter"]',
-        content: "Filter by team member interest. See which stocks your team finds interesting!",
+        content: "Step 2: Filter by team member interest to see which stocks your colleagues find interesting.",
         placement: "bottom",
       },
       {
         target: '[data-testid="select-days-filter"]',
-        content: "Filter by time since insider purchase. Focus on recent opportunities.",
+        content: "Step 3: Filter by how recent the insider purchase was - focus on fresh opportunities.",
         placement: "bottom",
       },
       {
-        target: '[data-testid^="card-stock-"]',
-        content: "Click any stock card to see detailed analysis, company info, news, and AI insights. You can also mark stocks as interesting or add comments for team discussion.",
-        placement: "top",
-      },
-      {
-        target: '[data-testid^="checkbox-card-"]',
-        content: "Select multiple stocks for bulk actions like approve, reject, or analyze.",
-        placement: "left",
+        target: "body",
+        content: "Step 4: Once stocks load, you can click any stock card for detailed analysis, mark stocks as interesting, or select multiple stocks for bulk actions. That's it!",
+        placement: "center",
       },
     ],
   },

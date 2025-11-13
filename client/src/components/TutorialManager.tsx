@@ -80,7 +80,12 @@ export function TutorialManager() {
       onComplete={async () => {
         // Mark tutorial as completed
         if (activeTutorialId) {
-          await completeTutorial(activeTutorialId);
+          try {
+            await completeTutorial(activeTutorialId);
+          } catch (error) {
+            console.error("Failed to mark tutorial as completed:", error);
+            // Still close the tutorial even if saving completion fails
+          }
         }
         setManualTrigger(false);
         setForceTutorialId(null);

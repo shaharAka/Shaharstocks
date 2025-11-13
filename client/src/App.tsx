@@ -89,7 +89,7 @@ function AuthenticatedApp() {
       <TutorialManager />
       <div className="flex h-screen w-full">
         <AppSidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1">
           <header className="flex items-center justify-between px-2 py-2 md:p-4 border-b bg-background shrink-0">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-1 md:gap-2">

@@ -228,6 +228,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/user/progress", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const progress = await storage.getUserProgress(req.session.userId);
+      res.json(progress);
+    } catch (error) {
+      console.error("Get user progress error:", error);
+      res.status(500).json({ error: "Failed to get user progress" });
+    }
+  });
+
+  app.post("/api/user/complete-onboarding", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      await storage.completeUserOnboarding(req.session.userId);
+      res.json({ message: "Onboarding completed successfully" });
+    } catch (error) {
+      console.error("Complete onboarding error:", error);
+      res.status(500).json({ error: "Failed to complete onboarding" });
+    }
+  });
+
+  app.post("/api/user/tutorial/:id/complete", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const tutorialId = req.params.id;
+      await storage.completeTutorial(req.session.userId, tutorialId);
+      res.json({ message: "Tutorial marked as completed" });
+    } catch (error) {
+      console.error("Complete tutorial error:", error);
+      res.status(500).json({ error: "Failed to complete tutorial" });
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;

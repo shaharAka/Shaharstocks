@@ -39,7 +39,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const completeOnboardingMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("/api/user/complete-onboarding", "POST");
+      await apiRequest("POST", "/api/user/complete-onboarding");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/progress"] });
@@ -48,7 +48,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const completeTutorialMutation = useMutation({
     mutationFn: async (tutorialId: string) => {
-      await apiRequest(`/api/user/tutorial/${tutorialId}/complete`, "POST");
+      await apiRequest("POST", `/api/user/tutorial/${tutorialId}/complete`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/progress"] });

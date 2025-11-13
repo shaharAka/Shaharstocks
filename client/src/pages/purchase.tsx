@@ -1387,13 +1387,14 @@ export default function Purchase() {
                     </div>
                   )}
                 </CardContent>
-                <CardFooter className="pt-3 pb-3">
+                <CardFooter className="pt-3 pb-3 border-t">
                   <div className="flex items-center justify-end w-full" onClick={(e) => e.stopPropagation()}>
                     <PinButton
                       ticker={stock.ticker}
                       isPinned={stock.isPinned || false}
                       variant="ghost"
                       size="sm"
+                      showLabel={true}
                     />
                   </div>
                 </CardFooter>
@@ -1652,13 +1653,14 @@ export default function Purchase() {
                         View Details
                       </Button>
                     </CardContent>
-                    <CardFooter className="pt-3 pb-3">
+                    <CardFooter className="pt-3 pb-3 border-t">
                       <div className="flex items-center justify-end w-full" onClick={(e) => e.stopPropagation()}>
                         <PinButton
                           ticker={stock.ticker}
                           isPinned={stock.isPinned || false}
                           variant="ghost"
                           size="sm"
+                          showLabel={true}
                         />
                       </div>
                     </CardFooter>

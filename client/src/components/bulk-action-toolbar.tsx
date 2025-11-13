@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, CheckCircle, XCircle, Users, RefreshCw, Sparkles, FlaskConical } from "lucide-react";
+import { X, CheckCircle, XCircle, Users, RefreshCw, Sparkles, FlaskConical, Pin, PinOff } from "lucide-react";
 
 interface BulkActionToolbarProps {
   selectedCount: number;
+  pinnedCount?: number;
   onClear: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -11,11 +12,14 @@ interface BulkActionToolbarProps {
   onRefresh: () => void;
   onAnalyze: () => void;
   onSimulate: () => void;
+  onPin?: () => void;
+  onUnpin?: () => void;
   isSimulating?: boolean;
 }
 
 export function BulkActionToolbar({
   selectedCount,
+  pinnedCount = 0,
   onClear,
   onApprove,
   onReject,
@@ -23,8 +27,11 @@ export function BulkActionToolbar({
   onRefresh,
   onAnalyze,
   onSimulate,
+  onPin,
+  onUnpin,
   isSimulating = false,
 }: BulkActionToolbarProps) {
+  const unpinnedCount = selectedCount - pinnedCount;
   return (
     <div 
       className={`bg-primary/10 border border-primary/20 rounded-md p-3 mb-4 transition-opacity ${
@@ -103,6 +110,30 @@ export function BulkActionToolbar({
             <FlaskConical className="h-4 w-4 mr-1" />
             {isSimulating ? "Simulating..." : "Simulate"}
           </Button>
+          {onPin && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={onPin}
+              disabled={unpinnedCount === 0}
+              data-testid="button-bulk-pin"
+            >
+              <Pin className="h-4 w-4 mr-1" />
+              Pin {unpinnedCount > 0 ? `(${unpinnedCount})` : ""}
+            </Button>
+          )}
+          {onUnpin && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={onUnpin}
+              disabled={pinnedCount === 0}
+              data-testid="button-bulk-unpin"
+            >
+              <PinOff className="h-4 w-4 mr-1" />
+              Unpin {pinnedCount > 0 ? `(${pinnedCount})` : ""}
+            </Button>
+          )}
         </div>
       </div>
     </div>

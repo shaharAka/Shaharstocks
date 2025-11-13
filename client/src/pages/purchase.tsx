@@ -690,6 +690,79 @@ export default function Purchase() {
     bulkSimulateMutation.mutate(Array.from(selectedTickers));
   };
 
+  // Bulk pin mutations
+  const bulkPinMutation = useMutation({
+    mutationFn: async (tickers: string[]) => {
+      // Pin all unpinned stocks
+      const unpinnedTickers = tickers.filter(ticker => {
+        const stock = stocks?.find(s => s.ticker === ticker);
+        return !stock?.isPinned;
+      });
+      
+      await Promise.all(
+        unpinnedTickers.map(ticker => apiRequest("POST", `/api/stocks/${ticker}/pin`, null))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", "rejected"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/pins"] });
+      clearSelection();
+      toast({
+        title: "Success",
+        description: "Selected stocks have been pinned",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to pin stocks",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkUnpinMutation = useMutation({
+    mutationFn: async (tickers: string[]) => {
+      // Unpin all pinned stocks
+      const pinnedTickers = tickers.filter(ticker => {
+        const stock = stocks?.find(s => s.ticker === ticker);
+        return stock?.isPinned;
+      });
+      
+      await Promise.all(
+        pinnedTickers.map(ticker => apiRequest("DELETE", `/api/stocks/${ticker}/pin`, null))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", "rejected"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/pins"] });
+      clearSelection();
+      toast({
+        title: "Success",
+        description: "Selected stocks have been unpinned",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to unpin stocks",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleBulkPin = () => {
+    if (selectedTickers.size === 0) return;
+    bulkPinMutation.mutate(Array.from(selectedTickers));
+  };
+
+  const handleBulkUnpin = () => {
+    if (selectedTickers.size === 0) return;
+    bulkUnpinMutation.mutate(Array.from(selectedTickers));
+  };
+
   const getRecommendationColor = (rec: string | null) => {
     if (!rec) return "secondary";
     const lower = rec.toLowerCase();
@@ -1039,6 +1112,10 @@ export default function Purchase() {
         <TabsContent value="pending" className="space-y-4 mt-4">
           <BulkActionToolbar
             selectedCount={selectedTickers.size}
+            pinnedCount={Array.from(selectedTickers).filter(ticker => {
+              const stock = stocks?.find(s => s.ticker === ticker);
+              return stock?.isPinned;
+            }).length}
             onClear={clearSelection}
             onApprove={handleBulkApprove}
             onReject={handleBulkReject}
@@ -1046,6 +1123,8 @@ export default function Purchase() {
             onRefresh={handleBulkRefresh}
             onAnalyze={handleBulkAnalyze}
             onSimulate={handleBulkSimulate}
+            onPin={handleBulkPin}
+            onUnpin={handleBulkUnpin}
             isSimulating={bulkSimulateMutation.isPending}
           />
 

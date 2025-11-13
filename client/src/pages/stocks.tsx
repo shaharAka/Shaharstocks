@@ -326,7 +326,7 @@ export default function Stocks() {
                     {stock.confidenceScore && (
                       <div className="col-span-2">
                         <p className="text-xs text-muted-foreground mb-1">
-                          Confidence Score
+                          Insider Signal Confidence
                         </p>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">

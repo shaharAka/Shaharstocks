@@ -8,12 +8,16 @@ export const COMPLIANCE_TERMS = {
   // Replace "recommendation" language
   opportunity: "Opportunity",
   opportunities: "Opportunities",
+  opportunitiesDescription: "Track insider trading signals sorted by relevance",
   signal: "Signal",
   
   // Replace "buy/sell" language
+  buy: "Purchase",
+  sell: "Sale",
   insiderPurchase: "Insider Purchase",
   insiderSale: "Insider Sale",
   transactionType: "Transaction Type",
+  insiderRole: "Insider Role",
   
   // Replace "trading" language
   picked: "Picked",
@@ -25,10 +29,17 @@ export const COMPLIANCE_TERMS = {
   review: "Review",
   dismiss: "Dismiss",
   archive: "Archive",
+  refresh: "Refresh",
+  
+  // Risk levels
+  highRisk: "High Conviction",
+  balanced: "Balanced",
+  lowRisk: "Conservative",
   
   // Data quality language
   dataQuality: "Data Quality",
   sourceConfidence: "Source Confidence",
+  dataRefreshed: "Data Refreshed",
 } as const;
 
 // Risk preset filter configurations
@@ -47,7 +58,9 @@ export interface RiskPreset {
   };
 }
 
-export const RISK_PRESETS: Record<"high" | "low" | "balanced", RiskPreset> = {
+export type RiskLevel = "high" | "low" | "balanced";
+
+export const RISK_PRESETS: Record<RiskLevel, RiskPreset> = {
   high: {
     name: "high",
     label: "High Conviction",
@@ -87,6 +100,11 @@ export const RISK_PRESETS: Record<"high" | "low" | "balanced", RiskPreset> = {
     },
   },
 };
+
+// Helper to get a risk preset by level
+export function getRiskPreset(level: RiskLevel): RiskPreset {
+  return RISK_PRESETS[level];
+}
 
 // Helper to get transaction type label (compliant language)
 export function getTransactionTypeLabel(recommendation: string | null): string {
@@ -345,9 +363,9 @@ export function applyRiskPresetFilters(
       if (daysOld && daysOld > maxDaysOld) return false;
     }
 
-    // AI score filter - require score to exist and meet minimum
+    // AI score filter - check merged fields first, then fallback to analysisJob
     if (minAIScore !== undefined) {
-      const aiScore = opp.analysisJob?.integratedScore;
+      const aiScore = (opp as any).integratedScore ?? (opp as any).aiScore ?? opp.analysisJob?.integratedScore;
       // Treat missing or zero scores as not meeting the requirement
       if (!aiScore || aiScore < minAIScore) return false;
     }

@@ -1782,7 +1782,7 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`[Storage] getStocksWithUserStatus called for userId: ${userId}`);
       
-      // Get all stocks with user statuses and pin status
+      // Get all stocks with user statuses and pin status, sorted by latest trade date
       const results = await db
         .select({
           stock: stocks,
@@ -1806,7 +1806,9 @@ export class DatabaseStorage implements IStorage {
             eq(stocks.ticker, userStockPins.ticker),
             eq(userStockPins.userId, userId)
           )
-        );
+        )
+        .orderBy(desc(stocks.insiderTradeDate))
+        .limit(500);
 
       console.log(`[Storage] Query returned ${results.length} rows`);
 

@@ -981,12 +981,17 @@ export default function Purchase() {
     return analyses.find(a => a.ticker === ticker);
   };
 
-  // Identify urgent opportunities (high-signal alerts)
-  const urgentOpportunities = pendingRecommendations
+  // Identify urgent opportunities (high-signal alerts from ALL sources)
+  // Include pending, pinned, and any high-priority stocks across all tabs
+  const allAvailableStocks = stocks || [];
+  const urgentOpportunities = allAvailableStocks
     .filter(stock => {
       const analysis = getAIAnalysis(stock.ticker);
       const aiScore = analysis?.aiScore || 0;
-      return stock.recommendation === 'BUY' && aiScore >= 70 && (stock.ageDays || 0) <= 14;
+      // Only BUY recommendations with high AI score and recent (within 14 days)
+      // Treat undefined age as very old (999) to exclude stale stocks without age field
+      const age = stock.ageDays ?? 999;
+      return stock.recommendation === 'BUY' && aiScore >= 75 && age <= 14;
     })
     .sort((a, b) => {
       // Sort by AI score descending, then by age ascending
@@ -999,9 +1004,10 @@ export default function Purchase() {
     })
     .slice(0, 4);
 
-  // Remaining stocks for backlog
+  // Remaining stocks for backlog (exclude urgent opportunities to avoid duplication)
+  const urgentTickers = new Set(urgentOpportunities.map(s => s.ticker));
   const backlogStocks = pendingRecommendations.filter(
-    stock => !urgentOpportunities.find(u => u.ticker === stock.ticker)
+    stock => !urgentTickers.has(stock.ticker)
   );
 
   return (
@@ -1016,20 +1022,41 @@ export default function Purchase() {
             High-signal alerts for quick decisions
           </p>
         </div>
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="lg" data-testid="button-filters">
-              <Filter className="h-4 w-4 mr-2" />
-              Filters & Tools
-            </Button>
-          </SheetTrigger>
-          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>Filters & Advanced Tools</SheetTitle>
-              <SheetDescription>
-                Customize your view and access advanced features
-              </SheetDescription>
-            </SheetHeader>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => refreshAllMutation.mutate()}
+            disabled={refreshAllMutation.isPending}
+            data-testid="button-refresh-quick"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? "animate-spin" : ""}`} />
+            <span className="hidden md:inline ml-2">Refresh</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => bulkAnalyzeMutation.mutate()}
+            disabled={bulkAnalyzeMutation.isPending}
+            data-testid="button-analyze-quick"
+          >
+            <Sparkles className={`h-4 w-4 ${bulkAnalyzeMutation.isPending ? "animate-spin" : ""}`} />
+            <span className="hidden md:inline ml-2">Analyze</span>
+          </Button>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="lg" data-testid="button-filters">
+                <Filter className="h-4 w-4 mr-2" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle>Filters & Advanced Tools</SheetTitle>
+                <SheetDescription>
+                  Customize your view and access advanced features
+                </SheetDescription>
+              </SheetHeader>
             <div className="space-y-6 mt-6">
               {/* Search */}
               <div className="space-y-2">
@@ -1147,20 +1174,33 @@ export default function Purchase() {
                 </Button>
               </div>
             </div>
-          </SheetContent>
-        </Sheet>
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
 
       {/* Hero Section: Urgent Opportunities */}
-      {urgentOpportunities.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Urgent Opportunities</h2>
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Zap className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">Urgent Opportunities</h2>
+          {urgentOpportunities.length > 0 && (
             <Badge variant="secondary" className="ml-auto">
               {urgentOpportunities.length} High-Priority
             </Badge>
-          </div>
+          )}
+        </div>
+        {urgentOpportunities.length === 0 ? (
+          <Card className="p-8">
+            <div className="text-center">
+              <Zap className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+              <h3 className="text-base font-medium mb-1" data-testid="text-no-urgent">All Clear</h3>
+              <p className="text-sm text-muted-foreground">
+                No high-priority alerts at the moment
+              </p>
+            </div>
+          </Card>
+        ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {urgentOpportunities.map((stock) => {
               const analysis = getAIAnalysis(stock.ticker);
@@ -1258,8 +1298,8 @@ export default function Purchase() {
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <Tabs value={activeTab} onValueChange={(value) => {
         setActiveTab(value as StockListTab);
@@ -1331,36 +1371,16 @@ export default function Purchase() {
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {pendingRecommendations.map((stock) => {
-            const currentPrice = parseFloat(stock.currentPrice);
-            const previousPrice = parseFloat(stock.previousClose || stock.currentPrice);
-            const priceChange = currentPrice - previousPrice;
-            const priceChangePercent = (priceChange / previousPrice) * 100;
-            const isPositive = priceChange >= 0;
-
-            // Insider transaction details
-            const insiderPrice = stock.insiderPrice ? parseFloat(stock.insiderPrice) : currentPrice;
-            const insiderQuantity = stock.insiderQuantity || 0;
-            const priceDiff = currentPrice - insiderPrice;
-            const priceDiffPercent = insiderPrice > 0 ? (priceDiff / insiderPrice) * 100 : 0;
-            const isProfitable = priceDiff >= 0;
-
-            const stockInterests = getStockInterests(stock.ticker);
+          {backlogStocks.map((stock) => {
             const analysis = getAIAnalysis(stock.ticker);
+            const aiScore = analysis?.aiScore || 0;
+            const currentPrice = parseFloat(stock.currentPrice);
 
             return (
               <Card 
                 key={stock.id} 
-                className="hover-elevate cursor-pointer relative" 
-                data-testid={`card-stock-${stock.ticker}`}
-                onClick={() => {
-                  setExplorerStock(stock);
-                  setExplorerOpen(true);
-                  // Mark stock as viewed when clicked
-                  if (currentUser) {
-                    markViewedMutation.mutate({ ticker: stock.ticker });
-                  }
-                }}
+                className="relative hover-elevate"
+                data-testid={`card-backlog-${stock.ticker}`}
               >
                 <div 
                   className="absolute top-2 right-2 z-10" 
@@ -1373,196 +1393,86 @@ export default function Purchase() {
                     data-testid={`checkbox-card-${stock.ticker}`}
                   />
                 </div>
-                <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2 pr-10">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <CardTitle className="text-lg font-semibold" data-testid={`text-ticker-${stock.ticker}`}>
+                <CardHeader className="space-y-0 pb-3 pr-10">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg truncate" data-testid={`text-ticker-${stock.ticker}`}>
                         {stock.ticker}
                       </CardTitle>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <PinButton
-                          ticker={stock.ticker}
-                          isPinned={stock.isPinned || false}
-                          variant="ghost"
-                          size="icon"
-                        />
-                      </div>
-                      {isNewStock(stock.ticker, stock.insiderTradeDate) && (
-                        <Badge variant="default" className="text-xs px-1.5 py-0" data-testid={`badge-new-${stock.ticker}`}>
-                          NEW
-                        </Badge>
-                      )}
-                      {simulatedTickers.has(stock.ticker) && (
-                        <Badge variant="outline" className="text-xs px-1.5 py-0 bg-accent/50" data-testid={`badge-simulated-${stock.ticker}`}>
-                          SIMULATION
-                        </Badge>
-                      )}
-                      {stock.isStale && (
-                        <Badge variant="secondary" className="text-xs px-1.5 py-0" data-testid={`badge-stale-${stock.ticker}`}>
-                          {stock.ageDays}d old
-                        </Badge>
-                      )}
+                      <p className="text-xs text-muted-foreground truncate">
+                        {stock.companyName}
+                      </p>
                     </div>
-                    <CardDescription className="text-xs line-clamp-1" data-testid={`text-company-${stock.ticker}`}>
-                      {stock.companyName}
-                    </CardDescription>
-                  </div>
-                  {stock.recommendation && (
-                    <Badge
-                      variant={getRecommendationColor(stock.recommendation)}
-                      className="text-xs shrink-0"
-                      data-testid={`badge-recommendation-${stock.ticker}`}
+                    <Badge 
+                      variant={aiScore >= 75 ? "default" : "secondary"}
+                      className="ml-2 flex-shrink-0"
                     >
-                      {getRecommendationIcon(stock.recommendation)}
+                      {aiScore}
                     </Badge>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-3 pb-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-mono font-semibold" data-testid={`text-price-${stock.ticker}`}>
-                      ${currentPrice.toFixed(2)}
-                    </span>
-                    <div
-                      className={`flex items-center gap-1 ${
-                        isPositive ? "text-success" : "text-destructive"
-                      }`}
-                      data-testid={`text-change-${stock.ticker}`}
-                    >
-                      {isPositive ? (
-                        <TrendingUp className="h-3 w-3" />
-                      ) : (
-                        <TrendingDown className="h-3 w-3" />
-                      )}
-                      <span className="text-sm font-mono font-medium">
-                        {isPositive ? "+" : ""}
-                        {priceChangePercent.toFixed(2)}%
-                      </span>
-                    </div>
                   </div>
-
-                  {stock.insiderPrice && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Insider @ ${parseFloat(stock.insiderPrice).toFixed(2)}</span>
-                      <span className={`font-mono text-sm ${isProfitable ? "text-success" : "text-destructive"}`} data-testid={`text-price-diff-${stock.ticker}`}>
-                        {isProfitable ? "+" : ""}{priceDiffPercent.toFixed(1)}%
-                      </span>
+                  <div className="text-2xl font-mono font-semibold">
+                    ${currentPrice.toFixed(2)}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-0 pr-10">
+                  {analysis?.primaryCatalyst && (
+                    <div className="text-xs text-muted-foreground line-clamp-2">
+                      {analysis.primaryCatalyst}
                     </div>
                   )}
-
-                  {stock.insiderTradeDate && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`text-days-from-buy-${stock.ticker}`}>
+                  {stock.ageDays !== undefined && (
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      <span>{getDaysFromBuy(stock.insiderTradeDate)} days from buy</span>
+                      {stock.ageDays === 0 ? 'Today' : `${stock.ageDays}d ago`}
                     </div>
                   )}
-
-                  {stock.candlesticks && stock.candlesticks.length > 0 && (
-                    <div className="-mx-2" data-testid={`chart-candlestick-${stock.ticker}`}>
-                      <MiniCandlestickChart data={stock.candlesticks} height={50} />
-                    </div>
-                  )}
-
-                  {stock.marketCap && (
-                    <div className="text-xs text-muted-foreground" data-testid={`text-marketcap-${stock.ticker}`}>
-                      {stock.marketCap} market cap
-                    </div>
-                  )}
-
-                  {analysis && (
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-                      {analysis.status === "analyzing" ? (
-                        <div className="flex flex-col gap-1.5 w-full">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs" data-testid={`badge-ai-analyzing-${stock.ticker}`}>
-                              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                              Analyzing...
-                            </Badge>
-                            <AnalysisPhaseIndicator
-                              microCompleted={stock.microAnalysisCompleted}
-                              macroCompleted={stock.macroAnalysisCompleted}
-                              combinedCompleted={stock.combinedAnalysisCompleted}
-                              currentPhase={stock.analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "complete" | null | undefined}
-                              stepDetails={stock.analysisJob?.stepDetails}
-                              size="sm"
-                              showDetailedProgress={true}
-                            />
-                          </div>
-                        </div>
-                      ) : analysis.status === "failed" ? (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="destructive" className="text-xs" data-testid={`badge-ai-failed-${stock.ticker}`}>
-                            Analysis Failed
-                          </Badge>
-                          {stock.analysisJob?.lastError && (
-                            <span className="text-[10px] text-destructive truncate max-w-[200px]" title={stock.analysisJob.lastError}>
-                              {stock.analysisJob.lastError}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-                          {(() => {
-                            const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
-                            const rating = analysis.overallRating;
-                            let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "secondary";
-                            
-                            if (rating === "buy" || rating === "strong_buy") badgeVariant = "default";
-                            else if (rating === "avoid" || rating === "sell" || rating === "strong_avoid") badgeVariant = "destructive";
-                            
-                            return (
-                              <div className="flex items-center gap-2">
-                                <Badge variant={badgeVariant} className="text-xs font-mono" data-testid={`badge-ai-score-${stock.ticker}`}>
-                                  {score}/100
-                                </Badge>
-                                {analysis.integratedScore && analysis.confidenceScore !== analysis.integratedScore && (
-                                  <span className="text-[10px] text-muted-foreground">
-                                    (micro: {analysis.confidenceScore})
-                                  </span>
-                                )}
-                                <AnalysisPhaseIndicator
-                                  microCompleted={stock.microAnalysisCompleted}
-                                  macroCompleted={stock.macroAnalysisCompleted}
-                                  combinedCompleted={stock.combinedAnalysisCompleted}
-                                  size="sm"
-                                />
-                              </div>
-                            );
-                          })()}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {(stockInterests.length > 0 || getCommentCount(stock.ticker) > 0) && (
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex gap-1">
-                        {stockInterests.map((interest) => (
-                          <Avatar
-                            key={interest.id}
-                            className="h-6 w-6"
-                            style={{ backgroundColor: interest.user.avatarColor }}
-                            data-testid={`avatar-interest-${stock.ticker}-${interest.user.name.toLowerCase()}`}
-                          >
-                            <AvatarFallback
-                              className="text-white text-xs"
-                              style={{ backgroundColor: interest.user.avatarColor }}
-                            >
-                              {getInitials(interest.user.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                        ))}
-                      </div>
-                      {getCommentCount(stock.ticker) > 0 && (
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <MessageSquare className="h-4 w-4" />
-                          <span className="text-sm" data-testid={`text-comment-count-${stock.ticker}`}>
-                            {getCommentCount(stock.ticker)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedStock(stock);
+                        setApprovalAction("approve");
+                        setConfirmDialogOpen(true);
+                      }}
+                      data-testid={`button-approve-${stock.ticker}`}
+                    >
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedStock(stock);
+                        setApprovalAction("reject");
+                        setConfirmDialogOpen(true);
+                      }}
+                      data-testid={`button-reject-${stock.ticker}`}
+                    >
+                      <XCircle className="h-3 w-3 mr-1" />
+                      Dismiss
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => {
+                      setExplorerStock(stock);
+                      setExplorerOpen(true);
+                      if (currentUser) {
+                        markViewedMutation.mutate({ ticker: stock.ticker });
+                      }
+                    }}
+                    data-testid={`button-deep-dive-${stock.ticker}`}
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    Deep Dive
+                  </Button>
                 </CardContent>
               </Card>
             );

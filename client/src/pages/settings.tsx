@@ -894,9 +894,9 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
       setFetchInterval((config.fetchInterval as "hourly" | "daily") || "hourly");
       setInsiderTitles(config.insiderTitles || []);
       setMinTransactionValue(config.minTransactionValue || null);
-      setMinMarketCap(config.minMarketCap || 500);
+      setMinMarketCap(config.minMarketCap ?? 500);
       setFetchPreviousDayOnly(config.fetchPreviousDayOnly || false);
-      setOptionsDealThreshold(config.optionsDealThresholdPercent || 15);
+      setOptionsDealThreshold(config.optionsDealThresholdPercent ?? 15);
     }
   }, [config]);
 
@@ -908,6 +908,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
         fetchInterval,
         insiderTitles: insiderTitles.length > 0 ? insiderTitles : null,
         minTransactionValue: minTransactionValue && minTransactionValue > 0 ? minTransactionValue : null,
+        minMarketCap: minMarketCap,
         fetchPreviousDayOnly,
         optionsDealThresholdPercent: optionsDealThreshold,
       });
@@ -1105,6 +1106,27 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
                 />
                 <p className="text-xs text-muted-foreground">
                   Filter transactions below this dollar amount (leave empty for no minimum)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="min-market-cap">Minimum Market Cap (millions)</Label>
+                <Input
+                  id="min-market-cap"
+                  type="number"
+                  min="0"
+                  step="100"
+                  placeholder="500"
+                  value={minMarketCap}
+                  onChange={(e) => {
+                    const value = e.target.value === "" ? 500 : parseInt(e.target.value);
+                    setMinMarketCap(isNaN(value) ? 500 : value);
+                  }}
+                  disabled={!openinsiderEnabled}
+                  data-testid="input-min-market-cap"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Only include companies with market cap above this value (in millions). Default $500M filters out micro-cap stocks. Set to 0 to include all sizes.
                 </p>
               </div>
 

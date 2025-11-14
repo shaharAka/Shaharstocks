@@ -527,23 +527,17 @@ function startOpeninsiderFetchJob() {
       let filteredCount = 0;
       for (const transaction of transactions) {
         try {
-          // Check if stock already exists with pending status
-          const existingStock = await storage.getStock(transaction.ticker);
-          
-          if (existingStock && existingStock.recommendationStatus === "pending") {
-            // Stock already exists with pending status, skip
-            continue;
-          }
-
-          // Check if this exact transaction (ticker + trade date) was already rejected
-          const allStocksForTicker = await storage.getAllStocksForTicker(transaction.ticker);
-          const wasRejected = allStocksForTicker.some((stock: any) => 
-            stock.recommendationStatus === "rejected" &&
-            stock.insiderTradeDate === transaction.filingDate
+          // Check if this exact transaction already exists using composite key
+          const existingTransaction = await storage.getTransactionByCompositeKey(
+            transaction.ticker,
+            transaction.filingDate,
+            transaction.insiderName,
+            "buy" // All OpenInsider transactions are buys
           );
           
-          if (wasRejected) {
-            log(`[OpeninsiderFetch] Stock ${transaction.ticker} with filing date ${transaction.filingDate} was previously rejected, skipping`);
+          if (existingTransaction) {
+            // Transaction already exists, skip
+            log(`[OpeninsiderFetch] Transaction already exists: ${transaction.ticker} by ${transaction.insiderName} on ${transaction.filingDate}`);
             continue;
           }
 

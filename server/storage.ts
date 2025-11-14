@@ -120,6 +120,7 @@ export interface IStorage {
   getStocksByUserStatus(userId: string, status: string): Promise<Stock[]>;
   getStock(ticker: string): Promise<Stock | undefined>;
   getAllStocksForTicker(ticker: string): Promise<Stock[]>;
+  getTransactionByCompositeKey(ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Stock | undefined>;
   createStock(stock: InsertStock): Promise<Stock>;
   updateStock(ticker: string, stock: Partial<Stock>): Promise<Stock | undefined>;
   deleteStock(ticker: string): Promise<boolean>;
@@ -386,6 +387,26 @@ export class DatabaseStorage implements IStorage {
 
   async getAllStocksForTicker(ticker: string): Promise<Stock[]> {
     return await db.select().from(stocks).where(eq(stocks.ticker, ticker));
+  }
+
+  async getTransactionByCompositeKey(
+    ticker: string,
+    insiderTradeDate: string,
+    insiderName: string,
+    recommendation: string
+  ): Promise<Stock | undefined> {
+    const [stock] = await db
+      .select()
+      .from(stocks)
+      .where(
+        and(
+          eq(stocks.ticker, ticker),
+          eq(stocks.insiderTradeDate, insiderTradeDate),
+          eq(stocks.insiderName, insiderName),
+          eq(stocks.recommendation, recommendation)
+        )
+      );
+    return stock;
   }
 
   async createStock(stock: InsertStock): Promise<Stock> {

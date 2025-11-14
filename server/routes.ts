@@ -66,10 +66,15 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
     
     for (const transaction of transactions) {
       try {
-        // Check if stock already exists
-        const existingStock = await storage.getStock(transaction.ticker);
+        // Check if this exact transaction already exists using composite key
+        const existingTransaction = await storage.getTransactionByCompositeKey(
+          transaction.ticker,
+          transaction.filingDate,
+          transaction.insiderName,
+          "buy" // All OpenInsider transactions are buys
+        );
         
-        if (existingStock) {
+        if (existingTransaction) {
           filteredAlreadyExists++;
           continue;
         }
@@ -2900,16 +2905,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let filteredCount = 0;
       const createdTickers: string[] = []; // Track newly created tickers for AI analysis
       
-      // Step 1: Filter out existing stocks first
+      // Step 1: Filter out existing transactions (check composite key, not just ticker)
       console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions...`);
       const newTransactions = [];
       for (const transaction of transactions) {
-        const existingStock = await storage.getStock(transaction.ticker);
-        if (!existingStock) {
+        const existingTransaction = await storage.getTransactionByCompositeKey(
+          transaction.ticker,
+          transaction.filingDate,
+          transaction.insiderName,
+          "buy" // All OpenInsider transactions are buys
+        );
+        if (!existingTransaction) {
           newTransactions.push(transaction);
         }
       }
-      console.log(`[OpeninsiderFetch] ${newTransactions.length} new tickers after duplicate check`);
+      console.log(`[OpeninsiderFetch] ${newTransactions.length} new transactions after duplicate check`);
       
       if (newTransactions.length === 0) {
         await storage.updateOpeninsiderSyncStatus();

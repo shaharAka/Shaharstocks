@@ -255,23 +255,17 @@ class TelegramService {
         }
       }
 
-      // Check if stock already exists
-      const existingStock = await storage.getStock(ticker);
-      if (existingStock && existingStock.recommendationStatus === "pending") {
-        console.log(`[Telegram] Stock ${ticker} already has pending recommendation, skipping`);
-        return;
-      }
-
-      // Check if this exact stock (ticker + trade date) was already rejected
-      // Get all stocks with this ticker (including rejected ones)
-      const allStocksForTicker = await storage.getAllStocksForTicker(ticker);
-      const wasRejected = allStocksForTicker.some((stock: any) => 
-        stock.recommendationStatus === "rejected" &&
-        stock.insiderTradeDate === tradeDate
+      // Check if this exact transaction already exists using composite key
+      // Note: Telegram messages don't include insider name, so we use 'Telegram Insider' as default
+      const existingTransaction = await storage.getTransactionByCompositeKey(
+        ticker,
+        tradeDate,
+        "Telegram Insider", // Default name since Telegram messages don't include insider name
+        "buy" // Only processing buy recommendations from Telegram
       );
       
-      if (wasRejected) {
-        console.log(`[Telegram] Stock ${ticker} with insider trade date ${tradeDate} was previously rejected, skipping`);
+      if (existingTransaction) {
+        console.log(`[Telegram] Transaction already exists: ${ticker} on ${tradeDate}, skipping`);
         return;
       }
 
@@ -317,6 +311,7 @@ class TelegramService {
         insiderPrice: price, // Price at which insider bought/sold
         insiderQuantity: quantity, // Number of shares insider traded
         insiderTradeDate: tradeDate, // Date when insider executed the trade
+        insiderName: "Telegram Insider", // Default name since Telegram doesn't provide insider details
         marketCap: "N/A",
         peRatio: "0",
         recommendation,

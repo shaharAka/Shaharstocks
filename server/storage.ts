@@ -1778,9 +1778,9 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userStockStatuses.userId, userId));
   }
 
-  async getStocksWithUserStatus(userId: string): Promise<any[]> {
+  async getStocksWithUserStatus(userId: string, limit: number = 100): Promise<any[]> {
     try {
-      console.log(`[Storage] getStocksWithUserStatus called for userId: ${userId}`);
+      console.log(`[Storage] getStocksWithUserStatus called for userId: ${userId}, limit: ${limit}`);
       
       // Get all stocks with user statuses and pin status, sorted by latest trade date
       const results = await db
@@ -1808,7 +1808,7 @@ export class DatabaseStorage implements IStorage {
           )
         )
         .orderBy(desc(stocks.insiderTradeDate))
-        .limit(500);
+        .limit(limit);
 
       console.log(`[Storage] Query returned ${results.length} rows`);
 

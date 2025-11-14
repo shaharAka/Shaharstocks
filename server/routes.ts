@@ -1040,8 +1040,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`[with-user-status] Fetching stocks for user ${req.session.userId}`);
       
+      // Get user to determine stock limit (500 during onboarding, otherwise user preference)
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Use 500 stocks during onboarding, otherwise use user's preference (default 100)
+      const stockLimit = !user.hasSeenOnboarding ? 500 : (user.stockLimit || 100);
+      console.log(`[with-user-status] User onboarding status: ${user.hasSeenOnboarding}, limit: ${stockLimit}`);
+      
       // Use the new storage method that includes user status and latest active job
-      const stocksWithStatus = await storage.getStocksWithUserStatus(req.session.userId);
+      const stocksWithStatus = await storage.getStocksWithUserStatus(req.session.userId, stockLimit);
       
       console.log(`[with-user-status] Found ${stocksWithStatus.length} stocks`);
       console.log(`[with-user-status] Pending stocks: ${stocksWithStatus.filter(s => s.userStatus === 'pending').length}`);

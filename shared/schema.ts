@@ -519,6 +519,7 @@ export const users = pgTable("users", {
   hasSeenOnboarding: boolean("has_seen_onboarding").notNull().default(false), // Track if user has completed the onboarding flow
   onboardingCompletedAt: timestamp("onboarding_completed_at"), // When user completed the unified onboarding flow
   tutorialCompletions: jsonb("tutorial_completions").$type<Record<string, boolean>>().default({}), // Track which tutorials have been completed
+  stockLimit: integer("stock_limit").notNull().default(100), // Maximum number of stocks to fetch (500 during onboarding, 100 default)
   archived: boolean("archived").notNull().default(false), // Soft delete for hiding users from admin list
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by"), // Which admin archived this user

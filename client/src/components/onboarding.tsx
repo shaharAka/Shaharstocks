@@ -40,6 +40,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
         // Default filters for high-quality recommendations
         insiderTitles: ["CEO", "CFO", "Director", "President", "COO", "CTO", "10% Owner"],
         minTransactionValue: 100000, // $100k minimum transaction value
+        optionsDealThresholdPercent: 15, // Filter out stock options deals (insider price must be ≥15% of market)
       });
       
       // Then fetch the data
@@ -153,8 +154,16 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   We'll fetch the latest 500 insider trading transactions from OpenInsider.com. 
                   This will give you a solid foundation of recent insider activity to review.
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  This usually takes about 30-60 seconds. You can configure additional data sources later in Settings.
+                <div className="space-y-2 mb-4">
+                  <p className="text-xs font-medium">Smart Filtering Applied:</p>
+                  <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
+                    <li>Only companies with market cap over $500M</li>
+                    <li>Filters out stock options deals (insider price must be ≥15% of market price)</li>
+                    <li>Focuses on high-quality insider purchase signals</li>
+                  </ul>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Takes 30-60 seconds. You can adjust these filters and add more data sources in Settings.
                 </p>
               </div>
             </>
@@ -168,10 +177,17 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   <Database className="h-8 w-8 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">Fetching Insider Trading Data</h3>
-                <p className="text-sm text-muted-foreground text-center max-w-md">
+                <p className="text-sm text-muted-foreground text-center max-w-md mb-3">
                   We're pulling the latest 500 transactions from OpenInsider.com. 
                   This includes company insider purchases and sales with detailed transaction information.
                 </p>
+                <div className="bg-muted/50 p-3 rounded-lg max-w-md mx-auto">
+                  <p className="text-xs font-medium mb-2 text-center">Quality Filters Active</p>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Filtering for companies over $500M market cap and excluding stock options deals. 
+                    These settings can be customized in Settings later.
+                  </p>
+                </div>
                 <p className="text-xs text-muted-foreground mt-4">
                   This may take 30-60 seconds...
                 </p>

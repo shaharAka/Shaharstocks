@@ -59,19 +59,26 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
     
     // Convert transactions to stock recommendations
     let createdCount = 0;
-    let filteredCount = 0;
+    let filteredMarketCap = 0;
+    let filteredOptionsDeals = 0;
+    let filteredAlreadyExists = 0;
+    let filteredNoQuote = 0;
+    
     for (const transaction of transactions) {
       try {
         // Check if stock already exists
         const existingStock = await storage.getStock(transaction.ticker);
         
         if (existingStock) {
+          filteredAlreadyExists++;
           continue;
         }
 
         // Get current market price from Finnhub
         const quote = await finnhubService.getQuote(transaction.ticker);
         if (!quote || !quote.currentPrice) {
+          filteredNoQuote++;
+          console.log(`[InitialDataFetch] ${transaction.ticker} no quote available, skipping`);
           continue;
         }
 
@@ -82,7 +89,7 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
         // Apply market cap filter (must be > $500M)
         const marketCapValue = data?.marketCap ? data.marketCap * 1_000_000 : 0;
         if (marketCapValue < 500_000_000) {
-          filteredCount++;
+          filteredMarketCap++;
           console.log(`[InitialDataFetch] ${transaction.ticker} market cap too low: $${(marketCapValue / 1_000_000).toFixed(1)}M, skipping`);
           continue;
         }
@@ -90,8 +97,8 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
         // Apply options deal filter (insider price should be >= 15% of current price)
         const insiderPriceNum = transaction.price;
         if (insiderPriceNum < quote.currentPrice * 0.15) {
-          filteredCount++;
-          console.log(`[InitialDataFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum} vs market: $${quote.currentPrice}), skipping`);
+          filteredOptionsDeals++;
+          console.log(`[InitialDataFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum.toFixed(2)} < 15% of market: $${quote.currentPrice.toFixed(2)}), skipping`);
           continue;
         }
 
@@ -128,7 +135,14 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
       }
     }
 
-    console.log(`[InitialDataFetch] Processed ${transactions.length} transactions for user ${userId}: created ${createdCount}, filtered ${filteredCount}`);
+    const totalFiltered = filteredMarketCap + filteredOptionsDeals + filteredAlreadyExists + filteredNoQuote;
+    console.log(`[InitialDataFetch] Completed processing ${transactions.length} transactions:`);
+    console.log(`  ✓ Created: ${createdCount}`);
+    console.log(`  ⊗ Already exists: ${filteredAlreadyExists}`);
+    console.log(`  ⊗ Market cap < $500M: ${filteredMarketCap}`);
+    console.log(`  ⊗ Options deals (price < 15% of market): ${filteredOptionsDeals}`);
+    console.log(`  ⊗ No quote available: ${filteredNoQuote}`);
+    console.log(`  Total filtered: ${totalFiltered}`);
     
     // Mark user as having initial data fetched
     await storage.markUserInitialDataFetched(userId);
@@ -2906,11 +2920,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[OpeninsiderFetch] Received ${quotesMap.size} quotes and ${stockDataMap.size} company profiles`);
       
       // Step 3: Process transactions with cached data
+      let filteredMarketCap = 0;
+      let filteredOptionsDeals = 0;
+      let filteredNoQuote = 0;
+      
       for (const transaction of newTransactions) {
         try {
           // Get pre-fetched quote
           const quote = quotesMap.get(transaction.ticker);
           if (!quote || !quote.currentPrice) {
+            filteredNoQuote++;
             console.log(`[OpeninsiderFetch] No quote for ${transaction.ticker}, skipping`);
             continue;
           }
@@ -2921,8 +2940,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Apply market cap filter (must be > $500M)
           // Note: data.marketCap is already in millions from Finnhub
           if (!data?.marketCap || data.marketCap < 500) {
-            filteredCount++;
+            filteredMarketCap++;
             console.log(`[OpeninsiderFetch] ${transaction.ticker} market cap too low: $${data?.marketCap || 0}M (need >$500M), skipping`);
+            continue;
+          }
+          
+          // Apply options deal filter (insider price should be >= 15% of current price)
+          const insiderPriceNum = transaction.price;
+          if (insiderPriceNum < quote.currentPrice * 0.15) {
+            filteredOptionsDeals++;
+            console.log(`[OpeninsiderFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum.toFixed(2)} < 15% of market: $${quote.currentPrice.toFixed(2)}), skipping`);
             continue;
           }
 
@@ -3012,12 +3039,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      const totalFiltered = filteredMarketCap + filteredOptionsDeals + filteredNoQuote + filteredCount;
+      
+      console.log(`[OpeninsiderFetch] Processing summary:`);
+      console.log(`  ✓ Created: ${createdCount}`);
+      console.log(`  ⊗ Already exists: ${filteredCount}`);
+      console.log(`  ⊗ Market cap < $500M: ${filteredMarketCap}`);
+      console.log(`  ⊗ Options deals (price < 15% of market): ${filteredOptionsDeals}`);
+      console.log(`  ⊗ No quote available: ${filteredNoQuote}`);
+      console.log(`  Total processed: ${transactions.length}, Total filtered: ${totalFiltered}`);
+      
       res.json({ 
         success: true, 
-        message: `Successfully created ${createdCount} new stock recommendations from ${transactions.length} transactions (${filteredCount} filtered out by market cap <$500M)`,
+        message: `Created ${createdCount} new recommendations from ${transactions.length} transactions. Filtered: ${filteredCount} already exist, ${filteredMarketCap} market cap <$500M, ${filteredOptionsDeals} options deals, ${filteredNoQuote} no quote`,
         created: createdCount,
         total: transactions.length,
-        filtered: filteredCount,
+        filtered: {
+          alreadyExists: filteredCount,
+          marketCapTooLow: filteredMarketCap,
+          optionsDeals: filteredOptionsDeals,
+          noQuote: filteredNoQuote,
+          total: totalFiltered
+        },
         transactionsFetched: transactions.length
       });
     } catch (error) {

@@ -2888,22 +2888,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get options deal threshold from config
       const optionsDealThreshold = config.optionsDealThresholdPercent ?? 15;
       
-      // Log active filters for debugging
-      console.log(`[OpeninsiderFetch] ====== ACTIVE FILTERS ======`);
-      console.log(`[OpeninsiderFetch] Fetch limit: ${config.fetchLimit || 50}`);
-      if (filters.insiderTitles) {
-        console.log(`[OpeninsiderFetch] Insider titles: ${filters.insiderTitles.join(', ')}`);
-      } else {
-        console.log(`[OpeninsiderFetch] Insider titles: ALL (no filter)`);
-      }
-      if (filters.minTransactionValue) {
-        console.log(`[OpeninsiderFetch] Min transaction value: $${filters.minTransactionValue.toLocaleString()}`);
-      } else {
-        console.log(`[OpeninsiderFetch] Min transaction value: NONE (no filter)`);
-      }
-      console.log(`[OpeninsiderFetch] Options deal threshold: ${optionsDealThreshold}% (insider price must be >= ${optionsDealThreshold}% of market price)`);
-      console.log(`[OpeninsiderFetch] Market cap filter: >$500M (hardcoded for purchase recommendations)`);
-      console.log(`[OpeninsiderFetch] ==============================`);
+      // Log all active filters for debugging
+      console.log(`[OpeninsiderFetch] Active filters:`, {
+        fetchLimit: config.fetchLimit || 50,
+        insiderTitles: filters.insiderTitles || null,
+        minTransactionValue: filters.minTransactionValue || null,
+        previousDayOnly: filters.previousDayOnly || false,
+        optionsDealThreshold: `${optionsDealThreshold}%`,
+        marketCapMinimum: "$500M (hardcoded)"
+      });
       
       // Fetch insider transactions with filters
       const transactions = await openinsiderService.fetchInsiderPurchases(

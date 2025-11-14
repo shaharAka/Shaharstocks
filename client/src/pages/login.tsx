@@ -82,6 +82,7 @@ export default function Login() {
   });
 
   const onSubmit = (data: LoginForm) => {
+    console.log('Login form submitted:', { email: data.email });
     loginMutation.mutate(data);
   };
 
@@ -183,9 +184,16 @@ export default function Login() {
               />
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full touch-manipulation"
                 disabled={loginMutation.isPending}
                 data-testid="button-login"
+                onClick={(e) => {
+                  console.log('Login button clicked');
+                  const formElement = e.currentTarget.closest('form');
+                  if (!formElement) {
+                    console.error('Form element not found');
+                  }
+                }}
               >
                 {loginMutation.isPending ? "Signing in..." : "Sign In"}
               </Button>

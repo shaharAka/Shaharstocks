@@ -4,21 +4,22 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Stock opportunity information from insider trading data feeds
+// Each row represents an individual insider transaction (multiple transactions per ticker allowed)
 export const stocks = pgTable("stocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  ticker: text("ticker").notNull().unique(),
+  ticker: text("ticker").notNull(), // Removed .unique() to allow multiple transactions per company
   companyName: text("company_name").notNull(),
   currentPrice: decimal("current_price", { precision: 12, scale: 2 }).notNull(), // Real-time market price
   previousClose: decimal("previous_close", { precision: 12, scale: 2 }),
   insiderPrice: decimal("insider_price", { precision: 12, scale: 2 }), // Price at which insider transacted
   insiderQuantity: integer("insider_quantity"), // Number of shares insider transacted
-  insiderTradeDate: text("insider_trade_date"), // Date when insider executed the transaction
-  insiderName: text("insider_name"), // Name of the insider who executed the transaction
+  insiderTradeDate: text("insider_trade_date").notNull(), // Date when insider executed the transaction (required for uniqueness)
+  insiderName: text("insider_name").notNull(), // Name of the insider who executed the transaction (required for uniqueness)
   insiderTitle: text("insider_title"), // Title of the insider (CEO, CFO, Director, etc.)
   marketPriceAtInsiderDate: decimal("market_price_at_insider_date", { precision: 12, scale: 2 }), // Market closing price on insider transaction date
   marketCap: text("market_cap"),
   peRatio: decimal("pe_ratio", { precision: 10, scale: 2 }),
-  recommendation: text("recommendation"), // "buy", "sell" (insider transaction type) - for data tracking only
+  recommendation: text("recommendation").notNull(), // "buy", "sell" (insider transaction type) - required for uniqueness
   recommendationStatus: text("recommendation_status").default("pending"), // "pending", "approved", "rejected" - user review status
   source: text("source"), // "telegram" or "openinsider" - data source
   confidenceScore: integer("confidence_score"), // 0-100 data quality score - measures reliability of the data source
@@ -47,7 +48,15 @@ export const stocks = pgTable("stocks", {
   combinedAnalysisCompleted: boolean("combined_analysis_completed").notNull().default(false), // Integrated score calculated
   lastUpdated: timestamp("last_updated").defaultNow(),
   rejectedAt: timestamp("rejected_at"), // When the recommendation was rejected
-});
+}, (table) => ({
+  // Unique constraint: Each transaction is unique by ticker + trade date + insider + type
+  transactionUnique: uniqueIndex("stock_transaction_unique_idx").on(
+    table.ticker,
+    table.insiderTradeDate,
+    table.insiderName,
+    table.recommendation
+  ),
+}));
 
 export const stockSchema = createSelectSchema(stocks);
 export const insertStockSchema = createInsertSchema(stocks).omit({ id: true, lastUpdated: true, recommendationStatus: true, rejectedAt: true });

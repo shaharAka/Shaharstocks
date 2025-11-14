@@ -2957,6 +2957,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let filteredOptionsDeals = 0;
       let filteredNoQuote = 0;
       
+      console.log(`[OpeninsiderFetch] Processing ${newTransactions.length} new transactions with backend filters...`);
+      
       for (const transaction of newTransactions) {
         try {
           // Get pre-fetched quote

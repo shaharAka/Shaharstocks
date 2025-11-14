@@ -209,7 +209,7 @@ export default function Community() {
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6 max-w-screen-2xl">
+    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl">
       <div className="flex items-center gap-3 mb-4 md:mb-6">
         <Lightbulb className="h-6 w-6 md:h-8 md:w-8 text-primary" />
         <div>

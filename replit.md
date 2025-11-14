@@ -3,6 +3,11 @@
 ## Overview
 signal2 is a professional stock trading dashboard offering real-time portfolio tracking, automated trigger-based trading rules, and comprehensive backtesting. It features a modern, information-dense interface for quick readability and trade execution. The system integrates real-time stock recommendations, news sentiment analysis, and AI-powered financial analysis from SEC EDGAR filings, Alpha Vantage fundamentals, and industry-specific macro analysis using sector ETFs. It supports multi-user collaboration, PayPal subscription payments, and Telegram integration for insider trading alerts.
 
+## UX Philosophy
+**Minimalistic landing page pushing high-signal alerts for quick decisions**: The primary flow prioritizes showing urgent opportunities with minimal friction. Users see filtered, high-quality recommendations immediately with prominent approve/reject actions. Advanced tools (AI analysis, simulations, what-if scenarios, detailed charts) are accessible but not prominent—users seeking depth can activate them via "Deep Dive" modals or navigate to advanced sections.
+
+**Navigation Flow**: 📊 Opportunities (landing, quick decisions) → 🔬 Analysis (advanced: Simulation + What-If Rules) → ⭐ Watchlist (advanced: Tracked Stocks + Active Alerts + History).
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 

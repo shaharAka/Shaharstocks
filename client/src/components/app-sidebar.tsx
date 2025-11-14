@@ -34,13 +34,16 @@ import {
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 
-const menuItems = [
+const quickDecisionItems = [
   {
-    title: "Recommendations",
+    title: "Opportunities",
     url: "/recommendations",
     icon: ShoppingCart,
-    testId: "link-recommendations",
+    testId: "link-opportunities",
   },
+];
+
+const advancedToolsItems = [
   {
     title: "Analysis",
     url: "/trading",
@@ -136,18 +139,51 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>Quick Decisions</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => {
-                // Check if current page matches this menu item (compare paths without query strings)
+              {quickDecisionItems.map((item) => {
                 const itemPath = item.url.split('?')[0];
-                // Treat "/" and "/recommendations" as equivalent (both show Recommendations page)
                 const isPageActive = currentPath === itemPath || 
                                       (itemPath === "/recommendations" && currentPath === "/");
                 const showBadge = item.url === "/recommendations" && newStocksCount > 0;
                 
-                // If item has sub-items, render as collapsible
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      className={isPageActive ? "bg-sidebar-accent" : ""}
+                      data-testid={item.testId}
+                      tooltip={isCollapsed ? item.title : undefined}
+                    >
+                      <Link href={item.url} onClick={handleNavClick}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                        {showBadge && (
+                          <span 
+                            className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
+                            data-testid="badge-new-opportunities"
+                          >
+                            {newStocksCount}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Advanced Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {advancedToolsItems.map((item) => {
+                const itemPath = item.url.split('?')[0];
+                const isPageActive = currentPath === itemPath;
+                
                 if (item.subItems) {
                   return (
                     <Collapsible key={item.title} asChild defaultOpen={isPageActive}>
@@ -158,7 +194,7 @@ export function AppSidebar() {
                             data-testid={item.testId}
                             tooltip={isCollapsed ? item.title : undefined}
                           >
-                            <item.icon className="h-4 w-4" />
+                            <item.icon className="h-4 w-4 text-muted-foreground" />
                             <span>{item.title}</span>
                             <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
                           </SidebarMenuButton>
@@ -166,7 +202,6 @@ export function AppSidebar() {
                         <CollapsibleContent>
                           <SidebarMenuSub>
                             {item.subItems.map((subItem) => {
-                              // Extract tab param from subItem URL
                               const subItemTab = new URLSearchParams(subItem.url.split('?')[1] || '').get('tab');
                               const isSubItemActive = isPageActive && currentTab === subItemTab;
                               
@@ -190,7 +225,6 @@ export function AppSidebar() {
                   );
                 }
                 
-                // Regular menu item without sub-items
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
@@ -200,16 +234,8 @@ export function AppSidebar() {
                       tooltip={isCollapsed ? item.title : undefined}
                     >
                       <Link href={item.url} onClick={handleNavClick}>
-                        <item.icon className="h-4 w-4" />
+                        <item.icon className="h-4 w-4 text-muted-foreground" />
                         <span>{item.title}</span>
-                        {showBadge && (
-                          <span 
-                            className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
-                            data-testid="badge-new-stocks"
-                          >
-                            {newStocksCount}
-                          </span>
-                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

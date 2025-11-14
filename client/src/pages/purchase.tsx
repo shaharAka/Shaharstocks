@@ -152,9 +152,15 @@ export default function Purchase() {
       };
     });
 
+    // Apply 14-day filter: only show opportunities from the last 2 weeks
+    const within14Days = stocksWithScores.filter(stock => {
+      const days = (stock as any).daysSinceTrade;
+      return days !== null && days <= 14;
+    });
+
     // Apply risk preset filters (returns filtered array with merged scores preserved)
     const preset = getRiskPreset(riskLevel);
-    const filteredWithScores = applyRiskPresetFilters(stocksWithScores, preset);
+    const filteredWithScores = applyRiskPresetFilters(within14Days, preset);
 
     // Sort opportunities using merged fields
     const sorted = [...filteredWithScores].sort((a, b) => {
@@ -180,6 +186,30 @@ export default function Purchase() {
   // Get pinned opportunities
   const pinnedOpportunities = useMemo(() => {
     return opportunities.filter(stock => stock.isPinned === true);
+  }, [opportunities]);
+
+  // Group opportunities by company ticker
+  const groupedOpportunities = useMemo(() => {
+    const groups = new Map<string, typeof opportunities>();
+    
+    opportunities.forEach(stock => {
+      const existing = groups.get(stock.ticker) || [];
+      groups.set(stock.ticker, [...existing, stock]);
+    });
+    
+    // Convert to array and sort by best AI score in each group
+    return Array.from(groups.entries())
+      .map(([ticker, stocks]) => ({
+        ticker,
+        companyName: stocks[0].companyName || ticker,
+        stocks: stocks.sort((a, b) => {
+          const aScore = (a as any).integratedScore ?? (a as any).aiScore ?? 0;
+          const bScore = (b as any).integratedScore ?? (b as any).aiScore ?? 0;
+          return bScore - aScore;
+        }),
+        maxAiScore: Math.max(...stocks.map(s => (s as any).integratedScore ?? (s as any).aiScore ?? 0)),
+      }))
+      .sort((a, b) => b.maxAiScore - a.maxAiScore); // Sort groups by best AI score
   }, [opportunities]);
 
   // Parse market cap for sorting
@@ -347,37 +377,64 @@ export default function Purchase() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {opportunities.map((stock) => {
-            // Use merged fields directly instead of re-fetching
-            const aiScore = (stock as any).integratedScore ?? (stock as any).aiScore ?? null;
-            const daysSinceTrade = (stock as any).daysSinceTrade ?? 0;
+        <div className="space-y-6">
+          {groupedOpportunities.map((group) => (
+            <div key={group.ticker} className="space-y-3">
+              {/* Company Header */}
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  {group.ticker}
+                  <a
+                    href={`https://finance.yahoo.com/quote/${group.ticker}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </h2>
+                {group.companyName !== group.ticker && (
+                  <span className="text-sm text-muted-foreground">{group.companyName}</span>
+                )}
+                {group.stocks.length > 1 && (
+                  <Badge variant="outline" className="ml-auto">
+                    {group.stocks.length} transactions
+                  </Badge>
+                )}
+              </div>
 
-            return (
-              <Card 
-                key={stock.ticker} 
-                className="hover-elevate relative"
-                data-testid={`card-opportunity-${stock.ticker}`}
-              >
+              {/* Transaction Cards */}
+              <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {group.stocks.map((stock) => {
+                  // Use merged fields directly instead of re-fetching
+                  const aiScore = (stock as any).integratedScore ?? (stock as any).aiScore ?? null;
+                  const daysSinceTrade = (stock as any).daysSinceTrade ?? 0;
+                  
+                  // Create composite key for unique identification
+                  const compositeKey = `${stock.ticker}-${stock.insiderName}-${stock.insiderTradeDate}`;
+
+                  return (
+                    <Card 
+                      key={stock.id || compositeKey} 
+                      className="hover-elevate relative"
+                      data-testid={`card-opportunity-${compositeKey}`}
+                    >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <span className="truncate" data-testid={`text-ticker-${stock.ticker}`}>
-                          {stock.ticker}
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <span className="truncate" data-testid={`text-insider-${compositeKey}`}>
+                          {stock.insiderName || "Insider"}
                         </span>
-                        <a
-                          href={`https://finance.yahoo.com/quote/${stock.ticker}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
                       </CardTitle>
-                      {stock.companyName && (
+                      {stock.insiderTitle && (
                         <p className="text-xs text-muted-foreground truncate mt-1">
-                          {stock.companyName}
+                          {stock.insiderTitle}
+                        </p>
+                      )}
+                      {stock.insiderTradeDate && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Trade: {new Date(stock.insiderTradeDate).toLocaleDateString()}
                         </p>
                       )}
                     </div>
@@ -414,11 +471,13 @@ export default function Purchase() {
                     </div>
                   )}
 
-                  {/* Insider Info */}
-                  {stock.insiderTitle && (
+                  {/* Insider Price & Quantity */}
+                  {stock.insiderPrice && stock.insiderQuantity && (
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">{getTerm("insiderRole")}:</span>
-                      <span className="font-medium text-xs">{stock.insiderTitle}</span>
+                      <span className="text-muted-foreground">Insider Trade:</span>
+                      <span className="font-medium text-xs">
+                        {stock.insiderQuantity.toLocaleString()} @ ${stock.insiderPrice}
+                      </span>
                     </div>
                   )}
 
@@ -464,7 +523,10 @@ export default function Purchase() {
             );
           })}
         </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
     </div>
   );
 }

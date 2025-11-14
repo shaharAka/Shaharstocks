@@ -878,6 +878,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
   const [fetchInterval, setFetchInterval] = useState<"hourly" | "daily">("hourly");
   const [insiderTitles, setInsiderTitles] = useState<string[]>([]);
   const [minTransactionValue, setMinTransactionValue] = useState<number | null>(null);
+  const [minMarketCap, setMinMarketCap] = useState(500);
   const [fetchPreviousDayOnly, setFetchPreviousDayOnly] = useState(false);
   const [optionsDealThreshold, setOptionsDealThreshold] = useState(15);
 
@@ -893,6 +894,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
       setFetchInterval((config.fetchInterval as "hourly" | "daily") || "hourly");
       setInsiderTitles(config.insiderTitles || []);
       setMinTransactionValue(config.minTransactionValue || null);
+      setMinMarketCap(config.minMarketCap || 500);
       setFetchPreviousDayOnly(config.fetchPreviousDayOnly || false);
       setOptionsDealThreshold(config.optionsDealThresholdPercent || 15);
     }

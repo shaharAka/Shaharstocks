@@ -2885,18 +2885,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.previousDayOnly = true;
       }
 
-      // Get options deal threshold from config
+      // Get configurable backend filters
       const optionsDealThreshold = config.optionsDealThresholdPercent ?? 15;
+      const minMarketCap = config.minMarketCap ?? 500; // Default $500M if not set
       
-      // Log all active filters for debugging
-      console.log(`[OpeninsiderFetch] Active filters:`, {
-        fetchLimit: config.fetchLimit || 50,
-        insiderTitles: filters.insiderTitles || null,
-        minTransactionValue: filters.minTransactionValue || null,
-        previousDayOnly: filters.previousDayOnly || false,
-        optionsDealThreshold: `${optionsDealThreshold}%`,
-        marketCapMinimum: "$500M (hardcoded)"
-      });
+      // Log all active filters for debugging (split into stage-1 and stage-2)
+      console.log(`[OpeninsiderFetch] ====== STAGE 1: Python Scraper Filters ======`);
+      console.log(`[OpeninsiderFetch] Fetch limit: ${config.fetchLimit || 50}`);
+      console.log(`[OpeninsiderFetch] Insider titles: ${filters.insiderTitles ? filters.insiderTitles.join(', ') : 'ALL'}`);
+      console.log(`[OpeninsiderFetch] Min transaction value: ${filters.minTransactionValue ? '$' + filters.minTransactionValue.toLocaleString() : 'NONE'}`);
+      console.log(`[OpeninsiderFetch] Previous day only: ${filters.previousDayOnly}`);
+      console.log(`[OpeninsiderFetch] ====== STAGE 2: Backend Post-Processing ======`);
+      console.log(`[OpeninsiderFetch] Min market cap: $${minMarketCap}M`);
+      console.log(`[OpeninsiderFetch] Options deal threshold: ${optionsDealThreshold}% (insider price >= market price)`);
+      console.log(`[OpeninsiderFetch] ==============================================`);
       
       // Fetch insider transactions with filters
       const transactions = await openinsiderService.fetchInsiderPurchases(
@@ -2972,13 +2974,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Get pre-fetched company data
           const data = stockDataMap.get(transaction.ticker);
           
-          // Apply market cap filter (must be > $500M)
+          // Apply market cap filter using user-configurable threshold
           // Note: data.marketCap is already in millions from Finnhub
-          if (!data?.marketCap || data.marketCap < 500) {
+          if (!data?.marketCap || data.marketCap < minMarketCap) {
             filteredMarketCap++;
             console.log(`[OpeninsiderFetch] ⊗ ${transaction.ticker} market cap too low:`);
             console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);
-            console.log(`  Market cap: $${data?.marketCap || 0}M (need >$500M)`);
+            console.log(`  Market cap: $${data?.marketCap || 0}M (need >$${minMarketCap}M)`);
             console.log(`  Insider price: $${transaction.price.toFixed(2)}, Market price: $${quote.currentPrice.toFixed(2)}`);
             continue;
           }

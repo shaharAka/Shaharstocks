@@ -760,6 +760,7 @@ export const openinsiderConfig = pgTable("openinsider_config", {
   // Filters
   insiderTitles: text("insider_titles").array(), // Filter by insider titles (CEO, CFO, Director, etc.)
   minTransactionValue: integer("min_transaction_value"), // Minimum transaction value in dollars
+  minMarketCap: integer("min_market_cap").notNull().default(500), // Minimum market cap in millions (default $500M)
   optionsDealThresholdPercent: integer("options_deal_threshold_percent").notNull().default(15), // Insider price must be >= this % of market price (filters options deals)
   lastSync: timestamp("last_sync"),
   lastError: text("last_error"),

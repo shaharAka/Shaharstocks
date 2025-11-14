@@ -122,11 +122,12 @@ export default function Purchase() {
   const opportunities = useMemo(() => {
     if (!stocks) return [];
 
-    // Start with pending stocks that have buy recommendations
+    // Start with pending stocks (both BUY and SELL)
     let filtered = stocks.filter(stock => {
-      // Only show pending stocks with buy recommendations
+      // Only show pending stocks with either buy or sell recommendations
       if (stock.userStatus !== "pending") return false;
-      if (!stock.recommendation?.toLowerCase().includes("buy")) return false;
+      const rec = stock.recommendation?.toLowerCase();
+      if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
       
       // Apply ticker search
       if (tickerSearch.trim() !== "") {
@@ -424,8 +425,8 @@ export default function Purchase() {
                   {/* Transaction Type */}
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">{getTerm("transactionType")}:</span>
-                    <Badge variant="default">
-                      {getTerm(stock.recommendation?.toLowerCase().includes("buy") ? "buy" : "sell")}
+                    <Badge variant={stock.recommendation?.toLowerCase().includes("buy") ? "default" : "destructive"}>
+                      {getTerm(stock.recommendation?.toLowerCase().includes("buy") ? "insiderPurchase" : "insiderSale")}
                     </Badge>
                   </div>
 
@@ -441,14 +442,21 @@ export default function Purchase() {
 
                   {/* AI Score */}
                   {aiScore !== null && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">AI Score:</span>
-                      <Badge 
-                        variant={aiScore >= 75 ? "default" : aiScore >= 50 ? "secondary" : "outline"}
-                        data-testid={`badge-score-${stock.ticker}`}
-                      >
-                        {aiScore}
-                      </Badge>
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">AI Score:</span>
+                        <Badge 
+                          variant={aiScore >= 75 ? "default" : aiScore >= 50 ? "secondary" : "outline"}
+                          data-testid={`badge-score-${stock.ticker}`}
+                        >
+                          {aiScore}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {stock.recommendation?.toLowerCase().includes("buy") 
+                          ? "Likelihood of price appreciation" 
+                          : "Likelihood of price decline"}
+                      </p>
                     </div>
                   )}
                 </CardContent>

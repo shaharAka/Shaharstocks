@@ -193,7 +193,7 @@ export function StockTable({
     <div className="rounded-md border max-h-[calc(100vh-16rem)] overflow-hidden flex flex-col">
       <div className="overflow-x-auto overflow-y-auto flex-1">
         <Table className="text-sm">
-          <TableHeader className="sticky top-0 bg-background z-10">
+          <TableHeader className="sticky top-0 bg-background z-[1]">
             <TableRow>
               <TableHead className="w-12">
                 {onSelectAll && (

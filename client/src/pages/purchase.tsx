@@ -21,6 +21,14 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
   ArrowUpRight,
   ArrowDownRight,
   Activity,
@@ -44,6 +52,7 @@ import {
   Sparkles,
   Search,
   Pin,
+  Zap,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -972,126 +981,285 @@ export default function Purchase() {
     return analyses.find(a => a.ticker === ticker);
   };
 
+  // Identify urgent opportunities (high-signal alerts)
+  const urgentOpportunities = pendingRecommendations
+    .filter(stock => {
+      const analysis = getAIAnalysis(stock.ticker);
+      const aiScore = analysis?.aiScore || 0;
+      return stock.recommendation === 'BUY' && aiScore >= 70 && (stock.ageDays || 0) <= 14;
+    })
+    .sort((a, b) => {
+      // Sort by AI score descending, then by age ascending
+      const aAnalysis = getAIAnalysis(a.ticker);
+      const bAnalysis = getAIAnalysis(b.ticker);
+      const aScore = aAnalysis?.aiScore || 0;
+      const bScore = bAnalysis?.aiScore || 0;
+      if (aScore !== bScore) return bScore - aScore;
+      return (a.ageDays || 0) - (b.ageDays || 0);
+    })
+    .slice(0, 4);
+
+  // Remaining stocks for backlog
+  const backlogStocks = pendingRecommendations.filter(
+    stock => !urgentOpportunities.find(u => u.ticker === stock.ticker)
+  );
+
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl mx-auto">
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">
-              Purchase Recommendations
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Review and approve stocks based on insider trading activity
-            </p>
-          </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => refreshAllMutation.mutate()}
-              disabled={refreshAllMutation.isPending}
-              data-testid="button-refresh-all"
-              className="hidden sm:flex"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshAllMutation.isPending ? "animate-spin" : ""}`} />
-              {refreshAllMutation.isPending ? "Refreshing..." : "Refresh Market Data"}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => refreshAllMutation.mutate()}
-              disabled={refreshAllMutation.isPending}
-              data-testid="button-refresh-all-mobile"
-              className="sm:hidden h-11 w-11"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshAllMutation.isPending ? "animate-spin" : ""}`} />
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => bulkAnalyzeMutation.mutate()}
-              disabled={bulkAnalyzeMutation.isPending}
-              data-testid="button-analyze-all"
-              className="hidden sm:flex"
-            >
-              <Sparkles className={`h-4 w-4 mr-2 ${bulkAnalyzeMutation.isPending ? "animate-spin" : ""}`} />
-              {bulkAnalyzeMutation.isPending ? "Analyzing..." : "Run AI Analysis"}
-            </Button>
-          </div>
+    <div className="p-4 md:p-6 space-y-6 md:space-y-8 max-w-7xl mx-auto">
+      {/* Simplified Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">
+            Opportunities
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            High-signal alerts for quick decisions
+          </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 md:gap-3 flex-wrap">
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search ticker or company..."
-              value={tickerSearch}
-              onChange={(e) => setTickerSearch(e.target.value)}
-              className="pl-9 w-full"
-              data-testid="input-ticker-search"
-            />
-          </div>
-          <Select value={interestFilter} onValueChange={(value: InterestFilter) => setInterestFilter(value)}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-interest-filter">
-              <SelectValue placeholder="Filter by interest" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stocks</SelectItem>
-              <SelectItem value="multiple">All Users Interested</SelectItem>
-              {users.map((user) => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.name} Interested
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={daysFilter} onValueChange={(value: DaysFilter) => setDaysFilter(value)}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-days-filter">
-              <SelectValue placeholder="Filter by days" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Any Time</SelectItem>
-              <SelectItem value="7">Last 7 Days</SelectItem>
-              <SelectItem value="14">Last 14 Days</SelectItem>
-              <SelectItem value="30">Last 30 Days</SelectItem>
-              <SelectItem value="60">Last 60 Days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={aiScoreFilter} onValueChange={(value: AIScoreFilter) => setAiScoreFilter(value)}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-ai-score-filter">
-              <SelectValue placeholder="Filter by AI score" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Scores</SelectItem>
-              <SelectItem value="0-50">0-50 (Low)</SelectItem>
-              <SelectItem value="50-75">50-75 (Medium)</SelectItem>
-              <SelectItem value="75-100">75-100 (High)</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="flex gap-1">
-            <Button
-              variant={viewMode === "table" ? "default" : "outline"}
-              size="lg"
-              onClick={() => setViewMode("table")}
-              data-testid="button-view-table"
-              className="toggle-elevate"
-            >
-              <LayoutList className="h-4 w-4 mr-2" />
-              Table
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="lg" data-testid="button-filters">
+              <Filter className="h-4 w-4 mr-2" />
+              Filters & Tools
             </Button>
-            <Button
-              variant={viewMode === "cards" ? "default" : "outline"}
-              size="lg"
-              onClick={() => setViewMode("cards")}
-              data-testid="button-view-cards"
-              className="toggle-elevate"
-            >
-              <LayoutGrid className="h-4 w-4 mr-2" />
-              Cards
-            </Button>
-          </div>
-        </div>
+          </SheetTrigger>
+          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Filters & Advanced Tools</SheetTitle>
+              <SheetDescription>
+                Customize your view and access advanced features
+              </SheetDescription>
+            </SheetHeader>
+            <div className="space-y-6 mt-6">
+              {/* Search */}
+              <div className="space-y-2">
+                <Label>Search</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search ticker or company..."
+                    value={tickerSearch}
+                    onChange={(e) => setTickerSearch(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-ticker-search"
+                  />
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="space-y-2">
+                <Label>Interest Filter</Label>
+                <Select value={interestFilter} onValueChange={(value: InterestFilter) => setInterestFilter(value)}>
+                  <SelectTrigger data-testid="select-interest-filter">
+                    <SelectValue placeholder="Filter by interest" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stocks</SelectItem>
+                    <SelectItem value="multiple">All Users Interested</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name} Interested
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Time Period</Label>
+                <Select value={daysFilter} onValueChange={(value: DaysFilter) => setDaysFilter(value)}>
+                  <SelectTrigger data-testid="select-days-filter">
+                    <SelectValue placeholder="Filter by days" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Any Time</SelectItem>
+                    <SelectItem value="7">Last 7 Days</SelectItem>
+                    <SelectItem value="14">Last 14 Days</SelectItem>
+                    <SelectItem value="30">Last 30 Days</SelectItem>
+                    <SelectItem value="60">Last 60 Days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>AI Score</Label>
+                <Select value={aiScoreFilter} onValueChange={(value: AIScoreFilter) => setAiScoreFilter(value)}>
+                  <SelectTrigger data-testid="select-ai-score-filter">
+                    <SelectValue placeholder="Filter by AI score" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Scores</SelectItem>
+                    <SelectItem value="0-50">0-50 (Low)</SelectItem>
+                    <SelectItem value="50-75">50-75 (Medium)</SelectItem>
+                    <SelectItem value="75-100">75-100 (High)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* View Mode */}
+              <div className="space-y-2">
+                <Label>View Mode</Label>
+                <div className="flex gap-2">
+                  <Button
+                    variant={viewMode === "table" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setViewMode("table")}
+                    data-testid="button-view-table"
+                  >
+                    <LayoutList className="h-4 w-4 mr-2" />
+                    Table
+                  </Button>
+                  <Button
+                    variant={viewMode === "cards" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setViewMode("cards")}
+                    data-testid="button-view-cards"
+                  >
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                    Cards
+                  </Button>
+                </div>
+              </div>
+
+              {/* Advanced Tools */}
+              <div className="pt-4 border-t space-y-3">
+                <Label>Advanced Actions</Label>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => refreshAllMutation.mutate()}
+                  disabled={refreshAllMutation.isPending}
+                  data-testid="button-refresh-all"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${refreshAllMutation.isPending ? "animate-spin" : ""}`} />
+                  {refreshAllMutation.isPending ? "Refreshing..." : "Refresh Market Data"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => bulkAnalyzeMutation.mutate()}
+                  disabled={bulkAnalyzeMutation.isPending}
+                  data-testid="button-analyze-all"
+                >
+                  <Sparkles className={`h-4 w-4 mr-2 ${bulkAnalyzeMutation.isPending ? "animate-spin" : ""}`} />
+                  {bulkAnalyzeMutation.isPending ? "Analyzing..." : "Run AI Analysis"}
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
+
+      {/* Hero Section: Urgent Opportunities */}
+      {urgentOpportunities.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Urgent Opportunities</h2>
+            <Badge variant="secondary" className="ml-auto">
+              {urgentOpportunities.length} High-Priority
+            </Badge>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {urgentOpportunities.map((stock) => {
+              const analysis = getAIAnalysis(stock.ticker);
+              const aiScore = analysis?.aiScore || 0;
+              const currentPrice = parseFloat(stock.currentPrice);
+              
+              return (
+                <Card 
+                  key={stock.id} 
+                  className="relative border-2 border-primary/20 hover-elevate"
+                  data-testid={`card-urgent-${stock.ticker}`}
+                >
+                  <CardHeader className="space-y-0 pb-3">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-lg truncate" data-testid={`text-ticker-${stock.ticker}`}>
+                          {stock.ticker}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {stock.companyName}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant={aiScore >= 85 ? "default" : "secondary"}
+                        className="ml-2 flex-shrink-0"
+                      >
+                        {aiScore}
+                      </Badge>
+                    </div>
+                    <div className="text-2xl font-mono font-semibold">
+                      ${currentPrice.toFixed(2)}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-0">
+                    {analysis?.primaryCatalyst && (
+                      <div className="text-xs text-muted-foreground line-clamp-2">
+                        {analysis.primaryCatalyst}
+                      </div>
+                    )}
+                    {stock.ageDays !== undefined && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {stock.ageDays === 0 ? 'Today' : `${stock.ageDays}d ago`}
+                      </div>
+                    )}
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedStock(stock);
+                          setApprovalAction("approve");
+                          setConfirmDialogOpen(true);
+                        }}
+                        data-testid={`button-approve-${stock.ticker}`}
+                      >
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedStock(stock);
+                          setApprovalAction("reject");
+                          setConfirmDialogOpen(true);
+                        }}
+                        data-testid={`button-reject-${stock.ticker}`}
+                      >
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Dismiss
+                      </Button>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => {
+                        setExplorerStock(stock);
+                        setExplorerOpen(true);
+                        if (currentUser) {
+                          markViewedMutation.mutate({ ticker: stock.ticker });
+                        }
+                      }}
+                      data-testid={`button-deep-dive-${stock.ticker}`}
+                    >
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      Deep Dive
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={(value) => {
         setActiveTab(value as StockListTab);

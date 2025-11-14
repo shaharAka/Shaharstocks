@@ -3,25 +3,25 @@ import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, un
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Stock information from Telegram insider trading feed
+// Stock opportunity information from insider trading data feeds
 export const stocks = pgTable("stocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticker: text("ticker").notNull().unique(),
   companyName: text("company_name").notNull(),
   currentPrice: decimal("current_price", { precision: 12, scale: 2 }).notNull(), // Real-time market price
   previousClose: decimal("previous_close", { precision: 12, scale: 2 }),
-  insiderPrice: decimal("insider_price", { precision: 12, scale: 2 }), // Price at which insider bought/sold
-  insiderQuantity: integer("insider_quantity"), // Number of shares insider traded
-  insiderTradeDate: text("insider_trade_date"), // Date when insider executed the trade
-  insiderName: text("insider_name"), // Name of the insider who executed the trade
+  insiderPrice: decimal("insider_price", { precision: 12, scale: 2 }), // Price at which insider transacted
+  insiderQuantity: integer("insider_quantity"), // Number of shares insider transacted
+  insiderTradeDate: text("insider_trade_date"), // Date when insider executed the transaction
+  insiderName: text("insider_name"), // Name of the insider who executed the transaction
   insiderTitle: text("insider_title"), // Title of the insider (CEO, CFO, Director, etc.)
-  marketPriceAtInsiderDate: decimal("market_price_at_insider_date", { precision: 12, scale: 2 }), // Market closing price on insider trade date
+  marketPriceAtInsiderDate: decimal("market_price_at_insider_date", { precision: 12, scale: 2 }), // Market closing price on insider transaction date
   marketCap: text("market_cap"),
   peRatio: decimal("pe_ratio", { precision: 10, scale: 2 }),
-  recommendation: text("recommendation"), // "buy", "sell" (from insider action)
-  recommendationStatus: text("recommendation_status").default("pending"), // "pending", "approved", "rejected"
+  recommendation: text("recommendation"), // "buy", "sell" (insider transaction type) - for data tracking only
+  recommendationStatus: text("recommendation_status").default("pending"), // "pending", "approved", "rejected" - user review status
   source: text("source"), // "telegram" or "openinsider" - data source
-  confidenceScore: integer("confidence_score"), // 0-100 INSIDER SIGNAL confidence (not AI analysis score) - measures reliability of the insider trading recommendation source
+  confidenceScore: integer("confidence_score"), // 0-100 data quality score - measures reliability of the data source
   priceHistory: jsonb("price_history").$type<{ date: string; price: number }[]>().default([]), // Last 7 days of prices
   candlesticks: jsonb("candlesticks").$type<{ date: string; open: number; high: number; low: number; close: number; volume: number }[]>().default([]), // Last 2 weeks of OHLCV data for charts
   // Company information from Finnhub
@@ -520,6 +520,7 @@ export const users = pgTable("users", {
   onboardingCompletedAt: timestamp("onboarding_completed_at"), // When user completed the unified onboarding flow
   tutorialCompletions: jsonb("tutorial_completions").$type<Record<string, boolean>>().default({}), // Track which tutorials have been completed
   stockLimit: integer("stock_limit").notNull().default(100), // Maximum number of stocks to fetch (500 during onboarding, 100 default)
+  riskPreference: text("risk_preference").notNull().default("balanced"), // "low", "balanced", "high" - determines default filter presets
   archived: boolean("archived").notNull().default(false), // Soft delete for hiding users from admin list
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by"), // Which admin archived this user

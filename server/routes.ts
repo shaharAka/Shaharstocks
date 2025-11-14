@@ -2870,6 +2870,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.previousDayOnly = true;
       }
 
+      // Get options deal threshold from config
+      const optionsDealThreshold = config.optionsDealThresholdPercent ?? 15;
+      console.log(`[OpeninsiderFetch] Using options deal threshold: ${optionsDealThreshold}% (insider price must be >= ${optionsDealThreshold}% of market price)`);
+      
       // Fetch insider transactions with filters
       const transactions = await openinsiderService.fetchInsiderPurchases(
         config.fetchLimit || 50,
@@ -2941,15 +2945,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Note: data.marketCap is already in millions from Finnhub
           if (!data?.marketCap || data.marketCap < 500) {
             filteredMarketCap++;
-            console.log(`[OpeninsiderFetch] ${transaction.ticker} market cap too low: $${data?.marketCap || 0}M (need >$500M), skipping`);
+            console.log(`[OpeninsiderFetch] ⊗ ${transaction.ticker} market cap too low:`);
+            console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);
+            console.log(`  Market cap: $${data?.marketCap || 0}M (need >$500M)`);
+            console.log(`  Insider price: $${transaction.price.toFixed(2)}, Market price: $${quote.currentPrice.toFixed(2)}`);
             continue;
           }
           
-          // Apply options deal filter (insider price should be >= 15% of current price)
+          // Apply options deal filter using configurable threshold
           const insiderPriceNum = transaction.price;
-          if (insiderPriceNum < quote.currentPrice * 0.15) {
+          const thresholdPercent = optionsDealThreshold / 100;
+          if (optionsDealThreshold > 0 && insiderPriceNum < quote.currentPrice * thresholdPercent) {
             filteredOptionsDeals++;
-            console.log(`[OpeninsiderFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum.toFixed(2)} < 15% of market: $${quote.currentPrice.toFixed(2)}), skipping`);
+            console.log(`[OpeninsiderFetch] ⊗ ${transaction.ticker} likely options deal:`);
+            console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);
+            console.log(`  Insider price: $${insiderPriceNum.toFixed(2)} < ${optionsDealThreshold}% of market: $${quote.currentPrice.toFixed(2)}`);
+            console.log(`  Transaction value: $${(insiderPriceNum * transaction.quantity).toLocaleString()}, Quantity: ${transaction.quantity.toLocaleString()}`);
             continue;
           }
 
@@ -2982,6 +2993,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           createdCount++;
           createdTickers.push(transaction.ticker); // Track this ticker for AI analysis
+          
+          // Log successful creation
+          console.log(`[OpeninsiderFetch] ✓ Created recommendation for ${transaction.ticker}:`);
+          console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);
+          console.log(`  Insider price: $${transaction.price.toFixed(2)}, Market price: $${quote.currentPrice.toFixed(2)}`);
+          console.log(`  Market cap: $${data.marketCap}M, Quantity: ${transaction.quantity.toLocaleString()}`);
+          console.log(`  Transaction value: $${(transaction.price * transaction.quantity).toLocaleString()}`);
 
           // Send Telegram notification
           if (telegramNotificationService.isReady()) {

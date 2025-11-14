@@ -879,6 +879,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
   const [insiderTitles, setInsiderTitles] = useState<string[]>([]);
   const [minTransactionValue, setMinTransactionValue] = useState<number | null>(null);
   const [fetchPreviousDayOnly, setFetchPreviousDayOnly] = useState(false);
+  const [optionsDealThreshold, setOptionsDealThreshold] = useState(15);
 
   const { data: config, isLoading } = useQuery<OpeninsiderConfig>({
     queryKey: ["/api/openinsider/config"],
@@ -893,6 +894,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
       setInsiderTitles(config.insiderTitles || []);
       setMinTransactionValue(config.minTransactionValue || null);
       setFetchPreviousDayOnly(config.fetchPreviousDayOnly || false);
+      setOptionsDealThreshold(config.optionsDealThresholdPercent || 15);
     }
   }, [config]);
 
@@ -905,6 +907,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
         insiderTitles: insiderTitles.length > 0 ? insiderTitles : null,
         minTransactionValue: minTransactionValue && minTransactionValue > 0 ? minTransactionValue : null,
         fetchPreviousDayOnly,
+        optionsDealThresholdPercent: optionsDealThreshold,
       });
       return await res.json();
     },
@@ -1100,6 +1103,25 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
                 />
                 <p className="text-xs text-muted-foreground">
                   Filter transactions below this dollar amount (leave empty for no minimum)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="options-deal-threshold">Options Deal Filter (%)</Label>
+                <Input
+                  id="options-deal-threshold"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  placeholder="15"
+                  value={optionsDealThreshold}
+                  onChange={(e) => setOptionsDealThreshold(parseInt(e.target.value) || 15)}
+                  disabled={!openinsiderEnabled}
+                  data-testid="input-options-deal-threshold"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Insider purchase price must be at least this % of current market price. Set to 0 to disable filter. Default 15% filters out likely stock options deals.
                 </p>
               </div>
             </div>

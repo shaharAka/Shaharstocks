@@ -517,13 +517,13 @@ export default function Settings() {
         </CardHeader>
         {showLogs && (
           <CardContent>
-            {fetchLogs.length === 0 ? (
+            {fetchLogs.filter(log => log.source !== 'openinsider').length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No logs yet. Logs will appear here when you attempt to fetch data.
               </p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {fetchLogs.map((log: any, index: number) => (
+                {fetchLogs.filter(log => log.source !== 'openinsider').map((log: any, index: number) => (
                   <div
                     key={index}
                     className={`p-3 rounded text-xs font-mono border ${
@@ -934,16 +934,9 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
 
   const fetchOpeninsiderDataMutation = useMutation({
     mutationFn: async () => {
-      addLog('openinsider', 'attempt', 'Attempting to fetch insider trading data from SEC filings', {});
-      try {
-        const res = await apiRequest("POST", "/api/openinsider/fetch", {});
-        const data = await res.json();
-        addLog('openinsider', 'success', `Successfully created ${data.created || 0} new recommendations from ${data.total || 0} transactions`, data);
-        return data;
-      } catch (error: any) {
-        addLog('openinsider', 'error', `Fetch failed: ${error.message}`, { error: error.toString(), stack: error.stack });
-        throw error;
-      }
+      const res = await apiRequest("POST", "/api/openinsider/fetch", {});
+      const data = await res.json();
+      return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/openinsider/config"] });

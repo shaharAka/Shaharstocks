@@ -117,6 +117,14 @@ export default function Purchase() {
     meta: { ignoreError: true },
   });
 
+  // Fetch followed stocks
+  const { data: followedStocks = [] } = useQuery<any[]>({
+    queryKey: ["/api/users/me/followed"],
+    enabled: !!currentUser,
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
   // Refresh all stocks mutation
   const refreshMutation = useMutation({
     mutationFn: async () => {
@@ -433,9 +441,44 @@ export default function Purchase() {
                   });
                   return;
                 }
-                Array.from(selectedTickers).forEach(ticker => {
+                
+                // Filter out already-followed stocks
+                const followedTickers = new Set(followedStocks.map(f => f.ticker));
+                const tickersToFollow = Array.from(selectedTickers).filter(
+                  ticker => !followedTickers.has(ticker)
+                );
+                const alreadyFollowed = Array.from(selectedTickers).filter(
+                  ticker => followedTickers.has(ticker)
+                );
+                
+                if (tickersToFollow.length === 0) {
+                  toast({
+                    title: "Already Following",
+                    description: `All ${selectedTickers.size} selected stocks are already being followed`,
+                    variant: "destructive",
+                  });
+                  setSelectedTickers(new Set());
+                  return;
+                }
+                
+                // Follow the new stocks
+                tickersToFollow.forEach(ticker => {
                   followMutation.mutate(ticker);
                 });
+                
+                // Show appropriate message
+                if (alreadyFollowed.length > 0) {
+                  toast({
+                    title: "Partially Followed",
+                    description: `Following ${tickersToFollow.length} new stocks. ${alreadyFollowed.length} already followed.`,
+                  });
+                } else {
+                  toast({
+                    title: "Following Stocks",
+                    description: `Following ${tickersToFollow.length} stocks`,
+                  });
+                }
+                
                 setSelectedTickers(new Set());
               }}
               disabled={followMutation.isPending}

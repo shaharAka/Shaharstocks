@@ -23,9 +23,8 @@ import {
   AlertTriangle,
   Calendar,
   DollarSign,
-  CheckCircle,
+  Heart,
   XCircle,
-  FlaskConical,
 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { StockComments } from "@/components/stock-comments";
@@ -41,9 +40,8 @@ interface StockExplorerProps {
   stock: (Stock & { isPinned?: boolean }) | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onApprove?: (stock: Stock) => void;
+  onFollow?: (stock: Stock) => void;
   onReject?: (stock: Stock) => void;
-  onSimulate?: (ticker: string) => void;
   users?: User[];
   interests?: StockInterestWithUser[];
 }
@@ -52,9 +50,8 @@ export function StockExplorer({
   stock,
   open,
   onOpenChange,
-  onApprove,
+  onFollow,
   onReject,
-  onSimulate,
   users = [],
   interests = [],
 }: StockExplorerProps) {
@@ -316,20 +313,11 @@ export function StockExplorer({
               <Button
                 variant="default"
                 className="flex-1"
-                onClick={() => onApprove?.(stock)}
-                data-testid={`button-explorer-approve-${stock.ticker}`}
+                onClick={() => onFollow?.(stock)}
+                data-testid={`button-explorer-follow-${stock.ticker}`}
               >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Approve
-              </Button>
-              <Button
-                variant="secondary"
-                className="flex-1"
-                onClick={() => onSimulate?.(stock.ticker)}
-                data-testid={`button-explorer-simulate-${stock.ticker}`}
-              >
-                <FlaskConical className="h-4 w-4 mr-2" />
-                Simulate
+                <Heart className="h-4 w-4 mr-2" />
+                Follow
               </Button>
               <Button
                 variant="outline"

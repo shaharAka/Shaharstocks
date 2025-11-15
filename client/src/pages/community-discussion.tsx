@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,8 +8,11 @@ import { MessageSquare, Users, TrendingUp, TrendingDown, Search } from "lucide-r
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Stock, User, StockInterestWithUser } from "@shared/schema";
 import { StockExplorer } from "@/components/stock-explorer";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function CommunityDiscussion() {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
@@ -38,6 +41,51 @@ export default function CommunityDiscussion() {
     queryKey: ["/api/stock-comment-counts"],
     retry: false,
     meta: { ignoreError: true },
+  });
+
+  // Follow stock mutation
+  const followMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      return await apiRequest("POST", `/api/stocks/${ticker}/follow`, null);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      toast({
+        title: "Stock Followed",
+        description: "You are now following this stock",
+      });
+      setExplorerOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to follow stock",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Reject stock mutation
+  const rejectMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      return await apiRequest("POST", `/api/stocks/${ticker}/reject`, null);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      toast({
+        title: "Opportunity Rejected",
+        description: "This opportunity has been hidden",
+      });
+      setExplorerOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to reject opportunity",
+        variant: "destructive",
+      });
+    },
   });
 
   // Helper functions
@@ -293,6 +341,8 @@ export default function CommunityDiscussion() {
         stock={explorerStock}
         open={explorerOpen}
         onOpenChange={setExplorerOpen}
+        onFollow={(stock) => followMutation.mutate(stock.ticker)}
+        onReject={(stock) => rejectMutation.mutate(stock.ticker)}
         users={users}
         interests={allInterests}
       />

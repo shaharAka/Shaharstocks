@@ -160,6 +160,51 @@ export default function Purchase() {
     },
   });
 
+  // Follow stock mutation
+  const followMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      return await apiRequest("POST", `/api/stocks/${ticker}/follow`, null);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      toast({
+        title: "Stock Followed",
+        description: "You are now following this stock",
+      });
+      setExplorerOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to follow stock",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Reject stock mutation
+  const rejectMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      return await apiRequest("POST", `/api/stocks/${ticker}/reject`, null);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      toast({
+        title: "Opportunity Rejected",
+        description: "This opportunity has been hidden",
+      });
+      setExplorerOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to reject opportunity",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Helper functions
   const getStockInterests = (ticker: string) => {
     return allInterests.filter(i => i.ticker === ticker);
@@ -565,6 +610,8 @@ export default function Purchase() {
         stock={explorerStock}
         open={explorerOpen}
         onOpenChange={setExplorerOpen}
+        onFollow={(stock) => followMutation.mutate(stock.ticker)}
+        onReject={(stock) => rejectMutation.mutate(stock.ticker)}
         users={users}
         interests={allInterests}
       />

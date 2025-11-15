@@ -694,6 +694,37 @@ export default function Purchase() {
             >
               Follow Selected
             </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                if (selectedTickers.size === 0) {
+                  toast({
+                    title: "No stocks selected",
+                    description: "Please select at least one stock to reject",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                
+                // Reject all selected stocks
+                const tickers = Array.from(selectedTickers);
+                tickers.forEach(ticker => {
+                  rejectMutation.mutate(ticker);
+                });
+                
+                toast({
+                  title: "Rejecting Stocks",
+                  description: `Rejecting ${tickers.length} stocks`,
+                });
+                
+                setSelectedTickers(new Set());
+              }}
+              disabled={rejectMutation.isPending}
+              data-testid="button-bulk-reject"
+            >
+              Reject Selected
+            </Button>
           </div>
         )}
       </div>

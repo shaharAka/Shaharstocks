@@ -336,6 +336,9 @@ export default function Purchase() {
     groupedArray.forEach(group => {
       const score = group.highestScore;
       const isUserRejected = group.latestTransaction.userStatus === "rejected";
+      const recommendation = group.latestTransaction.recommendation?.toLowerCase();
+      const isBuy = recommendation?.includes("buy");
+      const isSell = recommendation?.includes("sell");
       
       // Processing: No AI score yet
       if (score === null) {
@@ -343,20 +346,41 @@ export default function Purchase() {
         return;
       }
 
-      // Rejected: User rejected OR auto-rejected (score < 40, unless multiple transactions)
-      if (isUserRejected || (score < 40 && group.transactionCount === 1)) {
+      // User rejected stocks always go to rejected
+      if (isUserRejected) {
         sections.rejected.push(group);
         return;
       }
 
-      // Worth Exploring: Score > 70
-      if (score > 70) {
-        sections.worthExploring.push(group);
+      // SELL opportunity logic
+      if (isSell) {
+        // High Signal: Score < 30 (low score = company is weak, good for shorting)
+        if (score < 30) {
+          sections.worthExploring.push(group);
+        }
+        // Auto-reject: Score > 70 (high score = company is strong, bad for shorting)
+        else if (score > 70) {
+          sections.rejected.push(group);
+        }
+        // Recents: Score 30-70 (neutral zone)
+        else if (score >= 30 && score <= 70) {
+          sections.recents.push(group);
+        }
       }
-
-      // Recents: Score 40-70 and < 2 days old
-      if (score >= 40 && score <= 70 && group.daysSinceLatest < 2) {
-        sections.recents.push(group);
+      // BUY opportunity logic (existing logic)
+      else if (isBuy) {
+        // Auto-reject: Score < 40 (unless multiple transactions)
+        if (score < 40 && group.transactionCount === 1) {
+          sections.rejected.push(group);
+        }
+        // High Signal: Score > 70
+        else if (score > 70) {
+          sections.worthExploring.push(group);
+        }
+        // Recents: Score 40-70 and < 2 days old
+        else if (score >= 40 && score <= 70 && group.daysSinceLatest < 2) {
+          sections.recents.push(group);
+        }
       }
 
       // Community Picks: Only stocks with high engagement (comments >= threshold)

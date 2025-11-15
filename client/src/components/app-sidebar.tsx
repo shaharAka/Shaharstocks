@@ -170,26 +170,22 @@ export function AppSidebar() {
                   const isTickerActive = currentPath === tickerPath;
                   const isProcessing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
                   
-                  // Only show badges when we have complete data (insider action, AI stance, and alignment)
-                  // Use explicit null checks to ensure data completeness
-                  const hasCompleteData = stock.insiderAction != null && stock.aiStance != null && stock.stanceAlignment != null;
-                  
                   // Determine buy/sell tag based on INSIDER ACTION (left of ticker)
+                  // Show this whenever we have insider action data
                   // BUY uses green success color, SELL uses red destructive color
                   let insiderTag: { text: string; isBuy: boolean } | null = null;
-                  if (hasCompleteData) {
-                    if (stock.insiderAction === 'BUY') {
-                      insiderTag = { text: 'B', isBuy: true };
-                    } else if (stock.insiderAction === 'SELL') {
-                      insiderTag = { text: 'S', isBuy: false };
-                    }
+                  if (stock.insiderAction === 'BUY') {
+                    insiderTag = { text: 'B', isBuy: true };
+                  } else if (stock.insiderAction === 'SELL') {
+                    insiderTag = { text: 'S', isBuy: false };
                   }
                   
                   // Determine act/hold status based on STANCE ALIGNMENT (right of price)
+                  // Only show this when we have complete AI analysis data
                   // "act" = AI agrees with insider action (strong signal)
                   // "hold" = AI conflicts with insider action (weak signal)
                   let actionTag: { text: string; variant: 'default' | 'secondary' } | null = null;
-                  if (hasCompleteData) {
+                  if (stock.stanceAlignment != null) {
                     if (stock.stanceAlignment === 'act') {
                       actionTag = { text: 'act', variant: 'default' };
                     } else if (stock.stanceAlignment === 'hold') {

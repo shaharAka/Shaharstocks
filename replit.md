@@ -27,6 +27,7 @@ The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tai
 - **Company Info & News**: Integrates Finnhub for company profiles, market cap, and news with negative sentiment detection; excludes stocks below $500M market cap from purchase recommendations.
 - **Data Sources**: Real-time Telegram channel monitoring via GramJS and Python-based scraping of OpenInsider.com for insider trading data.
 - **AI-Powered Analysis**: Dual-agent system comprising a Micro Agent (SEC EDGAR, Alpha Vantage fundamentals) and a Macro Agent (industry-specific ETF performance) for comprehensive financial analysis.
+- **2-Week Event Horizon**: Opportunities page implements automatic cleanup of stocks older than 2 weeks (based on insider trade date). Old stocks are automatically removed from the board UNLESS the user is following them. Python scraper limited to fetching transactions from last 2 weeks maximum. Daily cleanup job removes stale non-followed stocks while preserving followed stocks indefinitely.
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
 - **Purchase Recommendation Filters**: Enforces a minimum $500M market cap.
 - **Trading Rules**: Trigger-based system for portfolio-wide or stock-specific rules based on price changes.

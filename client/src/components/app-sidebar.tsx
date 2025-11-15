@@ -151,7 +151,7 @@ export function AppSidebar() {
                         tooltip={isCollapsed ? "Following" : undefined}
                         data-testid="link-following"
                       >
-                        <Star className="h-4 w-4" />
+                        <Star className="h-4 w-4 fill-current" />
                         <span>Following</span>
                         <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                       </SidebarMenuButton>

@@ -330,61 +330,62 @@ export default function TickerDetail() {
                 Daily briefs will appear here once generated. Briefs are created daily for stocks you follow.
               </p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {dailyBriefs.map((brief: any) => {
                   const priceChange = parseFloat(brief.priceChange || 0);
                   const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
                   const isPositive = priceChange >= 0;
-                  const stance = brief.recommendedStance?.toLowerCase();
                   
-                  const getStanceConfig = () => {
+                  // Check if either scenario recommends ACT (buy/sell)
+                  const watchingIsAct = brief.watchingStance === "buy" || brief.watchingStance === "sell";
+                  const owningIsAct = brief.owningStance === "buy" || brief.owningStance === "sell";
+                  const hasActRecommendation = watchingIsAct || owningIsAct;
+                  
+                  const getStanceConfig = (stance: string) => {
                     if (stance === "buy") {
                       return {
                         icon: ArrowUpCircle,
-                        text: "Consider Buying",
+                        text: "Buy",
                         color: "text-green-600 dark:text-green-400",
-                        bgColor: "bg-green-50 dark:bg-green-950/20",
-                        borderColor: "border-l-green-500",
+                        bgColor: "bg-green-50 dark:bg-green-950/30",
+                        borderColor: "border-green-500",
                       };
                     } else if (stance === "sell") {
                       return {
                         icon: ArrowDownCircle,
-                        text: "Consider Selling",
+                        text: "Sell",
                         color: "text-red-600 dark:text-red-400",
-                        bgColor: "bg-red-50 dark:bg-red-950/20",
-                        borderColor: "border-l-red-500",
+                        bgColor: "bg-red-50 dark:bg-red-950/30",
+                        borderColor: "border-red-500",
                       };
                     } else {
                       return {
                         icon: MinusCircle,
-                        text: "Hold Position",
+                        text: "Hold",
                         color: "text-muted-foreground",
-                        bgColor: "bg-muted/30",
-                        borderColor: "border-l-gray-400 dark:border-l-gray-600",
+                        bgColor: "bg-muted/20",
+                        borderColor: "border-gray-400 dark:border-gray-600",
                       };
                     }
                   };
                   
-                  const config = getStanceConfig();
-                  const StanceIcon = config.icon;
+                  const watchingConfig = getStanceConfig(brief.watchingStance);
+                  const owningConfig = getStanceConfig(brief.owningStance);
                   
                   return (
-                    <div 
-                      key={brief.id} 
-                      className={`border rounded-lg border-l-4 ${config.borderColor} overflow-hidden`}
-                    >
-                      <div className={`${config.bgColor} px-4 py-3 border-b`}>
+                    <div key={brief.id} className="border rounded-lg overflow-hidden">
+                      {/* Header with price and ACT badge */}
+                      <div className="bg-muted/30 px-4 py-3 border-b">
                         <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <StanceIcon className={`h-6 w-6 ${config.color}`} />
-                            <div>
-                              <h3 className={`text-lg font-bold ${config.color}`} data-testid={`action-text-${brief.id}`}>
-                                {config.text}
-                              </h3>
-                              <p className="text-xs text-muted-foreground">
-                                Confidence: {brief.confidence}/10
-                              </p>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
+                              {new Date(brief.briefDate).toLocaleDateString()}
+                            </Badge>
+                            {hasActRecommendation && (
+                              <Badge variant="default" className="bg-primary font-bold" data-testid={`badge-act-${brief.id}`}>
+                                ACT
+                              </Badge>
+                            )}
                           </div>
                           <div className="text-right">
                             <p className="text-lg font-mono font-bold">
@@ -396,25 +397,68 @@ export default function TickerDetail() {
                           </div>
                         </div>
                       </div>
-                      <div className="p-4 space-y-3">
-                        <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
-                          {new Date(brief.briefDate).toLocaleDateString()}
-                        </Badge>
-                        <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
-                          {brief.briefText}
-                        </p>
-                        {brief.keyHighlights && brief.keyHighlights.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium mb-1">Key Highlights</h4>
-                            <ul className="list-disc list-inside space-y-1">
-                              {brief.keyHighlights.map((highlight: string, idx: number) => (
-                                <li key={idx} className="text-sm text-muted-foreground">
+                      
+                      {/* Dual Scenario Display - Side by Side */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
+                        {/* WATCHING Scenario */}
+                        <div className={`p-4 ${watchingConfig.bgColor} border-l-4 ${watchingConfig.borderColor}`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <watchingConfig.icon className={`h-5 w-5 ${watchingConfig.color}`} />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-muted-foreground">IF I ENTER</h4>
+                                <Badge variant={watchingIsAct ? "default" : "outline"} className={watchingIsAct ? "bg-primary" : ""}>
+                                  {watchingConfig.text}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Confidence: {brief.watchingConfidence}/10
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2" data-testid={`text-watching-${brief.id}`}>
+                            {brief.watchingText}
+                          </p>
+                          {brief.watchingHighlights && brief.watchingHighlights.length > 0 && (
+                            <ul className="list-disc list-inside space-y-1 mt-2">
+                              {brief.watchingHighlights.map((highlight: string, idx: number) => (
+                                <li key={idx} className="text-xs text-muted-foreground">
                                   {highlight}
                                 </li>
                               ))}
                             </ul>
+                          )}
+                        </div>
+                        
+                        {/* OWNING Scenario */}
+                        <div className={`p-4 ${owningConfig.bgColor} border-l-4 ${owningConfig.borderColor}`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <owningConfig.icon className={`h-5 w-5 ${owningConfig.color}`} />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-muted-foreground">IF I ALREADY OWN</h4>
+                                <Badge variant={owningIsAct ? "default" : "outline"} className={owningIsAct ? "bg-primary" : ""}>
+                                  {owningConfig.text}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Confidence: {brief.owningConfidence}/10
+                              </p>
+                            </div>
                           </div>
-                        )}
+                          <p className="text-sm text-muted-foreground mb-2" data-testid={`text-owning-${brief.id}`}>
+                            {brief.owningText}
+                          </p>
+                          {brief.owningHighlights && brief.owningHighlights.length > 0 && (
+                            <ul className="list-disc list-inside space-y-1 mt-2">
+                              {brief.owningHighlights.map((highlight: string, idx: number) => (
+                                <li key={idx} className="text-xs text-muted-foreground">
+                                  {highlight}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

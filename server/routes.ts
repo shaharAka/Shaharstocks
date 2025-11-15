@@ -13,6 +13,7 @@ import { finnhubService } from "./finnhubService";
 import { openinsiderService } from "./openinsiderService";
 import { createRequireAdmin } from "./session";
 import { verifyPayPalWebhook } from "./paypalWebhookVerifier";
+import { aiAnalysisService } from "./aiAnalysisService";
 
 /**
  * Check if US stock market is currently open
@@ -2106,6 +2107,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (analysisError) {
         console.error(`[Follow] Failed to enqueue analysis for ${ticker}:`, analysisError);
         // Don't fail the follow request if analysis enqueue fails
+      }
+      
+      // Generate day-0 daily brief immediately
+      try {
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        // Check if brief already exists for today
+        const existingBriefs = await storage.getDailyBriefsForTicker(ticker);
+        const briefExistsToday = existingBriefs.some((b: any) => b.briefDate === today);
+        
+        if (!briefExistsToday) {
+          console.log(`[Follow] Generating day-0 daily brief for ${ticker}...`);
+          
+          // Get current price data
+          const quote = await finnhubService.getQuote(ticker);
+          if (!quote || !quote.currentPrice || !quote.previousClose) {
+            throw new Error("Unable to fetch price data");
+          }
+          
+          // Get previous analysis for context (if available)
+          const stock = await storage.getStock(ticker);
+          const stockData = stock as any;
+          const previousAnalysis = stockData?.overallRating ? {
+            overallRating: stockData.overallRating,
+            summary: stockData.summary || "No previous analysis available"
+          } : undefined;
+          
+          // Get recent news (last 24h only, if available)
+          const now = Date.now() / 1000;
+          const oneDayAgo = now - (24 * 60 * 60);
+          const recentNews = stockData?.news
+            ?.filter((article: any) => article.datetime && article.datetime >= oneDayAgo)
+            ?.slice(0, 3)
+            ?.map((article: any) => ({
+              title: article.headline || "Untitled",
+              sentiment: 0,
+              source: article.source || "Unknown"
+            }));
+          
+          // Generate the brief
+          const brief = await aiAnalysisService.generateDailyBrief({
+            ticker,
+            currentPrice: quote.currentPrice,
+            previousPrice: quote.previousClose,
+            recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
+            previousAnalysis
+          });
+          
+          // Store in database
+          await storage.createDailyBrief({
+            ticker,
+            briefDate: today,
+            priceSnapshot: quote.currentPrice.toString(),
+            priceChange: quote.change.toString(),
+            priceChangePercent: quote.changePercent.toString(),
+            recommendedStance: brief.recommendedStance,
+            confidence: brief.confidence,
+            briefText: brief.briefText,
+            keyHighlights: brief.keyHighlights
+          });
+          
+          console.log(`[Follow] Generated day-0 brief for ${ticker}: ${brief.recommendedStance} (confidence: ${brief.confidence}/10)`);
+        } else {
+          console.log(`[Follow] Daily brief already exists for ${ticker} today, skipping`);
+        }
+      } catch (briefError) {
+        console.error(`[Follow] Failed to generate day-0 brief for ${ticker}:`, briefError);
+        // Don't fail the follow request if brief generation fails
       }
       
       res.status(201).json(follow);

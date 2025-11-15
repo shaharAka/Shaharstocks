@@ -1,6 +1,6 @@
 import { Step } from "react-joyride";
 
-export type TutorialId = "watchlist" | "recommendations" | "management" | "history" | "rules" | "backtesting" | "settings" | "analysis" | "onboarding" | "dashboard";
+export type TutorialId = "recommendations" | "analysis" | "settings" | "community" | "portfolio";
 
 export interface TutorialConfig {
   id: TutorialId;
@@ -12,217 +12,81 @@ export interface TutorialConfig {
 export interface RouteMapping {
   path: string;
   tutorialId: TutorialId;
-  // Optional tab parameter for pages with tabs
-  tab?: string;
 }
 
 export const routeToTutorialMap: RouteMapping[] = [
+  // Opportunities/Purchase pages
   { path: "/", tutorialId: "recommendations" },
   { path: "/recommendations", tutorialId: "recommendations" },
-  { path: "/watchlist", tutorialId: "watchlist" },
-  { path: "/portfolio", tutorialId: "watchlist" },
+  { path: "/purchase", tutorialId: "recommendations" },
+  
+  // Portfolio/Watchlist pages (all map to Portfolio component)
+  { path: "/watchlist", tutorialId: "portfolio" },
+  { path: "/portfolio", tutorialId: "portfolio" },
+  { path: "/management", tutorialId: "portfolio" },
+  { path: "/history", tutorialId: "portfolio" },
+  { path: "/dashboard", tutorialId: "portfolio" },
+  
+  // Analysis/Trading pages
   { path: "/trading", tutorialId: "analysis" },
-  { path: "/community", tutorialId: "dashboard" },
+  { path: "/rules", tutorialId: "analysis" },
+  { path: "/simulation", tutorialId: "analysis" },
+  
+  // Community pages
+  { path: "/community", tutorialId: "community" },
+  { path: "/community/discussion", tutorialId: "community" },
+  { path: "/community/feature-suggestions", tutorialId: "community" },
+  
+  // Settings
   { path: "/settings", tutorialId: "settings" },
 ];
 
-// Helper function to get tutorial ID from current route and tab
-export function getTutorialIdFromRoute(pathname: string, searchParams?: URLSearchParams): TutorialId | null {
-  // Check for exact path match first
+// Helper function to get tutorial ID from current route
+export function getTutorialIdFromRoute(pathname: string): TutorialId | null {
   const exactMatch = routeToTutorialMap.find(mapping => mapping.path === pathname);
-  if (exactMatch) {
-    return exactMatch.tutorialId;
-  }
-  
-  // Default fallback
-  return null;
+  return exactMatch?.tutorialId || null;
 }
 
 export const tutorials: Record<TutorialId, TutorialConfig> = {
-  watchlist: {
-    id: "watchlist",
-    title: "Watchlist Tour",
-    steps: [
-      {
-        target: "body",
-        content: "Welcome to your Watchlist! This is where you track stocks and manage alerts. Let's take a quick tour of the main navigation.",
-        placement: "center",
-      },
-      {
-        target: '[data-testid="link-recommendations"]',
-        content: "Recommendations: Review AI-analyzed stock recommendations with insider trading signals",
-        placement: "right",
-      },
-      {
-        target: '[data-testid="link-analysis"]',
-        content: "Analysis: Run simulations and create what-if trading rules to optimize your strategy",
-        placement: "right",
-      },
-      {
-        target: '[data-testid="link-community"]',
-        content: "Community: Share feature ideas, vote on suggestions, and view the development roadmap",
-        placement: "right",
-      },
-      {
-        target: '[data-testid="button-settings"]',
-        content: "Settings: Configure your data sources and integrations (click the gear icon)",
-        placement: "left",
-      },
-      {
-        target: '[data-testid="tab-tracked-stocks"]',
-        content: "Tracked Stocks tab: Monitor the stocks you're tracking with current prices",
-        placement: "bottom",
-      },
-      {
-        target: '[data-testid="tab-active-alerts"]',
-        content: "Active Alerts tab: View triggered sell alerts based on your trading rules",
-        placement: "bottom",
-      },
-      {
-        target: '[data-testid="tab-history"]',
-        content: "History tab: View all your past trades and performance",
-        placement: "bottom",
-      },
-    ],
-  },
   recommendations: {
     id: "recommendations",
-    title: "Stock Recommendations",
+    title: "Opportunities Dashboard",
     steps: [
       {
         target: "body",
-        content: "This page shows insider trading recommendations. Each recommendation comes from company insiders buying or selling their own stock. Use the filters above to find the most relevant opportunities.",
+        content: "Welcome to Opportunities! This shows stocks with insider trading activity from SEC filings, scored and filtered by AI. Use the dropdown filters to see BUY recommendations (high scores >60) or SELL recommendations (low scores <70), and filter by team interest or recency.",
         placement: "center",
-      },
-      {
-        target: '[data-testid="select-recommendation-filter"]',
-        content: "Step 1: Filter by Buy or Sell recommendations to focus on the type of trade you're interested in.",
-        placement: "bottom",
-      },
-      {
-        target: '[data-testid="select-interest-filter"]',
-        content: "Step 2: Filter by team member interest to see which stocks your colleagues find interesting.",
-        placement: "bottom",
-      },
-      {
-        target: '[data-testid="select-days-filter"]',
-        content: "Step 3: Filter by how recent the insider purchase was - focus on fresh opportunities.",
-        placement: "bottom",
       },
       {
         target: "body",
-        content: "Step 4: Once stocks load, you can click any stock card for detailed analysis, mark stocks as interesting, or select multiple stocks for bulk actions. That's it!",
+        content: "Click any stock card to see full details: AI analysis scores, community discussion, and simulation charts. Follow stocks using the star button to track them - followed stocks show daily briefs and appear in your watchlist.",
         placement: "center",
       },
-    ],
-  },
-  management: {
-    id: "management",
-    title: "Portfolio Management",
-    steps: [
       {
         target: "body",
-        content: "Monitor your active holdings with real-time price charts and automated trading rules.",
+        content: "Check the notification bell (top-right) for important alerts: high-score buy/sell signals, popular stocks (>10 followers), and stance changes on your positions. Happy trading!",
         placement: "center",
-      },
-      {
-        target: '[data-testid^="chart-"]',
-        content: "Each chart shows the stock's price movement with trading rule boundaries. When price hits these boundaries, your rules execute automatically.",
-        placement: "top",
-      },
-      {
-        target: '[data-testid="button-remove-holding"]',
-        content: "Manually close a position at any time",
-        placement: "left",
-      },
-      {
-        target: '[data-testid="button-add-rule"]',
-        content: "Create trading rules to automatically sell based on price changes or time held",
-        placement: "bottom",
-      },
-    ],
-  },
-  history: {
-    id: "history",
-    title: "Trade History",
-    steps: [
-      {
-        target: "body",
-        content: "View all your completed trades and performance",
-        placement: "center",
-      },
-      {
-        target: '[data-testid="text-total-profit"]',
-        content: "Track your overall profit/loss across all trades",
-        placement: "bottom",
-      },
-      {
-        target: "table",
-        content: "See details for each trade including entry/exit prices, quantity, and profit",
-        placement: "top",
       },
     ],
   },
   analysis: {
     id: "analysis",
-    title: "Analysis Tools",
+    title: "Simulation & What-If Analysis",
     steps: [
       {
         target: "body",
-        content: "The Analysis page has two powerful tools: simulation and what-if rules to optimize your trading strategy",
+        content: "The Analysis page has two tabs: Simulation for running backtests on historical data, and What-If Rules for testing different trading strategies against your simulated positions.",
         placement: "center",
-      },
-      {
-        target: '[data-testid="tab-simulation"]',
-        content: "Simulation tab: Run backtests on historical data to see how strategies would have performed",
-        placement: "bottom",
-      },
-      {
-        target: '[data-testid="tab-rules"]',
-        content: "What-If Rules tab: Test different trading rules to find the best approach",
-        placement: "bottom",
-      },
-    ],
-  },
-  rules: {
-    id: "rules",
-    title: "Trading Rules",
-    steps: [
-      {
-        target: "body",
-        content: "Create automated trading rules to manage your positions without constant monitoring",
-        placement: "center",
-      },
-      {
-        target: '[data-testid="button-create-rule"]',
-        content: "Click here to create a new trading rule",
-        placement: "bottom",
       },
       {
         target: "body",
-        content: "Rules can trigger on price changes, absolute prices, or time held. Actions include selling a percentage, quantity, or entire position.",
+        content: "Use the Simulation tab to backtest strategies using SEC insider trading data or Telegram signals. The system will show you historical performance metrics.",
         placement: "center",
       },
-    ],
-  },
-  backtesting: {
-    id: "backtesting",
-    title: "Strategy Backtesting",
-    steps: [
       {
         target: "body",
-        content: "Test your trading strategies on historical insider trading data to see how they would have performed",
+        content: "For stocks you follow, visit their detail page to see inline simulation charts with trading rule boundaries overlaid on price movements. This helps visualize when rules would trigger.",
         placement: "center",
-      },
-      {
-        target: '[data-testid="button-create-backtest"]',
-        content: "Create a new backtest scenario with your trading rules",
-        placement: "bottom",
-      },
-      {
-        target: '[data-testid="select-data-source"]',
-        content: "Choose between Telegram or SEC insider trading filings for historical analysis",
-        placement: "bottom",
       },
     ],
   },
@@ -232,60 +96,60 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
     steps: [
       {
         target: "body",
-        content: "Configure your data sources and integrations",
+        content: "Settings lets you configure data sources, view subscription status, and manage integrations. Scroll down to find insider trading data configuration and subscription management sections.",
         placement: "center",
       },
       {
-        target: '[data-testid="section-ibkr"]',
-        content: "Connect to Interactive Brokers for automated trading execution",
-        placement: "top",
+        target: "body",
+        content: "The Insider Trading Data section lets you configure SEC filing collection: set fetch limits (1-500 transactions), fetch intervals (hourly/daily), and quality filters like minimum transaction value.",
+        placement: "center",
       },
       {
-        target: '[data-testid="section-openinsider"]',
-        content: "Configure insider trading data source to fetch transactions from SEC filings",
-        placement: "top",
+        target: "body",
+        content: "Your subscription status appears in a dedicated card. You can manage your PayPal subscription through the provided link. That's all for settings!",
+        placement: "center",
       },
     ],
   },
-  onboarding: {
-    id: "onboarding",
-    title: "Welcome to signal2",
+  portfolio: {
+    id: "portfolio",
+    title: "Portfolio & Watchlist",
     steps: [
       {
         target: "body",
-        content: "Welcome to signal2! Let's get you started with setting up your first data source for insider trading recommendations.",
+        content: "The Portfolio page has three tabs at the top: Tracked Stocks shows stocks you're following with current prices and metrics, Active Alerts displays positions with triggered trading rules, and History shows completed trades.",
         placement: "center",
       },
       {
-        target: '[data-testid="section-openinsider"]',
-        content: "Our system collects real insider trading transactions from SEC regulatory filings. We'll start by fetching the first batch of recommendations.",
+        target: "body",
+        content: "In the Tracked Stocks tab, you'll see all stocks you've followed with real-time price updates. Click any stock to see daily briefs, AI analysis, and simulation charts on the detail page.",
         placement: "center",
       },
       {
-        target: '[data-testid="button-fetch-openinsider"]', // Internal testid stays same
-        content: "Click here to start fetching insider trading data. This will get you the latest 500 transactions.",
-        placement: "top",
+        target: "body",
+        content: "Active Alerts tab shows trading rules that have triggered on your positions. History tab tracks your completed trades with entry/exit prices and profit/loss. That's it!",
+        placement: "center",
       },
     ],
   },
-  dashboard: {
-    id: "dashboard",
-    title: "Community Dashboard",
+  community: {
+    id: "community",
+    title: "Community & Feature Voting",
     steps: [
       {
         target: "body",
-        content: "Welcome to the Community page! Share ideas, vote on features, and see what's being built.",
+        content: "The Community page is where you suggest features and vote on what gets built next. Your input directly shapes the product roadmap!",
         placement: "center",
       },
       {
-        target: '[data-testid="button-new-idea"]',
-        content: "Submit your own feature ideas and suggestions",
-        placement: "bottom",
+        target: "body",
+        content: "Click the button at the top to submit your own feature ideas. Explain the problem you're trying to solve and how the feature would help.",
+        placement: "center",
       },
       {
-        target: '[data-testid^="card-idea-"]',
-        content: "Vote on ideas you'd like to see implemented. Each user gets one vote per idea.",
-        placement: "top",
+        target: "body",
+        content: "Vote on existing ideas by clicking the vote buttons on each card. Each user gets one vote per idea, and popular ideas get prioritized for development. That's it!",
+        placement: "center",
       },
     ],
   },

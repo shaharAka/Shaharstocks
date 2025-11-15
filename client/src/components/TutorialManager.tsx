@@ -38,20 +38,17 @@ export function TutorialManager() {
     return () => window.removeEventListener('replay-tutorial', handleReplayTutorial);
   }, [currentTutorialId]);
 
-  // Auto-start tutorial for first-time visitors (only after onboarding is complete)
+  // Auto-start tutorial for first-time visitors (only recommendations page, only once)
   useEffect(() => {
     // Don't auto-start while data is loading or hasn't been fetched yet
     if (progressLoading || experienceState === "loading" || !progressFetched) return;
     
-    // Only auto-start if:
-    // 1. Onboarding is complete (experienceState === "complete")
-    // 2. There's a tutorial for this route
-    // 3. This tutorial hasn't been completed yet
-    // 4. We're not in forced mode (manual replay)
+    // Only auto-start on recommendations page and only if not completed
+    // This provides gentle onboarding without being too aggressive
     const shouldAutoStart = 
       experienceState === "complete" &&
-      currentTutorialId && 
-      !isTutorialCompleted(currentTutorialId) &&
+      currentTutorialId === "recommendations" &&
+      !isTutorialCompleted("recommendations") &&
       !forceTutorialId;
 
     if (shouldAutoStart && currentTutorialId !== prevTutorialIdRef.current) {

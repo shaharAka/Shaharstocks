@@ -3258,7 +3258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             insiderTradeDate: transaction.filingDate,
             insiderName: transaction.insiderName,
             insiderTitle: transaction.insiderTitle,
-            recommendation: "buy",
+            recommendation: transaction.recommendation || "buy",
             source: "openinsider",
             confidenceScore: transaction.confidence || 75,
             peRatio: null,

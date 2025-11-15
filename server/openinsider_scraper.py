@@ -83,8 +83,14 @@ class OpenInsiderScraper:
                 if page > 1:
                     url += f"&page={page}"
             else:
-                # Use latest-insider-purchases-25k for recent purchases (original working URL)
-                url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
+                # Fetch BOTH purchases and sales by alternating between endpoints
+                # This gives us a mix of buy and sell opportunities
+                if page % 2 == 1:  # Odd pages from insider-purchases
+                    actual_page = (page + 1) // 2
+                    url = f"{self.base_url}/insider-purchases?page={actual_page}"
+                else:  # Even pages from insider-sales  
+                    actual_page = page // 2
+                    url = f"{self.base_url}/insider-sales?page={actual_page}"
             
             last_error = None
             page_transactions = None

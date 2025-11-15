@@ -54,6 +54,21 @@ export interface OpenInsiderFilters {
   ticker?: string;
 }
 
+export interface ScraperFilterStats {
+  total_rows_scraped: number;
+  filtered_not_purchase: number;
+  filtered_invalid_data: number;
+  filtered_by_date: number;
+  filtered_by_title: number;
+  filtered_by_transaction_value: number;
+  filtered_by_insider_name: number;
+}
+
+export interface ScraperResponse {
+  transactions: OpenInsiderTransaction[];
+  stats: ScraperFilterStats;
+}
+
 class OpenInsiderService {
   private pythonScriptPath: string;
   private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
@@ -87,12 +102,12 @@ class OpenInsiderService {
    * Fetch insider purchase transactions from OpenInsider.com
    * @param limit Number of transactions to fetch (default: 100)
    * @param filters Optional filters for transactions
-   * @returns Array of insider transactions
+   * @returns Scraper response with transactions and filtering statistics
    */
   async fetchInsiderPurchases(
     limit: number = 100,
     filters?: OpenInsiderFilters
-  ): Promise<OpenInsiderTransaction[]> {
+  ): Promise<ScraperResponse> {
     try {
       // Validate and clamp limit to prevent command injection
       // Ensure it's a finite number, otherwise use default
@@ -133,13 +148,25 @@ class OpenInsiderService {
 
       if (!stdout || stdout.trim() === "") {
         console.error("[OpenInsider] No data returned from Python script");
-        return [];
+        return {
+          transactions: [],
+          stats: {
+            total_rows_scraped: 0,
+            filtered_not_purchase: 0,
+            filtered_invalid_data: 0,
+            filtered_by_date: 0,
+            filtered_by_title: 0,
+            filtered_by_transaction_value: 0,
+            filtered_by_insider_name: 0,
+          }
+        };
       }
 
-      const transactions: OpenInsiderTransaction[] = JSON.parse(stdout);
-      console.log(`[OpenInsider] Successfully fetched ${transactions.length} transactions`);
+      const response: ScraperResponse = JSON.parse(stdout);
+      console.log(`[OpenInsider] Successfully fetched ${response.transactions.length} transactions`);
+      console.log(`[OpenInsider] Stage 1 Filter Stats:`, response.stats);
 
-      return transactions;
+      return response;
     } catch (error: any) {
       console.error("[OpenInsider] Error fetching data:", error.message);
       if (error.stdout) {
@@ -221,8 +248,8 @@ class OpenInsiderService {
     limit: number,
     filters?: OpenInsiderFilters
   ): Promise<any[]> {
-    const transactions = await this.fetchInsiderPurchases(limit, filters);
-    return transactions.map(t => this.transactionToMessage(t));
+    const scraperResponse = await this.fetchInsiderPurchases(limit, filters);
+    return scraperResponse.transactions.map((t: OpenInsiderTransaction) => this.transactionToMessage(t));
   }
 
   /**

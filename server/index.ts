@@ -508,11 +508,17 @@ function startOpeninsiderFetchJob() {
         filters.previousDayOnly = true;
       }
 
+      // Get configurable backend filters
+      const optionsDealThreshold = config.optionsDealThresholdPercent ?? 15;
+      const minMarketCap = config.minMarketCap ?? 500;
+
       // Fetch insider transactions with filters
-      const transactions = await openinsiderService.fetchInsiderPurchases(
+      const scraperResponse = await openinsiderService.fetchInsiderPurchases(
         config.fetchLimit || 50,
         Object.keys(filters).length > 0 ? filters : undefined
       );
+      const transactions = scraperResponse.transactions;
+      const stage1Stats = scraperResponse.stats;
       
       if (transactions.length === 0) {
         log("[OpeninsiderFetch] No insider transactions found");
@@ -520,11 +526,26 @@ function startOpeninsiderFetchJob() {
         return;
       }
 
-      log(`[OpeninsiderFetch] Processing ${transactions.length} insider transactions`);
+      const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
+                                   stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 
+                                   stage1Stats.filtered_invalid_data;
+
+      log(`[OpeninsiderFetch] ======= STAGE 1: Python Scraper Filters =======`);
+      log(`[OpeninsiderFetch] Total rows scraped: ${stage1Stats.total_rows_scraped}`);
+      log(`[OpeninsiderFetch]   • Not a purchase / Invalid: ${stage1Stats.filtered_not_purchase + stage1Stats.filtered_invalid_data}`);
+      log(`[OpeninsiderFetch]   • Filtered by date: ${stage1Stats.filtered_by_date}`);
+      log(`[OpeninsiderFetch]   • Filtered by title: ${stage1Stats.filtered_by_title}`);
+      log(`[OpeninsiderFetch]   • Filtered by transaction value: ${stage1Stats.filtered_by_transaction_value}`);
+      log(`[OpeninsiderFetch] → Total Stage 1 filtered: ${totalStage1Filtered}`);
+      log(`[OpeninsiderFetch] → Returned ${transactions.length} matching transactions`);
+      log(`[OpeninsiderFetch] ===============================================`);
 
       // Convert transactions to stock recommendations
       let createdCount = 0;
-      let filteredCount = 0;
+      let filteredMarketCap = 0;
+      let filteredOptionsDeals = 0;
+      let filteredNoQuote = 0;
+      let filteredDuplicates = 0;
       for (const transaction of transactions) {
         try {
           // Check if this exact transaction already exists using composite key
@@ -537,27 +558,36 @@ function startOpeninsiderFetchJob() {
           
           if (existingTransaction) {
             // Transaction already exists, skip
-            log(`[OpeninsiderFetch] Transaction already exists: ${transaction.ticker} by ${transaction.insiderName} on ${transaction.filingDate}`);
+            filteredDuplicates++;
             continue;
           }
 
           // Get current market price from Finnhub
           const quote = await finnhubService.getQuote(transaction.ticker);
           if (!quote || !quote.currentPrice) {
+            filteredNoQuote++;
             log(`[OpeninsiderFetch] Could not get quote for ${transaction.ticker}, skipping`);
             continue;
           }
 
           // Fetch company profile, market cap, and news (regardless of market hours)
-          log(`[OpeninsiderFetch] Fetching company info for ${transaction.ticker}`);
           const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
           const data = stockData.get(transaction.ticker);
           
-          // Apply market cap filter (must be > $500M)
+          // Apply market cap filter using configurable threshold
           // Note: data.marketCap is already in millions from Finnhub
-          if (!data?.marketCap || data.marketCap < 500) {
-            filteredCount++;
-            log(`[OpeninsiderFetch] ${transaction.ticker} market cap too low: $${data?.marketCap || 0}M (need >$500M), skipping`);
+          if (!data?.marketCap || data.marketCap < minMarketCap) {
+            filteredMarketCap++;
+            log(`[OpeninsiderFetch] ${transaction.ticker} market cap too low: $${data?.marketCap || 0}M (need >$${minMarketCap}M), skipping`);
+            continue;
+          }
+
+          // Apply options deal filter using configurable threshold
+          const insiderPriceNum = transaction.price;
+          const thresholdPercent = optionsDealThreshold / 100;
+          if (optionsDealThreshold > 0 && insiderPriceNum < quote.currentPrice * thresholdPercent) {
+            filteredOptionsDeals++;
+            log(`[OpeninsiderFetch] ${transaction.ticker} likely options deal: insider price $${insiderPriceNum.toFixed(2)} < ${optionsDealThreshold}% of market $${quote.currentPrice.toFixed(2)}, skipping`);
             continue;
           }
 
@@ -617,7 +647,15 @@ function startOpeninsiderFetchJob() {
         }
       }
 
-      log(`[OpeninsiderFetch] Successfully created ${createdCount} new stock recommendations from ${transactions.length} transactions (${filteredCount} filtered by market cap)`);
+      log(`\n[OpeninsiderFetch] ======= STAGE 2: Backend Post-Processing =======`);
+      log(`[OpeninsiderFetch] Starting with: ${transactions.length} transactions`);
+      log(`[OpeninsiderFetch]   ⊗ Duplicates: ${filteredDuplicates}`);
+      log(`[OpeninsiderFetch]   ⊗ Market cap < $${minMarketCap}M: ${filteredMarketCap}`);
+      log(`[OpeninsiderFetch]   ⊗ Options deals (< ${optionsDealThreshold}%): ${filteredOptionsDeals}`);
+      log(`[OpeninsiderFetch]   ⊗ No quote: ${filteredNoQuote}`);
+      log(`[OpeninsiderFetch] → Total Stage 2 filtered: ${filteredDuplicates + filteredMarketCap + filteredOptionsDeals + filteredNoQuote}`);
+      log(`[OpeninsiderFetch] ===============================================`);
+      log(`\n[OpeninsiderFetch] ✓ Successfully created ${createdCount} new recommendations\n`);
       await storage.updateOpeninsiderSyncStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

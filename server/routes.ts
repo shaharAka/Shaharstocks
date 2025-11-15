@@ -47,7 +47,8 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
     console.log(`[InitialDataFetch] Starting initial data fetch for user ${userId}...`);
     
     // Fetch 500 transactions without any filters
-    const transactions = await openinsiderService.fetchInsiderPurchases(500);
+    const scraperResponse = await openinsiderService.fetchInsiderPurchases(500);
+    const transactions = scraperResponse.transactions;
     
     if (transactions.length === 0) {
       console.log(`[InitialDataFetch] No transactions found for user ${userId}`);
@@ -55,7 +56,19 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
       return;
     }
 
-    console.log(`[InitialDataFetch] Processing ${transactions.length} transactions for user ${userId}...`);
+    const totalStage1Filtered = scraperResponse.stats.filtered_by_title + scraperResponse.stats.filtered_by_transaction_value + 
+                                 scraperResponse.stats.filtered_by_date + scraperResponse.stats.filtered_not_purchase + 
+                                 scraperResponse.stats.filtered_invalid_data;
+    
+    console.log(`[InitialDataFetch] ======= STAGE 1: Python Scraper Filters =======`);
+    console.log(`[InitialDataFetch] Total rows scraped: ${scraperResponse.stats.total_rows_scraped}`);
+    console.log(`[InitialDataFetch]   • Not a purchase / Invalid: ${scraperResponse.stats.filtered_not_purchase + scraperResponse.stats.filtered_invalid_data}`);
+    console.log(`[InitialDataFetch]   • Filtered by date: ${scraperResponse.stats.filtered_by_date}`);
+    console.log(`[InitialDataFetch]   • Filtered by title: ${scraperResponse.stats.filtered_by_title}`);
+    console.log(`[InitialDataFetch]   • Filtered by transaction value: ${scraperResponse.stats.filtered_by_transaction_value}`);
+    console.log(`[InitialDataFetch] → Total Stage 1 filtered: ${totalStage1Filtered}`);
+    console.log(`[InitialDataFetch] → Returned ${transactions.length} matching transactions`);
+    console.log(`[InitialDataFetch] ===================================================`);
     
     // Convert transactions to stock recommendations
     let createdCount = 0;
@@ -140,14 +153,15 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
       }
     }
 
-    const totalFiltered = filteredMarketCap + filteredOptionsDeals + filteredAlreadyExists + filteredNoQuote;
-    console.log(`[InitialDataFetch] Completed processing ${transactions.length} transactions:`);
-    console.log(`  ✓ Created: ${createdCount}`);
-    console.log(`  ⊗ Already exists: ${filteredAlreadyExists}`);
-    console.log(`  ⊗ Market cap < $500M: ${filteredMarketCap}`);
-    console.log(`  ⊗ Options deals (price < 15% of market): ${filteredOptionsDeals}`);
-    console.log(`  ⊗ No quote available: ${filteredNoQuote}`);
-    console.log(`  Total filtered: ${totalFiltered}`);
+    console.log(`\n[InitialDataFetch] ======= STAGE 2: Backend Post-Processing =======`);
+    console.log(`[InitialDataFetch] Starting with: ${transactions.length} transactions`);
+    console.log(`[InitialDataFetch]   ⊗ Already exists: ${filteredAlreadyExists}`);
+    console.log(`[InitialDataFetch]   ⊗ Market cap < $500M: ${filteredMarketCap}`);
+    console.log(`[InitialDataFetch]   ⊗ Options deals (< 15%): ${filteredOptionsDeals}`);
+    console.log(`[InitialDataFetch]   ⊗ No quote: ${filteredNoQuote}`);
+    console.log(`[InitialDataFetch] → Total Stage 2 filtered: ${filteredAlreadyExists + filteredMarketCap + filteredOptionsDeals + filteredNoQuote}`);
+    console.log(`[InitialDataFetch] ===================================================`);
+    console.log(`\n[InitialDataFetch] ✓ Successfully created ${createdCount} new recommendations for user ${userId}\n`);
     
     // Mark user as having initial data fetched
     await storage.markUserInitialDataFetched(userId);
@@ -2808,12 +2822,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[InsiderHistory] Fetching history for "${sanitizedName}"${tickerInfo} (limit: ${limit})`);
 
       // Fetch insider trading history
-      const trades = await openinsiderService.fetchInsiderPurchases(
+      const scraperResponse = await openinsiderService.fetchInsiderPurchases(
         limit,
         { insider_name: insiderName, ticker }
       );
+      const trades = scraperResponse.transactions;
 
       console.log(`[InsiderHistory] Found ${trades.length} trades for "${sanitizedName}"`);
+      console.log(`[InsiderHistory] Stage 1 Filter Stats:`, scraperResponse.stats);
 
       // Handle empty results gracefully
       if (!trades || trades.length === 0) {
@@ -2901,10 +2917,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[OpeninsiderFetch] ==============================================`);
       
       // Fetch insider transactions with filters
-      const transactions = await openinsiderService.fetchInsiderPurchases(
+      const scraperResponse = await openinsiderService.fetchInsiderPurchases(
         config.fetchLimit || 50,
         Object.keys(filters).length > 0 ? filters : undefined
       );
+      const transactions = scraperResponse.transactions;
+      const stage1Stats = scraperResponse.stats;
+      
+      const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
+                                   stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 
+                                   stage1Stats.filtered_invalid_data;
+      
+      console.log(`\n[OpeninsiderFetch] ======= STAGE 1: Python Scraper Filters =======`);
+      console.log(`[OpeninsiderFetch] Total rows scraped: ${stage1Stats.total_rows_scraped}`);
+      console.log(`[OpeninsiderFetch]   • Not a purchase / Invalid: ${stage1Stats.filtered_not_purchase + stage1Stats.filtered_invalid_data}`);
+      console.log(`[OpeninsiderFetch]   • Filtered by date: ${stage1Stats.filtered_by_date}`);
+      console.log(`[OpeninsiderFetch]   • Filtered by title: ${stage1Stats.filtered_by_title}`);
+      console.log(`[OpeninsiderFetch]   • Filtered by transaction value: ${stage1Stats.filtered_by_transaction_value}`);
+      console.log(`[OpeninsiderFetch] → Total Stage 1 filtered: ${totalStage1Filtered}`);
+      console.log(`[OpeninsiderFetch] → Returned ${transactions.length} matching transactions`);
+      console.log(`[OpeninsiderFetch] ===================================================\n`);
       
       if (transactions.length === 0) {
         await storage.updateOpeninsiderSyncStatus();
@@ -3090,29 +3122,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const totalFiltered = filteredMarketCap + filteredOptionsDeals + filteredNoQuote + filteredCount;
+      const duplicates = transactions.length - newTransactions.length;
+      const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
+                                   stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 
+                                   stage1Stats.filtered_invalid_data;
       
-      console.log(`[OpeninsiderFetch] Processing summary:`);
-      console.log(`  ✓ Created: ${createdCount}`);
-      console.log(`  ⊗ Already exists: ${filteredCount}`);
-      console.log(`  ⊗ Market cap < $500M: ${filteredMarketCap}`);
-      console.log(`  ⊗ Options deals (price < 15% of market): ${filteredOptionsDeals}`);
-      console.log(`  ⊗ No quote available: ${filteredNoQuote}`);
-      console.log(`  Total processed: ${transactions.length}, Total filtered: ${totalFiltered}`);
+      console.log(`\n[OpeninsiderFetch] ======= STAGE 2: Backend Post-Processing =======`);
+      console.log(`[OpeninsiderFetch] Starting with: ${transactions.length} transactions`);
+      console.log(`[OpeninsiderFetch]   ⊗ Duplicates: ${duplicates}`);
+      console.log(`[OpeninsiderFetch]   ⊗ Market cap < $${minMarketCap}M: ${filteredMarketCap}`);
+      console.log(`[OpeninsiderFetch]   ⊗ Options deals (< ${optionsDealThreshold}%): ${filteredOptionsDeals}`);
+      console.log(`[OpeninsiderFetch]   ⊗ No quote: ${filteredNoQuote}`);
+      console.log(`[OpeninsiderFetch] → Total Stage 2 filtered: ${duplicates + filteredMarketCap + filteredOptionsDeals + filteredNoQuote}`);
+      console.log(`[OpeninsiderFetch] ===================================================`);
+      console.log(`\n[OpeninsiderFetch] ✓ Successfully created ${createdCount} new recommendations\n`);
       
       res.json({ 
         success: true, 
-        message: `Created ${createdCount} new recommendations from ${transactions.length} transactions. Filtered: ${filteredCount} already exist, ${filteredMarketCap} market cap <$500M, ${filteredOptionsDeals} options deals, ${filteredNoQuote} no quote`,
+        message: `Created ${createdCount} new recommendations. Stage 1: Scraped ${stage1Stats.total_rows_scraped} rows, filtered ${totalStage1Filtered}, returned ${transactions.length}. Stage 2: ${duplicates} duplicates, ${filteredMarketCap} market cap, ${filteredOptionsDeals} options deals, ${filteredNoQuote} no quote.`,
         created: createdCount,
         total: transactions.length,
-        filtered: {
-          alreadyExists: filteredCount,
+        stage1: {
+          totalScraped: stage1Stats.total_rows_scraped,
+          filteredNotPurchase: stage1Stats.filtered_not_purchase + stage1Stats.filtered_invalid_data,
+          filteredByDate: stage1Stats.filtered_by_date,
+          filteredByTitle: stage1Stats.filtered_by_title,
+          filteredByTransactionValue: stage1Stats.filtered_by_transaction_value,
+          totalFiltered: totalStage1Filtered,
+          returned: transactions.length
+        },
+        stage2: {
+          duplicates: duplicates,
           marketCapTooLow: filteredMarketCap,
           optionsDeals: filteredOptionsDeals,
           noQuote: filteredNoQuote,
-          total: totalFiltered
+          totalFiltered: filteredMarketCap + filteredOptionsDeals + filteredNoQuote
         },
-        transactionsFetched: transactions.length
+        activeFilters: {
+          stage1: {
+            insiderTitles: filters.insiderTitles || null,
+            minTransactionValue: filters.minTransactionValue || null,
+            previousDayOnly: filters.previousDayOnly || false
+          },
+          stage2: {
+            minMarketCap: minMarketCap,
+            optionsDealThreshold: optionsDealThreshold
+          }
+        }
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

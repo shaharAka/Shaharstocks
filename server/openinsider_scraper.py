@@ -33,7 +33,7 @@ class OpenInsiderScraper:
         previous_day_only: bool = False,
         insider_name: str | None = None,
         ticker: str | None = None
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
         Fetch recent insider purchase transactions with pagination and retry logic
         
@@ -46,10 +46,22 @@ class OpenInsiderScraper:
             ticker: Filter by specific stock ticker (uses OpenInsider's screener endpoint)
         
         Returns:
-            List of insider trading transactions matching the filters
+            Dictionary with transactions and filtering statistics
         """
         all_transactions = []
         filtered_transactions = []
+        
+        # Track filtering statistics
+        filter_stats = {
+            "total_rows_scraped": 0,
+            "filtered_not_purchase": 0,
+            "filtered_invalid_data": 0,
+            "filtered_by_date": 0,
+            "filtered_by_title": 0,
+            "filtered_by_transaction_value": 0,
+            "filtered_by_insider_name": 0,
+        }
+        
         page = 1
         # When filtering by insider name without ticker, fetch more pages
         max_pages = 50 if (insider_name and not ticker) else 20
@@ -86,7 +98,10 @@ class OpenInsiderScraper:
                     table = soup.find('table', {'class': 'tinytable'})
                     if not table:
                         print(f"No data table found on page {page}, stopping pagination", file=sys.stderr)
-                        return filtered_transactions
+                        return {
+                            "transactions": filtered_transactions,
+                            "stats": filter_stats
+                        }
                     
                     # Parse table rows
                     page_transactions = []
@@ -97,7 +112,10 @@ class OpenInsiderScraper:
                         # If no rows, we've reached the end
                         if len(rows) == 0:
                             print(f"No more data on page {page}, stopping pagination", file=sys.stderr)
-                            return filtered_transactions
+                            return {
+                                "transactions": filtered_transactions,
+                                "stats": filter_stats
+                            }
                         
                         for row in rows:
                             # Check if we have enough transactions already
@@ -107,6 +125,8 @@ class OpenInsiderScraper:
                             cells = row.find_all('td')
                             if len(cells) < 10:
                                 continue
+                            
+                            filter_stats["total_rows_scraped"] += 1
                             
                             # Extract data from cells
                             try:
@@ -184,7 +204,12 @@ class OpenInsiderScraper:
                                 insider_title = insider_title_cell.get_text(strip=True) if insider_title_cell else ""
                                 
                                 # Only include purchases (P or "P - Purchase") with valid data
-                                if not (trade_type.startswith("P") and ticker_text and price > 0):
+                                if not trade_type.startswith("P"):
+                                    filter_stats["filtered_not_purchase"] += 1
+                                    continue
+                                
+                                if not (ticker_text and price > 0):
+                                    filter_stats["filtered_invalid_data"] += 1
                                     continue
                                 
                                 # Apply filters
@@ -194,9 +219,11 @@ class OpenInsiderScraper:
                                         trade_date = datetime.strptime(trade_date_text, "%Y-%m-%d")
                                         yesterday = datetime.now() - timedelta(days=1)
                                         if trade_date.date() != yesterday.date():
+                                            filter_stats["filtered_by_date"] += 1
                                             continue
                                     except:
                                         # Skip if date parsing fails
+                                        filter_stats["filtered_by_date"] += 1
                                         continue
                                 
                                 # Filter by insider titles
@@ -207,14 +234,17 @@ class OpenInsiderScraper:
                                         for filter_title in insider_titles
                                     )
                                     if not title_match:
+                                        filter_stats["filtered_by_title"] += 1
                                         continue
                                 
                                 # Filter by minimum transaction value
                                 if min_transaction_value and value < min_transaction_value:
+                                    filter_stats["filtered_by_transaction_value"] += 1
                                     continue
                                 
                                 # Filter by insider name (case-insensitive partial match)
                                 if insider_name and insider_name.lower() not in scraped_insider_name.lower():
+                                    filter_stats["filtered_by_insider_name"] += 1
                                     continue
                                 
                                 transaction = {
@@ -278,14 +308,20 @@ class OpenInsiderScraper:
             if last_error:
                 # All retries failed for this page, stop pagination
                 print(f"Failed to fetch page {page} after {self.max_retries} attempts. Last error: {last_error}", file=sys.stderr)
-                return filtered_transactions
+                return {
+                    "transactions": filtered_transactions,
+                    "stats": filter_stats
+                }
             
             # Move to next page
             page += 1
             time.sleep(1)  # Be nice to the server
         
-        # Pagination complete
-        return filtered_transactions
+        # Pagination complete - return transactions with statistics
+        return {
+            "transactions": filtered_transactions,
+            "stats": filter_stats
+        }
 
 def main():
     """Main entry point for the scraper"""
@@ -318,7 +354,7 @@ def main():
             print(f"Warning: Invalid filters JSON: {e}", file=sys.stderr)
     
     scraper = OpenInsiderScraper()
-    transactions = scraper.fetch_insider_purchases(
+    result = scraper.fetch_insider_purchases(
         limit=limit,
         insider_titles=insider_titles,
         min_transaction_value=min_transaction_value,
@@ -328,7 +364,7 @@ def main():
     )
     
     # Output as JSON to stdout
-    print(json.dumps(transactions, indent=2))
+    print(json.dumps(result, indent=2))
 
 if __name__ == "__main__":
     main()

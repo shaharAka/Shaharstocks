@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Bell, BellOff } from "lucide-react";
+import { Plus, Bell, BellOff, X } from "lucide-react";
 import { type Stock, type TradingRule, type Trade } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +57,26 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     onError: (error: any) => {
       toast({
         title: "Failed to create rule",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteRuleMutation = useMutation({
+    mutationFn: async (ruleId: string) => {
+      return await apiRequest("DELETE", `/api/rules/${ruleId}`, null);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      toast({
+        title: "Trading rule deleted",
+        description: "The trading rule has been removed",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to delete rule",
         description: error.message || "An error occurred",
         variant: "destructive",
       });
@@ -460,9 +480,21 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
             <p className="text-sm font-medium">Active Trading Rules:</p>
             <div className="flex flex-wrap gap-2">
               {sellRuleLines.map((line, index) => (
-                <Badge key={index} variant="outline">
-                  Sell at {line.label} (${line.price.toFixed(2)})
-                </Badge>
+                <div key={index} className="relative group">
+                  <Badge variant="outline" className="pr-6" data-testid={`badge-rule-${line.rule.id}`}>
+                    Sell at {line.label} (${line.price.toFixed(2)})
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => deleteRuleMutation.mutate(line.rule.id)}
+                    disabled={deleteRuleMutation.isPending}
+                    data-testid={`button-delete-rule-${line.rule.id}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
               ))}
             </div>
           </div>

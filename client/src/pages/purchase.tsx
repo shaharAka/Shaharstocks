@@ -14,11 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
   RefreshCw,
   Search,
   Pin,
@@ -28,12 +23,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Stock } from "@shared/schema";
-import {
-  getTerm,
-  getRiskPreset,
-  applyRiskPresetFilters,
-  type RiskLevel,
-} from "@/lib/compliance";
+import { getTerm } from "@/lib/compliance";
 import { useUser } from "@/contexts/UserContext";
 
 // Extended Stock type with user status and AI analysis
@@ -54,16 +44,8 @@ export default function Purchase() {
   const { user: currentUser } = useUser();
   
   // State management
-  const [riskLevel, setRiskLevel] = useState<RiskLevel>("balanced");
   const [sortBy, setSortBy] = useState<SortOption>("aiScore");
   const [tickerSearch, setTickerSearch] = useState("");
-
-  // Sync risk level with user's stored preference when user loads
-  useEffect(() => {
-    if (currentUser?.riskPreference) {
-      setRiskLevel(currentUser.riskPreference as RiskLevel);
-    }
-  }, [currentUser?.riskPreference]);
 
   // Fetch opportunities
   const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
@@ -158,12 +140,8 @@ export default function Purchase() {
       return days !== null && days <= 14;
     });
 
-    // Apply risk preset filters (returns filtered array with merged scores preserved)
-    const preset = getRiskPreset(riskLevel);
-    const filteredWithScores = applyRiskPresetFilters(within14Days, preset);
-
     // Sort opportunities using merged fields
-    const sorted = [...filteredWithScores].sort((a, b) => {
+    const sorted = [...within14Days].sort((a, b) => {
       if (sortBy === "aiScore") {
         const aScore = (a as any).integratedScore ?? (a as any).aiScore ?? 0;
         const bScore = (b as any).integratedScore ?? (b as any).aiScore ?? 0;
@@ -181,7 +159,7 @@ export default function Purchase() {
     });
 
     return sorted;
-  }, [stocks, analyses, riskLevel, sortBy, tickerSearch]);
+  }, [stocks, analyses, sortBy, tickerSearch]);
 
   // Get pinned opportunities
   const pinnedOpportunities = useMemo(() => {
@@ -303,26 +281,8 @@ export default function Purchase() {
         </Button>
       </div>
 
-      {/* Risk Level Toggle & Controls */}
+      {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-4">
-        {/* Risk Level Tabs */}
-        <div className="flex-1">
-          <Label className="text-sm font-medium mb-2 block">Risk Profile</Label>
-          <Tabs value={riskLevel} onValueChange={(value) => setRiskLevel(value as RiskLevel)}>
-            <TabsList className="grid w-full grid-cols-3" data-testid="tabs-risk-level">
-              <TabsTrigger value="high" data-testid="tab-risk-high">
-                {getTerm("highRisk")}
-              </TabsTrigger>
-              <TabsTrigger value="balanced" data-testid="tab-risk-balanced">
-                {getTerm("balanced")}
-              </TabsTrigger>
-              <TabsTrigger value="low" data-testid="tab-risk-low">
-                {getTerm("lowRisk")}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
         {/* Sort Control */}
         <div className="flex-1">
           <Label className="text-sm font-medium mb-2 block">Sort By</Label>

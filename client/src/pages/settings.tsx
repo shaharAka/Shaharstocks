@@ -879,6 +879,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
   const [minMarketCap, setMinMarketCap] = useState(500);
   const [fetchPreviousDayOnly, setFetchPreviousDayOnly] = useState(false);
   const [optionsDealThreshold, setOptionsDealThreshold] = useState(15);
+  const [minCommunityEngagement, setMinCommunityEngagement] = useState(10);
 
   const { data: config, isLoading } = useQuery<OpeninsiderConfig>({
     queryKey: ["/api/openinsider/config"],
@@ -895,6 +896,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
       setMinMarketCap(config.minMarketCap ?? 500);
       setFetchPreviousDayOnly(config.fetchPreviousDayOnly || false);
       setOptionsDealThreshold(config.optionsDealThresholdPercent ?? 15);
+      setMinCommunityEngagement(config.minCommunityEngagement ?? 10);
     }
   }, [config]);
 
@@ -909,6 +911,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
         minMarketCap: minMarketCap,
         fetchPreviousDayOnly,
         optionsDealThresholdPercent: optionsDealThreshold,
+        minCommunityEngagement: minCommunityEngagement,
       });
       return await res.json();
     },
@@ -1144,6 +1147,24 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
                 />
                 <p className="text-xs text-muted-foreground">
                   Insider purchase price must be at least this % of current market price. Set to 0 to disable filter. Default 15% filters out likely stock options deals.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="min-community-engagement">Minimum Community Engagement</Label>
+                <Input
+                  id="min-community-engagement"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="10"
+                  value={minCommunityEngagement}
+                  onChange={(e) => setMinCommunityEngagement(parseInt(e.target.value) || 10)}
+                  disabled={!openinsiderEnabled}
+                  data-testid="input-min-community-engagement"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Minimum number of comments required for a stock to appear in the Community section. Default 10 shows only stocks with active discussions.
                 </p>
               </div>
             </div>

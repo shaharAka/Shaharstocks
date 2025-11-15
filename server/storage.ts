@@ -1950,6 +1950,7 @@ export class DatabaseStorage implements IStorage {
       // For backward compatibility, derive aiStance from watching scenario (uppercase for display)
       const aiStance = latestBrief?.watchingStance?.toUpperCase() as 'ENTER' | 'WAIT' | null || null;
       
+      // Push result with computed stanceAlignment
       results.push({
         ...followed,
         jobStatus,

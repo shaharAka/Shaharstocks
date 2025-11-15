@@ -277,8 +277,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
             <XAxis 
               dataKey="date" 
               stroke="hsl(var(--muted-foreground))"
-              tick={{ fill: "currentColor", fontSize: 12 }}
-              style={{ color: "hsl(var(--foreground))" }}
+              tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
               tickFormatter={(value) => {
                 const date = new Date(value);
                 return `${date.getMonth() + 1}/${date.getDate()}`;
@@ -286,8 +285,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
-              tick={{ fill: "currentColor", fontSize: 12 }}
-              style={{ color: "hsl(var(--foreground))" }}
+              tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
               tickFormatter={(value) => `$${value.toFixed(0)}`}
               domain={['auto', 'auto']}
             />

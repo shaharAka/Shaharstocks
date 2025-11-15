@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   Activity,
   ShoppingCart,
@@ -12,6 +13,7 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  ChevronRight,
 } from "lucide-react";
 import {
   Sidebar,
@@ -66,6 +68,7 @@ export function AppSidebar() {
   const newStocksCount = useNewStocksCount();
   const { user } = useUser();
   const { setOpenMobile, isMobile, state } = useSidebar();
+  const [showAllHoldStocks, setShowAllHoldStocks] = useState(false);
 
   // Fetch version info
   const { data: versionInfo } = useQuery<{ version: string; name: string }>({
@@ -150,84 +153,116 @@ export function AppSidebar() {
               })}
               
               {/* Following Submenu */}
-              {followedStocks.length > 0 && (
-                <Collapsible 
-                  defaultOpen={currentPath.startsWith("/ticker/")}
-                  className="group/collapsible"
-                >
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton
-                        tooltip={isCollapsed ? "Following" : undefined}
-                        data-testid="link-following"
+              {followedStocks.length > 0 && (() => {
+                // Group stocks by stance
+                const buyStocks = followedStocks.filter(s => s.latestStance === 'BUY');
+                const sellStocks = followedStocks.filter(s => s.latestStance === 'SELL');
+                const holdStocks = followedStocks.filter(s => s.latestStance === 'HOLD' || !s.latestStance);
+                
+                // Determine which hold stocks to show
+                const HOLD_DISPLAY_LIMIT = 3;
+                const shouldCollapseHold = holdStocks.length > HOLD_DISPLAY_LIMIT;
+                const visibleHoldStocks = shouldCollapseHold && !showAllHoldStocks 
+                  ? holdStocks.slice(0, HOLD_DISPLAY_LIMIT)
+                  : holdStocks;
+                
+                const renderStockItem = (stock: typeof followedStocks[0]) => {
+                  const tickerPath = `/ticker/${stock.ticker}`;
+                  const isTickerActive = currentPath === tickerPath;
+                  const isProcessing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
+                  
+                  // Get stance indicator
+                  let StanceIcon = null;
+                  let stanceColor = "";
+                  
+                  if (stock.latestStance) {
+                    if (stock.stanceAlignment === 'positive') {
+                      StanceIcon = TrendingUp;
+                      stanceColor = "text-success";
+                    } else if (stock.stanceAlignment === 'negative') {
+                      StanceIcon = TrendingDown;
+                      stanceColor = "text-destructive";
+                    } else {
+                      StanceIcon = Minus;
+                      stanceColor = "text-muted-foreground";
+                    }
+                  } else if (isProcessing) {
+                    StanceIcon = Loader2;
+                    stanceColor = "text-muted-foreground animate-spin";
+                  }
+                  
+                  return (
+                    <SidebarMenuSubItem key={stock.ticker}>
+                      <SidebarMenuSubButton
+                        asChild
+                        className={isTickerActive ? "bg-sidebar-accent" : ""}
+                        data-testid={`link-ticker-${stock.ticker}`}
                       >
-                        <Star className="h-4 w-4 fill-current" />
-                        <span>Following</span>
-                        <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {followedStocks.map((stock) => {
-                          const tickerPath = `/ticker/${stock.ticker}`;
-                          const isTickerActive = currentPath === tickerPath;
-                          const isProcessing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
+                        <Link href={tickerPath} onClick={handleNavClick}>
+                          <span className="font-mono font-medium flex items-center gap-1.5">
+                            {StanceIcon && <StanceIcon className={`h-3 w-3 ${stanceColor}`} />}
+                            {stock.ticker}
+                          </span>
+                          <span className="ml-auto text-xs font-mono text-muted-foreground">
+                            ${parseFloat(stock.currentPrice).toFixed(2)}
+                          </span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  );
+                };
+                
+                return (
+                  <Collapsible 
+                    defaultOpen={currentPath.startsWith("/ticker/")}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          tooltip={isCollapsed ? "Following" : undefined}
+                          data-testid="link-following"
+                        >
+                          <Star className="h-4 w-4 fill-current" />
+                          <span>Following</span>
+                          <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {/* BUY stocks first */}
+                          {buyStocks.map(renderStockItem)}
                           
-                          // Get stance indicator
-                          // Priority: Show the stance icon if a brief exists, otherwise show processing status
-                          // - Green up arrow when alignment is positive (BUY+uptrend or SELL+downtrend)
-                          // - Red down arrow when alignment is negative (BUY+downtrend or SELL+uptrend)
-                          // - Minus sign for neutral (HOLD) or when stance exists but alignment is neutral
-                          // - Loader when no brief exists but job is processing
-                          // - No icon when no brief and no active job
-                          let StanceIcon = null;
-                          let stanceColor = "";
+                          {/* SELL stocks */}
+                          {sellStocks.map(renderStockItem)}
                           
-                          // If we have a brief with stance, show the stance indicator
-                          if (stock.latestStance) {
-                            if (stock.stanceAlignment === 'positive') {
-                              StanceIcon = TrendingUp;
-                              stanceColor = "text-green-600 dark:text-green-400";
-                            } else if (stock.stanceAlignment === 'negative') {
-                              StanceIcon = TrendingDown;
-                              stanceColor = "text-red-600 dark:text-red-400";
-                            } else {
-                              // Neutral (HOLD or no clear trend)
-                              StanceIcon = Minus;
-                              stanceColor = "text-muted-foreground";
-                            }
-                          } else if (isProcessing) {
-                            // No brief yet, but analysis is in progress
-                            StanceIcon = Loader2;
-                            stanceColor = "text-muted-foreground animate-spin";
-                          }
-                          // else: No brief and no active job = no icon
+                          {/* HOLD stocks - with collapsible if more than 3 */}
+                          {visibleHoldStocks.map(renderStockItem)}
                           
-                          return (
-                            <SidebarMenuSubItem key={stock.ticker}>
+                          {/* Show More/Less button for HOLD stocks */}
+                          {shouldCollapseHold && (
+                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton
-                                asChild
-                                className={isTickerActive ? "bg-sidebar-accent" : ""}
-                                data-testid={`link-ticker-${stock.ticker}`}
+                                onClick={() => setShowAllHoldStocks(!showAllHoldStocks)}
+                                className="text-muted-foreground hover:text-foreground cursor-pointer"
+                                data-testid="button-toggle-hold-stocks"
                               >
-                                <Link href={tickerPath} onClick={handleNavClick}>
-                                  <span className="font-mono font-medium flex items-center gap-1.5">
-                                    {StanceIcon && <StanceIcon className={`h-3 w-3 ${stanceColor}`} />}
-                                    {stock.ticker}
-                                  </span>
-                                  <span className="ml-auto text-xs font-mono text-muted-foreground">
-                                    ${parseFloat(stock.currentPrice).toFixed(2)}
-                                  </span>
-                                </Link>
+                                <ChevronRight className={`h-3 w-3 transition-transform ${showAllHoldStocks ? 'rotate-90' : ''}`} />
+                                <span className="text-xs">
+                                  {showAllHoldStocks 
+                                    ? 'Show less' 
+                                    : `Show ${holdStocks.length - HOLD_DISPLAY_LIMIT} more HOLD`
+                                  }
+                                </span>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
-                          );
-                        })}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
-              )}
+                          )}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                );
+              })()}
               
               {/* Community Submenu */}
               <Collapsible 

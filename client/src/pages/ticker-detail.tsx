@@ -337,10 +337,10 @@ export default function TickerDetail() {
                   const isPositive = priceChange >= 0;
                   
                   // Check if either scenario recommends ACT
-                  // Watching scenario: ACT = "enter"
-                  // Owning scenario: ACT = "sell"
-                  const watchingIsAct = brief.watchingStance === "enter";
-                  const owningIsAct = brief.owningStance === "sell";
+                  // Watching scenario: ACT = "enter" (buy opportunity) or "short" (sell opportunity)
+                  // Owning scenario: ACT = "sell" (exit long) or "cover" (exit short)
+                  const watchingIsAct = brief.watchingStance === "enter" || brief.watchingStance === "short";
+                  const owningIsAct = brief.owningStance === "sell" || brief.owningStance === "cover";
                   const hasActRecommendation = watchingIsAct || owningIsAct;
                   
                   const getStanceConfig = (stance: string) => {
@@ -351,6 +351,14 @@ export default function TickerDetail() {
                         color: "text-green-600 dark:text-green-400",
                         bgColor: "bg-green-50 dark:bg-green-950/30",
                         borderColor: "border-green-500",
+                      };
+                    } else if (stance === "short") {
+                      return {
+                        icon: ArrowDownCircle,
+                        text: "SHORT",
+                        color: "text-orange-600 dark:text-orange-400",
+                        bgColor: "bg-orange-50 dark:bg-orange-950/30",
+                        borderColor: "border-orange-500",
                       };
                     } else if (stance === "wait") {
                       return {
@@ -367,6 +375,14 @@ export default function TickerDetail() {
                         color: "text-red-600 dark:text-red-400",
                         bgColor: "bg-red-50 dark:bg-red-950/30",
                         borderColor: "border-red-500",
+                      };
+                    } else if (stance === "cover") {
+                      return {
+                        icon: ArrowUpCircle,
+                        text: "COVER",
+                        color: "text-blue-600 dark:text-blue-400",
+                        bgColor: "bg-blue-50 dark:bg-blue-950/30",
+                        borderColor: "border-blue-500",
                       };
                     } else {
                       // Default to "hold" for owning scenario

@@ -2150,8 +2150,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } : undefined
           } : undefined;
           
-          // Get opportunity type from stock recommendation
-          const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
+          // Get opportunity type from stock recommendation (case-insensitive check)
+          const opportunityType = stockData?.recommendation?.toLowerCase().includes("sell") ? "sell" : "buy";
           
           // Check if user owns this stock (real holdings only, not simulated)
           const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
@@ -4256,7 +4256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Get stock data for context and opportunity type
           const stock = await storage.getStock(ticker);
           const stockData = stock as any;
-          const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
+          const opportunityType = stockData?.recommendation?.toLowerCase().includes("sell") ? "sell" : "buy";
           const previousAnalysis = stockData?.overallRating ? {
             overallRating: stockData.overallRating,
             summary: stockData.summary || "No previous analysis available",

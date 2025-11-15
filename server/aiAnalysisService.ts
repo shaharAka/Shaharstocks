@@ -420,14 +420,19 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     const priceChangePercent = ((priceChange / previousPrice) * 100).toFixed(2);
     
     const isBuyOpportunity = opportunityType === "buy";
+    const isSellOpportunity = opportunityType === "sell";
     
-    const positionContext = userOwnsPosition
-      ? `USER OWNS THIS STOCK - Focus on EXIT STRATEGY ONLY (when to sell or hold). NEVER recommend adding to position.`
-      : `USER CONSIDERING ENTRY - Focus on ENTRY EVALUATION (should they enter now, wait, or avoid?)`;
+    const positionContext = isSellOpportunity
+      ? (userOwnsPosition
+          ? `USER HAS A SHORT POSITION - Focus on COVERING STRATEGY (when to cover the short or hold it). This is a SHORTING analysis.`
+          : `USER CONSIDERING SHORTING - Focus on SHORT ENTRY EVALUATION (should they open a short position now or wait?)`)
+      : (userOwnsPosition
+          ? `USER OWNS THIS STOCK - Focus on EXIT STRATEGY ONLY (when to sell or hold). NEVER recommend adding to position.`
+          : `USER CONSIDERING ENTRY - Focus on ENTRY EVALUATION (should they enter now, wait, or avoid?)`);
     
     const opportunityContext = isBuyOpportunity
       ? "This is a BUY OPPORTUNITY - insiders recently BOUGHT shares, signaling potential upside."
-      : "This is a SELL OPPORTUNITY - insiders recently SOLD shares, signaling potential downside or overvaluation.";
+      : "This is a SELL/SHORT OPPORTUNITY - insiders recently SOLD shares, signaling potential downside or weakness. Low AI score indicates company weakness, making this a good shorting candidate.";
     
     // Build technical trend context from initial AI analysis if available
     let trendContext = "";
@@ -450,9 +455,9 @@ ${signals.length > 0 ? `- Signals: ${signals.join(', ')}` : ''}`;
     let stanceRules: string;
     
     if (userOwnsPosition) {
-      // User owns the stock - focus ONLY on exit strategy (sell or hold, NEVER buy/add)
+      // User owns the position - focus ONLY on exit strategy
       stanceRules = isBuyOpportunity
-        ? `STANCE RULES for OWNED POSITION (Buy Opportunity):
+        ? `STANCE RULES for OWNED LONG POSITION (Buy Opportunity):
 Use initial trend as baseline. Focus on WHEN TO EXIT or HOLD.
 
 ⚠️ CRITICAL: You can ONLY recommend "sell" or "hold" - NEVER "buy". This is exit strategy, not adding to position.
@@ -467,19 +472,22 @@ HOLD:
 - Price -2% to -4% but initial trend still bullish/moderate (don't panic sell on small dips)
 
 Decision: SELL when trend confirms exit. HOLD when trend supports staying in. NEVER recommend "buy".`
-        : `STANCE RULES for OWNED POSITION (Sell Opportunity - Contrarian):
-You hold against insider sell. Prioritize capital preservation.
+        : `STANCE RULES for OWNED SHORT POSITION (Sell/Short Opportunity):
+You have a SHORT position. Price DECLINE = your profit. Focus on COVERING strategy.
 
-⚠️ CRITICAL: You can ONLY recommend "sell" or "hold" - NEVER "buy".
+⚠️ CRITICAL: You can ONLY recommend "cover" or "hold" - NEVER "buy" or "sell".
 
-ACT (sell):
-- "sell" if ANY decline -2%+ (stop loss)
-- "sell" if gain +4%+ (take contrarian profit)
+COVER SHORT (ACT - close short position):
+- "cover" if price -5%+ (take short profit on significant decline)
+- "cover" if price +3%+ AND initial bearish trend reversing bullish (stop loss - trend against you)
+- "cover" if strong bullish news violates bearish thesis (cut losses early)
 
-HOLD (rare):
-- Small gain 0-3% with initial trend reversing bullish
+HOLD SHORT (keep short position open):
+- Price declining -1% to -4% with initial bearish trend intact (let it run down)
+- Sideways action with initial trend still bearish/weak (wait for more decline)
+- Small gain +1% to +2% (price rising slightly) but initial trend still bearish (noise, not reversal)
 
-Decision: Default "sell" on ANY weakness. ACT = exit quickly. NEVER recommend "buy".`
+Decision: COVER when you've profited enough OR trend reversing against you. HOLD when bearish trend continues. For shorts, price FALLING = your gain.`
     } else {
       // User doesn't own - focus on entry evaluation with ENTER/WAIT logic
       stanceRules = isBuyOpportunity
@@ -498,19 +506,22 @@ WAIT:
 - "wait" if initial trend bearish/weak + price falling (avoid entry)
 
 Decision: ENTER when initial trend confirms insider buy signal. WAIT if trend weak or unclear.`
-        : `STANCE RULES for ENTRY DECISION (Sell Opportunity):
-Insiders sold. Default = avoid entry.
+        : `STANCE RULES for SHORT ENTRY DECISION (Sell/Short Opportunity):
+Insiders sold. Low AI score indicates company weakness. Evaluate SHORT ENTRY.
 
-⚠️ CRITICAL: You must choose "enter" or "wait" - NO OTHER VALUES.
+⚠️ CRITICAL: You must choose "short" or "wait" - NO OTHER VALUES.
 
-ENTER (ACT - rare):
-- "enter" ONLY if initial trend STRONG bullish + massive oversold (rare contrarian entry)
+SHORT (ACT - open short position):
+- "short" if initial trend bearish/weak + price breaking down (trend confirms weakness)
+- "short" if initial trend bearish/moderate + price rallying +2% to +4% (rally into resistance, short the bounce)
+- "short" if low AI score (<30) confirms fundamental weakness + any bearish technical signal
 
-WAIT:
-- "wait" if initial trend bearish + price breaking down (avoid entry)
-- "wait" if initial trend neutral, price sideways (no clear signal)
+WAIT (don't open short):
+- "wait" if initial trend bullish/strong + price rising (don't fight the trend)
+- "wait" if initial trend neutral, price sideways (no clear short setup)
+- "wait" if positive news contradicts bearish thesis (wait for clarity)
 
-Decision: Default "wait" stance. ENTER only on rare strong contrarian signals.`
+Decision: SHORT when bearish trend + weak fundamentals align. WAIT if trend unclear or bullish.`
     }
     
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.
@@ -553,13 +564,25 @@ BE DECISIVE. Near-term traders need action, not patience.
 
 Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
 {
-  "recommendedStance": ${userOwnsPosition ? '"sell" | "hold"' : '"enter" | "wait"'},
+  "recommendedStance": ${
+    isSellOpportunity
+      ? (userOwnsPosition ? '"cover" | "hold"' : '"short" | "wait"')
+      : (userOwnsPosition ? '"sell" | "hold"' : '"enter" | "wait"')
+  },
   "confidence": 1-10,
   "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on NEAR-TERM action.",
   "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
 }
 
-${userOwnsPosition ? '⚠️ CRITICAL: For owned positions, you can ONLY use "sell" or "hold" - NEVER "enter" or "wait".' : '⚠️ CRITICAL: For entry evaluation, you can ONLY use "enter" or "wait" - NEVER "buy", "hold", or "sell".'}`;
+${
+  isSellOpportunity
+    ? (userOwnsPosition
+        ? '⚠️ CRITICAL: For short positions, you can ONLY use "cover" or "hold" - NEVER "sell", "enter", "wait", or "buy".'
+        : '⚠️ CRITICAL: For short entry evaluation, you can ONLY use "short" or "wait" - NEVER "enter", "buy", "hold", or "sell".')
+    : (userOwnsPosition
+        ? '⚠️ CRITICAL: For owned positions, you can ONLY use "sell" or "hold" - NEVER "enter" or "wait".'
+        : '⚠️ CRITICAL: For entry evaluation, you can ONLY use "enter" or "wait" - NEVER "buy", "hold", or "sell".')
+}`;
 
     try {
       const response = await openai.chat.completions.create({

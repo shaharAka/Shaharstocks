@@ -1334,8 +1334,8 @@ function startDailyBriefJob() {
                 } : undefined
               } : undefined;
               
-              // Get opportunity type from stock recommendation
-              const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
+              // Get opportunity type from stock recommendation (case-insensitive check)
+              const opportunityType = stockData?.recommendation?.toLowerCase().includes("sell") ? "sell" : "buy";
               
               // Get recent news (last 24h only, if available)
               const now = Date.now() / 1000; // Unix timestamp in seconds

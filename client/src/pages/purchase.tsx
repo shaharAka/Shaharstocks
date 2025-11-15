@@ -21,8 +21,6 @@ import {
   LayoutGrid,
   LayoutList,
   ExternalLink,
-  Pin,
-  PinOff,
   Clock,
   MessageSquare,
   Star,
@@ -39,7 +37,6 @@ import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 
 type StockWithUserStatus = Stock & {
   userStatus: string;
-  isPinned?: boolean;
   isFollowing?: boolean;
   analysisJob?: {
     status: string;
@@ -149,26 +146,6 @@ export default function Purchase() {
     },
   });
 
-  // Toggle pick mutation
-  const togglePickMutation = useMutation({
-    mutationFn: async ({ ticker, isPinned }: { ticker: string; isPinned: boolean }) => {
-      if (isPinned) {
-        return await apiRequest("DELETE", `/api/stocks/${ticker}/pin`, null);
-      } else {
-        return await apiRequest("POST", `/api/stocks/${ticker}/pin`, null);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to update pick status",
-        variant: "destructive",
-      });
-    },
-  });
 
   // Follow stock mutation
   const followMutation = useMutation({
@@ -319,10 +296,6 @@ export default function Purchase() {
     return sorted;
   }, [stocks, analyses, sortBy, tickerSearch, followedStocks]);
 
-  // Get pinned opportunities
-  const pinnedOpportunities = useMemo(() => {
-    return opportunities.filter(stock => stock.isPinned === true);
-  }, [opportunities]);
 
   if (isLoading) {
     return (
@@ -425,10 +398,6 @@ export default function Purchase() {
           <div>
             <span className="text-muted-foreground">Total {getTerm("opportunities")}: </span>
             <span className="font-medium" data-testid="text-total-count">{opportunities.length}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Picked: </span>
-            <span className="font-medium" data-testid="text-picked-count">{pinnedOpportunities.length}</span>
           </div>
         </div>
 
@@ -571,9 +540,6 @@ export default function Purchase() {
                         <Badge variant="default" className="text-xs px-1.5 py-0" data-testid={`badge-new-${stock.ticker}`}>
                           NEW
                         </Badge>
-                      )}
-                      {stock.isPinned && (
-                        <Pin className="h-3.5 w-3.5 text-primary fill-current" />
                       )}
                       {stock.isFollowing && (
                         <Star className="h-3.5 w-3.5 text-primary fill-current" data-testid={`icon-following-${stock.ticker}`} />

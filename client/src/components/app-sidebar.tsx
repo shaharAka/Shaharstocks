@@ -68,7 +68,6 @@ export function AppSidebar() {
   const newStocksCount = useNewStocksCount();
   const { user } = useUser();
   const { setOpenMobile, isMobile, state } = useSidebar();
-  const [showAllHoldStocks, setShowAllHoldStocks] = useState(false);
 
   // Fetch version info
   const { data: versionInfo } = useQuery<{ version: string; name: string }>({
@@ -159,12 +158,9 @@ export function AppSidebar() {
                 const sellStocks = followedStocks.filter(s => s.latestStance === 'SELL');
                 const holdStocks = followedStocks.filter(s => s.latestStance === 'HOLD' || !s.latestStance);
                 
-                // Determine which hold stocks to show
+                // Determine if hold stocks should be grouped
                 const HOLD_DISPLAY_LIMIT = 3;
-                const shouldCollapseHold = holdStocks.length > HOLD_DISPLAY_LIMIT;
-                const visibleHoldStocks = shouldCollapseHold && !showAllHoldStocks 
-                  ? holdStocks.slice(0, HOLD_DISPLAY_LIMIT)
-                  : holdStocks;
+                const shouldGroupHoldStocks = holdStocks.length > HOLD_DISPLAY_LIMIT;
                 
                 const renderStockItem = (stock: typeof followedStocks[0]) => {
                   const tickerPath = `/ticker/${stock.ticker}`;
@@ -236,26 +232,27 @@ export function AppSidebar() {
                           {/* SELL stocks */}
                           {sellStocks.map(renderStockItem)}
                           
-                          {/* HOLD stocks - with collapsible if more than 3 */}
-                          {visibleHoldStocks.map(renderStockItem)}
-                          
-                          {/* Show More/Less button for HOLD stocks */}
-                          {shouldCollapseHold && (
-                            <SidebarMenuSubItem>
-                              <SidebarMenuSubButton
-                                onClick={() => setShowAllHoldStocks(!showAllHoldStocks)}
-                                className="text-muted-foreground hover:text-foreground cursor-pointer"
-                                data-testid="button-toggle-hold-stocks"
-                              >
-                                <ChevronRight className={`h-3 w-3 transition-transform ${showAllHoldStocks ? 'rotate-90' : ''}`} />
-                                <span className="text-xs">
-                                  {showAllHoldStocks 
-                                    ? 'Show less' 
-                                    : `Show ${holdStocks.length - HOLD_DISPLAY_LIMIT} more HOLD`
-                                  }
-                                </span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
+                          {/* HOLD stocks - either individual or grouped */}
+                          {shouldGroupHoldStocks ? (
+                            <Collapsible className="group/hold-collapsible">
+                              <SidebarMenuSubItem>
+                                <CollapsibleTrigger asChild>
+                                  <SidebarMenuSubButton
+                                    className="text-muted-foreground hover:text-foreground cursor-pointer"
+                                    data-testid="button-toggle-hold-stocks"
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                    <span className="text-xs">HOLD ({holdStocks.length})</span>
+                                    <ChevronRight className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/hold-collapsible:rotate-90" />
+                                  </SidebarMenuSubButton>
+                                </CollapsibleTrigger>
+                              </SidebarMenuSubItem>
+                              <CollapsibleContent>
+                                {holdStocks.map(renderStockItem)}
+                              </CollapsibleContent>
+                            </Collapsible>
+                          ) : (
+                            holdStocks.map(renderStockItem)
                           )}
                         </SidebarMenuSub>
                       </CollapsibleContent>

@@ -203,6 +203,18 @@ export function StockTable({
                 </Button>
               </TableHead>
               <TableHead className="hidden md:table-cell min-w-[120px]">Company</TableHead>
+              <TableHead className="text-right hidden lg:table-cell w-[85px]">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={() => handleSort("aiScore")}
+                  className="px-1"
+                  data-testid="sort-ai-score"
+                >
+                  AI Score
+                  <SortIcon field="aiScore" />
+                </Button>
+              </TableHead>
               <TableHead className="min-w-[70px]">
                 <Button
                   variant="ghost"
@@ -262,18 +274,6 @@ export function StockTable({
                 >
                   Mkt Cap
                   <SortIcon field="marketCap" />
-                </Button>
-              </TableHead>
-              <TableHead className="text-right hidden lg:table-cell w-[85px]">
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  onClick={() => handleSort("aiScore")}
-                  className="px-1"
-                  data-testid="sort-ai-score"
-                >
-                  AI Score
-                  <SortIcon field="aiScore" />
                 </Button>
               </TableHead>
               <TableHead className="hidden lg:table-cell min-w-[70px]">
@@ -345,48 +345,6 @@ export function StockTable({
                 <TableCell className="hidden md:table-cell max-w-xs truncate text-xs text-muted-foreground py-2" data-testid={`cell-company-${stock.ticker}`}>
                   {stock.companyName}
                 </TableCell>
-                <TableCell className="py-2">
-                  {stock.recommendation && (
-                    <Badge
-                      variant={stock.recommendation.toLowerCase().includes("buy") ? "default" : "destructive"}
-                      className="text-xs"
-                      data-testid={`badge-rec-${stock.ticker}`}
-                    >
-                      {stock.recommendation.toLowerCase().includes("buy") ? (
-                        <ArrowUpRight className="h-3 w-3 mr-1" />
-                      ) : (
-                        <ArrowDownRight className="h-3 w-3 mr-1" />
-                      )}
-                      {stock.recommendation.replace("_", " ").toUpperCase()}
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm py-2" data-testid={`cell-price-${stock.ticker}`}>
-                  ${currentPrice.toFixed(2)}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell w-32 py-2" data-testid={`cell-chart-${stock.ticker}`}>
-                  {stock.candlesticks && stock.candlesticks.length > 0 ? (
-                    <div className="h-12">
-                      <MiniCandlestickChart data={stock.candlesticks} height={48} />
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right py-2">
-                  <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-success" : "text-destructive"}`}>
-                    {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    <span className="text-xs font-mono font-medium">
-                      {isPositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground hidden xl:table-cell py-2">
-                  {insiderPrice ? `$${insiderPrice.toFixed(2)}` : "-"}
-                </TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground hidden xl:table-cell py-2">
-                  {stock.marketCap || "-"}
-                </TableCell>
                 <TableCell className="text-right hidden lg:table-cell py-2" data-testid={`cell-ai-score-${stock.ticker}`}>
                   {(() => {
                     const analysis = getAIAnalysis(stock.ticker);
@@ -440,6 +398,48 @@ export function StockTable({
                       </div>
                     );
                   })()}
+                </TableCell>
+                <TableCell className="py-2">
+                  {stock.recommendation && (
+                    <Badge
+                      variant={stock.recommendation.toLowerCase().includes("buy") ? "default" : "destructive"}
+                      className="text-xs"
+                      data-testid={`badge-rec-${stock.ticker}`}
+                    >
+                      {stock.recommendation.toLowerCase().includes("buy") ? (
+                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                      ) : (
+                        <ArrowDownRight className="h-3 w-3 mr-1" />
+                      )}
+                      {stock.recommendation.replace("_", " ").toUpperCase()}
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm py-2" data-testid={`cell-price-${stock.ticker}`}>
+                  ${currentPrice.toFixed(2)}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell w-32 py-2" data-testid={`cell-chart-${stock.ticker}`}>
+                  {stock.candlesticks && stock.candlesticks.length > 0 ? (
+                    <div className="h-12">
+                      <MiniCandlestickChart data={stock.candlesticks} height={48} />
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right py-2">
+                  <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-success" : "text-destructive"}`}>
+                    {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    <span className="text-xs font-mono font-medium">
+                      {isPositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-mono text-xs text-muted-foreground hidden xl:table-cell py-2">
+                  {insiderPrice ? `$${insiderPrice.toFixed(2)}` : "-"}
+                </TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground hidden xl:table-cell py-2">
+                  {stock.marketCap || "-"}
                 </TableCell>
                 <TableCell className="hidden lg:table-cell py-2">
                   {stock.insiderTradeDate && (

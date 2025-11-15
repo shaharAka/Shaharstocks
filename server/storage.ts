@@ -73,8 +73,8 @@ import {
   type InsertAdminNotification,
   type FollowedStock,
   type InsertFollowedStock,
-  type DailySummary,
-  type InsertDailySummary,
+  type DailyBrief,
+  type InsertDailyBrief,
   stocks,
   portfolioHoldings,
   trades,
@@ -110,7 +110,7 @@ import {
   announcementReads,
   adminNotifications,
   followedStocks,
-  dailySummaries,
+  dailyBriefs,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
@@ -255,8 +255,8 @@ export interface IStorage {
   followStock(follow: InsertFollowedStock): Promise<FollowedStock>;
   unfollowStock(ticker: string, userId: string): Promise<boolean>;
   getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>>;
-  getDailySummariesForTicker(ticker: string): Promise<DailySummary[]>;
-  createDailySummary(summary: InsertDailySummary): Promise<DailySummary>;
+  getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]>;
+  createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief>;
 
   // User Stock Statuses
   getUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus | undefined>;
@@ -1923,41 +1923,41 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async getDailySummariesForTicker(ticker: string): Promise<DailySummary[]> {
+  async getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]> {
     return await db
       .select()
-      .from(dailySummaries)
-      .where(eq(dailySummaries.ticker, ticker))
-      .orderBy(desc(dailySummaries.summaryDate));
+      .from(dailyBriefs)
+      .where(eq(dailyBriefs.ticker, ticker))
+      .orderBy(desc(dailyBriefs.briefDate));
   }
 
-  async createDailySummary(summary: InsertDailySummary): Promise<DailySummary> {
-    // Check if summary already exists for this ticker and date
+  async createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief> {
+    // Check if brief already exists for this ticker and date
     const [existing] = await db
       .select()
-      .from(dailySummaries)
+      .from(dailyBriefs)
       .where(
         and(
-          eq(dailySummaries.ticker, summary.ticker),
-          eq(dailySummaries.summaryDate, summary.summaryDate)
+          eq(dailyBriefs.ticker, brief.ticker),
+          eq(dailyBriefs.briefDate, brief.briefDate)
         )
       )
       .limit(1);
 
     if (existing) {
-      // Update existing summary
+      // Update existing brief
       const [updated] = await db
-        .update(dailySummaries)
-        .set(summary)
-        .where(eq(dailySummaries.id, existing.id))
+        .update(dailyBriefs)
+        .set(brief)
+        .where(eq(dailyBriefs.id, existing.id))
         .returning();
       return updated;
     }
 
-    // Create new summary
+    // Create new brief
     const [created] = await db
-      .insert(dailySummaries)
-      .values(summary)
+      .insert(dailyBriefs)
+      .values(brief)
       .returning();
     return created;
   }

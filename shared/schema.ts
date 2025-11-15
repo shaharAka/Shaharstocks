@@ -986,30 +986,24 @@ export const insertFollowedStockSchema = createInsertSchema(followedStocks).omit
 export type InsertFollowedStock = z.infer<typeof insertFollowedStockSchema>;
 export type FollowedStock = typeof followedStocks.$inferSelect;
 
-// Daily Stock Summaries - stores daily micro/macro analysis for followed stocks
-export const dailySummaries = pgTable("daily_summaries", {
+// Daily Stock Briefs - Lightweight daily reports for followed stocks (< 120 words)
+// Provides quick buy/sell/hold guidance without full AI analysis
+export const dailyBriefs = pgTable("daily_briefs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticker: text("ticker").notNull(),
-  summaryDate: text("summary_date").notNull(), // YYYY-MM-DD format
-  microAnalysis: jsonb("micro_analysis").$type<{
-    score: number;
-    summary: string;
-    keyFindings: string[];
-    sentiment: "bullish" | "bearish" | "neutral";
-  }>(),
-  macroAnalysis: jsonb("macro_analysis").$type<{
-    score: number;
-    summary: string;
-    industryTrends: string[];
-    sentiment: "bullish" | "bearish" | "neutral";
-  }>(),
-  combinedScore: integer("combined_score"), // 0-100 overall score
-  priceAtSummary: decimal("price_at_summary", { precision: 12, scale: 2 }), // Stock price when summary was generated
+  briefDate: text("brief_date").notNull(), // YYYY-MM-DD format
+  priceSnapshot: decimal("price_snapshot", { precision: 12, scale: 2 }).notNull(), // Price at time of brief
+  priceChange: decimal("price_change", { precision: 12, scale: 2 }), // Dollar change vs previous close
+  priceChangePercent: decimal("price_change_percent", { precision: 10, scale: 2 }), // Percent change
+  keyHighlights: text("key_highlights").array().default([]), // Top 2-3 news/catalyst bullets
+  recommendedStance: text("recommended_stance").notNull(), // "buy", "hold", "sell"
+  confidence: integer("confidence").notNull(), // 1-10 confidence in recommendation
+  briefText: text("brief_text").notNull(), // Short narrative summary (< 120 words)
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
-  tickerDateUnique: uniqueIndex("ticker_date_unique_idx").on(table.ticker, table.summaryDate),
+  tickerDateUnique: uniqueIndex("daily_brief_ticker_date_idx").on(table.ticker, table.briefDate),
 }));
 
-export const insertDailySummarySchema = createInsertSchema(dailySummaries).omit({ id: true, createdAt: true });
-export type InsertDailySummary = z.infer<typeof insertDailySummarySchema>;
-export type DailySummary = typeof dailySummaries.$inferSelect;
+export const insertDailyBriefSchema = createInsertSchema(dailyBriefs).omit({ id: true, createdAt: true });
+export type InsertDailyBrief = z.infer<typeof insertDailyBriefSchema>;
+export type DailyBrief = typeof dailyBriefs.$inferSelect;

@@ -1988,9 +1988,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/:ticker/comments", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
       const validatedData = insertStockCommentSchema.parse({
         ...req.body,
         ticker: req.params.ticker,
+        userId: req.session.userId,
       });
       const comment = await storage.createStockComment(validatedData);
       res.status(201).json(comment);

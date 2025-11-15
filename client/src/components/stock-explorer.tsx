@@ -23,21 +23,20 @@ import {
   AlertTriangle,
   Calendar,
   DollarSign,
-  Heart,
+  Star,
   XCircle,
 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { StockComments } from "@/components/stock-comments";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
 import { InsiderHistoryDialog } from "@/components/insider-history-dialog";
-import { PinButton } from "@/components/pin-button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import type { Stock, User, StockInterestWithUser, StockCommentWithUser } from "@shared/schema";
 
 interface StockExplorerProps {
-  stock: (Stock & { isPinned?: boolean }) | null;
+  stock: Stock | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onFollow?: (stock: Stock) => void;
@@ -65,6 +64,15 @@ export function StockExplorer({
     queryFn: () => fetch(`/api/stocks/${stock?.ticker}/comments`).then(res => res.json()),
     enabled: !!stock?.ticker,
   });
+
+  const { data: followedStocks = [] } = useQuery<any[]>({
+    queryKey: ["/api/users/me/followed"],
+    enabled: !!currentUser,
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  const isFollowing = followedStocks.some(f => f.ticker === stock?.ticker);
 
   const toggleInterestMutation = useMutation({
     mutationFn: async ({ ticker, isMarked }: { ticker: string; isMarked: boolean }) => {
@@ -123,18 +131,10 @@ export function StockExplorer({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden" data-testid="dialog-stock-explorer">
-        <DialogHeader className="pr-6">
-          <div className="flex items-start justify-between gap-3">
-            <DialogTitle className="text-2xl font-semibold break-words flex-1" data-testid={`text-explorer-title-${stock.ticker}`}>
-              {stock.ticker} - {stock.companyName}
-            </DialogTitle>
-            <PinButton
-              ticker={stock.ticker}
-              isPinned={stock.isPinned || false}
-              variant="ghost"
-              size="icon"
-            />
-          </div>
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-semibold break-words" data-testid={`text-explorer-title-${stock.ticker}`}>
+            {stock.ticker} - {stock.companyName}
+          </DialogTitle>
           {stock.source && (
             <div className="mt-1">
               <Badge variant="outline">
@@ -311,13 +311,13 @@ export function StockExplorer({
             {/* Actions */}
             <div className="flex gap-2">
               <Button
-                variant="default"
+                variant={isFollowing ? "outline" : "default"}
                 className="flex-1"
                 onClick={() => onFollow?.(stock)}
                 data-testid={`button-explorer-follow-${stock.ticker}`}
               >
-                <Heart className="h-4 w-4 mr-2" />
-                Follow
+                <Star className={`h-4 w-4 mr-2 ${isFollowing ? "fill-current" : ""}`} />
+                {isFollowing ? "Unfollow" : "Follow"}
               </Button>
               <Button
                 variant="outline"

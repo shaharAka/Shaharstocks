@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   LineChart,
   Line,
@@ -14,7 +14,15 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Bell, BellOff } from "lucide-react";
 import { type Stock, type TradingRule, type Trade } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface StockSimulationPlotProps {
   ticker: string;
@@ -22,8 +30,37 @@ interface StockSimulationPlotProps {
 }
 
 export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps) {
+  const { toast } = useToast();
+  const [showRuleForm, setShowRuleForm] = useState(false);
+  const [ruleAction, setRuleAction] = useState<"sell" | "sell_all">("sell");
+  const [conditionMetric, setConditionMetric] = useState<"price_change_percent" | "price_absolute">("price_change_percent");
+  const [conditionValue, setConditionValue] = useState("");
+  const [enableNotifications, setEnableNotifications] = useState(true);
+
   const { data: rules, isLoading: rulesLoading } = useQuery<TradingRule[]>({
     queryKey: ["/api/rules"],
+  });
+
+  const createRuleMutation = useMutation({
+    mutationFn: async (newRule: any) => {
+      return await apiRequest("/api/rules", "POST", newRule);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      toast({
+        title: "Trading rule created",
+        description: `Rule created for ${ticker}${enableNotifications ? ' with notifications enabled' : ''}`,
+      });
+      setShowRuleForm(false);
+      setConditionValue("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to create rule",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
   });
 
   // Fetch both real and simulated holdings to support all use cases
@@ -55,6 +92,11 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
                   simulatedHoldings?.find(h => h.ticker === ticker);
   const purchasePrice = holding ? parseFloat(holding.averagePurchasePrice) : null;
   const isSimulated = !!simulatedHoldings?.find(h => h.ticker === ticker);
+  
+  // Calculate P&L
+  const currentPrice = parseFloat(stock.currentPrice);
+  const unrealizedPnL = holding && purchasePrice ? (currentPrice - purchasePrice) * holding.shares : null;
+  const unrealizedPnLPercent = holding && purchasePrice ? ((currentPrice - purchasePrice) / purchasePrice) * 100 : null;
 
   // Find purchase date from trades
   const purchaseDate = useMemo(() => {
@@ -128,6 +170,48 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     return lines;
   }, [rules, holding, ticker, purchasePrice, stock]);
 
+  const handleCreateRule = () => {
+    const value = parseFloat(conditionValue);
+    if (isNaN(value)) {
+      toast({
+        title: "Invalid value",
+        description: "Please enter a valid number",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // For percentage: keep signed value; for absolute price: use positive value
+    const conditionValue_normalized = conditionMetric === "price_change_percent" ? value : Math.abs(value);
+    
+    // Operator based on sign for percentage, or default for absolute price
+    let operator: "greater_than_or_equal" | "less_than_or_equal";
+    if (conditionMetric === "price_change_percent") {
+      operator = value >= 0 ? "greater_than_or_equal" : "less_than_or_equal";
+    } else {
+      // For absolute price, use <= for sell (price falls below threshold)
+      operator = "less_than_or_equal";
+    }
+
+    const newRule = {
+      name: `${ticker} ${ruleAction} at ${conditionMetric === 'price_change_percent' ? `${value > 0 ? '+' : ''}${value}%` : `$${conditionValue_normalized}`}`,
+      scope: "specific_stock" as const,
+      ticker,
+      action: ruleAction,
+      conditions: [
+        {
+          metric: conditionMetric,
+          operator,
+          value: conditionValue_normalized,
+        },
+      ],
+      enabled: true,
+      notifyOnTrigger: enableNotifications,
+    };
+
+    createRuleMutation.mutate(newRule);
+  };
+
   const candlesticks = (stock as any).candlesticks;
   if (!candlesticks || candlesticks.length === 0) {
     return (
@@ -169,27 +253,39 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
           )}
         </div>
         {purchasePrice && (
-          <p className="text-sm text-muted-foreground">
-            Entry: ${purchasePrice.toFixed(2)} {purchaseDate && `on ${purchaseDate.toISOString().split('T')[0]}`}
-          </p>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-muted-foreground">
+              Entry: ${purchasePrice.toFixed(2)} {purchaseDate && `on ${purchaseDate.toISOString().split('T')[0]}`}
+            </span>
+            {unrealizedPnL !== null && unrealizedPnLPercent !== null && (
+              <div className={`flex items-center gap-1 font-medium ${unrealizedPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <span data-testid="text-unrealized-pnl">
+                  {unrealizedPnL >= 0 ? '+' : ''}${unrealizedPnL.toFixed(2)} ({unrealizedPnL >= 0 ? '+' : ''}{unrealizedPnLPercent.toFixed(2)}%)
+                </span>
+                <Badge variant={unrealizedPnL >= 0 ? "default" : "destructive"} className="text-xs">
+                  Unrealized P&L
+                </Badge>
+              </div>
+            )}
+          </div>
         )}
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis 
               dataKey="date" 
-              stroke="hsl(var(--muted-foreground))"
-              tick={{ fontSize: 12 }}
+              className="stroke-muted-foreground"
+              tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
               tickFormatter={(value) => {
                 const date = new Date(value);
                 return `${date.getMonth() + 1}/${date.getDate()}`;
               }}
             />
             <YAxis 
-              stroke="hsl(var(--muted-foreground))"
-              tick={{ fontSize: 12 }}
+              className="stroke-muted-foreground"
+              tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
               tickFormatter={(value) => `$${value.toFixed(0)}`}
               domain={['auto', 'auto']}
             />
@@ -198,6 +294,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
                 backgroundColor: "hsl(var(--popover))",
                 border: "1px solid hsl(var(--border))",
                 borderRadius: "6px",
+                color: "hsl(var(--popover-foreground))",
               }}
               labelFormatter={(value) => {
                 const date = new Date(value as string);
@@ -205,7 +302,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
               }}
               formatter={(value: any) => [`$${Number(value).toFixed(2)}`, "Price"]}
             />
-            <Legend />
+            <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
             
             {/* Purchase price line */}
             {purchasePrice && (
@@ -250,6 +347,113 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
           </LineChart>
         </ResponsiveContainer>
 
+        {/* Inline Rule Creation */}
+        <div className="mt-6 pt-4 border-t">
+          {!showRuleForm ? (
+            <Button
+              onClick={() => setShowRuleForm(true)}
+              variant="outline"
+              size="sm"
+              className="w-full"
+              data-testid="button-add-rule"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Trading Rule for {ticker}
+            </Button>
+          ) : (
+            <div className="space-y-4 p-4 bg-muted rounded-md">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">Create Trading Rule</h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowRuleForm(false)}
+                  data-testid="button-cancel-rule"
+                >
+                  Cancel
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="rule-action">Action</Label>
+                  <Select value={ruleAction} onValueChange={(v) => setRuleAction(v as "sell" | "sell_all")}>
+                    <SelectTrigger id="rule-action" data-testid="select-rule-action">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sell">Sell</SelectItem>
+                      <SelectItem value="sell_all">Sell All</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="condition-metric">Condition</Label>
+                  <Select value={conditionMetric} onValueChange={(v) => setConditionMetric(v as any)}>
+                    <SelectTrigger id="condition-metric" data-testid="select-condition-metric">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="price_change_percent">Price Change %</SelectItem>
+                      <SelectItem value="price_absolute">Absolute Price</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="condition-value">
+                  {conditionMetric === "price_change_percent" ? "Percentage" : "Price"} {" "}
+                  {conditionMetric === "price_change_percent" && "(e.g., 10 for +10%, -5 for -5%)"}
+                </Label>
+                <Input
+                  id="condition-value"
+                  type="number"
+                  step={conditionMetric === "price_change_percent" ? "0.1" : "0.01"}
+                  placeholder={conditionMetric === "price_change_percent" ? "Enter percentage" : "Enter price"}
+                  value={conditionValue}
+                  onChange={(e) => setConditionValue(e.target.value)}
+                  data-testid="input-condition-value"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-background rounded-md border">
+                <div className="flex items-center gap-2">
+                  {enableNotifications ? (
+                    <Bell className="h-4 w-4 text-primary" />
+                  ) : (
+                    <BellOff className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <div>
+                    <Label htmlFor="enable-notifications" className="cursor-pointer">
+                      Enable Notifications
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Get alerted when this rule triggers for {ticker}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="enable-notifications"
+                  checked={enableNotifications}
+                  onCheckedChange={setEnableNotifications}
+                  data-testid="switch-notifications"
+                />
+              </div>
+
+              <Button
+                onClick={handleCreateRule}
+                className="w-full"
+                disabled={createRuleMutation.isPending || !conditionValue}
+                data-testid="button-create-rule"
+              >
+                {createRuleMutation.isPending ? "Creating..." : "Create Rule"}
+              </Button>
+            </div>
+          )}
+        </div>
+
         {/* Rule indicators */}
         {sellRuleLines.length > 0 && (
           <div className="mt-4 space-y-2">
@@ -261,14 +465,6 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
                 </Badge>
               ))}
             </div>
-          </div>
-        )}
-
-        {!holding && sellRuleLines.length === 0 && (
-          <div className="mt-4 p-4 bg-muted rounded-md">
-            <p className="text-sm text-muted-foreground">
-              Create trading rules to see automated sell boundaries overlaid on the chart
-            </p>
           </div>
         )}
       </CardContent>

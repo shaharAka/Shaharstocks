@@ -189,26 +189,105 @@ class QueueWorker {
       } : undefined;
       console.log(`[QueueWorker] ✅ SEC data prepared`);
 
-      // Check for insider trading data
+      // Check for insider trading data - get ALL transactions for this ticker
       console.log(`[QueueWorker] 🔍 Checking for insider trading data for ${job.ticker}...`);
       const insiderTradingStrength = await (async () => {
         try {
-          const stock = await storage.getStock(job.ticker);
-          console.log(`[QueueWorker] Stock data retrieved: ${stock ? 'found' : 'not found'}`);
-          if (stock && stock.recommendation === "buy") {
-            return {
-              recentPurchases: 1,
-              totalValue: stock.currentPrice ? `$${parseFloat(stock.currentPrice).toFixed(2)}` : "N/A",
-              confidence: stock.confidenceScore?.toString() || "Medium"
-            };
+          const allStocks = await storage.getAllStocksForTicker(job.ticker);
+          console.log(`[QueueWorker] Found ${allStocks.length} transaction(s) for ${job.ticker}`);
+          
+          if (allStocks.length === 0) {
+            return undefined;
           }
-          return undefined;
+          
+          // Aggregate all transactions - separate buys and sells
+          const buyTransactions = allStocks.filter(s => s.recommendation?.toLowerCase() === "buy");
+          const sellTransactions = allStocks.filter(s => s.recommendation?.toLowerCase() === "sell");
+          
+          console.log(`[QueueWorker] Transaction breakdown: ${buyTransactions.length} BUY, ${sellTransactions.length} SELL`);
+          
+          // Determine overall signal based on transaction mix
+          let direction: string;
+          let transactionType: string;
+          let dominantSignal: string;
+          
+          if (buyTransactions.length > 0 && sellTransactions.length === 0) {
+            direction = "buy";
+            transactionType = "purchase";
+            dominantSignal = "BULLISH - Only insider BUYING detected";
+          } else if (sellTransactions.length > 0 && buyTransactions.length === 0) {
+            direction = "sell";
+            transactionType = "sale";
+            dominantSignal = "BEARISH - Only insider SELLING detected";
+          } else if (buyTransactions.length > 0 && sellTransactions.length > 0) {
+            // Mixed signals - determine which signal is more recent and use that as direction
+            const sortedByDate = allStocks.sort((a, b) => 
+              new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime()
+            );
+            
+            // Find most recent BUY or SELL (skip any with missing recommendation)
+            const mostRecentSignal = sortedByDate.find(s => 
+              s.recommendation?.toLowerCase() === "buy" || s.recommendation?.toLowerCase() === "sell"
+            );
+            
+            if (mostRecentSignal) {
+              direction = mostRecentSignal.recommendation?.toLowerCase() || "mixed";
+              transactionType = direction === "buy" ? "purchase" : (direction === "sell" ? "sale" : "mixed");
+              dominantSignal = `MIXED SIGNALS - ${buyTransactions.length} BUY, ${sellTransactions.length} SELL (most recent: ${direction.toUpperCase()})`;
+            } else {
+              // Fallback: if no clear BUY/SELL found, use counts to determine
+              direction = buyTransactions.length >= sellTransactions.length ? "buy" : "sell";
+              transactionType = direction === "buy" ? "purchase" : "sale";
+              dominantSignal = `MIXED SIGNALS - ${buyTransactions.length} BUY, ${sellTransactions.length} SELL (using ${direction.toUpperCase()} as dominant)`;
+            }
+          } else {
+            // No clear transactions - this shouldn't happen but handle gracefully
+            direction = "unknown";
+            transactionType = "transaction";
+            dominantSignal = "Unknown signal - no clear insider transactions";
+          }
+          
+          // Use most recent transaction for price/quantity details
+          const primaryStock = allStocks.sort((a, b) => 
+            new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime()
+          )[0];
+          
+          return {
+            direction: direction,
+            transactionType: transactionType,
+            dominantSignal: dominantSignal,
+            buyCount: buyTransactions.length,
+            sellCount: sellTransactions.length,
+            totalTransactions: allStocks.length,
+            quantityStr: primaryStock.insiderQuantity ? `${primaryStock.insiderQuantity.toLocaleString()} shares` : "Unknown",
+            insiderPrice: primaryStock.insiderPrice ? `$${parseFloat(primaryStock.insiderPrice).toFixed(2)}` : "Unknown",
+            currentPrice: primaryStock.currentPrice ? `$${parseFloat(primaryStock.currentPrice).toFixed(2)}` : "Unknown",
+            insiderName: primaryStock.insiderName || "Unknown",
+            insiderTitle: primaryStock.insiderTitle || "Unknown",
+            tradeDate: primaryStock.insiderTradeDate || "Unknown",
+            totalValue: primaryStock.insiderPrice && primaryStock.insiderQuantity 
+              ? `$${(parseFloat(primaryStock.insiderPrice) * primaryStock.insiderQuantity).toFixed(2)}` 
+              : "Unknown",
+            confidence: primaryStock.confidenceScore?.toString() || "Medium",
+            // Include all transactions for full context
+            allTransactions: allStocks.map(s => ({
+              direction: s.recommendation?.toLowerCase() || "unknown",
+              insiderName: s.insiderName || "Unknown",
+              insiderTitle: s.insiderTitle || "Unknown",
+              quantityStr: s.insiderQuantity ? `${s.insiderQuantity.toLocaleString()} shares` : "Unknown",
+              price: s.insiderPrice ? `$${parseFloat(s.insiderPrice).toFixed(2)}` : "Unknown",
+              date: s.insiderTradeDate || "Unknown",
+              value: s.insiderPrice && s.insiderQuantity 
+                ? `$${(parseFloat(s.insiderPrice) * s.insiderQuantity).toFixed(2)}` 
+                : "Unknown"
+            }))
+          };
         } catch (error) {
           console.error(`[QueueWorker] Error getting insider trading data:`, error);
           return undefined;
         }
       })();
-      console.log(`[QueueWorker] ✅ Insider trading check complete`);
+      console.log(`[QueueWorker] ✅ Insider trading check complete:`, insiderTradingStrength ? `${insiderTradingStrength.dominantSignal}` : 'No insider data');
       
       await this.updateProgress(job.id, job.ticker, "fetching_data", {
         phase: "data_fetch",

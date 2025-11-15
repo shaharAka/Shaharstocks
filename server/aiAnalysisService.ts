@@ -61,9 +61,29 @@ interface FinancialData {
   newsSentiment?: NewsSentiment;
   priceNewsCorrelation?: PriceNewsCorrelation;
   insiderTradingStrength?: {
-    recentPurchases: number;
-    totalValue: string;
+    direction: string; // "buy", "sell", or "mixed"
+    transactionType: string; // "purchase", "sale", or "mixed"
+    dominantSignal: string; // Human-readable signal description
+    buyCount: number; // Number of BUY transactions
+    sellCount: number; // Number of SELL transactions
+    totalTransactions: number; // Total transaction count
+    quantityStr: string; // Formatted quantity with "shares" or "Unknown"
+    insiderPrice: string; // Formatted price or "Unknown"
+    currentPrice: string; // Formatted price or "Unknown"
+    insiderName: string;
+    insiderTitle: string;
+    tradeDate: string;
+    totalValue: string; // Formatted value or "Unknown"
     confidence: string;
+    allTransactions: Array<{
+      direction: string;
+      insiderName: string;
+      insiderTitle: string;
+      quantityStr: string; // Formatted quantity or "Unknown"
+      price: string; // Formatted price or "Unknown"
+      date: string;
+      value: string; // Formatted value or "Unknown"
+    }>;
   };
   // SEC EDGAR Filing Narratives
   secFilings?: {
@@ -117,12 +137,25 @@ class AIAnalysisService {
     const latestIncomeStatement = incomeStatement?.annualReports?.[0] || incomeStatement?.quarterlyReports?.[0];
     const latestCashFlow = cashFlow?.annualReports?.[0] || cashFlow?.quarterlyReports?.[0];
 
+    // Determine transaction direction and build context-aware prompt
+    const isBuy = insiderTradingStrength?.direction === "buy";
+    const isSell = insiderTradingStrength?.direction === "sell";
+    const transactionContext = isBuy 
+      ? "INSIDER BUYING" 
+      : (isSell ? "INSIDER SELLING" : "INSIDER TRADING");
+    
+    const analysisContext = isBuy
+      ? "Company insiders (executives, board members) just purchased shares. Analyze if this is a strong buy signal or if there are concerns that make it a pass within the next 1-2 weeks."
+      : (isSell 
+        ? "Company insiders (executives, board members) just SOLD shares. This is typically a BEARISH signal. Analyze if the fundamentals justify their decision to sell, or if this is just routine portfolio rebalancing. Consider whether you should AVOID this stock or if the sell is a false alarm."
+        : "Company insiders just transacted shares. Analyze the signal.");
+
     // Build insider trade validation prompt - focus on 1-2 week outlook
-    const prompt = `You are a seasoned equity analyst specializing in insider trading patterns. This stock has recent INSIDER BUYING activity. Your job is to validate whether this insider signal is worth acting on for a 1-2 WEEK TRADING WINDOW.
+    const prompt = `You are a seasoned equity analyst specializing in insider trading patterns. This stock has recent ${transactionContext} activity. Your job is to validate whether this insider signal is worth acting on for a 1-2 WEEK TRADING WINDOW.
 
 INVESTMENT HORIZON: 1-2 weeks (short-term trading opportunity)
 
-CONTEXT: Company insiders (executives, board members) just purchased shares. Analyze if this is a strong buy signal or if there are concerns that make it a pass within the next 1-2 weeks.
+CONTEXT: ${analysisContext}
 
 === COMPANY: ${ticker} ===
 Sector: ${companyOverview?.sector || "N/A"}
@@ -132,7 +165,7 @@ Market Cap: ${comprehensiveFundamentals?.marketCap || companyOverview?.marketCap
 ${secFilings ? `
 Filing Type: ${secFilings.formType} (Filed: ${secFilings.filingDate})
 
-Read through this SEC filing as an analyst. Extract KEY SIGNALS that validate or contradict the insider buy:
+Read through this SEC filing as an analyst. Extract KEY SIGNALS that validate or contradict the insider ${isBuy ? "buy" : (isSell ? "sell" : "transaction")}:
 
 BUSINESS OVERVIEW EXCERPT:
 ${secFilings.businessOverview ? secFilings.businessOverview.substring(0, 2500) : "Not available"}
@@ -144,8 +177,11 @@ RISK FACTORS EXCERPT:
 ${secFilings.riskFactors ? secFilings.riskFactors.substring(0, 3000) : "Not available"}
 
 YOUR TASK: Extract 3-5 specific insights from these filings that either:
-- SUPPORT the insider buy (e.g., new product launch, expansion plans, strong guidance)
-- CONTRADICT the insider buy (e.g., major risks, declining markets, litigation)
+${isBuy 
+  ? "- SUPPORT the insider buy (e.g., new product launch, expansion plans, strong guidance)\n- CONTRADICT the insider buy (e.g., major risks, declining markets, litigation)"
+  : (isSell 
+    ? "- JUSTIFY the insider sell (e.g., major risks, declining markets, litigation, operational challenges)\n- CONTRADICT the insider sell (e.g., strong guidance, new opportunities, improving fundamentals)"
+    : "- Support or contradict the insider transaction")}
 ` : "SEC filings not available - rely on fundamentals only"}
 
 === COMPREHENSIVE FUNDAMENTALS ANALYSIS ===
@@ -199,24 +235,52 @@ Top Headlines: ${newsSentiment.articles.slice(0, 3).map(a => a.title).join(' | '
 
 === INSIDER TRADE VALIDATION ===
 ${insiderTradingStrength ? `
-Insider Activity: ${insiderTradingStrength.recentPurchases} recent purchase(s)
-Total Value: ${insiderTradingStrength.totalValue}
-Signal Strength: ${insiderTradingStrength.confidence}
-` : "Insider just bought shares - validate this signal"}
+SIGNAL SUMMARY: ${insiderTradingStrength.dominantSignal}
+Transaction Breakdown: ${insiderTradingStrength.buyCount} BUY, ${insiderTradingStrength.sellCount} SELL (Total: ${insiderTradingStrength.totalTransactions})
+
+PRIMARY TRANSACTION (Most Recent):
+- Direction: ${insiderTradingStrength.direction.toUpperCase()}
+- Insider: ${insiderTradingStrength.insiderName} (${insiderTradingStrength.insiderTitle})
+- Date: ${insiderTradingStrength.tradeDate}
+- Quantity: ${insiderTradingStrength.quantityStr}
+- Insider Price: ${insiderTradingStrength.insiderPrice}
+- Current Price: ${insiderTradingStrength.currentPrice}
+- Total Value: ${insiderTradingStrength.totalValue}
+
+ALL TRANSACTIONS FOR THIS TICKER:
+${insiderTradingStrength.allTransactions.map((t, idx) => 
+  `${idx + 1}. ${t.direction.toUpperCase()} - ${t.insiderName} (${t.insiderTitle}): ${t.quantityStr} @ ${t.price} on ${t.date} (Value: ${t.value})`
+).join('\n')}
+
+SIGNAL INTERPRETATION:
+${isBuy && insiderTradingStrength.sellCount === 0
+  ? "✓ BULLISH SIGNAL: Only insider BUYING detected - typically indicates confidence in future performance"
+  : (isSell && insiderTradingStrength.buyCount === 0
+    ? "✗ BEARISH SIGNAL: Only insider SELLING detected - typically indicates concerns about future performance or overvaluation"
+    : (insiderTradingStrength.buyCount > 0 && insiderTradingStrength.sellCount > 0
+      ? `⚠️  MIXED SIGNALS: Both buying (${insiderTradingStrength.buyCount}) and selling (${insiderTradingStrength.sellCount}) detected. Analyze which signal is more recent and credible. Consider if different insiders have different outlooks, or if some are routine portfolio management.`
+      : ""))}
+` : "Insider transaction detected - validate this signal"}
 
 === ANALYSIS REQUIREMENTS ===
+${isBuy 
+  ? `Your rating should be "buy" if the insider purchase is validated by strong fundamentals, or "pass" if there are concerns.`
+  : (isSell 
+    ? `Your rating should be "sell" or "avoid" if the insider sale is justified by weak fundamentals or risks, or "pass" if the sell appears to be routine and fundamentals remain strong.`
+    : `Your rating should reflect whether the insider transaction is validated by fundamentals.`)}
+
 Provide your analysis in this EXACT JSON format:
 {
-  "overallRating": "buy" or "pass",
+  "overallRating": ${isBuy ? '"buy" or "pass"' : (isSell ? '"sell" or "avoid" or "pass"' : '"buy" or "sell" or "pass"')},
   "confidenceScore": 0-100,
-  "summary": "2-3 sentences: Does this insider buy have merit? What's the 1-2 week outlook?",
+  "summary": "2-3 sentences: ${isBuy ? 'Does this insider buy have merit? What\'s the 1-2 week outlook?' : (isSell ? 'Does this insider sell signal weakness? Should investors avoid or is this routine portfolio management?' : 'Validate the insider transaction')}",
   "financialHealth": {
     "score": 0-100,
     "strengths": ["List 2-4 specific financial strengths you found in the numbers"],
     "weaknesses": ["List 2-4 specific financial weaknesses or concerns"],
     "redFlags": ["List any serious red flags from SEC filings or financials, or empty array"]
   },
-  "secFilingInsights": ["Extract 3-5 KEY INSIGHTS from SEC filings that validate OR contradict the insider buy"],
+  "secFilingInsights": ["Extract 3-5 KEY INSIGHTS from SEC filings that validate OR contradict the insider ${isBuy ? "buy" : (isSell ? "sell" : "transaction")}"],
   "fundamentalSignals": ["Extract 3-5 specific SIGNALS from the fundamental numbers (e.g., 'ROE 25% indicates strong profitability', 'Debt-to-equity 0.3 shows conservative leverage')"],
   "technicalAnalysis": {
     "score": 0-100,
@@ -230,19 +294,31 @@ Provide your analysis in this EXACT JSON format:
     "newsVolume": "high" or "medium" or "low",
     "key_themes": ["2-3 key themes from recent news"]
   },
-  "insiderValidation": "1-2 sentences: Does the fundamental and technical analysis support this insider buy?",
+  "insiderValidation": "1-2 sentences: Does the fundamental and technical analysis support this insider ${isBuy ? "buy" : (isSell ? "sell" : "transaction")}?",
   "risks": ["List 3-5 specific risks for the 1-2 week window"],
-  "opportunities": ["List 2-4 specific catalysts that could drive price up in 1-2 weeks"],
-  "recommendation": "Clear 2-3 sentence recommendation: BUY or PASS for 1-2 week window, and why"
+  "opportunities": ["List 2-4 specific catalysts that could ${isBuy ? "drive price up" : (isSell ? "drive price down" : "move price")} in 1-2 weeks"],
+  "recommendation": "Clear 2-3 sentence recommendation: ${isBuy ? "BUY or PASS" : (isSell ? "SELL/AVOID or PASS" : "Action")} for 1-2 week window, and why"
 }
 
 MICRO SCORE RUBRIC (confidenceScore: 0-100 scale):
 This is your STOCK-SPECIFIC (MICRO) analysis score based on fundamentals, technicals, and insider signals.
-- 90-100: STRONG BUY - All signals align, insider buy is highly validated, excellent 1-2 week setup
+${isBuy 
+  ? `- 90-100: STRONG BUY - All signals align, insider buy is highly validated, excellent 1-2 week setup
 - 70-89: BUY - Good fundamentals support insider signal, favorable near-term outlook
 - 50-69: WEAK BUY - Mixed signals, insider buy has some merit but concerns exist
 - 30-49: PASS - Fundamentals don't support insider buy, or significant risks
-- 0-29: STRONG PASS - Red flags contradict insider signal, avoid
+- 0-29: STRONG PASS - Red flags contradict insider signal, avoid`
+  : (isSell 
+    ? `- 90-100: STRONG SELL/AVOID - All signals align, insider sell is highly validated by weak fundamentals, avoid this stock
+- 70-89: SELL/AVOID - Weak fundamentals justify insider sell, bearish near-term outlook
+- 50-69: WEAK SELL - Mixed signals, insider sell has some merit but not conclusive
+- 30-49: PASS - Fundamentals remain strong despite sell, likely routine portfolio management
+- 0-29: IGNORE SELL - Strong fundamentals contradict sell signal, false alarm`
+    : `- 90-100: STRONG SIGNAL - All signals align
+- 70-89: VALIDATED - Fundamentals support insider signal
+- 50-69: MIXED - Some merit but concerns exist
+- 30-49: PASS - Fundamentals don't support signal
+- 0-29: IGNORE - Red flags contradict signal`)}
 
 NOTE: This micro score will be adjusted by a separate MACRO analysis that considers market-wide and sector conditions.
 

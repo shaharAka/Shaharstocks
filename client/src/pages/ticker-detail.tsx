@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
+import { StockSimulationPlot } from "@/components/stock-simulation-plot";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
@@ -315,19 +316,147 @@ export default function TickerDetail() {
         </CardContent>
       </Card>
 
-      {/* Candlestick Chart */}
-      {stock.candlesticks && stock.candlesticks.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Price Chart</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MiniCandlestickChart
-              data={stock.candlesticks}
-              height={200}
-            />
-          </CardContent>
-        </Card>
+      {/* Daily Briefs - Show above simulation for followed stocks */}
+      {isFollowing && (
+        <LoadingStrikeBorder isLoading={hasActiveAnalysisJob}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Daily Stock Briefs
+                {hasActiveAnalysisJob && (
+                  <Badge variant="secondary" className="ml-2">
+                    Analyzing...
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Lightweight daily reports with quick buy/sell/hold guidance for followed stocks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+            {briefsLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ) : dailyBriefs.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Daily briefs will appear here once generated. Briefs are created daily for stocks you follow.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {dailyBriefs.map((brief: any) => {
+                  const priceChange = parseFloat(brief.priceChange || 0);
+                  const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
+                  const isPositive = priceChange >= 0;
+                  const stance = brief.recommendedStance?.toLowerCase();
+                  
+                  const getStanceConfig = () => {
+                    if (stance === "buy") {
+                      return {
+                        icon: ArrowUpCircle,
+                        text: "Consider Buying",
+                        color: "text-green-600 dark:text-green-400",
+                        bgColor: "bg-green-50 dark:bg-green-950/20",
+                        borderColor: "border-l-green-500",
+                      };
+                    } else if (stance === "sell") {
+                      return {
+                        icon: ArrowDownCircle,
+                        text: "Consider Selling",
+                        color: "text-red-600 dark:text-red-400",
+                        bgColor: "bg-red-50 dark:bg-red-950/20",
+                        borderColor: "border-l-red-500",
+                      };
+                    } else {
+                      return {
+                        icon: MinusCircle,
+                        text: "Hold Position",
+                        color: "text-muted-foreground",
+                        bgColor: "bg-muted/30",
+                        borderColor: "border-l-gray-400 dark:border-l-gray-600",
+                      };
+                    }
+                  };
+                  
+                  const config = getStanceConfig();
+                  const StanceIcon = config.icon;
+                  
+                  return (
+                    <div 
+                      key={brief.id} 
+                      className={`border rounded-lg border-l-4 ${config.borderColor} overflow-hidden`}
+                    >
+                      <div className={`${config.bgColor} px-4 py-3 border-b`}>
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <StanceIcon className={`h-6 w-6 ${config.color}`} />
+                            <div>
+                              <h3 className={`text-lg font-bold ${config.color}`} data-testid={`action-text-${brief.id}`}>
+                                {config.text}
+                              </h3>
+                              <p className="text-xs text-muted-foreground">
+                                Confidence: {brief.confidence}/10
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-mono font-bold">
+                              ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
+                            </p>
+                            <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
+                          {new Date(brief.briefDate).toLocaleDateString()}
+                        </Badge>
+                        <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
+                          {brief.briefText}
+                        </p>
+                        {brief.keyHighlights && brief.keyHighlights.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-1">Key Highlights</h4>
+                            <ul className="list-disc list-inside space-y-1">
+                              {brief.keyHighlights.map((highlight: string, idx: number) => (
+                                <li key={idx} className="text-sm text-muted-foreground">
+                                  {highlight}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            </CardContent>
+          </Card>
+        </LoadingStrikeBorder>
+      )}
+
+      {/* Simulation Plot for followed stocks, or Candlestick Chart for non-followed */}
+      {isFollowing ? (
+        <StockSimulationPlot ticker={ticker} stock={stock} />
+      ) : (
+        stock.candlesticks && stock.candlesticks.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Price Chart</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MiniCandlestickChart
+                data={stock.candlesticks}
+                height={200}
+              />
+            </CardContent>
+          </Card>
+        )
       )}
 
       {/* Main Content Tabs */}
@@ -347,139 +476,8 @@ export default function TickerDetail() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Daily Brief Tab */}
+        {/* Summary Tab */}
         <TabsContent value="summary" className="space-y-4">
-          <LoadingStrikeBorder isLoading={hasActiveAnalysisJob}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Daily Stock Briefs
-                  {hasActiveAnalysisJob && (
-                    <Badge variant="secondary" className="ml-2">
-                      Analyzing...
-                    </Badge>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  Lightweight daily reports with quick buy/sell/hold guidance for followed stocks
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-              {briefsLoading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-3/4" />
-                </div>
-              ) : dailyBriefs.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  {isFollowing 
-                    ? "Daily briefs will appear here once generated. Briefs are created daily for stocks you follow."
-                    : "Follow this stock to receive daily briefs with quick trading guidance."
-                  }
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {dailyBriefs.map((brief: any) => {
-                    const priceChange = parseFloat(brief.priceChange || 0);
-                    const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
-                    const isPositive = priceChange >= 0;
-                    const stance = brief.recommendedStance?.toLowerCase();
-                    
-                    const getStanceConfig = () => {
-                      if (stance === "buy") {
-                        return {
-                          icon: ArrowUpCircle,
-                          text: "Consider Buying",
-                          color: "text-green-600 dark:text-green-400",
-                          bgColor: "bg-green-50 dark:bg-green-950/20",
-                          borderColor: "border-l-green-500",
-                        };
-                      } else if (stance === "sell") {
-                        return {
-                          icon: ArrowDownCircle,
-                          text: "Consider Selling",
-                          color: "text-red-600 dark:text-red-400",
-                          bgColor: "bg-red-50 dark:bg-red-950/20",
-                          borderColor: "border-l-red-500",
-                        };
-                      } else {
-                        return {
-                          icon: MinusCircle,
-                          text: "Hold Position",
-                          color: "text-muted-foreground",
-                          bgColor: "bg-muted/30",
-                          borderColor: "border-l-gray-400 dark:border-l-gray-600",
-                        };
-                      }
-                    };
-                    
-                    const config = getStanceConfig();
-                    const StanceIcon = config.icon;
-                    
-                    return (
-                      <div 
-                        key={brief.id} 
-                        className={`border rounded-lg border-l-4 ${config.borderColor} overflow-hidden`}
-                      >
-                        {/* Action Banner */}
-                        <div className={`${config.bgColor} px-4 py-3 border-b`}>
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                              <StanceIcon className={`h-6 w-6 ${config.color}`} />
-                              <div>
-                                <h3 className={`text-lg font-bold ${config.color}`} data-testid={`action-text-${brief.id}`}>
-                                  {config.text}
-                                </h3>
-                                <p className="text-xs text-muted-foreground">
-                                  Confidence: {brief.confidence}/10
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-lg font-mono font-bold">
-                                ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
-                              </p>
-                              <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Content */}
-                        <div className="p-4 space-y-3">
-                          {/* Date */}
-                          <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
-                            {new Date(brief.briefDate).toLocaleDateString()}
-                          </Badge>
-
-                          {/* Brief text */}
-                          <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
-                            {brief.briefText}
-                          </p>
-
-                          {/* Key highlights */}
-                          {brief.keyHighlights && brief.keyHighlights.length > 0 && (
-                            <div>
-                              <h4 className="text-sm font-medium mb-1">Key Highlights</h4>
-                              <ul className="list-disc list-inside space-y-1">
-                                {brief.keyHighlights.map((highlight: string, idx: number) => (
-                                  <li key={idx} className="text-sm text-muted-foreground">
-                                    {highlight}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              </CardContent>
-            </Card>
-          </LoadingStrikeBorder>
 
           {/* Company Information */}
           {(stock.description || stock.industry || stock.country || stock.webUrl) && (

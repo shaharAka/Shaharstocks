@@ -20,8 +20,16 @@ interface MarketData {
   };
   sectorPerformance: Array<{
     sector: string;
+    etfSymbol: string;
     performance: string;
     trend: string;
+    currentPrice?: number;
+    changePercent?: number;
+    weekChange?: number;
+    monthChange?: number;
+    volatility?: number;
+    relativeStrength?: number;
+    momentum?: number;
   }>;
   webNews?: Array<{
     title: string;
@@ -158,11 +166,15 @@ async function fetchMarketIndices(): Promise<MarketData> {
         
         const data = await response.json();
         const change = parseFloat(data["Global Quote"]?.["10. change percent"]?.replace("%", "") || "0");
+        const currentPrice = parseFloat(data["Global Quote"]?.["05. price"] || "0");
         
         return {
           sector: sector.name,
+          etfSymbol: sector.symbol,
           performance: Math.abs(change) > 1 ? (change > 0 ? "strong" : "weak") : "moderate",
           trend: change > 0.5 ? "up" : change < -0.5 ? "down" : "flat",
+          currentPrice: currentPrice > 0 ? currentPrice : undefined,
+          changePercent: change,
         };
       })
     );
@@ -262,6 +274,91 @@ function normalizeIndustry(industry: string | null | undefined): string | null {
   return industry.toLowerCase().trim();
 }
 
+// Calculate standard deviation for volatility
+function calculateStdDev(values: number[]): number {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+  const squaredDiffs = values.map(val => Math.pow(val - mean, 2));
+  const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+// Fetch detailed ETF performance data with historical metrics
+async function fetchDetailedETFData(etfSymbol: string, sp500Change: number): Promise<{
+  currentPrice: number;
+  dayChange: number;
+  weekChange: number;
+  monthChange: number;
+  volatility: number;
+  relativeStrength: number;
+  momentum: number;
+} | null> {
+  try {
+    console.log(`[MacroAgent] Fetching detailed data for ${etfSymbol}...`);
+    
+    // Fetch daily time series data (compact = 100 days)
+    const response = await fetch(
+      `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${etfSymbol}&apikey=${ALPHA_VANTAGE_API_KEY}&outputsize=compact`
+    );
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
+    
+    const data = await response.json();
+    const timeSeries = data["Time Series (Daily)"];
+    
+    if (!timeSeries) {
+      console.warn(`[MacroAgent] No time series data for ${etfSymbol}`);
+      return null;
+    }
+    
+    // Sort dates descending (most recent first)
+    const dates = Object.keys(timeSeries).sort().reverse();
+    if (dates.length < 22) { // Need at least 22 trading days for monthly data
+      console.warn(`[MacroAgent] Insufficient data for ${etfSymbol}`);
+      return null;
+    }
+    
+    // Extract closing prices
+    const prices = dates.map(date => parseFloat(timeSeries[date]["4. close"]));
+    const currentPrice = prices[0];
+    const weekAgoPrice = prices[5] || prices[prices.length - 1]; // ~5 trading days ago
+    const monthAgoPrice = prices[21] || prices[prices.length - 1]; // ~21 trading days ago
+    
+    // Calculate percentage changes
+    const dayChange = ((currentPrice - prices[1]) / prices[1]) * 100;
+    const weekChange = ((currentPrice - weekAgoPrice) / weekAgoPrice) * 100;
+    const monthChange = ((currentPrice - monthAgoPrice) / monthAgoPrice) * 100;
+    
+    // Calculate daily returns for last 21 days
+    const returns: number[] = [];
+    for (let i = 0; i < Math.min(21, prices.length - 1); i++) {
+      returns.push(((prices[i] - prices[i + 1]) / prices[i + 1]) * 100);
+    }
+    
+    // Volatility = standard deviation of daily returns (annualized approximation)
+    const volatility = calculateStdDev(returns) * Math.sqrt(252); // Annualized volatility
+    
+    // Relative strength vs S&P 500 (ETF performance - SPY performance)
+    const relativeStrength = dayChange - sp500Change;
+    
+    // Momentum = average of last 5 day returns
+    const recentReturns = returns.slice(0, 5);
+    const momentum = recentReturns.reduce((sum, r) => sum + r, 0) / recentReturns.length;
+    
+    return {
+      currentPrice,
+      dayChange,
+      weekChange,
+      monthChange,
+      volatility,
+      relativeStrength,
+      momentum,
+    };
+  } catch (error) {
+    console.warn(`[MacroAgent] Error fetching detailed data for ${etfSymbol}:`, error);
+    return null;
+  }
+}
+
 export async function runMacroAnalysis(industry?: string): Promise<InsertMacroAnalysis> {
   const industryLabel = industry || "General Market";
   console.log(`[MacroAgent] Starting macro economic analysis for ${industryLabel}...`);
@@ -272,38 +369,143 @@ export async function runMacroAnalysis(industry?: string): Promise<InsertMacroAn
     // Fetch market data
     const marketData = await fetchMarketIndices();
     
-    // Fetch industry-specific ETF performance if industry is provided
-    let industryPerformance: { change: number; trend: string } | null = null;
+    // Fetch detailed industry-specific ETF performance if industry is provided
+    let industrySectorAnalysis: InsertMacroAnalysis['industrySectorAnalysis'] = undefined;
     const normalizedIndustry = normalizeIndustry(industry);
     if (normalizedIndustry && INDUSTRY_ETF_MAP[normalizedIndustry]) {
       const etfSymbol = INDUSTRY_ETF_MAP[normalizedIndustry];
-      console.log(`[MacroAgent] Fetching industry-specific data for ${industry} → ${normalizedIndustry} (${etfSymbol})...`);
+      console.log(`[MacroAgent] Fetching detailed sector data for ${industry} → ${normalizedIndustry} (${etfSymbol})...`);
       
-      try {
-        const response = await fetch(
-          `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${etfSymbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
-        );
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
+      const detailedData = await fetchDetailedETFData(etfSymbol, marketData.sp500.change);
+      
+      if (detailedData) {
+        // Calculate sector weight based on relative strength and momentum
+        // Weight ranges from 0-100, higher when sector is outperforming
         
-        const data = await response.json();
-        const change = parseFloat(data["Global Quote"]?.["10. change percent"]?.replace("%", "") || "0");
+        // Normalize relative strength to 0-50 scale
+        // Strong outperformance (>3%) = 50 pts, strong underperformance (<-3%) = 0 pts
+        const normalizedRS = ((detailedData.relativeStrength + 3) / 6) * 50; // Map -3% to +3% range onto 0-50
+        const relativeStrengthWeight = Math.min(Math.max(normalizedRS, 0), 50);
         
-        industryPerformance = {
-          change,
-          trend: change > 1 ? "strong_up" : change > 0.3 ? "up" : change < -1 ? "strong_down" : change < -0.3 ? "down" : "flat",
+        // Normalize momentum to 0-30 scale
+        // Strong positive (>1.5%) = 30 pts, strong negative (<-1.5%) = 0 pts
+        const normalizedMomentum = ((detailedData.momentum + 1.5) / 3) * 30; // Map -1.5% to +1.5% range onto 0-30
+        const momentumWeight = Math.min(Math.max(normalizedMomentum, 0), 30);
+        
+        // Normalize volatility to 0-20 scale (inverse - lower volatility = higher weight)
+        // Low volatility (<10%) = 20 pts, high volatility (>40%) = 0 pts
+        const normalizedVolatility = ((40 - detailedData.volatility) / 30) * 20; // Map 10-40% range onto 20-0
+        const volatilityWeight = Math.min(Math.max(normalizedVolatility, 0), 20);
+        
+        const sectorWeight = Math.round(relativeStrengthWeight + momentumWeight + volatilityWeight);
+        
+        // Log weight calculation for verification
+        console.log(`[MacroAgent] Sector Weight Calculation for ${etfSymbol}:`);
+        console.log(`  - Relative Strength: ${detailedData.relativeStrength.toFixed(2)}% → ${relativeStrengthWeight.toFixed(1)} pts (max 50)`);
+        console.log(`  - Momentum: ${detailedData.momentum.toFixed(2)}% → ${momentumWeight.toFixed(1)} pts (max 30)`);
+        console.log(`  - Volatility: ${detailedData.volatility.toFixed(1)}% → ${volatilityWeight.toFixed(1)} pts (max 20)`);
+        console.log(`  - Total Sector Weight: ${sectorWeight}/100`);
+        
+        // Generate sector explanation
+        const sectorExplanation = `${industry} sector (${etfSymbol}) is ${
+          detailedData.relativeStrength > 1 ? 'significantly outperforming' :
+          detailedData.relativeStrength > 0 ? 'slightly outperforming' :
+          detailedData.relativeStrength > -1 ? 'slightly underperforming' : 'significantly underperforming'
+        } the broader market with ${detailedData.relativeStrength > 0 ? '+' : ''}${detailedData.relativeStrength.toFixed(2)}% relative strength. ` +
+        `${detailedData.momentum > 0.5 ? 'Strong positive' : detailedData.momentum > 0 ? 'Moderate positive' : detailedData.momentum > -0.5 ? 'Weak negative' : 'Strong negative'} momentum (${detailedData.momentum.toFixed(2)}%). ` +
+        `Volatility is ${detailedData.volatility > 25 ? 'elevated' : detailedData.volatility > 15 ? 'moderate' : 'low'} at ${detailedData.volatility.toFixed(1)}% annualized. ` +
+        `Sector weight: ${sectorWeight}/100 (${sectorWeight > 70 ? 'high influence' : sectorWeight > 40 ? 'moderate influence' : 'low influence'} on analysis).`;
+        
+        industrySectorAnalysis = {
+          etfSymbol,
+          sectorName: industry || "Unknown",
+          currentPrice: detailedData.currentPrice,
+          dayChange: detailedData.dayChange,
+          weekChange: detailedData.weekChange,
+          monthChange: detailedData.monthChange,
+          volatility: detailedData.volatility,
+          relativeStrength: detailedData.relativeStrength,
+          momentum: detailedData.momentum,
+          sectorWeight,
+          sectorExplanation,
         };
-      } catch (error) {
-        console.warn(`[MacroAgent] Could not fetch industry data for ${industry}:`, error);
+        
+        console.log(`[MacroAgent] Sector Analysis: ${sectorExplanation}`);
       }
     }
     
-    // Prepare prompt for OpenAI
-    const industryContext = industry 
-      ? `\n\nINDUSTRY-SPECIFIC ANALYSIS FOR: ${industry}
-${industryPerformance ? `- Industry ETF Performance: ${industryPerformance.change > 0 ? '+' : ''}${industryPerformance.change.toFixed(2)}% (Trend: ${industryPerformance.trend})
-- Industry Relative Strength: ${industryPerformance.change > marketData.sp500.change ? 'Outperforming market' : 'Underperforming market'}` : '- No industry-specific data available'}
+    // Prepare prompt for OpenAI with enhanced sector context
+    const industryContext = industrySectorAnalysis 
+      ? `\n\n═══════════════════════════════════════════════════════════════
+INDUSTRY-SPECIFIC SECTOR ANALYSIS FOR: ${industry}
+═══════════════════════════════════════════════════════════════
 
-IMPORTANT: Your analysis should consider BOTH general market conditions AND this specific industry's performance. Adjust the macro factor based on how this industry is positioned in the current market environment.`
+SECTOR ETF: ${industrySectorAnalysis.etfSymbol} - ${industrySectorAnalysis.sectorName}
+
+PERFORMANCE METRICS:
+- Current Price: $${industrySectorAnalysis.currentPrice.toFixed(2)}
+- Daily Change: ${industrySectorAnalysis.dayChange > 0 ? '+' : ''}${industrySectorAnalysis.dayChange.toFixed(2)}%
+- Week Change: ${industrySectorAnalysis.weekChange > 0 ? '+' : ''}${industrySectorAnalysis.weekChange.toFixed(2)}%
+- Month Change: ${industrySectorAnalysis.monthChange > 0 ? '+' : ''}${industrySectorAnalysis.monthChange.toFixed(2)}%
+
+SECTOR STRENGTH ANALYSIS:
+- Relative Strength vs S&P 500: ${industrySectorAnalysis.relativeStrength > 0 ? '+' : ''}${industrySectorAnalysis.relativeStrength.toFixed(2)}% ${
+  industrySectorAnalysis.relativeStrength > 1 ? '(SIGNIFICANTLY OUTPERFORMING ✓)' :
+  industrySectorAnalysis.relativeStrength > 0 ? '(Outperforming ✓)' :
+  industrySectorAnalysis.relativeStrength > -1 ? '(Underperforming ✗)' : '(SIGNIFICANTLY UNDERPERFORMING ✗✗)'
+}
+- Momentum (5-day): ${industrySectorAnalysis.momentum > 0 ? '+' : ''}${industrySectorAnalysis.momentum.toFixed(2)}% ${
+  industrySectorAnalysis.momentum > 0.5 ? '(STRONG POSITIVE ⬆)' :
+  industrySectorAnalysis.momentum > 0 ? '(Positive ↗)' :
+  industrySectorAnalysis.momentum > -0.5 ? '(Weak ↘)' : '(NEGATIVE ⬇)'
+}
+- Volatility (annualized): ${industrySectorAnalysis.volatility.toFixed(1)}% ${
+  industrySectorAnalysis.volatility > 25 ? '(HIGH VOLATILITY ⚠)' :
+  industrySectorAnalysis.volatility > 15 ? '(Moderate)' : '(Low ✓)'
+}
+
+SECTOR WEIGHT: ${industrySectorAnalysis.sectorWeight}/100 ${
+  industrySectorAnalysis.sectorWeight > 70 ? '(HIGH INFLUENCE - PRIORITIZE SECTOR TRENDS)' :
+  industrySectorAnalysis.sectorWeight > 40 ? '(MODERATE INFLUENCE)' : '(LOW INFLUENCE - GENERAL MARKET MATTERS MORE)'
+}
+
+AUTOMATED SECTOR SUMMARY:
+${industrySectorAnalysis.sectorExplanation}
+
+═══════════════════════════════════════════════════════════════
+CRITICAL GUIDANCE FOR YOUR ANALYSIS:
+═══════════════════════════════════════════════════════════════
+
+1. SECTOR WEIGHT INTERPRETATION:
+   - ${industrySectorAnalysis.sectorWeight > 70 ? 'This sector is showing VERY STRONG signals - prioritize sector-specific trends heavily in your recommendation' :
+     industrySectorAnalysis.sectorWeight > 40 ? 'This sector has MODERATE influence - balance sector and general market conditions' :
+     'This sector is showing WEAK signals - rely more on general market conditions'}
+
+2. RELATIVE STRENGTH MATTERS:
+   - Sector is ${industrySectorAnalysis.relativeStrength > 0 ? 'OUTPERFORMING' : 'UNDERPERFORMING'} the market
+   - This ${industrySectorAnalysis.relativeStrength > 1 || industrySectorAnalysis.relativeStrength < -1 ? 'STRONGLY' : 'moderately'} affects ${industry} stock recommendations
+
+3. MOMENTUM SIGNALS:
+   - ${industrySectorAnalysis.momentum > 0.5 ? 'Strong positive momentum suggests continued strength - favorable for BUY recommendations' :
+     industrySectorAnalysis.momentum > 0 ? 'Moderate positive momentum - cautiously favorable' :
+     industrySectorAnalysis.momentum > -0.5 ? 'Weak momentum - neutral to slightly negative' :
+     'Strong negative momentum - unfavorable for BUY, consider lower scores'}
+
+4. VOLATILITY CONSIDERATIONS:
+   - ${industrySectorAnalysis.volatility > 25 ? 'HIGH volatility indicates increased risk - consider lowering recommendation strength' :
+     industrySectorAnalysis.volatility > 15 ? 'Moderate volatility - normal market conditions' :
+     'Low volatility - stable sector, favorable for recommendations'}
+
+YOUR SECTOR-SPECIFIC RECOMMENDATION MUST:
+- Explain how the sector's ${industrySectorAnalysis.sectorWeight}/100 weight influenced your decision
+- Address the ${industrySectorAnalysis.relativeStrength > 0 ? 'outperformance' : 'underperformance'} relative to the market
+- Consider the ${industrySectorAnalysis.momentum > 0 ? 'positive' : 'negative'} momentum trend
+- Account for the ${industrySectorAnalysis.volatility > 20 ? 'elevated' : 'moderate'} volatility level
+`
+      : industry
+      ? `\n\nINDUSTRY-SPECIFIC ANALYSIS FOR: ${industry}
+- No detailed sector ETF data available
+- Rely primarily on general market conditions for this analysis`
       : '';
     
     // Format economic indicators section if available
@@ -451,6 +653,7 @@ Respond in JSON format:
       vixInterpretation: marketData.vix.interpretation,
       economicIndicators: marketData.economicIndicators || {},
       sectorPerformance: marketData.sectorPerformance,
+      industrySectorAnalysis: industrySectorAnalysis || undefined,
       marketCondition: analysis.marketCondition,
       marketPhase: analysis.marketPhase,
       riskAppetite: analysis.riskAppetite,
@@ -486,6 +689,7 @@ Respond in JSON format:
       vixInterpretation: null,
       economicIndicators: null,
       sectorPerformance: null,
+      industrySectorAnalysis: undefined,
       marketCondition: null,
       marketPhase: null,
       riskAppetite: null,

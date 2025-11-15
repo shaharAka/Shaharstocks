@@ -347,6 +347,106 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                     </div>
                   )}
 
+                  {macroAnalysis.industrySectorAnalysis && (
+                    <div className="pt-1 border-t border-border/50" data-testid="sector-analysis-container">
+                      <div className="text-xs font-medium mb-2 flex items-center gap-1.5">
+                        <Globe className="h-3.5 w-3.5" />
+                        <span data-testid="text-sector-etf-symbol">Sector ETF Analysis: {macroAnalysis.industrySectorAnalysis.etfSymbol}</span>
+                        <Badge 
+                          variant={
+                            macroAnalysis.industrySectorAnalysis.sectorWeight > 70 ? 'default' :
+                            macroAnalysis.industrySectorAnalysis.sectorWeight > 40 ? 'secondary' : 'outline'
+                          }
+                          className="ml-auto"
+                          data-testid="badge-sector-weight"
+                        >
+                          Weight: {macroAnalysis.industrySectorAnalysis.sectorWeight}/100
+                        </Badge>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                        <div className="space-y-0.5">
+                          <div className="text-muted-foreground">Day</div>
+                          <div 
+                            className={`font-mono font-semibold ${
+                              macroAnalysis.industrySectorAnalysis.dayChange >= 0 ? 'text-success' : 'text-destructive'
+                            }`}
+                            data-testid="text-sector-day-change"
+                          >
+                            {macroAnalysis.industrySectorAnalysis.dayChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.dayChange.toFixed(2)}%
+                          </div>
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="text-muted-foreground">Week</div>
+                          <div 
+                            className={`font-mono font-semibold ${
+                              macroAnalysis.industrySectorAnalysis.weekChange >= 0 ? 'text-success' : 'text-destructive'
+                            }`}
+                            data-testid="text-sector-week-change"
+                          >
+                            {macroAnalysis.industrySectorAnalysis.weekChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.weekChange.toFixed(2)}%
+                          </div>
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="text-muted-foreground">Month</div>
+                          <div 
+                            className={`font-mono font-semibold ${
+                              macroAnalysis.industrySectorAnalysis.monthChange >= 0 ? 'text-success' : 'text-destructive'
+                            }`}
+                            data-testid="text-sector-month-change"
+                          >
+                            {macroAnalysis.industrySectorAnalysis.monthChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.monthChange.toFixed(2)}%
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                        <div className="space-y-0.5">
+                          <div className="text-muted-foreground">Rel. Strength</div>
+                          <div 
+                            className={`font-mono font-semibold ${
+                              macroAnalysis.industrySectorAnalysis.relativeStrength > 1 ? 'text-success' :
+                              macroAnalysis.industrySectorAnalysis.relativeStrength > 0 ? 'text-success/70' :
+                              macroAnalysis.industrySectorAnalysis.relativeStrength > -1 ? 'text-destructive/70' : 'text-destructive'
+                            }`}
+                            data-testid="text-sector-relative-strength"
+                          >
+                            {macroAnalysis.industrySectorAnalysis.relativeStrength >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.relativeStrength.toFixed(2)}%
+                          </div>
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="text-muted-foreground">Momentum</div>
+                          <div 
+                            className={`font-mono font-semibold ${
+                              macroAnalysis.industrySectorAnalysis.momentum > 0.5 ? 'text-success' :
+                              macroAnalysis.industrySectorAnalysis.momentum > 0 ? 'text-success/70' :
+                              macroAnalysis.industrySectorAnalysis.momentum > -0.5 ? 'text-destructive/70' : 'text-destructive'
+                            }`}
+                            data-testid="text-sector-momentum"
+                          >
+                            {macroAnalysis.industrySectorAnalysis.momentum >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.momentum.toFixed(2)}%
+                          </div>
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="text-muted-foreground">Volatility</div>
+                          <div 
+                            className={`font-mono font-semibold ${
+                              macroAnalysis.industrySectorAnalysis.volatility > 25 ? 'text-destructive' :
+                              macroAnalysis.industrySectorAnalysis.volatility > 15 ? 'text-muted-foreground' : 'text-success'
+                            }`}
+                            data-testid="text-sector-volatility"
+                          >
+                            {macroAnalysis.industrySectorAnalysis.volatility.toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <p className="text-xs text-muted-foreground italic bg-muted/20 p-2 rounded" data-testid="text-sector-explanation">
+                        {macroAnalysis.industrySectorAnalysis.sectorExplanation}
+                      </p>
+                    </div>
+                  )}
+
                   {macroAnalysis.summary && (
                     <p className="text-xs text-muted-foreground italic pt-2 border-t border-border/50">
                       {macroAnalysis.summary}

@@ -219,9 +219,31 @@ export const macroAnalyses = pgTable("macro_analyses", {
   // Sector Analysis
   sectorPerformance: jsonb("sector_performance").$type<{
     sector: string;
+    etfSymbol: string;
     performance: string; // "strong", "moderate", "weak"
     trend: string; // "up", "down", "flat"
+    currentPrice?: number;
+    changePercent?: number; // Daily change %
+    weekChange?: number; // 1-week change %
+    monthChange?: number; // 1-month change %
+    volatility?: number; // Standard deviation of returns
+    relativeStrength?: number; // Performance vs S&P 500 (positive = outperforming)
+    momentum?: number; // 5-day momentum indicator
   }[]>(),
+  // Industry-Specific Sector Analysis (for the opportunity stock's sector)
+  industrySectorAnalysis: jsonb("industry_sector_analysis").$type<{
+    etfSymbol: string;
+    sectorName: string;
+    currentPrice: number;
+    dayChange: number;
+    weekChange: number;
+    monthChange: number;
+    volatility: number;
+    relativeStrength: number; // vs S&P 500
+    momentum: number;
+    sectorWeight: number; // 0-100: How much weight this sector carries in the analysis
+    sectorExplanation: string; // AI explanation of sector influence
+  }>(),
   // Market Conditions
   marketCondition: text("market_condition"), // "bull", "bear", "sideways", "volatile"
   marketPhase: text("market_phase"), // "early_cycle", "mid_cycle", "late_cycle", "recession"

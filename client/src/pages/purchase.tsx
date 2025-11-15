@@ -688,6 +688,12 @@ export default function Purchase() {
 
       <Dialog open={fetchConfigOpen} onOpenChange={setFetchConfigOpen}>
         <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Fetch Configuration</DialogTitle>
+            <DialogDescription>
+              Configure data sources for insider trading opportunities
+            </DialogDescription>
+          </DialogHeader>
           <Settings />
         </DialogContent>
       </Dialog>

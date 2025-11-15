@@ -135,7 +135,13 @@ export default function TickerDetail() {
   // Add comment mutation
   const addCommentMutation = useMutation({
     mutationFn: async (text: string) => {
-      return await apiRequest("POST", `/api/stocks/${ticker}/comments`, { comment: text });
+      if (!currentUser?.id) {
+        throw new Error("User not authenticated");
+      }
+      return await apiRequest("POST", `/api/stocks/${ticker}/comments`, { 
+        userId: currentUser.id,
+        comment: text 
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "comments"] });

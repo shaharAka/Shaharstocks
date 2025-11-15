@@ -47,9 +47,30 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
   try {
     console.log(`[InitialDataFetch] Starting initial data fetch for user ${userId}...`);
     
-    // Fetch 500 transactions without any filters
-    const scraperResponse = await openinsiderService.fetchInsiderPurchases(500);
-    const transactions = scraperResponse.transactions;
+    // Fetch BOTH purchases and sales (500 each) for comprehensive initial dataset
+    const [purchasesResponse, salesResponse] = await Promise.all([
+      openinsiderService.fetchInsiderPurchases(500, undefined, "P"),
+      openinsiderService.fetchInsiderSales(500, undefined)
+    ]);
+    
+    // Merge transactions from both sources
+    const transactions = [...purchasesResponse.transactions, ...salesResponse.transactions];
+    
+    // Merge stats for logging
+    const scraperResponse = {
+      transactions,
+      stats: {
+        total_rows_scraped: purchasesResponse.stats.total_rows_scraped + salesResponse.stats.total_rows_scraped,
+        filtered_not_purchase: purchasesResponse.stats.filtered_not_purchase + salesResponse.stats.filtered_not_purchase,
+        filtered_invalid_data: purchasesResponse.stats.filtered_invalid_data + salesResponse.stats.filtered_invalid_data,
+        filtered_by_date: purchasesResponse.stats.filtered_by_date + salesResponse.stats.filtered_by_date,
+        filtered_by_title: purchasesResponse.stats.filtered_by_title + salesResponse.stats.filtered_by_title,
+        filtered_by_transaction_value: purchasesResponse.stats.filtered_by_transaction_value + salesResponse.stats.filtered_by_transaction_value,
+        filtered_by_insider_name: purchasesResponse.stats.filtered_by_insider_name + salesResponse.stats.filtered_by_insider_name,
+      }
+    };
+    
+    console.log(`[InitialDataFetch] Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
     
     if (transactions.length === 0) {
       console.log(`[InitialDataFetch] No transactions found for user ${userId}`);
@@ -85,7 +106,7 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           transaction.ticker,
           transaction.filingDate,
           transaction.insiderName,
-          "buy" // All OpenInsider transactions are buys
+          transaction.recommendation // Use actual recommendation (buy or sell)
         );
         
         if (existingTransaction) {

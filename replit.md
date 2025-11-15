@@ -21,7 +21,7 @@ The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tai
 - **Backend**: Express.js with TypeScript, RESTful API design, JSON body parsing, Zod schema validation.
 - **Database**: PostgreSQL (Neon serverless) with Drizzle ORM for type-safe queries and migrations, utilizing UUID primary keys, Decimal types, JSONB, and timestamp tracking.
 - **Data Models**: Key entities include Stocks, Portfolio Holdings, Trades, Trigger-based Trading Rules (flexible scopes, conditions, actions), Backtest Jobs/Price Data/Scenarios, Telegram Config, OpenInsider Config, Users, and Stock Comments.
-- **Cache Isolation**: All trading rules queries use user-scoped cache keys `["/api/rules", userId]` with `enabled: !!user` guards to prevent cross-user contamination. Implemented across stock-simulation-plot.tsx, use-portfolio-data.ts hook, simulation.tsx, rules.tsx, management.tsx, and portfolio/management.tsx components.
+- **Cache Isolation**: All trading rules queries use user-scoped cache keys `["/api/rules", userId]` with `enabled: !!user` guards and custom `queryFn` to prevent cross-user contamination. The custom `queryFn` explicitly fetches from `/api/rules` (not `/api/rules/${userId}`) to avoid the default query function's URL construction bug (joining cache key with `/`). Backend enforces user scoping via session authentication. Implemented across stock-simulation-plot.tsx, use-portfolio-data.ts hook, simulation.tsx, rules.tsx, management.tsx, and portfolio/management.tsx components.
 
 ### Feature Specifications
 - **PayPal Subscription Integration**: Production-ready automated subscription activation with secure webhook verification.

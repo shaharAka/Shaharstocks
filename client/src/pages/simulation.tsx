@@ -90,6 +90,11 @@ export default function Simulation() {
     queryKey: ["/api/rules", user?.id],
     refetchInterval: 300000, // Refetch every 5 minutes
     enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch("/api/rules", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch rules");
+      return res.json();
+    },
   });
 
   const { data: trades, isLoading: tradesLoading } = useQuery<Trade[]>({

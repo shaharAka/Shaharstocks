@@ -88,6 +88,11 @@ export default function Rules() {
   const { data: rules, isLoading: rulesLoading } = useQuery<TradingRule[]>({
     queryKey: ["/api/rules", user?.id],
     enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch("/api/rules", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch rules");
+      return res.json();
+    },
   });
 
   const { data: stocks } = useQuery<Stock[]>({

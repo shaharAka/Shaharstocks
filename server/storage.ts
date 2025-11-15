@@ -256,6 +256,7 @@ export interface IStorage {
   unfollowStock(ticker: string, userId: string): Promise<boolean>;
   getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>>;
   getDailySummariesForTicker(ticker: string): Promise<DailySummary[]>;
+  createDailySummary(summary: InsertDailySummary): Promise<DailySummary>;
 
   // User Stock Statuses
   getUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus | undefined>;
@@ -1928,6 +1929,37 @@ export class DatabaseStorage implements IStorage {
       .from(dailySummaries)
       .where(eq(dailySummaries.ticker, ticker))
       .orderBy(desc(dailySummaries.summaryDate));
+  }
+
+  async createDailySummary(summary: InsertDailySummary): Promise<DailySummary> {
+    // Check if summary already exists for this ticker and date
+    const [existing] = await db
+      .select()
+      .from(dailySummaries)
+      .where(
+        and(
+          eq(dailySummaries.ticker, summary.ticker),
+          eq(dailySummaries.summaryDate, summary.summaryDate)
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      // Update existing summary
+      const [updated] = await db
+        .update(dailySummaries)
+        .set(summary)
+        .where(eq(dailySummaries.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    // Create new summary
+    const [created] = await db
+      .insert(dailySummaries)
+      .values(summary)
+      .returning();
+    return created;
   }
 
   async getUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus | undefined> {

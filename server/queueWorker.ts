@@ -328,6 +328,56 @@ class QueueWorker {
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'combined');
       console.log(`[QueueWorker] ✅ All analysis phases complete for ${job.ticker}`);
 
+      // Create daily summary for the ticker
+      try {
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        console.log(`[QueueWorker] 📅 Creating daily summary for ${job.ticker} (${today})...`);
+        
+        // Get current price for the summary
+        const stock = await storage.getStock(job.ticker);
+        const priceAtSummary = stock?.currentPrice || "0";
+
+        // Determine sentiment based on rating
+        const getSentiment = (rating?: string): "bullish" | "bearish" | "neutral" => {
+          if (!rating) return "neutral";
+          const lowerRating = rating.toLowerCase();
+          if (lowerRating.includes("strong buy") || lowerRating.includes("buy")) return "bullish";
+          if (lowerRating.includes("sell")) return "bearish";
+          return "neutral";
+        };
+
+        // Extract industry trends from sector performance
+        const industryTrends = (macroAnalysis.sectorPerformance || [])
+          .map(s => `${s.sector}: ${s.performance} (${s.trend})`)
+          .slice(0, 3); // Top 3 sectors
+
+        await storage.createDailySummary({
+          ticker: job.ticker,
+          summaryDate: today,
+          microAnalysis: {
+            score: analysis.confidenceScore,
+            summary: analysis.summary || "Analysis complete",
+            keyFindings: [
+              ...(analysis.financialHealth.strengths || []),
+              ...(analysis.opportunities || [])
+            ].slice(0, 5), // Top 5 findings
+            sentiment: getSentiment(analysis.overallRating),
+          },
+          macroAnalysis: {
+            score: macroAnalysis.macroScore || 50,
+            summary: macroAnalysis.summary || "Market analysis complete",
+            industryTrends: industryTrends,
+            sentiment: getSentiment(macroAnalysis.recommendation),
+          },
+          combinedScore: integratedScore,
+          priceAtSummary: priceAtSummary.toString(),
+        });
+        console.log(`[QueueWorker] ✅ Daily summary created for ${job.ticker}`);
+      } catch (summaryError) {
+        console.error(`[QueueWorker] ⚠️  Failed to create daily summary for ${job.ticker}:`, summaryError);
+        // Don't fail the job if summary creation fails
+      }
+
       // Create notifications for high-value opportunities (score > 75)
       if (integratedScore > 75) {
         console.log(`[QueueWorker] 🔔 High-value stock detected (${integratedScore}/100), creating notifications...`);

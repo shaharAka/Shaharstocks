@@ -39,8 +39,6 @@ import {
   type StockInterest,
   type InsertStockInterest,
   type StockInterestWithUser,
-  type UserStockPin,
-  type InsertUserStockPin,
   type StockView,
   type InsertStockView,
   type StockAnalysis,
@@ -95,7 +93,6 @@ import {
   users,
   stockComments,
   stockInterests,
-  userStockPins,
   stockViews,
   stockAnalyses,
   macroAnalyses,
@@ -251,11 +248,6 @@ export interface IStorage {
   getAllStockInterests(): Promise<StockInterestWithUser[]>;
   createStockInterest(interest: InsertStockInterest): Promise<StockInterest>;
   deleteStockInterest(ticker: string, userId: string): Promise<boolean>;
-
-  // Stock Pins
-  getUserStockPins(userId: string): Promise<UserStockPin[]>;
-  createStockPin(pin: InsertUserStockPin): Promise<UserStockPin>;
-  deleteStockPin(ticker: string, userId: string): Promise<boolean>;
 
   // Followed Stocks
   getUserFollowedStocks(userId: string): Promise<FollowedStock[]>;
@@ -1755,32 +1747,6 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  // Stock Pins
-  async getUserStockPins(userId: string): Promise<UserStockPin[]> {
-    return await db
-      .select()
-      .from(userStockPins)
-      .where(eq(userStockPins.userId, userId))
-      .orderBy(desc(userStockPins.pinnedAt));
-  }
-
-  async createStockPin(pin: InsertUserStockPin): Promise<UserStockPin> {
-    const [newPin] = await db.insert(userStockPins).values(pin).returning();
-    return newPin;
-  }
-
-  async deleteStockPin(ticker: string, userId: string): Promise<boolean> {
-    const result = await db
-      .delete(userStockPins)
-      .where(
-        and(
-          eq(userStockPins.ticker, ticker),
-          eq(userStockPins.userId, userId)
-        )
-      );
-    return true;
-  }
-
   // Followed Stocks
   async getUserFollowedStocks(userId: string): Promise<FollowedStock[]> {
     return await db
@@ -1882,7 +1848,7 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`[Storage] getStocksWithUserStatus called for userId: ${userId}, limit: ${limit}`);
       
-      // Get all stocks with user statuses and pin status, sorted by latest trade date
+      // Get all stocks with user statuses, sorted by latest trade date
       const results = await db
         .select({
           stock: stocks,
@@ -1890,7 +1856,6 @@ export class DatabaseStorage implements IStorage {
           userApprovedAt: userStockStatuses.approvedAt,
           userRejectedAt: userStockStatuses.rejectedAt,
           userDismissedAt: userStockStatuses.dismissedAt,
-          isPinned: userStockPins.ticker,
         })
         .from(stocks)
         .leftJoin(
@@ -1898,13 +1863,6 @@ export class DatabaseStorage implements IStorage {
           and(
             eq(stocks.ticker, userStockStatuses.ticker),
             eq(userStockStatuses.userId, userId)
-          )
-        )
-        .leftJoin(
-          userStockPins,
-          and(
-            eq(stocks.ticker, userStockPins.ticker),
-            eq(userStockPins.userId, userId)
           )
         )
         .orderBy(desc(stocks.insiderTradeDate))
@@ -1947,7 +1905,6 @@ export class DatabaseStorage implements IStorage {
           userApprovedAt: row.userApprovedAt,
           userRejectedAt: row.userRejectedAt,
           userDismissedAt: row.userDismissedAt,
-          isPinned: row.isPinned !== null,
           analysisJob: latestJob ? {
             status: latestJob.status,
             currentStep: latestJob.currentStep,

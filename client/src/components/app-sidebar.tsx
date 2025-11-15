@@ -11,6 +11,7 @@ import {
   Loader2,
   TrendingUp,
   TrendingDown,
+  Minus,
 } from "lucide-react";
 import {
   Sidebar,
@@ -182,7 +183,8 @@ export function AppSidebar() {
                           // Show loader when processing
                           // Show green up arrow when alignment is positive (BUY+uptrend or SELL+downtrend)
                           // Show red down arrow when alignment is negative (BUY+downtrend or SELL+uptrend)
-                          // Neutral (HOLD) shows no icon
+                          // Show minus sign for neutral (HOLD) or when stance exists but alignment is neutral
+                          // No icon only when no daily brief exists yet
                           let StanceIcon = null;
                           let stanceColor = "";
                           if (isProcessing) {
@@ -194,8 +196,11 @@ export function AppSidebar() {
                           } else if (stock.stanceAlignment === 'negative') {
                             StanceIcon = TrendingDown;
                             stanceColor = "text-red-600 dark:text-red-400";
+                          } else if (stock.stanceAlignment === 'neutral' && stock.latestStance) {
+                            StanceIcon = Minus;
+                            stanceColor = "text-muted-foreground";
                           }
-                          // Neutral (HOLD) or null shows no icon
+                          // No icon only when no daily brief exists (null latestStance)
                           
                           return (
                             <SidebarMenuSubItem key={stock.ticker}>

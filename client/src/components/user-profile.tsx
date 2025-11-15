@@ -33,11 +33,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { LogOut, UserCog, Trash2 } from "lucide-react";
+import { LogOut, UserCog, Trash2, CreditCard } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { BillingManagement } from "@/components/billing-management";
 
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -52,6 +53,7 @@ export function UserProfile() {
   const { toast } = useToast();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [billingDialogOpen, setBillingDialogOpen] = useState(false);
 
   const form = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
@@ -153,6 +155,13 @@ export function UserProfile() {
             <span>Edit Profile</span>
           </DropdownMenuItem>
           <DropdownMenuItem
+            onClick={() => setBillingDialogOpen(true)}
+            data-testid="button-billing"
+          >
+            <CreditCard className="mr-2 h-4 w-4" />
+            <span>Billing & Subscription</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
             onClick={() => setDeleteDialogOpen(true)}
             className="text-destructive"
             data-testid="button-delete-account"
@@ -241,6 +250,18 @@ export function UserProfile() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={billingDialogOpen} onOpenChange={setBillingDialogOpen}>
+        <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Billing & Subscription</DialogTitle>
+            <DialogDescription>
+              Manage your subscription and billing information
+            </DialogDescription>
+          </DialogHeader>
+          <BillingManagement />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

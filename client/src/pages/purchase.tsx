@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -22,6 +23,7 @@ import {
   Clock,
   MessageSquare,
   Star,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -35,6 +37,7 @@ import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Filter, Search, SortAsc } from "lucide-react";
+import Settings from "@/pages/settings";
 
 type StockWithUserStatus = Stock & {
   userStatus: string;
@@ -74,6 +77,7 @@ export default function Purchase() {
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
+  const [fetchConfigOpen, setFetchConfigOpen] = useState(false);
 
   // Selection handlers
   const toggleSelection = (ticker: string) => {
@@ -438,16 +442,27 @@ export default function Purchase() {
             {getTerm("opportunitiesDescription")}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="lg"
-          onClick={() => refreshMutation.mutate()}
-          disabled={refreshMutation.isPending}
-          data-testid="button-refresh"
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
-          <span className="ml-2">{getTerm("refresh")}</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setFetchConfigOpen(true)}
+            data-testid="button-fetch-config"
+          >
+            <SettingsIcon className="h-4 w-4" />
+            <span className="ml-2">Fetch Configuration</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
+            data-testid="button-refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
+            <span className="ml-2">{getTerm("refresh")}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Quick Filters */}
@@ -670,6 +685,12 @@ export default function Purchase() {
         onReject={(stock) => rejectMutation.mutate(stock.ticker)}
         users={users}
       />
+
+      <Dialog open={fetchConfigOpen} onOpenChange={setFetchConfigOpen}>
+        <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-auto">
+          <Settings />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

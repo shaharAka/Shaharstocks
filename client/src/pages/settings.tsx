@@ -221,14 +221,12 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-semibold mb-1 flex items-center gap-2" data-testid="text-page-title">
           <SettingsIcon className="h-6 w-6" />
-          Settings
+          Fetch Configuration
         </h1>
         <p className="text-sm text-muted-foreground">
-          Manage your subscription and configure data sources
+          Configure data sources for insider trading opportunities
         </p>
       </div>
-
-      <BillingManagementSection />
 
       {featureFlags?.enableTelegram && status && (
         <Card>

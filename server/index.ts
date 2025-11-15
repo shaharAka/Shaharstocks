@@ -160,6 +160,9 @@ app.use((req, res, next) => {
   
   // Start hourly reconciliation job to re-queue incomplete analyses
   startAnalysisReconciliationJob();
+  
+  // Start daily summary generation job for followed stocks
+  startDailySummaryJob();
 })();
 
 /**
@@ -1188,4 +1191,93 @@ function startAnalysisReconciliationJob() {
   // Then run every hour
   setInterval(reconcileIncompleteAnalyses, ONE_HOUR);
   log("[Reconciliation] Background job started - reconciling incomplete analyses every hour");
+}
+
+function startDailySummaryJob() {
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+
+  async function generateDailySummaries() {
+    try {
+      log("[DailySummary] Starting daily summary generation job...");
+      
+      // Get all users and their followed stocks
+      const users = await storage.getUsers();
+      const followedTickersSet = new Set<string>();
+      
+      for (const user of users) {
+        const followed = await storage.getUserFollowedStocks(user.id);
+        followed.forEach((f: { ticker: string }) => followedTickersSet.add(f.ticker));
+      }
+      
+      const followedTickers = Array.from(followedTickersSet);
+      
+      if (followedTickers.length === 0) {
+        log("[DailySummary] No followed stocks to generate summaries for");
+        return;
+      }
+      
+      log(`[DailySummary] Generating summaries for ${followedTickers.length} followed stocks`);
+      
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      let generatedCount = 0;
+      let skippedCount = 0;
+      
+      for (const ticker of followedTickers) {
+        try {
+          // Check if summary already exists for today
+          const existingSummaries = await storage.getDailySummariesForTicker(ticker);
+          const todaySummary = existingSummaries.find(s => s.summaryDate === today);
+          
+          if (todaySummary) {
+            log(`[DailySummary] Skipping ${ticker} - summary already exists for today`);
+            skippedCount++;
+            continue;
+          }
+          
+          // Get stock for analysis
+          const stock = await storage.getStock(ticker);
+          if (!stock) {
+            log(`[DailySummary] Skipping ${ticker} - stock not found`);
+            skippedCount++;
+            continue;
+          }
+          
+          // Generate summary using existing analysis or trigger new analysis
+          log(`[DailySummary] Generating summary for ${ticker}...`);
+          
+          // Check if there's already a pending or processing job for this ticker
+          const existingJobs = await storage.getAiAnalysisJobsForTicker(ticker);
+          const hasPendingJob = existingJobs.some(
+            (job: any) => job.status === "pending" || job.status === "processing"
+          );
+          
+          if (hasPendingJob) {
+            log(`[DailySummary] Skipping ${ticker} - analysis job already pending or processing`);
+            skippedCount++;
+            continue;
+          }
+          
+          // Queue a low-priority analysis job for daily summary
+          await storage.enqueueAnalysisJob(ticker, "daily_summary", "low");
+          generatedCount++;
+          
+        } catch (error) {
+          console.error(`[DailySummary] Error generating summary for ${ticker}:`, error);
+        }
+      }
+      
+      log(`[DailySummary] Job complete: generated ${generatedCount}, skipped ${skippedCount}`);
+    } catch (error) {
+      console.error("[DailySummary] Error in daily summary job:", error);
+    }
+  }
+
+  // Run immediately on startup
+  generateDailySummaries().catch(err => {
+    console.error("[DailySummary] Initial generation failed:", err);
+  });
+
+  // Then run once a day
+  setInterval(generateDailySummaries, ONE_DAY);
+  log("[DailySummary] Background job started - generating summaries once a day");
 }

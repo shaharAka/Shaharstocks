@@ -425,6 +425,14 @@ export default function Purchase() {
             <Button
               size="sm"
               onClick={() => {
+                if (selectedTickers.size === 0) {
+                  toast({
+                    title: "No stocks selected",
+                    description: "Please select at least one stock to follow",
+                    variant: "destructive",
+                  });
+                  return;
+                }
                 Array.from(selectedTickers).forEach(ticker => {
                   followMutation.mutate(ticker);
                 });

@@ -23,6 +23,7 @@ import Settings from "@/pages/settings";
 import CommunityDiscussion from "@/pages/community-discussion";
 import FeatureSuggestions from "@/pages/community-feature-suggestions";
 import AdminPage from "@/pages/admin";
+import TickerDetail from "@/pages/ticker-detail";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Terms from "@/pages/terms";
@@ -39,6 +40,7 @@ function Router() {
       <Route path="/recommendations" component={Purchase} />
       <Route path="/watchlist" component={Portfolio} />
       <Route path="/trading" component={Trading} />
+      <Route path="/ticker/:ticker" component={TickerDetail} />
       <Route path="/community/discussion" component={CommunityDiscussion} />
       <Route path="/community/feature-suggestions" component={FeatureSuggestions} />
       <Route path="/community" component={CommunityDiscussion} />

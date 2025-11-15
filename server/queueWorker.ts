@@ -367,7 +367,7 @@ class QueueWorker {
             score: macroAnalysis.macroScore || 50,
             summary: macroAnalysis.summary || "Market analysis complete",
             industryTrends: industryTrends,
-            sentiment: getSentiment(macroAnalysis.recommendation),
+            sentiment: getSentiment(macroAnalysis.recommendation || undefined),
           },
           combinedScore: integratedScore,
           priceAtSummary: priceAtSummary.toString(),

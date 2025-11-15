@@ -3328,14 +3328,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdCount++;
           createdTickers.push(transaction.ticker); // Track this ticker for AI analysis
           
-          // Queue AI analysis job for the new stock (both buys and sells)
-          try {
-            await storage.enqueueAnalysisJob(newStock.ticker, "openinsider_fetch", "normal");
-            console.log(`[OpeninsiderFetch] ✓ Queued AI analysis job for ${transaction.ticker} (${transaction.recommendation})`);
-          } catch (error) {
-            console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${transaction.ticker}:`, error);
-          }
-          
           // Log successful creation
           console.log(`[OpeninsiderFetch] ✓ Created recommendation for ${transaction.ticker}:`);
           console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);
@@ -3373,6 +3365,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Queue ONE AI analysis job per unique ticker (not per transaction)
+      if (createdTickers.length > 0) {
+        const uniqueTickers = Array.from(new Set(createdTickers));
+        console.log(`[OpeninsiderFetch] Queuing AI analysis for ${uniqueTickers.length} unique tickers (from ${createdTickers.length} transactions)...`);
+        
+        for (const ticker of uniqueTickers) {
+          try {
+            await storage.enqueueAnalysisJob(ticker, "openinsider_fetch", "normal");
+            console.log(`[OpeninsiderFetch] ✓ Queued AI analysis for ${ticker}`);
+          } catch (error) {
+            console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${ticker}:`, error);
+          }
+        }
+      }
+
       await storage.updateOpeninsiderSyncStatus();
       
       // Mark user's initial data as fetched if this is their first time
@@ -3382,26 +3389,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const user = await storage.getUser(req.session.userId);
         if (user && !user.initialDataFetched) {
           await storage.markUserInitialDataFetched(req.session.userId);
-          
-          // Auto-trigger AI analysis for newly created stocks during onboarding
-          if (createdTickers.length > 0) {
-            console.log(`[Onboarding] Auto-queueing AI analysis for ${createdTickers.length} new stocks`);
-            
-            // Queue AI analysis for each newly created ticker
-            const queuePromises = createdTickers.map(ticker =>
-              storage.enqueueAnalysisJob(ticker, "onboarding", "normal")
-                .catch((err: any) => {
-                  console.error(`[Onboarding] Failed to queue AI analysis for ${ticker}:`, err);
-                  return null; // Continue with other tickers even if one fails
-                })
-            );
-            
-            // Wait for all queue operations to complete
-            const results = await Promise.allSettled(queuePromises);
-            const queuedCount = results.filter(r => r.status === 'fulfilled' && r.value !== null).length;
-            
-            console.log(`[Onboarding] Successfully queued AI analysis for ${queuedCount}/${createdTickers.length} stocks`);
-          }
+          console.log(`[Onboarding] Marked user ${req.session.userId} initial data as fetched`);
+          // Note: AI analysis jobs already queued above for all created stocks
         }
       }
       

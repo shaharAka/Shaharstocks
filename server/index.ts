@@ -571,6 +571,8 @@ function startOpeninsiderFetchJob() {
       let filteredOptionsDeals = 0;
       let filteredNoQuote = 0;
       let filteredDuplicates = 0;
+      const createdTickers = new Set<string>(); // Track unique tickers for AI analysis
+      
       for (const transaction of transactions) {
         try {
           // Check if this exact transaction already exists using composite key
@@ -646,15 +648,8 @@ function startOpeninsiderFetchJob() {
           });
 
           createdCount++;
-          log(`[OpeninsiderFetch] Created stock recommendation for ${transaction.ticker}`);
-          
-          // Queue AI analysis job for the new stock (both buys and sells)
-          try {
-            await storage.enqueueAnalysisJob(newStock.ticker, "openinsider_fetch", "normal");
-            log(`[OpeninsiderFetch] Queued AI analysis job for ${transaction.ticker} (${transaction.recommendation})`);
-          } catch (error) {
-            console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${transaction.ticker}:`, error);
-          }
+          createdTickers.add(transaction.ticker); // Track unique ticker
+          log(`[OpeninsiderFetch] Created stock recommendation for ${transaction.ticker}`)
 
           // Send Telegram notification (only if feature enabled)
           if (ENABLE_TELEGRAM && telegramNotificationService.isReady()) {
@@ -682,6 +677,19 @@ function startOpeninsiderFetchJob() {
         }
       }
 
+      // Queue ONE AI analysis job per unique ticker (not per transaction)
+      if (createdTickers.size > 0) {
+        log(`[OpeninsiderFetch] Queuing AI analysis for ${createdTickers.size} unique tickers...`);
+        for (const ticker of createdTickers) {
+          try {
+            await storage.enqueueAnalysisJob(ticker, "openinsider_fetch", "normal");
+            log(`[OpeninsiderFetch] ✓ Queued AI analysis for ${ticker}`);
+          } catch (error) {
+            console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${ticker}:`, error);
+          }
+        }
+      }
+
       log(`\n[OpeninsiderFetch] ======= STAGE 2: Backend Post-Processing =======`);
       log(`[OpeninsiderFetch] Starting with: ${transactions.length} transactions`);
       log(`[OpeninsiderFetch]   ⊗ Duplicates: ${filteredDuplicates}`);
@@ -690,7 +698,7 @@ function startOpeninsiderFetchJob() {
       log(`[OpeninsiderFetch]   ⊗ No quote: ${filteredNoQuote}`);
       log(`[OpeninsiderFetch] → Total Stage 2 filtered: ${filteredDuplicates + filteredMarketCap + filteredOptionsDeals + filteredNoQuote}`);
       log(`[OpeninsiderFetch] ===============================================`);
-      log(`\n[OpeninsiderFetch] ✓ Successfully created ${createdCount} new recommendations\n`);
+      log(`\n[OpeninsiderFetch] ✓ Successfully created ${createdCount} new recommendations (${createdTickers.size} unique tickers)\n`);
       await storage.updateOpeninsiderSyncStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

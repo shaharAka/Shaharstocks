@@ -43,6 +43,16 @@ export default function TickerDetail() {
     enabled: !!ticker,
   });
 
+  // Check if user is following this stock (needed for daily briefs query)
+  const { data: followedStocks = [] } = useQuery<any[]>({
+    queryKey: ["/api/users/me/followed"],
+    enabled: !!currentUser,
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  const isFollowing = followedStocks.some(f => f.ticker === ticker);
+
   // Fetch daily briefs (lightweight daily reports for followed stocks)
   const { data: dailyBriefs = [], isLoading: briefsLoading } = useQuery<any[]>({
     queryKey: ["/api/stocks", ticker, "daily-briefs"],
@@ -75,16 +85,6 @@ export default function TickerDetail() {
     meta: { ignoreError: true },
   });
 
-  // Check if user is following this stock
-  const { data: followedStocks = [] } = useQuery<any[]>({
-    queryKey: ["/api/users/me/followed"],
-    enabled: !!currentUser,
-    retry: false,
-    meta: { ignoreError: true },
-  });
-
-  const isFollowing = followedStocks.some(f => f.ticker === ticker);
-
   // Follow mutation
   const followMutation = useMutation({
     mutationFn: async () => {
@@ -93,6 +93,7 @@ export default function TickerDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "daily-briefs"] }); // Fetch daily briefs after following
       toast({
         title: "Stock Followed",
         description: "Day-0 AI analysis has been queued for this stock",

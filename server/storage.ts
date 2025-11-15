@@ -1924,11 +1924,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]> {
+    // Limit to last 7 days to keep response lightweight
     return await db
       .select()
       .from(dailyBriefs)
       .where(eq(dailyBriefs.ticker, ticker))
-      .orderBy(desc(dailyBriefs.briefDate));
+      .orderBy(desc(dailyBriefs.briefDate))
+      .limit(7);
   }
 
   async createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief> {

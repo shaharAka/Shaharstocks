@@ -75,6 +75,41 @@ export default function TickerDetail() {
     meta: { ignoreError: true },
   });
 
+  // Check if user is following this stock
+  const { data: followedStocks = [] } = useQuery<any[]>({
+    queryKey: ["/api/users/me/followed"],
+    enabled: !!currentUser,
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  const isFollowing = followedStocks.some(f => f.ticker === ticker);
+
+  // Follow mutation
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `/api/stocks/${ticker}/follow`, null);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      toast({
+        title: "Stock Followed",
+        description: "Day-0 AI analysis has been queued for this stock",
+      });
+    },
+    onError: (error: any) => {
+      const message = error.message?.includes("already following") 
+        ? "You are already following this stock"
+        : "Failed to follow stock";
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Unfollow mutation
   const unfollowMutation = useMutation({
     mutationFn: async () => {
@@ -185,15 +220,27 @@ export default function TickerDetail() {
             )}
           </div>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => unfollowMutation.mutate()}
-          disabled={unfollowMutation.isPending}
-          data-testid="button-unfollow"
-        >
-          <Star className="h-4 w-4 mr-2 fill-current" />
-          Unfollow
-        </Button>
+        {isFollowing ? (
+          <Button
+            variant="outline"
+            onClick={() => unfollowMutation.mutate()}
+            disabled={unfollowMutation.isPending}
+            data-testid="button-unfollow"
+          >
+            <Star className="h-4 w-4 mr-2 fill-current" />
+            {unfollowMutation.isPending ? "Unfollowing..." : "Unfollow"}
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            onClick={() => followMutation.mutate()}
+            disabled={followMutation.isPending}
+            data-testid="button-follow"
+          >
+            <Star className="h-4 w-4 mr-2" />
+            {followMutation.isPending ? "Following..." : "Follow"}
+          </Button>
+        )}
       </div>
 
       {/* Price Overview */}

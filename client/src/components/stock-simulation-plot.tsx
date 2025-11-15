@@ -293,28 +293,28 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
       <CardContent>
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.6} />
+            <CartesianGrid strokeDasharray="3 3" stroke="oklch(var(--border))" />
             <XAxis 
               dataKey="date" 
-              stroke="hsl(var(--muted-foreground))"
-              tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
+              stroke="oklch(var(--muted-foreground))"
+              tick={{ fill: "oklch(var(--foreground))", fontSize: 12 }}
               tickFormatter={(value) => {
                 const date = new Date(value);
                 return `${date.getMonth() + 1}/${date.getDate()}`;
               }}
             />
             <YAxis 
-              stroke="hsl(var(--muted-foreground))"
-              tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
+              stroke="oklch(var(--muted-foreground))"
+              tick={{ fill: "oklch(var(--foreground))", fontSize: 12 }}
               tickFormatter={(value) => `$${value.toFixed(0)}`}
               domain={['auto', 'auto']}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--popover))",
-                border: "1px solid hsl(var(--border))",
+                backgroundColor: "oklch(var(--popover))",
+                border: "1px solid oklch(var(--border))",
                 borderRadius: "6px",
-                color: "hsl(var(--popover-foreground))",
+                color: "oklch(var(--popover-foreground))",
               }}
               labelFormatter={(value) => {
                 const date = new Date(value as string);
@@ -322,18 +322,18 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
               }}
               formatter={(value: any) => [`$${Number(value).toFixed(2)}`, "Price"]}
             />
-            <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
+            <Legend wrapperStyle={{ color: "oklch(var(--foreground))" }} />
             
             {/* Purchase price line */}
             {purchasePrice && (
               <ReferenceLine
                 y={purchasePrice}
-                stroke="hsl(var(--primary))"
+                stroke="oklch(var(--primary))"
                 strokeDasharray="5 5"
                 label={{
                   value: `Entry: $${purchasePrice.toFixed(2)}`,
                   position: "insideTopRight",
-                  fill: "hsl(var(--primary))",
+                  fill: "oklch(var(--primary))",
                   fontSize: 12,
                 }}
               />
@@ -344,12 +344,12 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
               <ReferenceLine
                 key={index}
                 y={line.price}
-                stroke="hsl(var(--destructive))"
+                stroke="oklch(var(--destructive))"
                 strokeDasharray="3 3"
                 label={{
                   value: `Sell ${line.label}`,
                   position: "insideTopRight",
-                  fill: "hsl(var(--destructive))",
+                  fill: "oklch(var(--destructive))",
                   fontSize: 12,
                 }}
               />

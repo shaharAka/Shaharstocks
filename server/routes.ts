@@ -2134,6 +2134,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             summary: stockData.summary || "No previous analysis available"
           } : undefined;
           
+          // Get opportunity type from stock recommendation
+          const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
+          
           // Get recent news (last 24h only, if available)
           const now = Date.now() / 1000;
           const oneDayAgo = now - (24 * 60 * 60);
@@ -2151,6 +2154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ticker,
             currentPrice: quote.price,
             previousPrice: quote.previousClose,
+            opportunityType,
             recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
             previousAnalysis
           });
@@ -4139,6 +4143,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to mark all admin notifications as read:", error);
       res.status(500).json({ error: "Failed to mark all notifications as read" });
+    }
+  });
+
+  // Admin endpoint to regenerate daily briefs for all followed stocks
+  app.post("/api/admin/regenerate-briefs", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get all followed tickers for this user
+      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
+      const followedTickers = followedStocks.map(f => f.ticker);
+      
+      let generatedCount = 0;
+      let skippedCount = 0;
+      let errorCount = 0;
+      
+      for (const ticker of followedTickers) {
+        try {
+          // Get current price
+          const quote = await stockService.getQuote(ticker);
+          if (!quote || quote.price === 0 || quote.previousClose === 0) {
+            console.log(`[AdminRegenerate] Skipping ${ticker} - invalid price data`);
+            skippedCount++;
+            continue;
+          }
+          
+          // Get stock data for context and opportunity type
+          const stock = await storage.getStock(ticker);
+          const stockData = stock as any;
+          const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
+          const previousAnalysis = stockData?.overallRating ? {
+            overallRating: stockData.overallRating,
+            summary: stockData.summary || "No previous analysis available"
+          } : undefined;
+          
+          // Get recent news
+          const now = Date.now() / 1000;
+          const oneDayAgo = now - (24 * 60 * 60);
+          const recentNews = stockData?.news
+            ?.filter((article: any) => article.datetime && article.datetime >= oneDayAgo)
+            ?.slice(0, 3)
+            ?.map((article: any) => ({
+              title: article.headline || "Untitled",
+              sentiment: 0,
+              source: article.source || "Unknown"
+            }));
+          
+          // Generate brief
+          const brief = await aiAnalysisService.generateDailyBrief({
+            ticker,
+            currentPrice: quote.price,
+            previousPrice: quote.previousClose,
+            opportunityType,
+            recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
+            previousAnalysis
+          });
+          
+          // Create or update brief (createDailyBrief handles both)
+          await storage.createDailyBrief({
+            ticker,
+            briefDate: today,
+            priceSnapshot: quote.price.toString(),
+            priceChange: quote.change.toString(),
+            priceChangePercent: quote.changePercent.toString(),
+            recommendedStance: brief.recommendedStance,
+            confidence: brief.confidence,
+            briefText: brief.briefText,
+            keyHighlights: brief.keyHighlights
+          });
+          
+          generatedCount++;
+          console.log(`[AdminRegenerate] Generated brief for ${ticker}: ${brief.recommendedStance} (${opportunityType} opportunity, confidence: ${brief.confidence}/10)`);
+        } catch (error) {
+          errorCount++;
+          console.error(`[AdminRegenerate] Error generating brief for ${ticker}:`, error);
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        generated: generatedCount, 
+        skipped: skippedCount, 
+        errors: errorCount 
+      });
+    } catch (error) {
+      console.error("Failed to regenerate briefs:", error);
+      res.status(500).json({ error: "Failed to regenerate briefs" });
     }
   });
 

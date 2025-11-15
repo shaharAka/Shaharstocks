@@ -289,6 +289,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     ticker: string;
     currentPrice: number;
     previousPrice: number;
+    opportunityType?: "buy" | "sell"; // Type of opportunity (based on insider action)
     recentNews?: { title: string; sentiment: number; source: string }[];
     previousAnalysis?: { overallRating: string; summary: string };
   }): Promise<{
@@ -297,14 +298,42 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     briefText: string; // <120 words
     keyHighlights: string[]; // 2-3 bullet points
   }> {
-    const { ticker, currentPrice, previousPrice, recentNews, previousAnalysis } = params;
+    const { ticker, currentPrice, previousPrice, opportunityType = "buy", recentNews, previousAnalysis } = params;
     
     const priceChange = currentPrice - previousPrice;
     const priceChangePercent = ((priceChange / previousPrice) * 100).toFixed(2);
     
+    // Adjust guidance based on opportunity type
+    const isBuyOpportunity = opportunityType === "buy";
+    const opportunityContext = isBuyOpportunity
+      ? "This is a BUY OPPORTUNITY - insiders recently BOUGHT shares, signaling potential upside."
+      : "This is a SELL OPPORTUNITY - insiders recently SOLD shares, signaling potential downside or overvaluation.";
+    
+    const stanceRules = isBuyOpportunity
+      ? `STANCE RULES for BUY OPPORTUNITY (1-2 week horizon):
+- "buy" = Positive momentum (+2%+), positive catalysts, or dip buying opportunity → accumulate for near-term gains
+- "hold" = Flat/sideways (-1% to +1%) with no clear catalysts → wait for clearer direction
+- "sell" = Significant negative momentum (-3%+), broken support, or fundamental concerns → cut losses
+
+⚠️ IMPORTANT: 
+- +5-6% move = "buy" (ride momentum) or "sell" (take profits if overbought)
+- -5-6% move = "buy" (dip buying if fundamentals intact) or "sell" (cut losses if broken)
+- Reserve "hold" ONLY for minimal movement (<2%) with no catalysts`
+      : `STANCE RULES for SELL OPPORTUNITY (1-2 week horizon):
+- "sell" = Positive momentum (+2%+) confirms insiders were right → short or avoid (stock overvalued)
+- "hold" = Flat/sideways (-1% to +1%) → wait for clearer direction or avoid entirely  
+- "buy" = ONLY if significant negative momentum (-5%+) AND strong reversal signals → contrarian dip buy
+
+⚠️ IMPORTANT: 
+- +5-6% move = "sell" (insiders were right to exit, avoid or short)
+- -5-6% move = "hold" (falling as expected) or "buy" ONLY if oversold with reversal signals
+- Bias toward "sell" or "hold" - be very cautious with "buy" on sell opportunities`;
+    
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.
 
 ⚡ CRITICAL: This is SHORT-TERM TRADING, not long-term investing. Even small trends demand action.
+
+OPPORTUNITY TYPE: ${opportunityContext}
 
 CURRENT STATUS:
 - Current Price: $${currentPrice.toFixed(2)}
@@ -330,16 +359,9 @@ Return JSON in this EXACT format:
   "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
 }
 
-STANCE RULES (1-2 week trading horizon):
-- "buy" = ANY positive momentum (even +2-3%), positive catalysts, or recovery signals → accumulate for near-term gains
-- "hold" = ONLY for flat/sideways price action (-1% to +1%) with no clear catalysts → wait for clearer direction
-- "sell" = ANY negative momentum (even -2-3%), warning signs, or overbought conditions → take profits or cut losses
+${stanceRules}
 
-⚠️ IMPORTANT: 
-- A +5-6% move should NEVER be "hold" - recommend "buy" (ride momentum) or "sell" (take profits)
-- A -5-6% move should NEVER be "hold" - recommend "buy" (dip buying) or "sell" (cut losses)
-- Reserve "hold" ONLY for minimal movement (<2% change) with no catalysts
-- BE DECISIVE. Near-term traders need action, not patience.`;
+BE DECISIVE. Near-term traders need action, not patience.`;
 
     try {
       const response = await openai.chat.completions.create({

@@ -1267,6 +1267,9 @@ function startDailyBriefJob() {
             summary: stockData.summary || "No previous analysis available"
           } : undefined;
           
+          // Get opportunity type from stock recommendation
+          const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
+          
           // Get recent news (last 24h only, if available)
           const now = Date.now() / 1000; // Unix timestamp in seconds
           const oneDayAgo = now - (24 * 60 * 60);
@@ -1280,11 +1283,12 @@ function startDailyBriefJob() {
             }));
           
           // Generate the brief using AI
-          log(`[DailyBrief] Generating brief for ${ticker}...`);
+          log(`[DailyBrief] Generating brief for ${ticker} (${opportunityType} opportunity)...`);
           const brief = await aiAnalysisService.generateDailyBrief({
             ticker,
             currentPrice: quote.price,
             previousPrice: quote.previousClose,
+            opportunityType,
             recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
             previousAnalysis
           });

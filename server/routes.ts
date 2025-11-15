@@ -3123,9 +3123,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const duplicates = transactions.length - newTransactions.length;
-      const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
-                                   stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 
-                                   stage1Stats.filtered_invalid_data;
       
       console.log(`\n[OpeninsiderFetch] ======= STAGE 2: Backend Post-Processing =======`);
       console.log(`[OpeninsiderFetch] Starting with: ${transactions.length} transactions`);

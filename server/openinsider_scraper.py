@@ -32,7 +32,8 @@ class OpenInsiderScraper:
         min_transaction_value: int | None = None,
         previous_day_only: bool = False,
         insider_name: str | None = None,
-        ticker: str | None = None
+        ticker: str | None = None,
+        max_days_back: int = 14
     ) -> Dict[str, Any]:
         """
         Fetch recent insider purchase transactions with pagination and retry logic
@@ -44,6 +45,7 @@ class OpenInsiderScraper:
             previous_day_only: Only fetch transactions from previous day
             insider_name: Filter by specific insider name (case-insensitive partial match)
             ticker: Filter by specific stock ticker (uses OpenInsider's screener endpoint)
+            max_days_back: Maximum number of days back to fetch (default: 14 for 2-week horizon)
         
         Returns:
             Dictionary with transactions and filtering statistics
@@ -216,7 +218,30 @@ class OpenInsiderScraper:
                                 recommendation = "buy" if trade_type.startswith("P") else "sell"
                                 
                                 # Apply filters
-                                # Filter by previous day only
+                                # Filter by date horizon (2-week default)
+                                # Use filing date for consistency with backend filtering
+                                try:
+                                    filing_date = datetime.strptime(filing_date_text, "%Y-%m-%d")
+                                    cutoff_date = datetime.now() - timedelta(days=max_days_back)
+                                    
+                                    # If transaction is older than max_days_back, skip it
+                                    if filing_date < cutoff_date:
+                                        filter_stats["filtered_by_date"] += 1
+                                        # Since results are sorted by date (newest first),
+                                        # we can stop pagination early if we hit old dates
+                                        if not (insider_name or ticker):  # Don't stop if searching for specific insider/ticker
+                                            print(f"[OpenInsider] Reached transactions older than {max_days_back} days, stopping pagination", file=sys.stderr)
+                                            return {
+                                                "transactions": filtered_transactions,
+                                                "stats": filter_stats
+                                            }
+                                        continue
+                                except:
+                                    # Skip if date parsing fails
+                                    filter_stats["filtered_by_date"] += 1
+                                    continue
+                                
+                                # Filter by previous day only (if specified)
                                 if previous_day_only:
                                     try:
                                         trade_date = datetime.strptime(trade_date_text, "%Y-%m-%d")

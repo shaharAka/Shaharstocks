@@ -2118,7 +2118,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const stockData = stock as any;
           const previousAnalysis = stockData?.overallRating ? {
             overallRating: stockData.overallRating,
-            summary: stockData.summary || "No previous analysis available"
+            summary: stockData.summary || "No previous analysis available",
+            technicalAnalysis: stockData.technicalAnalysis ? {
+              trend: stockData.technicalAnalysis.trend,
+              momentum: stockData.technicalAnalysis.momentum,
+              score: stockData.technicalAnalysis.score,
+              signals: stockData.technicalAnalysis.signals
+            } : undefined
           } : undefined;
           
           // Get opportunity type from stock recommendation
@@ -4192,7 +4198,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
           const previousAnalysis = stockData?.overallRating ? {
             overallRating: stockData.overallRating,
-            summary: stockData.summary || "No previous analysis available"
+            summary: stockData.summary || "No previous analysis available",
+            technicalAnalysis: stockData.technicalAnalysis ? {
+              trend: stockData.technicalAnalysis.trend,
+              momentum: stockData.technicalAnalysis.momentum,
+              score: stockData.technicalAnalysis.score,
+              signals: stockData.technicalAnalysis.signals
+            } : undefined
           } : undefined;
           
           // Check if user owns this stock (real holdings only, not simulated)

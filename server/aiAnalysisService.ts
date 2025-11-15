@@ -292,7 +292,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     opportunityType?: "buy" | "sell"; // Type of opportunity (based on insider action)
     userOwnsPosition?: boolean; // Whether user currently owns this stock
     recentNews?: { title: string; sentiment: number; source: string }[];
-    previousAnalysis?: { overallRating: string; summary: string };
+    previousAnalysis?: { overallRating: string; summary: string; technicalAnalysis?: any }; // Include technical analysis from full AI analysis
   }): Promise<{
     recommendedStance: "buy" | "hold" | "sell";
     confidence: number; // 1-10
@@ -316,59 +316,80 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       ? "This is a BUY OPPORTUNITY - insiders recently BOUGHT shares, signaling potential upside."
       : "This is a SELL OPPORTUNITY - insiders recently SOLD shares, signaling potential downside or overvaluation.";
     
-    // Different stance rules based on ownership
+    // Build technical trend context from initial AI analysis if available
+    let trendContext = "";
+    if (previousAnalysis?.technicalAnalysis) {
+      const tech = previousAnalysis.technicalAnalysis;
+      const trend = tech.trend || "neutral"; // bullish, bearish, neutral
+      const momentum = tech.momentum || "weak"; // strong, moderate, weak
+      const score = typeof tech.score === "number" ? tech.score : 50; // 0-100, preserve 0 as valid bearish score
+      const signals = Array.isArray(tech.signals) ? tech.signals.slice(0, 3) : [];
+      
+      trendContext = `
+INITIAL AI TECHNICAL ANALYSIS (baseline trend from insider opportunity):
+- Trend: ${trend}
+- Momentum: ${momentum}
+- Technical Score: ${score}/100
+${signals.length > 0 ? `- Signals: ${signals.join(', ')}` : ''}`;
+    }
+    
+    // Different stance rules based on ownership - NOW WITH TREND AWARENESS
     let stanceRules: string;
     
     if (userOwnsPosition) {
-      // User owns the stock - focus on exit strategy
+      // User owns the stock - focus on exit strategy with trend-based ACT logic
       stanceRules = isBuyOpportunity
         ? `STANCE RULES for OWNED POSITION (Buy Opportunity):
-YOUR GOAL: Maximize gains or minimize losses on your existing position
+Use initial trend as baseline. Compare current price action to decide stance.
 
-- "hold" = Uptrend intact (+1% to +4%), no sell signals → let it run, trail stop
-- "sell" = Strong gain (+5%+) OR broken support (-3%+) → take profits or cut losses
-- "buy" = Dip (-2% to -4%) on low volume with support holding → average down if fundamentals strong
+ACT (buy/sell):
+- "sell" if price +5%+ AND initial trend weakening
+- "sell" if price -3%+ AND violates initial bullish trend (stop loss)
+- "buy" if price -2% to -4% AND initial trend still bullish/moderate (add to position)
 
-EXIT SIGNALS:
-- Take profit at +5-8% if near resistance or overbought
-- Stop loss at -3-5% if support breaks or fundamentals deteriorate
-- Trail stops on +6%+ gains to lock in profits`
-        : `STANCE RULES for OWNED POSITION (Sell Opportunity - Contrarian Hold):
-REMEMBER: Insiders sold, so you're holding a contrarian position
+HOLD:
+- Modest gains +1-4% with initial trend intact
+- Sideways action, initial trend neutral
 
-- "sell" = Any weakness (-2%+) OR sideways action → exit while you can, insiders were right
-- "hold" = Strong reversal (+4%+) with volume → position validated, trail stop
-- "buy" = RARELY - only if massive dip creates value AND fundamentals improved
+Decision: ACT when price confirms or violates initial trend. HOLD when unclear.`
+        : `STANCE RULES for OWNED POSITION (Sell Opportunity - Contrarian):
+You hold against insider sell. Prioritize capital preservation.
 
-HIGH ALERT:
-- This position goes against insider selling - be ready to exit quickly
-- Any negative catalyst = immediate sell
-- Set tight stop loss (-3% max)`;
+ACT (sell):
+- "sell" if ANY decline -2%+ (stop loss)
+- "sell" if gain +4%+ (take contrarian profit)
+
+HOLD (rare):
+- Small gain 0-3% with initial trend reversing bullish
+
+Decision: Default "sell" on ANY weakness. ACT = exit quickly.`
     } else {
-      // User doesn't own - focus on entry evaluation
+      // User doesn't own - focus on entry evaluation with trend-based ACT logic
       stanceRules = isBuyOpportunity
         ? `STANCE RULES for ENTRY DECISION (Buy Opportunity):
-YOUR GOAL: Decide if insider buying signal is still valid for entry NOW
+Use initial trend to validate insider signal for entry.
 
-- "buy" = Positive momentum (+2%+) OR dip with support (-2% to 0%) → insider signal still valid, enter
-- "hold" = Flat/sideways (-1% to +1%), waiting for breakout → insider signal unclear, wait
-- "sell" = Broken down (-3%+) OR negative catalysts → insider signal invalidated, avoid entry
+ACT:
+- "buy" if initial trend bullish/strong + price stable or up
+- "buy" if initial trend bullish/moderate + price -2% to -4% (dip entry)
+- "sell" if initial trend bearish/weak + price falling (avoid entry)
 
-ENTRY CRITERIA:
-- Buy on strength if +2-4% with volume (ride insider momentum)
-- Buy on weakness if -2-3% at support (entry discount)
-- Avoid if -5%+ (insider timing may be off, wait for reversal)`
+HOLD:
+- Initial trend neutral, price sideways (wait for clarity)
+- Initial trend bullish but price action mixed
+
+Decision: ACT when initial trend confirms insider buy signal. Avoid if trend weak.`
         : `STANCE RULES for ENTRY DECISION (Sell Opportunity):
-REMEMBER: Insiders sold - be very skeptical about buying
+Insiders sold. Default = avoid entry.
 
-- "sell" = Any uptrend (+2%+) → insiders were right, short or avoid
-- "hold" = Sideways (-1% to +1%) → wait for clearer direction, no entry
-- "buy" = ONLY if severe oversold (-6%+) AND strong reversal signals → contrarian value play
+ACT:
+- "sell" if initial trend bearish + price breaking down (avoid/short)
+- "buy" ONLY if initial trend STRONG bullish + massive oversold (rare contrarian)
 
-DEFAULT BIAS: AVOID ENTRY
-- Insiders know more than you - respect the sell signal
-- Only enter if overwhelmingly oversold with reversal confirmation
-- "buy" should be rare on sell opportunities`;
+HOLD:
+- Initial trend neutral, price sideways
+
+Decision: Default "sell" stance. ACT when trend confirms insider sell.`
     }
     
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.
@@ -384,6 +405,8 @@ CURRENT STATUS:
 - Previous Close: $${previousPrice.toFixed(2)}
 - Change: ${priceChange >= 0 ? '+' : ''}$${priceChange.toFixed(2)} (${priceChangePercent}%)
 
+${trendContext}
+
 ${previousAnalysis ? `PREVIOUS ANALYSIS CONTEXT:
 Rating: ${previousAnalysis.overallRating}
 Summary: ${previousAnalysis.summary}
@@ -395,17 +418,25 @@ ${recentNews.slice(0, 3).map(n => `- ${n.title} (${n.source}, sentiment: ${n.sen
 
 YOUR TASK: Provide an ACTION-ORIENTED brief (<120 words). Near-term traders MUST act on trends.
 
-Return JSON in this EXACT format:
-{
-  "recommendedStance": "buy" | "hold" | "sell",
-  "confidence": 1-10 (where 10 is highest confidence),
-  "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on NEAR-TERM action.",
-  "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
-}
+${trendContext ? `
+TREND-BASED DECISION MAKING:
+The initial AI trend is your BASELINE. Compare current price action against this baseline:
+- If price action CONFIRMS the trend → Consider ACT stance
+- If price action VIOLATES the trend (owned position) → Consider ACT stance (stop loss)
+- If price action is NEUTRAL → Consider HOLD stance
+` : ''}
 
 ${stanceRules}
 
-BE DECISIVE. Near-term traders need action, not patience.`;
+BE DECISIVE. Near-term traders need action, not patience.
+
+Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
+{
+  "recommendedStance": "buy" | "hold" | "sell",
+  "confidence": 1-10,
+  "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on NEAR-TERM action.",
+  "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
+}`;
 
     try {
       const response = await openai.chat.completions.create({

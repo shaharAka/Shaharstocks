@@ -890,6 +890,7 @@ function startSimulatedRuleExecutionJob() {
               // Create a simulated sell trade
               const total = currentPrice * quantityToSell;
               await storage.createTrade({
+                userId: holding.userId,
                 ticker: holding.ticker,
                 type: "sell",
                 quantity: quantityToSell,
@@ -1283,7 +1284,13 @@ function startDailyBriefJob() {
               const stockData = stock as any; // Cast to bypass type narrowing
               const previousAnalysis = stockData?.overallRating ? {
                 overallRating: stockData.overallRating,
-                summary: stockData.summary || "No previous analysis available"
+                summary: stockData.summary || "No previous analysis available",
+                technicalAnalysis: stockData.technicalAnalysis ? {
+                  trend: stockData.technicalAnalysis.trend,
+                  momentum: stockData.technicalAnalysis.momentum,
+                  score: stockData.technicalAnalysis.score,
+                  signals: stockData.technicalAnalysis.signals
+                } : undefined
               } : undefined;
               
               // Get opportunity type from stock recommendation
@@ -1345,8 +1352,7 @@ function startDailyBriefJob() {
                       message: `${ticker}: Stance changed from HOLD to SELL on your position`,
                       metadata: {
                         previousStance: 'hold',
-                        newStance: 'sell',
-                        confidence: brief.confidence
+                        newStance: 'sell'
                       },
                       isRead: false,
                     });

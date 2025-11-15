@@ -33,7 +33,8 @@ import { useState } from "react";
 import { LoadingStrikeBorder } from "@/components/loading-strike-border";
 
 export default function TickerDetail() {
-  const { ticker } = useParams<{ ticker: string }>();
+  const { ticker: rawTicker } = useParams<{ ticker: string }>();
+  const ticker = rawTicker?.toUpperCase();
   const { toast } = useToast();
   const { user: currentUser } = useUser();
   const [commentText, setCommentText] = useState("");
@@ -102,9 +103,14 @@ export default function TickerDetail() {
   // Follow mutation
   const followMutation = useMutation({
     mutationFn: async () => {
+      if (!ticker) {
+        throw new Error("Ticker is not defined");
+      }
+      console.log("[Follow] Attempting to follow:", ticker);
       return await apiRequest("POST", `/api/stocks/${ticker}/follow`, null);
     },
     onSuccess: () => {
+      console.log("[Follow] Successfully followed:", ticker);
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
@@ -115,9 +121,10 @@ export default function TickerDetail() {
       });
     },
     onError: (error: any) => {
+      console.error("[Follow] Error following stock:", error);
       const message = error.message?.includes("already following") 
         ? "You are already following this stock"
-        : "Failed to follow stock";
+        : `Failed to follow stock: ${error.message || 'Unknown error'}`;
       toast({
         title: "Error",
         description: message,
@@ -129,6 +136,9 @@ export default function TickerDetail() {
   // Unfollow mutation
   const unfollowMutation = useMutation({
     mutationFn: async () => {
+      if (!ticker) {
+        throw new Error("Ticker is not defined");
+      }
       return await apiRequest("DELETE", `/api/stocks/${ticker}/follow`, null);
     },
     onSuccess: () => {
@@ -247,7 +257,7 @@ export default function TickerDetail() {
           <Button
             variant="outline"
             onClick={() => unfollowMutation.mutate()}
-            disabled={unfollowMutation.isPending}
+            disabled={!ticker || unfollowMutation.isPending}
             data-testid="button-unfollow"
           >
             <Star className="h-4 w-4 mr-2 fill-current" />
@@ -257,7 +267,7 @@ export default function TickerDetail() {
           <Button
             variant="outline"
             onClick={() => followMutation.mutate()}
-            disabled={followMutation.isPending}
+            disabled={!ticker || followMutation.isPending}
             data-testid="button-follow"
           >
             <Star className="h-4 w-4 mr-2" />

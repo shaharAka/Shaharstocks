@@ -19,12 +19,15 @@ import {
   Pin,
   PinOff,
   ExternalLink,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Stock } from "@shared/schema";
 import { getTerm } from "@/lib/compliance";
 import { useUser } from "@/contexts/UserContext";
+import { StockTable } from "@/components/stock-table";
 
 // Extended Stock type with user status and AI analysis
 type StockWithUserStatus = Stock & {
@@ -38,6 +41,7 @@ type StockWithUserStatus = Stock & {
 };
 
 type SortOption = "aiScore" | "daysFromTrade" | "marketCap";
+type ViewMode = "cards" | "table";
 
 export default function Purchase() {
   const { toast } = useToast();
@@ -46,6 +50,7 @@ export default function Purchase() {
   // State management
   const [sortBy, setSortBy] = useState<SortOption>("aiScore");
   const [tickerSearch, setTickerSearch] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("cards");
 
   // Fetch opportunities
   const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
@@ -315,15 +320,39 @@ export default function Purchase() {
         </div>
       </div>
 
-      {/* Stats Bar */}
-      <div className="flex gap-4 text-sm">
-        <div>
-          <span className="text-muted-foreground">Total {getTerm("opportunities")}: </span>
-          <span className="font-medium" data-testid="text-total-count">{opportunities.length}</span>
+      {/* Stats Bar with View Toggle */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4 text-sm">
+          <div>
+            <span className="text-muted-foreground">Total {getTerm("opportunities")}: </span>
+            <span className="font-medium" data-testid="text-total-count">{opportunities.length}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Picked: </span>
+            <span className="font-medium" data-testid="text-picked-count">{pinnedOpportunities.length}</span>
+          </div>
         </div>
-        <div>
-          <span className="text-muted-foreground">Picked: </span>
-          <span className="font-medium" data-testid="text-picked-count">{pinnedOpportunities.length}</span>
+        
+        {/* View Mode Toggle */}
+        <div className="flex gap-2">
+          <Button
+            variant={viewMode === "table" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("table")}
+            data-testid="button-view-table"
+          >
+            <LayoutList className="h-4 w-4 mr-2" />
+            Table
+          </Button>
+          <Button
+            variant={viewMode === "cards" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("cards")}
+            data-testid="button-view-cards"
+          >
+            <LayoutGrid className="h-4 w-4 mr-2" />
+            Cards
+          </Button>
         </div>
       </div>
 
@@ -336,6 +365,15 @@ export default function Purchase() {
             </p>
           </CardContent>
         </Card>
+      ) : viewMode === "table" ? (
+        <StockTable
+          stocks={opportunities}
+          users={[]}
+          interests={[]}
+          commentCounts={[]}
+          analyses={analyses}
+          onStockClick={() => {}}
+        />
       ) : (
         <div className="space-y-6">
           {groupedOpportunities.map((group) => (

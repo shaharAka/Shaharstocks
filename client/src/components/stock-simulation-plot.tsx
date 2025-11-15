@@ -43,7 +43,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
 
   const createRuleMutation = useMutation({
     mutationFn: async (newRule: any) => {
-      return await apiRequest("/api/rules", "POST", newRule);
+      return await apiRequest("POST", "/api/rules", newRule);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/rules"] });

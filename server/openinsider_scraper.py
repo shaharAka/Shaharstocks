@@ -83,7 +83,7 @@ class OpenInsiderScraper:
                 if page > 1:
                     url += f"&page={page}"
             else:
-                # Use the reliable latest-insider-purchases-25k endpoint
+                # Use latest-insider-purchases-25k for recent purchases (original working URL)
                 url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
             
             last_error = None

@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, Pin } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, Pin, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Stock, User, StockInterestWithUser } from "@shared/schema";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
@@ -325,6 +325,9 @@ export function StockTable({
                   <div className="flex items-center gap-2">
                     {(stock as any).isPinned && (
                       <Pin className="h-3.5 w-3.5 text-primary fill-current" data-testid={`icon-pinned-${stock.ticker}`} />
+                    )}
+                    {(stock as any).isFollowing && (
+                      <Star className="h-3.5 w-3.5 text-primary fill-current" data-testid={`icon-following-${stock.ticker}`} />
                     )}
                     <span>{stock.ticker}</span>
                     {isNewStock(stock.ticker, stock.insiderTradeDate) && (

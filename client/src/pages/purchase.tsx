@@ -25,6 +25,7 @@ import {
   PinOff,
   Clock,
   MessageSquare,
+  Star,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -39,6 +40,7 @@ import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 type StockWithUserStatus = Stock & {
   userStatus: string;
   isPinned?: boolean;
+  isFollowing?: boolean;
   analysisJob?: {
     status: string;
     currentStep: string | null;
@@ -268,6 +270,7 @@ export default function Purchase() {
     });
 
     // Join AI scores and calculate days from trade
+    const followedTickers = new Set(followedStocks.map(f => f.ticker));
     const stocksWithScores = filtered.map(stock => {
       const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
       const daysSinceTrade = getDaysFromBuy(stock.insiderTradeDate);
@@ -276,6 +279,7 @@ export default function Purchase() {
         integratedScore: analysis?.integratedScore ?? null,
         aiScore: analysis?.aiScore ?? null,
         daysSinceTrade: daysSinceTrade,
+        isFollowing: followedTickers.has(stock.ticker),
       };
     });
 
@@ -313,7 +317,7 @@ export default function Purchase() {
     });
 
     return sorted;
-  }, [stocks, analyses, sortBy, tickerSearch]);
+  }, [stocks, analyses, sortBy, tickerSearch, followedStocks]);
 
   // Get pinned opportunities
   const pinnedOpportunities = useMemo(() => {
@@ -570,6 +574,9 @@ export default function Purchase() {
                       )}
                       {stock.isPinned && (
                         <Pin className="h-3.5 w-3.5 text-primary fill-current" />
+                      )}
+                      {stock.isFollowing && (
+                        <Star className="h-3.5 w-3.5 text-primary fill-current" data-testid={`icon-following-${stock.ticker}`} />
                       )}
                     </div>
                     <CardDescription className="text-xs line-clamp-1" data-testid={`text-company-${stock.ticker}`}>

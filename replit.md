@@ -17,10 +17,11 @@ Preferred communication style: Simple, everyday language.
 The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tailwind CSS for styling, supporting light/dark modes. Typography uses Inter for UI and JetBrains Mono for numerical data. A mobile-first, 12-column CSS Grid layout ensures responsiveness, with comprehensive mobile optimization for touch targets and responsive layouts across all critical components. Visuals include auto-scaling charts, color-coded avatars, and interactive guided tours using `react-joyride` for onboarding. **Tutorial System**: Centralized TutorialManager component maps routes to tutorials, enabling global help button to trigger context-appropriate tours from any page. Auto-starts on first visit, supports manual replay via help button, and preserves state during tab navigation.
 
 ### Technical Implementations
-- **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (optimistic updates, cache invalidation), React Hook Form with Zod for validation.
+- **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (optimistic updates, cache invalidation with user-scoped query keys), React Hook Form with Zod for validation.
 - **Backend**: Express.js with TypeScript, RESTful API design, JSON body parsing, Zod schema validation.
 - **Database**: PostgreSQL (Neon serverless) with Drizzle ORM for type-safe queries and migrations, utilizing UUID primary keys, Decimal types, JSONB, and timestamp tracking.
 - **Data Models**: Key entities include Stocks, Portfolio Holdings, Trades, Trigger-based Trading Rules (flexible scopes, conditions, actions), Backtest Jobs/Price Data/Scenarios, Telegram Config, OpenInsider Config, Users, and Stock Comments.
+- **Cache Isolation**: All trading rules queries use user-scoped cache keys `["/api/rules", userId]` with `enabled: !!user` guards to prevent cross-user contamination. Implemented across stock-simulation-plot.tsx, use-portfolio-data.ts hook, simulation.tsx, rules.tsx, management.tsx, and portfolio/management.tsx components.
 
 ### Feature Specifications
 - **PayPal Subscription Integration**: Production-ready automated subscription activation with secure webhook verification.

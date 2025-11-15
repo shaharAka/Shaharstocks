@@ -104,9 +104,9 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <TrendingUpIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Dual-Agent AI Analysis</h3>
+                  <h3 className="font-semibold text-sm mb-1">AI-Scored Opportunities</h3>
                   <p className="text-sm text-muted-foreground">
-                    Micro agent analyzes SEC filings and fundamentals, macro agent evaluates industry trends using sector ETFs
+                    Browse stocks from SEC insider trading filings with AI scores and buy/hold/sell recommendations. Follow stocks to receive daily briefs with fresh trading guidance.
                   </p>
                 </div>
               </div>
@@ -114,9 +114,9 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Automated Trading & Backtesting</h3>
+                  <h3 className="font-semibold text-sm mb-1">Smart Notifications & Daily Briefs</h3>
                   <p className="text-sm text-muted-foreground">
-                    Set trigger-based rules, simulate strategies with historical data, track portfolio in real-time
+                    Get alerts for high-score buy/sell signals, popular stocks, and stance changes. Followed stocks receive daily AI briefs with confidence scores and key highlights.
                   </p>
                 </div>
               </div>
@@ -124,9 +124,9 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Insider Trading Alerts</h3>
+                  <h3 className="font-semibold text-sm mb-1">Trading Rules & Simulation</h3>
                   <p className="text-sm text-muted-foreground">
-                    SEC regulatory filing integration for tracking corporate insider transactions and C-suite buying activity
+                    Create automated trading rules based on price triggers. Run backtests on historical data and visualize rule boundaries with simulation charts.
                   </p>
                 </div>
               </div>

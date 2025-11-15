@@ -179,9 +179,9 @@ export default function Signup() {
                   <div className="flex items-start gap-3">
                     <TrendingUpIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                     <div>
-                      <h3 className="font-semibold mb-1">Professional Stock Analysis</h3>
+                      <h3 className="font-semibold mb-1">AI-Powered Stock Analysis</h3>
                       <p className="text-sm text-muted-foreground">
-                        signal2 provides real-time portfolio tracking, dual-agent AI analysis powered by SEC filings and sector ETF data, and automated trading rules.
+                        Access insider trading opportunities from SEC filings with AI scoring, daily briefs for followed stocks, and smart notifications for high-value buy/sell signals.
                       </p>
                     </div>
                   </div>
@@ -189,9 +189,9 @@ export default function Signup() {
                   <div className="flex items-start gap-3">
                     <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                     <div>
-                      <h3 className="font-semibold mb-1">Premium Managed Services</h3>
+                      <h3 className="font-semibold mb-1">Trading Tools & Collaboration</h3>
                       <p className="text-sm text-muted-foreground">
-                        Get access to insider trading alerts via Telegram, comprehensive backtesting simulations, and multi-user collaboration features.
+                        Create automated trading rules, run backtests with simulation charts, and collaborate with your team through stock comments and interest markers.
                       </p>
                     </div>
                   </div>
@@ -199,9 +199,9 @@ export default function Signup() {
                   <div className="flex items-start gap-3">
                     <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                     <div>
-                      <h3 className="font-semibold mb-1">About Subscription Charges</h3>
+                      <h3 className="font-semibold mb-1">Managed Data & Infrastructure</h3>
                       <p className="text-sm text-muted-foreground">
-                        Subscription fees cover connections to managed premium data services (Alpha Vantage, Finnhub, OpenAI), secure deployment infrastructure, and ongoing platform maintenance.
+                        Subscription includes managed connections to premium data services (Alpha Vantage, Finnhub, OpenAI), secure cloud deployment, and continuous platform updates.
                       </p>
                     </div>
                   </div>
@@ -255,9 +255,9 @@ export default function Signup() {
               <div className="flex items-start gap-3">
                 <TrendingUpIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Dual-Agent AI Analysis</h3>
+                  <h3 className="font-semibold text-sm mb-1">AI-Scored Opportunities</h3>
                   <p className="text-sm text-muted-foreground">
-                    Micro agent analyzes SEC filings and fundamentals, macro agent evaluates industry trends using sector ETFs
+                    Browse stocks from SEC insider trading filings with AI scores and buy/hold/sell recommendations. Follow stocks to receive daily briefs with fresh trading guidance.
                   </p>
                 </div>
               </div>
@@ -265,9 +265,9 @@ export default function Signup() {
               <div className="flex items-start gap-3">
                 <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Automated Trading & Backtesting</h3>
+                  <h3 className="font-semibold text-sm mb-1">Smart Notifications & Daily Briefs</h3>
                   <p className="text-sm text-muted-foreground">
-                    Set trigger-based rules, simulate strategies with historical data, track portfolio in real-time
+                    Get alerts for high-score buy/sell signals, popular stocks, and stance changes. Followed stocks receive daily AI briefs with confidence scores and key highlights.
                   </p>
                 </div>
               </div>
@@ -275,9 +275,9 @@ export default function Signup() {
               <div className="flex items-start gap-3">
                 <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Insider Trading Alerts</h3>
+                  <h3 className="font-semibold text-sm mb-1">Trading Rules & Simulation</h3>
                   <p className="text-sm text-muted-foreground">
-                    Telegram integration for real-time stock recommendations and insider transaction monitoring
+                    Create automated trading rules based on price triggers. Run backtests on historical data and visualize rule boundaries with simulation charts.
                   </p>
                 </div>
               </div>

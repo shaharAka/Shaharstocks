@@ -1848,7 +1848,14 @@ export class DatabaseStorage implements IStorage {
     try {
       console.log(`[Storage] getStocksWithUserStatus called for userId: ${userId}, limit: ${limit}`);
       
-      // Get all stocks with user statuses, sorted by latest trade date
+      // Calculate 2 weeks ago date
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      
+      // Get all stocks with user statuses, filtered by 2-week horizon unless followed
+      // Stocks must be either:
+      // 1. Within last 2 weeks (insiderTradeDate >= 2 weeks ago), OR
+      // 2. Followed by the user
       const results = await db
         .select({
           stock: stocks,
@@ -1856,6 +1863,7 @@ export class DatabaseStorage implements IStorage {
           userApprovedAt: userStockStatuses.approvedAt,
           userRejectedAt: userStockStatuses.rejectedAt,
           userDismissedAt: userStockStatuses.dismissedAt,
+          isFollowing: followedStocks.ticker,
         })
         .from(stocks)
         .leftJoin(
@@ -1864,6 +1872,16 @@ export class DatabaseStorage implements IStorage {
             eq(stocks.ticker, userStockStatuses.ticker),
             eq(userStockStatuses.userId, userId)
           )
+        )
+        .leftJoin(
+          followedStocks,
+          and(
+            eq(stocks.ticker, followedStocks.ticker),
+            eq(followedStocks.userId, userId)
+          )
+        )
+        .where(
+          sql`(${stocks.insiderTradeDate} >= ${twoWeeksAgo.toISOString()} OR ${followedStocks.ticker} IS NOT NULL)`
         )
         .orderBy(desc(stocks.insiderTradeDate))
         .limit(limit);

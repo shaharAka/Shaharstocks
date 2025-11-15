@@ -3185,6 +3185,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       console.log(`[OpeninsiderFetch] Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
+      console.log(`[OpeninsiderFetch] BUY transactions: ${transactions.filter(t => t.recommendation === 'buy').length}`);
+      console.log(`[OpeninsiderFetch] SELL transactions: ${transactions.filter(t => t.recommendation === 'sell').length}`);
       
       const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
                                    stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 
@@ -3225,6 +3227,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       console.log(`[OpeninsiderFetch] ${newTransactions.length} new transactions after duplicate check`);
+      console.log(`[OpeninsiderFetch] New BUY transactions: ${newTransactions.filter(t => t.recommendation === 'buy').length}`);
+      console.log(`[OpeninsiderFetch] New SELL transactions: ${newTransactions.filter(t => t.recommendation === 'sell').length}`);
       
       if (newTransactions.length === 0) {
         await storage.updateOpeninsiderSyncStatus();

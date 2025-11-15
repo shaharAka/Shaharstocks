@@ -1246,7 +1246,7 @@ function startDailySummaryJob() {
           log(`[DailySummary] Generating summary for ${ticker}...`);
           
           // Check if there's already a pending or processing job for this ticker
-          const existingJobs = await storage.getAiAnalysisJobsForTicker(ticker);
+          const existingJobs = await storage.getJobsByTicker(ticker);
           const hasPendingJob = existingJobs.some(
             (job: any) => job.status === "pending" || job.status === "processing"
           );

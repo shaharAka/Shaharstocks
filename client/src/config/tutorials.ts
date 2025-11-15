@@ -54,7 +54,7 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
     steps: [
       {
         target: "body",
-        content: "Welcome to Opportunities! This shows stocks with insider trading activity from SEC filings, scored and filtered by AI. Use the dropdown filters to see BUY recommendations (high scores >60) or SELL recommendations (low scores <70), and filter by team interest or recency.",
+        content: "Welcome to Opportunities! This shows stocks with insider trading activity from SEC filings, scored and filtered by AI. Use the dropdown filters to see BUY recommendations (high signals >60) or SELL recommendations (low scores <70), and filter by team interest or recency.",
         placement: "center",
       },
       {

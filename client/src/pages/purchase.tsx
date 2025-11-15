@@ -493,7 +493,7 @@ export default function Purchase() {
               onClick={() => setFunnelSection("worthExploring")}
               data-testid="filter-worth-exploring"
             >
-              High Score ({funnelSections.worthExploring?.length || 0})
+              High Signal ({funnelSections.worthExploring?.length || 0})
             </Badge>
             <Badge
               variant={funnelSection === "recents" ? "default" : "outline"}

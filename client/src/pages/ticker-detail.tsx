@@ -18,7 +18,10 @@ import {
   Globe,
   Building2,
   Newspaper,
-  TrendingUpIcon
+  TrendingUpIcon,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  MinusCircle
 } from "lucide-react";
 import { Link } from "wouter";
 import type { Stock, StockInterestWithUser, StockCommentWithUser } from "@shared/schema";
@@ -380,57 +383,95 @@ export default function TickerDetail() {
                     const priceChange = parseFloat(brief.priceChange || 0);
                     const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
                     const isPositive = priceChange >= 0;
+                    const stance = brief.recommendedStance?.toLowerCase();
+                    
+                    const getStanceConfig = () => {
+                      if (stance === "buy") {
+                        return {
+                          icon: ArrowUpCircle,
+                          text: "Consider Buying",
+                          color: "text-green-600 dark:text-green-400",
+                          bgColor: "bg-green-50 dark:bg-green-950/20",
+                          borderColor: "border-l-green-500",
+                        };
+                      } else if (stance === "sell") {
+                        return {
+                          icon: ArrowDownCircle,
+                          text: "Consider Selling",
+                          color: "text-red-600 dark:text-red-400",
+                          bgColor: "bg-red-50 dark:bg-red-950/20",
+                          borderColor: "border-l-red-500",
+                        };
+                      } else {
+                        return {
+                          icon: MinusCircle,
+                          text: "Hold Position",
+                          color: "text-muted-foreground",
+                          bgColor: "bg-muted/30",
+                          borderColor: "border-l-gray-400 dark:border-l-gray-600",
+                        };
+                      }
+                    };
+                    
+                    const config = getStanceConfig();
+                    const StanceIcon = config.icon;
                     
                     return (
-                      <div key={brief.id} className="border rounded-lg p-4 space-y-3">
-                        {/* Header with date, stance, and price info */}
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
-                              {new Date(brief.briefDate).toLocaleDateString()}
-                            </Badge>
-                            <Badge 
-                              variant={
-                                brief.recommendedStance === "buy" ? "default" : 
-                                brief.recommendedStance === "sell" ? "destructive" : 
-                                "secondary"
-                              }
-                              data-testid={`badge-stance-${brief.id}`}
-                            >
-                              {brief.recommendedStance?.toUpperCase()}
-                            </Badge>
-                            <Badge variant="outline" data-testid={`badge-confidence-${brief.id}`}>
-                              Confidence: {brief.confidence}/10
-                            </Badge>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-mono font-medium">
-                              ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
-                            </p>
-                            <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                              {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
-                            </p>
+                      <div 
+                        key={brief.id} 
+                        className={`border rounded-lg border-l-4 ${config.borderColor} overflow-hidden`}
+                      >
+                        {/* Action Banner */}
+                        <div className={`${config.bgColor} px-4 py-3 border-b`}>
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <StanceIcon className={`h-6 w-6 ${config.color}`} />
+                              <div>
+                                <h3 className={`text-lg font-bold ${config.color}`} data-testid={`action-text-${brief.id}`}>
+                                  {config.text}
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                  Confidence: {brief.confidence}/10
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-lg font-mono font-bold">
+                                ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
+                              </p>
+                              <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+                              </p>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Brief text */}
-                        <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
-                          {brief.briefText}
-                        </p>
+                        {/* Content */}
+                        <div className="p-4 space-y-3">
+                          {/* Date */}
+                          <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
+                            {new Date(brief.briefDate).toLocaleDateString()}
+                          </Badge>
 
-                        {/* Key highlights */}
-                        {brief.keyHighlights && brief.keyHighlights.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium mb-1">Key Highlights</h4>
-                            <ul className="list-disc list-inside space-y-1">
-                              {brief.keyHighlights.map((highlight: string, idx: number) => (
-                                <li key={idx} className="text-sm text-muted-foreground">
-                                  {highlight}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
+                          {/* Brief text */}
+                          <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
+                            {brief.briefText}
+                          </p>
+
+                          {/* Key highlights */}
+                          {brief.keyHighlights && brief.keyHighlights.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium mb-1">Key Highlights</h4>
+                              <ul className="list-disc list-inside space-y-1">
+                                {brief.keyHighlights.map((highlight: string, idx: number) => (
+                                  <li key={idx} className="text-sm text-muted-foreground">
+                                    {highlight}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

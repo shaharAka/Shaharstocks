@@ -2992,11 +2992,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let filteredNoQuote = 0;
       
       console.log(`[OpeninsiderFetch] Processing ${newTransactions.length} new transactions with backend filters...`);
-      console.log(`[OpeninsiderFetch] Market cap filter: >$${minMarketCap}M, Options deal filter: ${optionsDealThreshold}%`);
       
       for (const transaction of newTransactions) {
         try {
-          console.log(`[OpeninsiderFetch] → Processing ${transaction.ticker} (${transaction.insiderName})...`);
           // Get pre-fetched quote
           const quote = quotesMap.get(transaction.ticker);
           if (!quote || !quote.currentPrice) {
@@ -3032,6 +3030,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Create stock recommendation with complete information
+          console.log(`[OpeninsiderFetch] Creating stock for ${transaction.ticker}...`);
           const newStock = await storage.createStock({
             ticker: transaction.ticker,
             companyName: transaction.companyName || transaction.ticker,
@@ -3088,7 +3087,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         } catch (err) {
-          console.error(`[OpeninsiderFetch] Error processing ${transaction.ticker}:`, err);
+          console.error(`[OpeninsiderFetch] ❌ Error processing ${transaction.ticker}:`, err);
+          console.error(`[OpeninsiderFetch] Error details:`, {
+            ticker: transaction.ticker,
+            insiderName: transaction.insiderName,
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined
+          });
         }
       }
 

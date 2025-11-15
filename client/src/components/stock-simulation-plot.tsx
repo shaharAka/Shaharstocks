@@ -276,16 +276,18 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis 
               dataKey="date" 
-              className="stroke-muted-foreground"
-              tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
+              stroke="hsl(var(--muted-foreground))"
+              tick={{ fill: "currentColor", fontSize: 12 }}
+              style={{ color: "hsl(var(--foreground))" }}
               tickFormatter={(value) => {
                 const date = new Date(value);
                 return `${date.getMonth() + 1}/${date.getDate()}`;
               }}
             />
             <YAxis 
-              className="stroke-muted-foreground"
-              tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }}
+              stroke="hsl(var(--muted-foreground))"
+              tick={{ fill: "currentColor", fontSize: 12 }}
+              style={{ color: "hsl(var(--foreground))" }}
               tickFormatter={(value) => `$${value.toFixed(0)}`}
               domain={['auto', 'auto']}
             />

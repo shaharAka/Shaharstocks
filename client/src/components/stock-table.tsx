@@ -205,7 +205,7 @@ export function StockTable({
                 </Button>
               </TableHead>
               <TableHead className="hidden md:table-cell min-w-[120px]">Company</TableHead>
-              <TableHead className="hidden min-w-[70px]">
+              <TableHead className="min-w-[70px]">
                 <Button
                   variant="ghost"
                   size="lg"
@@ -213,7 +213,7 @@ export function StockTable({
                   className="px-2"
                   data-testid="sort-recommendation"
                 >
-                  Rec.
+                  Type
                   <SortIcon field="recommendation" />
                 </Button>
               </TableHead>
@@ -347,7 +347,7 @@ export function StockTable({
                 <TableCell className="hidden md:table-cell max-w-xs truncate text-xs text-muted-foreground py-2" data-testid={`cell-company-${stock.ticker}`}>
                   {stock.companyName}
                 </TableCell>
-                <TableCell className="hidden">
+                <TableCell className="py-2">
                   {stock.recommendation && (
                     <Badge
                       variant={stock.recommendation.toLowerCase().includes("buy") ? "default" : "destructive"}

@@ -2121,11 +2121,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
+      const ticker = req.params.ticker.toUpperCase();
       const validatedData = insertFollowedStockSchema.parse({
-        ticker: req.params.ticker.toUpperCase(),
+        ticker,
         userId: req.session.userId,
       });
       const follow = await storage.followStock(validatedData);
+      
+      // Trigger immediate "day 0" analysis for this stock
+      try {
+        console.log(`[Follow] Triggering day 0 analysis for ${ticker}`);
+        await storage.enqueueAnalysisJob(ticker, "follow_day_0", "high");
+      } catch (analysisError) {
+        console.error(`[Follow] Failed to enqueue analysis for ${ticker}:`, analysisError);
+        // Don't fail the follow request if analysis enqueue fails
+      }
+      
       res.status(201).json(follow);
     } catch (error) {
       console.error("Follow stock error:", error);
@@ -2160,11 +2171,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let followedCount = 0;
       for (const ticker of tickers) {
         try {
+          const upperTicker = ticker.toUpperCase();
           await storage.followStock({
-            ticker: ticker.toUpperCase(),
+            ticker: upperTicker,
             userId: req.session.userId,
           });
           followedCount++;
+          
+          // Trigger immediate "day 0" analysis for each followed stock
+          try {
+            console.log(`[BulkFollow] Triggering day 0 analysis for ${upperTicker}`);
+            await storage.enqueueAnalysisJob(upperTicker, "follow_day_0", "high");
+          } catch (analysisError) {
+            console.error(`[BulkFollow] Failed to enqueue analysis for ${upperTicker}:`, analysisError);
+            // Don't fail the bulk follow if analysis enqueue fails
+          }
         } catch (error) {
           console.error(`Failed to follow ${ticker}:`, error);
         }

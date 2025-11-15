@@ -1,18 +1,41 @@
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Star, TrendingUp, TrendingDown } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  ArrowLeft, 
+  Star, 
+  TrendingUp, 
+  TrendingDown, 
+  ExternalLink,
+  MessageSquare,
+  Users,
+  Calendar,
+  Globe,
+  Building2,
+  Newspaper,
+  TrendingUpIcon
+} from "lucide-react";
 import { Link } from "wouter";
-import type { Stock } from "@shared/schema";
+import type { Stock, StockInterestWithUser, StockCommentWithUser } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useUser } from "@/contexts/UserContext";
+import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { formatDistanceToNow } from "date-fns";
+import { Textarea } from "@/components/ui/textarea";
+import { useState } from "react";
 
 export default function TickerDetail() {
   const { ticker } = useParams<{ ticker: string }>();
   const { toast } = useToast();
+  const { user: currentUser } = useUser();
+  const [commentText, setCommentText] = useState("");
 
   // Fetch stock details
   const { data: stock, isLoading: stockLoading } = useQuery<Stock>({
@@ -23,6 +46,30 @@ export default function TickerDetail() {
   // Fetch daily summaries
   const { data: dailySummaries = [], isLoading: summariesLoading } = useQuery<any[]>({
     queryKey: ["/api/stocks", ticker, "daily-summaries"],
+    enabled: !!ticker,
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  // Fetch AI analysis
+  const { data: aiAnalysis } = useQuery<any>({
+    queryKey: ["/api/stocks", ticker, "analysis"],
+    enabled: !!ticker,
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  // Fetch comments
+  const { data: comments = [] } = useQuery<StockCommentWithUser[]>({
+    queryKey: ["/api/stocks", ticker, "comments"],
+    enabled: !!ticker,
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  // Fetch interests
+  const { data: interests = [] } = useQuery<StockInterestWithUser[]>({
+    queryKey: ["/api/stocks", ticker, "interests"],
     enabled: !!ticker,
     retry: false,
     meta: { ignoreError: true },
@@ -49,6 +96,32 @@ export default function TickerDetail() {
       });
     },
   });
+
+  // Add comment mutation
+  const addCommentMutation = useMutation({
+    mutationFn: async (text: string) => {
+      return await apiRequest("POST", `/api/stocks/${ticker}/comments`, { comment: text });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "comments"] });
+      setCommentText("");
+      toast({
+        title: "Comment added",
+        description: "Your comment has been posted",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add comment",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const getInitials = (name: string) => {
+    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  };
 
   if (stockLoading) {
     return (
@@ -83,10 +156,12 @@ export default function TickerDetail() {
   const priceChangePercent = (priceChange / previousPrice) * 100;
   const isPositive = priceChange >= 0;
 
+  const newsItems = (stock as any).news || [];
+
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <Button
             variant="outline"
@@ -121,126 +196,453 @@ export default function TickerDetail() {
         </Button>
       </div>
 
-      {/* Price Card */}
+      {/* Price Overview */}
       <Card>
-        <CardHeader>
-          <CardTitle>Current Price</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-baseline gap-4">
-            <span className="text-4xl font-bold font-mono" data-testid="text-current-price">
-              ${currentPrice.toFixed(2)}
-            </span>
-            <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              {isPositive ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
-              <span className="text-lg font-medium" data-testid="text-price-change">
-                {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
-              </span>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-sm text-muted-foreground mb-2">Current Price</h3>
+              <div className="flex items-baseline gap-4">
+                <span className="text-4xl font-bold font-mono" data-testid="text-current-price">
+                  ${currentPrice.toFixed(2)}
+                </span>
+                <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {isPositive ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+                  <span className="text-lg font-medium" data-testid="text-price-change">
+                    {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {stock.marketCap && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Market Cap</p>
+                  <p className="text-lg font-medium" data-testid="text-market-cap">{stock.marketCap}</p>
+                </div>
+              )}
+              {stock.peRatio && (
+                <div>
+                  <p className="text-sm text-muted-foreground">P/E Ratio</p>
+                  <p className="text-lg font-medium" data-testid="text-pe-ratio">{parseFloat(stock.peRatio).toFixed(2)}</p>
+                </div>
+              )}
             </div>
           </div>
-          {stock.marketCap && (
-            <div className="mt-4">
-              <span className="text-sm text-muted-foreground">Market Cap: </span>
-              <span className="text-sm font-medium" data-testid="text-market-cap">{stock.marketCap}</span>
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* Daily Summary Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Daily Analysis Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {summariesLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-          ) : dailySummaries.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Daily analysis summaries will appear here once generated. AI-powered micro and macro analysis runs daily for followed stocks.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {dailySummaries.map((summary: any) => (
-                <div key={summary.id} className="border-l-4 border-l-primary pl-4 py-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline" data-testid={`badge-date-${summary.summaryDate}`}>
-                      {new Date(summary.summaryDate).toLocaleDateString()}
-                    </Badge>
-                    {summary.aiScore && (
-                      <Badge variant={summary.aiScore > 7 ? "default" : "secondary"} data-testid={`badge-score-${summary.id}`}>
-                        AI Score: {summary.aiScore}/10
-                      </Badge>
-                    )}
-                  </div>
-                  {summary.microAnalysis && (
-                    <div className="mb-2">
-                      <h4 className="text-sm font-medium mb-1">Micro Analysis</h4>
-                      <p className="text-sm text-muted-foreground" data-testid={`text-micro-${summary.id}`}>
-                        {summary.microAnalysis}
-                      </p>
-                    </div>
-                  )}
-                  {summary.macroAnalysis && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-1">Macro Analysis</h4>
-                      <p className="text-sm text-muted-foreground" data-testid={`text-macro-${summary.id}`}>
-                        {summary.macroAnalysis}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Insider Trade Info */}
-      {stock.insiderPrice && (
+      {/* Candlestick Chart */}
+      {stock.candlesticks && stock.candlesticks.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Insider Trade Information</CardTitle>
+            <CardTitle>Price Chart</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Insider Price</p>
-                <p className="text-lg font-mono font-medium" data-testid="text-insider-price">
-                  ${parseFloat(stock.insiderPrice).toFixed(2)}
-                </p>
-              </div>
-              {stock.insiderTradeDate && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Trade Date</p>
-                  <p className="text-lg font-medium" data-testid="text-trade-date">
-                    {new Date(stock.insiderTradeDate).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-              {stock.insiderName && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Insider Name</p>
-                  <p className="text-lg font-medium" data-testid="text-insider-name">
-                    {stock.insiderName}
-                  </p>
-                </div>
-              )}
-              {stock.insiderTitle && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Insider Title</p>
-                  <p className="text-lg font-medium" data-testid="text-insider-title">
-                    {stock.insiderTitle}
-                  </p>
-                </div>
-              )}
-            </div>
+            <MiniCandlestickChart
+              data={stock.candlesticks}
+              height={200}
+            />
           </CardContent>
         </Card>
       )}
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="summary" className="w-full">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
+          <TabsTrigger value="news">News</TabsTrigger>
+          <TabsTrigger value="insider">Insider</TabsTrigger>
+          <TabsTrigger value="discussion">
+            Discussion
+            {comments.length > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {comments.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Daily Summary Tab */}
+        <TabsContent value="summary" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Daily Analysis Summary</CardTitle>
+              <CardDescription>
+                AI-powered micro and macro analysis runs daily for followed stocks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {summariesLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              ) : dailySummaries.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Daily analysis summaries will appear here once generated. The first analysis will run shortly after following this stock.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {dailySummaries.map((summary: any) => (
+                    <div key={summary.id} className="border-l-4 border-l-primary pl-4 py-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline" data-testid={`badge-date-${summary.summaryDate}`}>
+                          {new Date(summary.summaryDate).toLocaleDateString()}
+                        </Badge>
+                        {summary.aiScore && (
+                          <Badge variant={summary.aiScore > 7 ? "default" : "secondary"} data-testid={`badge-score-${summary.id}`}>
+                            AI Score: {summary.aiScore}/10
+                          </Badge>
+                        )}
+                      </div>
+                      {summary.microAnalysis && (
+                        <div className="mb-2">
+                          <h4 className="text-sm font-medium mb-1">Micro Analysis</h4>
+                          <p className="text-sm text-muted-foreground" data-testid={`text-micro-${summary.id}`}>
+                            {summary.microAnalysis}
+                          </p>
+                        </div>
+                      )}
+                      {summary.macroAnalysis && (
+                        <div>
+                          <h4 className="text-sm font-medium mb-1">Macro Analysis</h4>
+                          <p className="text-sm text-muted-foreground" data-testid={`text-macro-${summary.id}`}>
+                            {summary.macroAnalysis}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Company Information */}
+          {(stock.description || stock.industry || stock.country || stock.webUrl) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  Company Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {stock.description && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">About</h4>
+                    <p className="text-sm text-muted-foreground" data-testid="text-description">
+                      {stock.description}
+                    </p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {stock.industry && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Industry</p>
+                      <p className="font-medium" data-testid="text-industry">{stock.industry}</p>
+                    </div>
+                  )}
+                  {stock.country && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Country</p>
+                      <p className="font-medium" data-testid="text-country">{stock.country}</p>
+                    </div>
+                  )}
+                  {stock.ipo && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">IPO Date</p>
+                      <p className="font-medium" data-testid="text-ipo">{stock.ipo}</p>
+                    </div>
+                  )}
+                </div>
+                {stock.webUrl && (
+                  <Button variant="outline" size="sm" asChild data-testid="button-website">
+                    <a href={stock.webUrl} target="_blank" rel="noopener noreferrer">
+                      <Globe className="h-4 w-4 mr-2" />
+                      Visit Website
+                      <ExternalLink className="h-3 w-3 ml-2" />
+                    </a>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* AI Analysis Tab */}
+        <TabsContent value="analysis" className="space-y-4">
+          {aiAnalysis ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUpIcon className="h-5 w-5" />
+                  Complete AI Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {aiAnalysis.confidenceScore !== undefined && (
+                  <div>
+                    <Badge variant={aiAnalysis.confidenceScore > 70 ? "default" : "secondary"}>
+                      Confidence Score: {aiAnalysis.confidenceScore}/100
+                    </Badge>
+                  </div>
+                )}
+                {aiAnalysis.summary && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Summary</h4>
+                    <p className="text-sm text-muted-foreground">{aiAnalysis.summary}</p>
+                  </div>
+                )}
+                {aiAnalysis.strengths && aiAnalysis.strengths.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Strengths</h4>
+                    <ul className="list-disc list-inside space-y-1">
+                      {aiAnalysis.strengths.map((s: string, i: number) => (
+                        <li key={i} className="text-sm text-muted-foreground">{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {aiAnalysis.weaknesses && aiAnalysis.weaknesses.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Weaknesses</h4>
+                    <ul className="list-disc list-inside space-y-1">
+                      {aiAnalysis.weaknesses.map((w: string, i: number) => (
+                        <li key={i} className="text-sm text-muted-foreground">{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {aiAnalysis.redFlags && aiAnalysis.redFlags.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 text-red-600 dark:text-red-400">Red Flags</h4>
+                    <ul className="list-disc list-inside space-y-1">
+                      {aiAnalysis.redFlags.map((r: string, i: number) => (
+                        <li key={i} className="text-sm text-red-600 dark:text-red-400">{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <p className="text-muted-foreground">No AI analysis available yet</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* News Tab */}
+        <TabsContent value="news" className="space-y-4">
+          {newsItems.length > 0 ? (
+            newsItems.map((item: any, index: number) => (
+              <Card key={index}>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-start justify-between gap-4">
+                    <span>{item.headline}</span>
+                    <Button variant="ghost" size="sm" asChild>
+                      <a href={item.url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  </CardTitle>
+                  <CardDescription className="flex items-center gap-2">
+                    <Newspaper className="h-4 w-4" />
+                    {item.source}
+                    <span>•</span>
+                    <Calendar className="h-4 w-4" />
+                    {new Date(item.datetime * 1000).toLocaleDateString()}
+                  </CardDescription>
+                </CardHeader>
+                {item.summary && (
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">{item.summary}</p>
+                  </CardContent>
+                )}
+              </Card>
+            ))
+          ) : (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <p className="text-muted-foreground">No news available</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Insider Tab */}
+        <TabsContent value="insider" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Insider Trade Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {stock.insiderPrice && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Insider Price</p>
+                    <p className="text-lg font-mono font-medium" data-testid="text-insider-price">
+                      ${parseFloat(stock.insiderPrice).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+                {stock.insiderQuantity && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Shares</p>
+                    <p className="text-lg font-medium" data-testid="text-insider-quantity">
+                      {stock.insiderQuantity.toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                {stock.insiderTradeDate && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Trade Date</p>
+                    <p className="text-lg font-medium" data-testid="text-trade-date">
+                      {stock.insiderTradeDate}
+                    </p>
+                  </div>
+                )}
+                {stock.marketPriceAtInsiderDate && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Market Price at Trade</p>
+                    <p className="text-lg font-mono font-medium" data-testid="text-market-price-at-trade">
+                      ${parseFloat(stock.marketPriceAtInsiderDate).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+              </div>
+              {(stock.insiderName || stock.insiderTitle) && (
+                <>
+                  <Separator className="my-4" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {stock.insiderName && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Insider Name</p>
+                        <p className="text-lg font-medium" data-testid="text-insider-name">
+                          {stock.insiderName}
+                        </p>
+                      </div>
+                    )}
+                    {stock.insiderTitle && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Insider Title</p>
+                        <p className="text-lg font-medium" data-testid="text-insider-title">
+                          {stock.insiderTitle}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Discussion Tab */}
+        <TabsContent value="discussion" className="space-y-4">
+          {/* Interested Users */}
+          {interests.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Team Members Interested ({interests.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {interests.map((interest) => {
+                    if (!interest.user) return null;
+                    return (
+                      <div key={interest.id} className="flex items-center gap-2 bg-muted px-3 py-1 rounded-full">
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs">
+                            {getInitials(interest.user.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{interest.user.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Comments */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                Comments ({comments.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Add Comment */}
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="Add a comment..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  rows={2}
+                  data-testid="input-comment"
+                />
+                <Button
+                  onClick={() => {
+                    if (commentText.trim()) {
+                      addCommentMutation.mutate(commentText);
+                    }
+                  }}
+                  disabled={!commentText.trim() || addCommentMutation.isPending}
+                  data-testid="button-add-comment"
+                >
+                  Post
+                </Button>
+              </div>
+
+              <Separator />
+
+              {/* Comment List */}
+              {comments.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-4">
+                  No comments yet. Be the first to share your thoughts!
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {comments.map((comment) => {
+                    if (!comment.user) return null;
+                    return (
+                      <div key={comment.id} className="flex gap-3" data-testid={`comment-${comment.id}`}>
+                        <Avatar>
+                          <AvatarFallback>
+                            {getInitials(comment.user.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-sm">{comment.user.name}</span>
+                            {comment.createdAt && (
+                              <span className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">{comment.comment}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

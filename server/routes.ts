@@ -2194,17 +2194,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const ticker = req.params.ticker.toUpperCase();
+      // Validate ticker parameter
+      const tickerParam = req.params.ticker?.trim()?.toUpperCase();
+      if (!tickerParam || tickerParam.length > 10 || !/^[A-Z]+$/.test(tickerParam)) {
+        return res.status(400).json({ error: "Invalid ticker format" });
+      }
       
-      // Check if user follows this stock
+      // Check if user follows this stock (normalize case on both sides)
       const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
-      const isFollowing = followedStocks.some(fs => fs.ticker === ticker);
+      const isFollowing = followedStocks.some(fs => fs.ticker.toUpperCase() === tickerParam);
       
       if (!isFollowing) {
         return res.status(403).json({ error: "You must follow this stock to view daily briefs" });
       }
       
-      const briefs = await storage.getDailyBriefsForTicker(ticker);
+      const briefs = await storage.getDailyBriefsForTicker(tickerParam);
       res.json(briefs);
     } catch (error) {
       console.error("Get daily briefs error:", error);

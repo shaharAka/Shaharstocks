@@ -23,6 +23,7 @@ import { Plus, Bell, BellOff, X } from "lucide-react";
 import { type Stock, type TradingRule, type Trade } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/contexts/UserContext";
 
 interface StockSimulationPlotProps {
   ticker: string;
@@ -30,6 +31,7 @@ interface StockSimulationPlotProps {
 }
 
 export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps) {
+  const { user } = useUser();
   const { toast } = useToast();
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [ruleAction, setRuleAction] = useState<"sell" | "sell_all">("sell");
@@ -38,7 +40,8 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
   const [enableNotifications, setEnableNotifications] = useState(true);
 
   const { data: rules, isLoading: rulesLoading } = useQuery<TradingRule[]>({
-    queryKey: ["/api/rules"],
+    queryKey: ["/api/rules", user?.id],
+    enabled: !!user,
   });
 
   const createRuleMutation = useMutation({
@@ -46,7 +49,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
       return await apiRequest("POST", "/api/rules", newRule);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
       toast({
         title: "Trading rule created",
         description: `Rule created for ${ticker}${enableNotifications ? ' with notifications enabled' : ''}`,
@@ -68,7 +71,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
       return await apiRequest("DELETE", `/api/rules/${ruleId}`, null);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
       toast({
         title: "Trading rule deleted",
         description: "The trading rule has been removed",

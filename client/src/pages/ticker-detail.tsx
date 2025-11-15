@@ -46,7 +46,7 @@ export default function TickerDetail() {
   // Fetch daily briefs (lightweight daily reports for followed stocks)
   const { data: dailyBriefs = [], isLoading: briefsLoading } = useQuery<any[]>({
     queryKey: ["/api/stocks", ticker, "daily-briefs"],
-    enabled: !!ticker && (userStatus?.isFollowing ?? false), // Only fetch if following
+    enabled: !!ticker && isFollowing, // Only fetch if following
     retry: false,
     meta: { ignoreError: true },
   });
@@ -334,7 +334,7 @@ export default function TickerDetail() {
                 </div>
               ) : dailyBriefs.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
-                  {userStatus?.isFollowing 
+                  {isFollowing 
                     ? "Daily briefs will appear here once generated. Briefs are created daily for stocks you follow."
                     : "Follow this stock to receive daily briefs with quick trading guidance."
                   }

@@ -33,7 +33,7 @@ import { InsiderHistoryDialog } from "@/components/insider-history-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
-import type { Stock, User, StockInterestWithUser, StockCommentWithUser } from "@shared/schema";
+import type { Stock, User, StockCommentWithUser } from "@shared/schema";
 
 interface StockExplorerProps {
   stock: Stock | null;
@@ -42,7 +42,6 @@ interface StockExplorerProps {
   onFollow?: (stock: Stock) => void;
   onReject?: (stock: Stock) => void;
   users?: User[];
-  interests?: StockInterestWithUser[];
 }
 
 export function StockExplorer({
@@ -52,7 +51,6 @@ export function StockExplorer({
   onFollow,
   onReject,
   users = [],
-  interests = [],
 }: StockExplorerProps) {
   const { toast } = useToast();
   const { user: currentUser } = useUser();
@@ -73,35 +71,6 @@ export function StockExplorer({
   });
 
   const isFollowing = followedStocks.some(f => f.ticker === stock?.ticker);
-
-  const toggleInterestMutation = useMutation({
-    mutationFn: async ({ ticker, isMarked }: { ticker: string; isMarked: boolean }) => {
-      if (isMarked) {
-        const response = await fetch(`/api/stocks/${ticker}/interests`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (!response.ok) throw new Error("Failed to remove interest");
-      } else {
-        const response = await fetch(`/api/stocks/${ticker}/interests`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (!response.ok) throw new Error("Failed to add interest");
-        return await response.json();
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stock-interests"] });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to update interest status.",
-        variant: "destructive",
-      });
-    },
-  });
 
   const unfollowMutation = useMutation({
     mutationFn: async (ticker: string) => {
@@ -143,10 +112,6 @@ export function StockExplorer({
 
   const getInitials = (name: string) => {
     return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-  };
-
-  const getStockInterests = (ticker: string) => {
-    return interests.filter(i => i.ticker === ticker);
   };
 
   const negativeKeywords = ["bankruptcy", "fraud", "investigation", "lawsuit", "downgrade", "loss", "scandal"];
@@ -272,63 +237,6 @@ export function StockExplorer({
                         </span>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Interest Markers */}
-            {currentUser && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Team Interest</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {/* Interested Users Display */}
-                  {getStockInterests(stock.ticker).length > 0 && (
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">Interested team members:</p>
-                      <div className="flex gap-2 flex-wrap">
-                        {getStockInterests(stock.ticker).map((interest) => (
-                          <div key={interest.id} className="flex items-center gap-1.5 bg-muted px-2 py-1 rounded-md">
-                            <Avatar className="h-5 w-5" style={{ backgroundColor: interest.user.avatarColor }}>
-                              <AvatarFallback 
-                                className="text-white text-xs" 
-                                style={{ backgroundColor: interest.user.avatarColor }}
-                              >
-                                {getInitials(interest.user.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm">{interest.user.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Current User's Interest Toggle */}
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Mark your interest:</p>
-                    <Button
-                      size="sm"
-                      variant={getStockInterests(stock.ticker).some(i => i.userId === currentUser.id) ? "default" : "outline"}
-                      onClick={() => toggleInterestMutation.mutate({ 
-                        ticker: stock.ticker, 
-                        isMarked: getStockInterests(stock.ticker).some(i => i.userId === currentUser.id)
-                      })}
-                      disabled={toggleInterestMutation.isPending}
-                      data-testid={`button-explorer-interest-toggle`}
-                    >
-                      <Avatar className="h-5 w-5 mr-1.5" style={{ backgroundColor: currentUser.avatarColor }}>
-                        <AvatarFallback 
-                          className="text-white text-xs" 
-                          style={{ backgroundColor: currentUser.avatarColor }}
-                        >
-                          {getInitials(currentUser.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      {getStockInterests(stock.ticker).some(i => i.userId === currentUser.id) ? "Remove Interest" : "Mark as Interesting"}
-                    </Button>
                   </div>
                 </CardContent>
               </Card>

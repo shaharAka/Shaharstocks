@@ -11,14 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Stock, User, StockInterestWithUser } from "@shared/schema";
+import type { Stock, User } from "@shared/schema";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { AnalysisPhaseIndicator } from "@/components/analysis-phase-indicator";
 
 interface StockTableProps {
   stocks: Stock[];
   users: User[];
-  interests: StockInterestWithUser[];
   commentCounts: { ticker: string; count: number }[];
   analyses?: any[];
   selectedTickers?: Set<string>;
@@ -35,7 +34,6 @@ type SortDirection = "asc" | "desc";
 export function StockTable({ 
   stocks, 
   users, 
-  interests, 
   commentCounts, 
   analyses = [], 
   selectedTickers = new Set(),

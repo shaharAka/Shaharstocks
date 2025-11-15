@@ -36,9 +36,6 @@ import {
   type StockComment,
   type InsertStockComment,
   type StockCommentWithUser,
-  type StockInterest,
-  type InsertStockInterest,
-  type StockInterestWithUser,
   type StockView,
   type InsertStockView,
   type StockAnalysis,
@@ -92,7 +89,6 @@ import {
   ruleExecutions,
   users,
   stockComments,
-  stockInterests,
   stockViews,
   stockAnalyses,
   macroAnalyses,
@@ -243,12 +239,6 @@ export interface IStorage {
   getStockComments(ticker: string): Promise<StockCommentWithUser[]>;
   getStockCommentCounts(): Promise<{ ticker: string; count: number }[]>;
   createStockComment(comment: InsertStockComment): Promise<StockComment>;
-
-  // Stock Interests
-  getStockInterests(ticker: string): Promise<StockInterestWithUser[]>;
-  getAllStockInterests(): Promise<StockInterestWithUser[]>;
-  createStockInterest(interest: InsertStockInterest): Promise<StockInterest>;
-  deleteStockInterest(ticker: string, userId: string): Promise<boolean>;
 
   // Followed Stocks
   getUserFollowedStocks(userId: string): Promise<FollowedStock[]>;
@@ -509,7 +499,6 @@ export class DatabaseStorage implements IStorage {
       const deleteCounts = {
         aiJobs: 0,
         analyses: 0,
-        interests: 0,
         views: 0,
         userStatuses: 0,
         comments: 0,
@@ -527,12 +516,7 @@ export class DatabaseStorage implements IStorage {
         .returning({ ticker: stockAnalyses.ticker });
       deleteCounts.analyses = deletedAnalyses.length;
       
-      // Delete stock interests
-      const deletedInterests = await tx.delete(stockInterests)
-        .where(inArray(stockInterests.ticker, candidateTickers))
-        .returning({ ticker: stockInterests.ticker });
-      deleteCounts.interests = deletedInterests.length;
-      
+
       // Delete stock views
       const deletedViews = await tx.delete(stockViews)
         .where(inArray(stockViews.ticker, candidateTickers))
@@ -620,7 +604,6 @@ export class DatabaseStorage implements IStorage {
       const deleteCounts = {
         aiJobs: 0,
         analyses: 0,
-        interests: 0,
         views: 0,
         userStatuses: 0,
         comments: 0,
@@ -638,12 +621,7 @@ export class DatabaseStorage implements IStorage {
         .returning({ ticker: stockAnalyses.ticker });
       deleteCounts.analyses = deletedAnalyses.length;
       
-      // Delete stock interests
-      const deletedInterests = await tx.delete(stockInterests)
-        .where(inArray(stockInterests.ticker, candidateTickers))
-        .returning({ ticker: stockInterests.ticker });
-      deleteCounts.interests = deletedInterests.length;
-      
+
       // Delete stock views
       const deletedViews = await tx.delete(stockViews)
         .where(inArray(stockViews.ticker, candidateTickers))
@@ -773,7 +751,6 @@ export class DatabaseStorage implements IStorage {
       const deleteCounts = {
         aiJobs: 0,
         analyses: 0,
-        interests: 0,
         views: 0,
         userStatuses: 0,
         comments: 0,
@@ -791,12 +768,7 @@ export class DatabaseStorage implements IStorage {
         .returning({ ticker: stockAnalyses.ticker });
       deleteCounts.analyses = deletedAnalyses.length;
       
-      // Delete stock interests
-      const deletedInterests = await tx.delete(stockInterests)
-        .where(inArray(stockInterests.ticker, candidateTickers))
-        .returning({ ticker: stockInterests.ticker });
-      deleteCounts.interests = deletedInterests.length;
-      
+
       // Delete stock views
       const deletedViews = await tx.delete(stockViews)
         .where(inArray(stockViews.ticker, candidateTickers))
@@ -1822,57 +1794,6 @@ export class DatabaseStorage implements IStorage {
       .groupBy(stockComments.ticker);
 
     return counts;
-  }
-
-  // Stock Interests
-  async getStockInterests(ticker: string): Promise<StockInterestWithUser[]> {
-    const interests = await db
-      .select({
-        interest: stockInterests,
-        user: users,
-      })
-      .from(stockInterests)
-      .leftJoin(users, eq(stockInterests.userId, users.id))
-      .where(eq(stockInterests.ticker, ticker))
-      .orderBy(desc(stockInterests.createdAt));
-
-    return interests.map((row) => ({
-      ...row.interest,
-      user: row.user!,
-    }));
-  }
-
-  async getAllStockInterests(): Promise<StockInterestWithUser[]> {
-    const interests = await db
-      .select({
-        interest: stockInterests,
-        user: users,
-      })
-      .from(stockInterests)
-      .leftJoin(users, eq(stockInterests.userId, users.id))
-      .orderBy(desc(stockInterests.createdAt));
-
-    return interests.map((row) => ({
-      ...row.interest,
-      user: row.user!,
-    }));
-  }
-
-  async createStockInterest(interest: InsertStockInterest): Promise<StockInterest> {
-    const [newInterest] = await db.insert(stockInterests).values(interest).returning();
-    return newInterest;
-  }
-
-  async deleteStockInterest(ticker: string, userId: string): Promise<boolean> {
-    const result = await db
-      .delete(stockInterests)
-      .where(
-        and(
-          eq(stockInterests.ticker, ticker),
-          eq(stockInterests.userId, userId)
-        )
-      );
-    return true;
   }
 
   // Followed Stocks

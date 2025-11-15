@@ -647,26 +647,6 @@ export type StockCommentWithUser = StockComment & {
   user: User;
 };
 
-// Stock interests - marks which stocks users find interesting
-export const stockInterests = pgTable("stock_interests", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  ticker: text("ticker").notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertStockInterestSchema = createInsertSchema(stockInterests).omit({ 
-  id: true, 
-  createdAt: true 
-});
-export type InsertStockInterest = z.infer<typeof insertStockInterestSchema>;
-export type StockInterest = typeof stockInterests.$inferSelect;
-
-// Combined type for interest with user info
-export type StockInterestWithUser = StockInterest & {
-  user: User;
-};
-
 // Stock views - tracks when users have viewed/clicked on stocks
 export const stockViews = pgTable("stock_views", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

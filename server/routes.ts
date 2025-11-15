@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertStockInterestSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema } from "@shared/schema";
+import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema } from "@shared/schema";
 import { z } from "zod";
 import { telegramService } from "./telegram";
 import { stockService } from "./stockService";
@@ -2014,56 +2014,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch comment counts" });
     }
   });
-
-  // Stock interest routes
-  app.get("/api/stocks/:ticker/interests", async (req, res) => {
-    try {
-      const interests = await storage.getStockInterests(req.params.ticker);
-      res.json(interests);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch interests" });
-    }
-  });
-
-  app.get("/api/stock-interests", async (req, res) => {
-    try {
-      const interests = await storage.getAllStockInterests();
-      res.json(interests);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch all interests" });
-    }
-  });
-
-  app.post("/api/stocks/:ticker/interests", async (req, res) => {
-    try {
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      const validatedData = insertStockInterestSchema.parse({
-        ticker: req.params.ticker,
-        userId: req.session.userId,
-      });
-      const interest = await storage.createStockInterest(validatedData);
-      res.status(201).json(interest);
-    } catch (error) {
-      console.error("Create interest error:", error);
-      res.status(400).json({ error: "Invalid interest data" });
-    }
-  });
-
-  app.delete("/api/stocks/:ticker/interests", async (req, res) => {
-    try {
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      await storage.deleteStockInterest(req.params.ticker, req.session.userId);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Delete interest error:", error);
-      res.status(500).json({ error: "Failed to delete interest" });
-    }
-  });
-
 
   // Stock follow routes
   app.get("/api/users/me/followed", async (req, res) => {

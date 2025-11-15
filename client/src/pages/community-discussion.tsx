@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useState, useMemo } from "react";
 import { MessageSquare, Users, TrendingUp, TrendingDown, Search } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { Stock, User, StockInterestWithUser } from "@shared/schema";
+import type { Stock, User } from "@shared/schema";
 import { StockExplorer } from "@/components/stock-explorer";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -25,13 +25,6 @@ export default function CommunityDiscussion() {
   // Fetch users
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    retry: false,
-    meta: { ignoreError: true },
-  });
-
-  // Fetch stock interests
-  const { data: allInterests = [] } = useQuery<StockInterestWithUser[]>({
-    queryKey: ["/api/stock-interests"],
     retry: false,
     meta: { ignoreError: true },
   });
@@ -92,10 +85,6 @@ export default function CommunityDiscussion() {
   });
 
   // Helper functions
-  const getStockInterests = (ticker: string) => {
-    return allInterests.filter(i => i.ticker === ticker);
-  };
-
   const getCommentCount = (ticker: string) => {
     return commentCounts.find(c => c.ticker === ticker)?.count || 0;
   };
@@ -104,12 +93,11 @@ export default function CommunityDiscussion() {
     return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
-  // Filter stocks that have either comments or interests
+  // Filter stocks that have comments
   const discussionStocks = useMemo(() => {
     const stocksWithActivity = stocks.filter(stock => {
       const hasComments = getCommentCount(stock.ticker) > 0;
-      const hasInterests = getStockInterests(stock.ticker).length > 0;
-      return hasComments || hasInterests;
+      return hasComments;
     });
 
     // Apply search filter
@@ -122,16 +110,16 @@ export default function CommunityDiscussion() {
       stock.ticker.toLowerCase().includes(search) ||
       stock.companyName?.toLowerCase().includes(search)
     );
-  }, [stocks, allInterests, commentCounts, searchTerm]);
+  }, [stocks, commentCounts, searchTerm]);
 
-  // Sort by activity (comments + interests)
+  // Sort by comment activity
   const sortedStocks = useMemo(() => {
     return [...discussionStocks].sort((a, b) => {
-      const aActivity = getCommentCount(a.ticker) + getStockInterests(a.ticker).length;
-      const bActivity = getCommentCount(b.ticker) + getStockInterests(b.ticker).length;
+      const aActivity = getCommentCount(a.ticker);
+      const bActivity = getCommentCount(b.ticker);
       return bActivity - aActivity;
     });
-  }, [discussionStocks, allInterests, commentCounts]);
+  }, [discussionStocks, commentCounts]);
 
   if (stocksLoading) {
     return (
@@ -164,7 +152,7 @@ export default function CommunityDiscussion() {
             Discussion
           </h1>
           <p className="text-sm text-muted-foreground">
-            Stocks with team comments and interest
+            Stocks with team comments
           </p>
         </div>
       </div>
@@ -184,7 +172,7 @@ export default function CommunityDiscussion() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -194,19 +182,6 @@ export default function CommunityDiscussion() {
                   {sortedStocks.length}
                 </div>
                 <div className="text-xs text-muted-foreground">Active Discussions</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <div className="text-2xl font-bold" data-testid="text-total-interests">
-                  {allInterests.length}
-                </div>
-                <div className="text-xs text-muted-foreground">Team Interests</div>
               </div>
             </div>
           </CardContent>
@@ -232,7 +207,7 @@ export default function CommunityDiscussion() {
           <CardContent className="p-8 text-center">
             <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
             <p className="text-muted-foreground" data-testid="text-no-discussions">
-              {searchTerm ? "No stocks match your search" : "No discussions yet. Start by marking interest or adding comments on stocks."}
+              {searchTerm ? "No stocks match your search" : "No discussions yet. Start by adding comments on stocks."}
             </p>
           </CardContent>
         </Card>
@@ -244,7 +219,6 @@ export default function CommunityDiscussion() {
             const priceChange = currentPrice - previousPrice;
             const priceChangePercent = (priceChange / previousPrice) * 100;
             const isPositive = priceChange >= 0;
-            const stockInterests = getStockInterests(stock.ticker);
             const commentCount = getCommentCount(stock.ticker);
 
             return (
@@ -301,38 +275,16 @@ export default function CommunityDiscussion() {
                   </div>
 
                   {/* Community Activity */}
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t">
-                    <div className="flex gap-1">
-                      {stockInterests.slice(0, 5).map((interest) => (
-                        <Avatar
-                          key={interest.id}
-                          className="h-6 w-6"
-                          style={{ backgroundColor: interest.user.avatarColor }}
-                          data-testid={`avatar-interest-${stock.ticker}-${interest.user.name.toLowerCase()}`}
-                        >
-                          <AvatarFallback
-                            className="text-white text-xs"
-                            style={{ backgroundColor: interest.user.avatarColor }}
-                          >
-                            {getInitials(interest.user.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                      ))}
-                      {stockInterests.length > 5 && (
-                        <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                          +{stockInterests.length - 5}
-                        </div>
-                      )}
-                    </div>
-                    {commentCount > 0 && (
+                  {commentCount > 0 && (
+                    <div className="flex items-center gap-2 pt-2 border-t">
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <MessageSquare className="h-4 w-4" />
                         <span className="text-sm font-medium" data-testid={`text-comment-count-${stock.ticker}`}>
-                          {commentCount}
+                          {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
                         </span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -347,7 +299,6 @@ export default function CommunityDiscussion() {
         onFollow={(stock) => followMutation.mutate(stock.ticker)}
         onReject={(stock) => rejectMutation.mutate(stock.ticker)}
         users={users}
-        interests={allInterests}
       />
     </div>
   );

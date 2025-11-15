@@ -24,7 +24,7 @@ import {
   MinusCircle
 } from "lucide-react";
 import { Link } from "wouter";
-import type { Stock, StockInterestWithUser, StockCommentWithUser } from "@shared/schema";
+import type { Stock, StockCommentWithUser } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
@@ -91,14 +91,6 @@ export default function TickerDetail() {
   // Fetch comments
   const { data: comments = [] } = useQuery<StockCommentWithUser[]>({
     queryKey: ["/api/stocks", ticker, "comments"],
-    enabled: !!ticker,
-    retry: false,
-    meta: { ignoreError: true },
-  });
-
-  // Fetch interests
-  const { data: interests = [] } = useQuery<StockInterestWithUser[]>({
-    queryKey: ["/api/stocks", ticker, "interests"],
     enabled: !!ticker,
     retry: false,
     meta: { ignoreError: true },
@@ -704,35 +696,6 @@ export default function TickerDetail() {
 
         {/* Discussion Tab */}
         <TabsContent value="discussion" className="space-y-4">
-          {/* Interested Users */}
-          {interests.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Team Members Interested ({interests.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {interests.map((interest) => {
-                    if (!interest.user) return null;
-                    return (
-                      <div key={interest.id} className="flex items-center gap-2 bg-muted px-3 py-1 rounded-full">
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-xs">
-                            {getInitials(interest.user.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm">{interest.user.name}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Comments */}
           <Card>
             <CardHeader>

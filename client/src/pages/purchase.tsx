@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Stock, type User, type StockInterestWithUser } from "@shared/schema";
+import { type Stock, type User } from "@shared/schema";
 import { getTerm } from "@/lib/compliance";
 import { useUser } from "@/contexts/UserContext";
 import { StockTable } from "@/components/stock-table";
@@ -58,7 +58,7 @@ type GroupedStock = {
   transactionCount: number;
   highestScore: number | null;
   daysSinceLatest: number;
-  communityScore: number; // follows + interests
+  communityScore: number; // follows count
   isFollowing: boolean;
 };
 
@@ -102,16 +102,9 @@ export default function Purchase() {
     queryKey: ["/api/stock-analyses"],
   });
 
-  // Fetch users (for interest indicators)
+  // Fetch users
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    retry: false,
-    meta: { ignoreError: true },
-  });
-
-  // Fetch stock interests
-  const { data: allInterests = [] } = useQuery<StockInterestWithUser[]>({
-    queryKey: ["/api/stock-interests"],
     retry: false,
     meta: { ignoreError: true },
   });
@@ -212,10 +205,6 @@ export default function Purchase() {
   });
 
   // Helper functions
-  const getStockInterests = (ticker: string) => {
-    return allInterests.filter(i => i.ticker === ticker);
-  };
-
   const getCommentCount = (ticker: string) => {
     return commentCounts.find(c => c.ticker === ticker)?.count || 0;
   };
@@ -287,10 +276,8 @@ export default function Purchase() {
       const score = (stock as any).integratedScore ?? (stock as any).aiScore;
       const daysSince = (stock as any).daysSinceTrade;
       
-      // Calculate community score (interests from all users)
-      // Note: We only have access to interests, not aggregate follows across all users
-      const stockInterests = getStockInterests(stock.ticker);
-      const communityScore = stockInterests.length;
+      // Calculate community score based on comment activity
+      const communityScore = getCommentCount(stock.ticker);
       
       if (!existing) {
         grouped.set(stock.ticker, {
@@ -396,7 +383,7 @@ export default function Purchase() {
     sections.communityPicks = [...sections.communityPicks].sort((a, b) => b.communityScore - a.communityScore);
 
     return { groupedStocks: groupedArray, funnelSections: sections };
-  }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks, allInterests, users]);
+  }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks, users, commentCounts]);
 
   // Get current section's stocks and flatten for rendering
   const groupedOpportunities = funnelSections[funnelSection] || [];
@@ -662,7 +649,6 @@ export default function Purchase() {
         <StockTable
           stocks={opportunities}
           users={users}
-          interests={allInterests}
           commentCounts={commentCounts}
           analyses={analyses}
           selectedTickers={selectedTickers}
@@ -683,7 +669,6 @@ export default function Purchase() {
         onFollow={(stock) => followMutation.mutate(stock.ticker)}
         onReject={(stock) => rejectMutation.mutate(stock.ticker)}
         users={users}
-        interests={allInterests}
       />
     </div>
   );

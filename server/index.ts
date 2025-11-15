@@ -607,13 +607,15 @@ function startOpeninsiderFetchJob() {
             continue;
           }
 
-          // Apply options deal filter using configurable threshold
-          const insiderPriceNum = transaction.price;
-          const thresholdPercent = optionsDealThreshold / 100;
-          if (optionsDealThreshold > 0 && insiderPriceNum < quote.currentPrice * thresholdPercent) {
-            filteredOptionsDeals++;
-            log(`[OpeninsiderFetch] ${transaction.ticker} likely options deal: insider price $${insiderPriceNum.toFixed(2)} < ${optionsDealThreshold}% of market $${quote.currentPrice.toFixed(2)}, skipping`);
-            continue;
+          // Apply options deal filter ONLY to BUY transactions (doesn't apply to sales)
+          if (transaction.recommendation === "buy") {
+            const insiderPriceNum = transaction.price;
+            const thresholdPercent = optionsDealThreshold / 100;
+            if (optionsDealThreshold > 0 && insiderPriceNum < quote.currentPrice * thresholdPercent) {
+              filteredOptionsDeals++;
+              log(`[OpeninsiderFetch] ${transaction.ticker} likely options deal: insider price $${insiderPriceNum.toFixed(2)} < ${optionsDealThreshold}% of market $${quote.currentPrice.toFixed(2)}, skipping`);
+              continue;
+            }
           }
 
           // Create stock recommendation with complete information
@@ -627,7 +629,7 @@ function startOpeninsiderFetchJob() {
             insiderTradeDate: transaction.filingDate, // Use filing date as that's when the info became public
             insiderName: transaction.insiderName,
             insiderTitle: transaction.insiderTitle,
-            recommendation: "buy",
+            recommendation: transaction.recommendation, // Use actual recommendation (buy or sell)
             source: "openinsider",
             confidenceScore: transaction.confidence || 75,
             peRatio: null,

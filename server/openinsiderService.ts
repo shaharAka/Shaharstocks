@@ -111,12 +111,19 @@ class OpenInsiderService {
     tradeType: "P" | "S" = "P"
   ): Promise<ScraperResponse> {
     try {
+      // Validate and normalize tradeType to uppercase
+      const normalizedTradeType = (tradeType || "P").toString().toUpperCase();
+      if (normalizedTradeType !== "P" && normalizedTradeType !== "S") {
+        throw new Error(`Invalid tradeType: ${tradeType}. Must be "P" (purchase) or "S" (sale)`);
+      }
+      const safeTradeType = normalizedTradeType as "P" | "S";
+      
       // Validate and clamp limit to prevent command injection
       // Ensure it's a finite number, otherwise use default
       const numericLimit = Number.isFinite(limit) ? limit : 100;
       const safeLimit = Math.max(1, Math.min(Math.floor(numericLimit), 500));
       
-      const transactionTypeLabel = tradeType === "S" ? "sale" : "purchase";
+      const transactionTypeLabel = safeTradeType === "S" ? "sale" : "purchase";
       const filterInfo = filters ? ` with filters: ${JSON.stringify(filters)}` : '';
       console.log(`[OpenInsider] Fetching ${safeLimit} insider ${transactionTypeLabel} transactions${filterInfo}...`);
 
@@ -139,8 +146,8 @@ class OpenInsiderService {
         args.push("{}");
       }
       
-      // Add trade_type parameter as third argument
-      args.push(tradeType);
+      // Add trade_type parameter as third argument (now validated and normalized)
+      args.push(safeTradeType);
 
       const { stdout, stderr } = await execFileAsync(
         "python3",

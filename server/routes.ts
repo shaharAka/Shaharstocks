@@ -134,12 +134,14 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           continue;
         }
         
-        // Apply options deal filter (insider price should be >= 15% of current price)
-        const insiderPriceNum = transaction.price;
-        if (insiderPriceNum < quote.currentPrice * 0.15) {
-          filteredOptionsDeals++;
-          console.log(`[InitialDataFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum.toFixed(2)} < 15% of market: $${quote.currentPrice.toFixed(2)}), skipping`);
-          continue;
+        // Apply options deal filter ONLY to BUY transactions (insider price should be >= 15% of current price)
+        if (transaction.recommendation === "buy") {
+          const insiderPriceNum = transaction.price;
+          if (insiderPriceNum < quote.currentPrice * 0.15) {
+            filteredOptionsDeals++;
+            console.log(`[InitialDataFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum.toFixed(2)} < 15% of market: $${quote.currentPrice.toFixed(2)}), skipping`);
+            continue;
+          }
         }
 
         // Create stock recommendation with complete information
@@ -153,7 +155,7 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           insiderTradeDate: transaction.filingDate,
           insiderName: transaction.insiderName,
           insiderTitle: transaction.insiderTitle,
-          recommendation: transaction.recommendation || "buy",
+          recommendation: transaction.recommendation, // Use actual recommendation (buy or sell)
           source: "openinsider",
           confidenceScore: transaction.confidence || 75,
           peRatio: null,
@@ -3277,16 +3279,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
           
-          // Apply options deal filter using configurable threshold
-          const insiderPriceNum = transaction.price;
-          const thresholdPercent = optionsDealThreshold / 100;
-          if (optionsDealThreshold > 0 && insiderPriceNum < quote.currentPrice * thresholdPercent) {
-            filteredOptionsDeals++;
-            console.log(`[OpeninsiderFetch] ⊗ ${transaction.ticker} likely options deal:`);
-            console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);
-            console.log(`  Insider price: $${insiderPriceNum.toFixed(2)} < ${optionsDealThreshold}% of market: $${quote.currentPrice.toFixed(2)}`);
-            console.log(`  Transaction value: $${(insiderPriceNum * transaction.quantity).toLocaleString()}, Quantity: ${transaction.quantity.toLocaleString()}`);
-            continue;
+          // Apply options deal filter ONLY to BUY transactions using configurable threshold
+          if (transaction.recommendation === "buy") {
+            const insiderPriceNum = transaction.price;
+            const thresholdPercent = optionsDealThreshold / 100;
+            if (optionsDealThreshold > 0 && insiderPriceNum < quote.currentPrice * thresholdPercent) {
+              filteredOptionsDeals++;
+              console.log(`[OpeninsiderFetch] ⊗ ${transaction.ticker} likely options deal:`);
+              console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);
+              console.log(`  Insider price: $${insiderPriceNum.toFixed(2)} < ${optionsDealThreshold}% of market: $${quote.currentPrice.toFixed(2)}`);
+              console.log(`  Transaction value: $${(insiderPriceNum * transaction.quantity).toLocaleString()}, Quantity: ${transaction.quantity.toLocaleString()}`);
+              continue;
+            }
           }
 
           // Create stock recommendation with complete information

@@ -782,16 +782,16 @@ export default function Purchase() {
               <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {((stock as any)._groupedData?.allTransactions || [stock]).map((transaction: StockWithUserStatus) => {
                   const aiScore = (stock as any).integratedScore ?? (stock as any).aiScore ?? null;
-                  const daysSinceTrade = getDaysFromBuy(stock.insiderTradeDate);
+                  const daysSinceTrade = getDaysFromBuy(transaction.insiderTradeDate);
                   
-                  const compositeKey = `${stock.ticker}-${stock.insiderName}-${stock.insiderTradeDate}`;
+                  const compositeKey = `${transaction.ticker}-${transaction.insiderName}-${transaction.insiderTradeDate}`;
 
                   return (
                     <Card 
-                      key={stock.id || compositeKey} 
+                      key={transaction.id || compositeKey} 
                       className="hover-elevate relative cursor-pointer"
                       onClick={() => {
-                        setExplorerStock(stock);
+                        setExplorerStock(transaction);
                         setExplorerOpen(true);
                       }}
                       data-testid={`card-opportunity-${compositeKey}`}
@@ -801,17 +801,17 @@ export default function Purchase() {
                           <div className="flex-1 min-w-0">
                             <CardTitle className="text-base flex items-center gap-2">
                               <span className="truncate" data-testid={`text-insider-${compositeKey}`}>
-                                {stock.insiderName || "Insider"}
+                                {transaction.insiderName || "Insider"}
                               </span>
                             </CardTitle>
-                            {stock.insiderTitle && (
+                            {transaction.insiderTitle && (
                               <p className="text-xs text-muted-foreground truncate mt-1">
-                                {stock.insiderTitle}
+                                {transaction.insiderTitle}
                               </p>
                             )}
-                            {stock.insiderTradeDate && (
+                            {transaction.insiderTradeDate && (
                               <p className="text-xs text-muted-foreground mt-1">
-                                Trade: {new Date(stock.insiderTradeDate).toLocaleDateString()}
+                                Trade: {new Date(transaction.insiderTradeDate).toLocaleDateString()}
                               </p>
                             )}
                           </div>
@@ -834,26 +834,33 @@ export default function Purchase() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-3">
+                        {/* 2-Week Trend Chart */}
+                        {stock.candlesticks && stock.candlesticks.length > 0 && (
+                          <div className="h-16 -mx-2">
+                            <MiniCandlestickChart data={stock.candlesticks} height={64} />
+                          </div>
+                        )}
+
                         {/* Price Info */}
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-muted-foreground">Current Price:</span>
-                          <span className="font-medium">${stock.currentPrice}</span>
+                          <span className="font-medium">${transaction.currentPrice}</span>
                         </div>
 
                         {/* Market Cap */}
-                        {stock.marketCap && (
+                        {transaction.marketCap && (
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Market Cap:</span>
-                            <span className="font-medium">{stock.marketCap}</span>
+                            <span className="font-medium">{transaction.marketCap}</span>
                           </div>
                         )}
 
                         {/* Insider Price & Quantity */}
-                        {stock.insiderPrice && stock.insiderQuantity && (
+                        {transaction.insiderPrice && transaction.insiderQuantity && (
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Insider Trade:</span>
                             <span className="font-medium text-xs">
-                              {stock.insiderQuantity.toLocaleString()} @ ${stock.insiderPrice}
+                              {transaction.insiderQuantity.toLocaleString()} @ ${transaction.insiderPrice}
                             </span>
                           </div>
                         )}
@@ -861,8 +868,8 @@ export default function Purchase() {
                         {/* Transaction Type */}
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-muted-foreground">{getTerm("transactionType")}:</span>
-                          <Badge variant={stock.recommendation?.toLowerCase().includes("buy") ? "default" : "destructive"}>
-                            {getTerm(stock.recommendation?.toLowerCase().includes("buy") ? "insiderPurchase" : "insiderSale")}
+                          <Badge variant={transaction.recommendation?.toLowerCase().includes("buy") ? "default" : "destructive"}>
+                            {getTerm(transaction.recommendation?.toLowerCase().includes("buy") ? "insiderPurchase" : "insiderSale")}
                           </Badge>
                         </div>
 
@@ -870,7 +877,7 @@ export default function Purchase() {
                         {daysSinceTrade > 0 && (
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Days from Trade:</span>
-                            <span className="font-medium" data-testid={`text-days-${stock.ticker}`}>
+                            <span className="font-medium" data-testid={`text-days-${transaction.ticker}`}>
                               {daysSinceTrade}
                             </span>
                           </div>
@@ -889,7 +896,7 @@ export default function Purchase() {
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              {stock.recommendation?.toLowerCase().includes("buy") 
+                              {transaction.recommendation?.toLowerCase().includes("buy") 
                                 ? "Likelihood of price appreciation" 
                                 : "Likelihood of price decline"}
                             </p>

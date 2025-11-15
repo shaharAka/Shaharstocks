@@ -2120,10 +2120,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!briefExistsToday) {
           console.log(`[Follow] Generating day-0 daily brief for ${ticker}...`);
           
-          // Get current price data
-          const quote = await finnhubService.getQuote(ticker);
-          if (!quote || !quote.currentPrice || !quote.previousClose) {
-            throw new Error("Unable to fetch price data");
+          // Get current price data (matching daily job implementation)
+          const quote = await stockService.getQuote(ticker);
+          if (!quote || quote.price === 0 || quote.previousClose === 0) {
+            throw new Error("Unable to fetch valid price data");
           }
           
           // Get previous analysis for context (if available)
@@ -2149,7 +2149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Generate the brief
           const brief = await aiAnalysisService.generateDailyBrief({
             ticker,
-            currentPrice: quote.currentPrice,
+            currentPrice: quote.price,
             previousPrice: quote.previousClose,
             recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
             previousAnalysis
@@ -2159,7 +2159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createDailyBrief({
             ticker,
             briefDate: today,
-            priceSnapshot: quote.currentPrice.toString(),
+            priceSnapshot: quote.price.toString(),
             priceChange: quote.change.toString(),
             priceChangePercent: quote.changePercent.toString(),
             recommendedStance: brief.recommendedStance,
@@ -2173,7 +2173,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[Follow] Daily brief already exists for ${ticker} today, skipping`);
         }
       } catch (briefError) {
-        console.error(`[Follow] Failed to generate day-0 brief for ${ticker}:`, briefError);
+        const errorDetails = briefError instanceof Error ? 
+          `${briefError.message}\n${briefError.stack}` : 
+          JSON.stringify(briefError);
+        console.error(`[Follow] Failed to generate day-0 brief for ${ticker}:`, errorDetails);
         // Don't fail the follow request if brief generation fails
       }
       

@@ -373,6 +373,14 @@ export const insertTradingRuleSchema = createInsertSchema(tradingRules).omit({
   id: true, 
   createdAt: true, 
   updatedAt: true 
+}).extend({
+  conditions: z.array(z.object({
+    metric: z.string(),
+    operator: z.string(),
+    value: z.number(),
+    logic: z.enum(["AND", "OR"]).optional(),
+    baselinePrice: z.number().optional(),
+  })).optional(),
 });
 export type InsertTradingRule = z.infer<typeof insertTradingRuleSchema>;
 export type TradingRule = typeof tradingRules.$inferSelect;

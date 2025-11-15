@@ -142,7 +142,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     const candlesticks = (stock as any).candlesticks;
     if (!candlesticks || candlesticks.length === 0) return [];
     
-    return candlesticks
+    const data = candlesticks
       .filter((candle: any) => {
         // Only show data from purchase date onwards if user has a position
         if (!purchaseDate) return true;
@@ -154,6 +154,8 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
         price: candle.close, // Use closing price
       }))
       .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    return data;
   }, [(stock as any).candlesticks, purchaseDate]);
 
   // Calculate sell rule boundaries
@@ -200,6 +202,28 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
 
     return lines;
   }, [rules, ticker, purchasePrice, stock]);
+
+  // Calculate Y-axis domain to include all prices and rule lines
+  const yAxisDomain = useMemo(() => {
+    const prices = chartData.map((d: any) => d.price);
+    if (prices.length === 0) return ['auto', 'auto'];
+
+    const allValues = [
+      ...prices,
+      ...(purchasePrice ? [purchasePrice] : []),
+      ...sellRuleLines.map(l => l.price)
+    ];
+
+    const minValue = Math.min(...allValues);
+    const maxValue = Math.max(...allValues);
+    
+    // Add 5% padding for better visualization
+    const padding = (maxValue - minValue) * 0.05;
+    return [
+      Math.floor((minValue - padding) * 100) / 100,
+      Math.ceil((maxValue + padding) * 100) / 100
+    ];
+  }, [chartData, purchasePrice, sellRuleLines, ticker]);
 
   const handleCreateRule = () => {
     const value = parseFloat(conditionValue);
@@ -324,7 +348,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
               stroke="oklch(var(--muted-foreground))"
               tick={{ fill: "oklch(var(--foreground))", fontSize: 12 }}
               tickFormatter={(value) => `$${value.toFixed(0)}`}
-              domain={['auto', 'auto']}
+              domain={yAxisDomain as [number, number]}
             />
             <Tooltip
               contentStyle={{

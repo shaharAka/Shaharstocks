@@ -20,7 +20,8 @@ import Portfolio from "@/pages/portfolio";
 import Purchase from "@/pages/purchase";
 import Trading from "@/pages/trading";
 import Settings from "@/pages/settings";
-import Community from "@/pages/community";
+import CommunityDiscussion from "@/pages/community-discussion";
+import FeatureSuggestions from "@/pages/community-feature-suggestions";
 import AdminPage from "@/pages/admin";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
@@ -38,7 +39,9 @@ function Router() {
       <Route path="/recommendations" component={Purchase} />
       <Route path="/watchlist" component={Portfolio} />
       <Route path="/trading" component={Trading} />
-      <Route path="/community" component={Community} />
+      <Route path="/community/discussion" component={CommunityDiscussion} />
+      <Route path="/community/feature-suggestions" component={FeatureSuggestions} />
+      <Route path="/community" component={CommunityDiscussion} />
       <Route path="/admin" component={AdminPage} />
       {/* Legacy redirects for backwards compatibility */}
       <Route path="/purchase" component={Purchase} />

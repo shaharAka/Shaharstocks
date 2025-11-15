@@ -5,6 +5,8 @@ import {
   ShoppingCart,
   ShieldCheck,
   Lightbulb,
+  MessageSquare,
+  ChevronDown,
 } from "lucide-react";
 import {
   Sidebar,
@@ -15,10 +17,18 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarHeader,
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 
@@ -29,11 +39,20 @@ const mainMenuItems = [
     icon: ShoppingCart,
     testId: "link-opportunities",
   },
+];
+
+const communityMenuItems = [
   {
-    title: "Community",
-    url: "/community",
+    title: "Discussion",
+    url: "/community/discussion",
+    icon: MessageSquare,
+    testId: "link-discussion",
+  },
+  {
+    title: "Feature Suggestions",
+    url: "/community/feature-suggestions",
     icon: Lightbulb,
-    testId: "link-community",
+    testId: "link-feature-suggestions",
   },
 ];
 
@@ -109,6 +128,48 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+              
+              {/* Community Submenu */}
+              <Collapsible 
+                defaultOpen={currentPath.startsWith("/community")}
+                className="group/collapsible"
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      tooltip={isCollapsed ? "Community" : undefined}
+                      data-testid="link-community"
+                    >
+                      <Lightbulb className="h-4 w-4" />
+                      <span>Community</span>
+                      <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {communityMenuItems.map((subItem) => {
+                        const subItemPath = subItem.url.split('?')[0];
+                        const isSubPageActive = currentPath === subItemPath;
+                        
+                        return (
+                          <SidebarMenuSubItem key={subItem.title}>
+                            <SidebarMenuSubButton
+                              asChild
+                              className={isSubPageActive ? "bg-sidebar-accent" : ""}
+                              data-testid={subItem.testId}
+                            >
+                              <Link href={subItem.url} onClick={handleNavClick}>
+                                <subItem.icon className="h-4 w-4" />
+                                <span>{subItem.title}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

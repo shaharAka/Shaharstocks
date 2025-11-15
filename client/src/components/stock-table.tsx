@@ -8,9 +8,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, MessageSquare, Clock, Pin } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, Pin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Stock, User, StockInterestWithUser } from "@shared/schema";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
@@ -69,18 +68,6 @@ export function StockTable({
       setSortField(field);
       setSortDirection("asc");
     }
-  };
-
-  const getInitials = (name: string) => {
-    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-  };
-
-  const getStockInterests = (ticker: string) => {
-    return interests.filter(i => i.ticker === ticker);
-  };
-
-  const getCommentCount = (ticker: string) => {
-    return commentCounts.find(c => c.ticker === ticker)?.count || 0;
   };
 
   const getAIAnalysis = (ticker: string) => {
@@ -303,7 +290,6 @@ export function StockTable({
                   <SortIcon field="daysFromBuy" />
                 </Button>
               </TableHead>
-              <TableHead className="hidden sm:table-cell min-w-[100px]">Community</TableHead>
             </TableRow>
             </TableHeader>
           <TableBody>
@@ -314,7 +300,6 @@ export function StockTable({
             const priceChangePercent = (priceChange / previousPrice) * 100;
             const isPositive = priceChange >= 0;
             const insiderPrice = stock.insiderPrice ? parseFloat(stock.insiderPrice) : null;
-            const stockInterests = getStockInterests(stock.ticker);
 
             return (
               <TableRow
@@ -465,37 +450,6 @@ export function StockTable({
                       <span>{getDaysFromBuy(stock.insiderTradeDate)}d</span>
                     </div>
                   )}
-                </TableCell>
-                <TableCell className="hidden sm:table-cell py-2">
-                  <div className="flex items-center gap-2">
-                    {stockInterests.length > 0 && (
-                      <div className="flex gap-1">
-                        {stockInterests.map((interest) => (
-                          <Avatar
-                            key={interest.id}
-                            className="h-6 w-6"
-                            style={{ backgroundColor: interest.user.avatarColor }}
-                            data-testid={`avatar-interest-${stock.ticker}-${interest.user.name.toLowerCase()}`}
-                          >
-                            <AvatarFallback
-                              className="text-white text-xs"
-                              style={{ backgroundColor: interest.user.avatarColor }}
-                            >
-                              {getInitials(interest.user.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                        ))}
-                      </div>
-                    )}
-                    {getCommentCount(stock.ticker) > 0 && (
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <MessageSquare className="h-4 w-4" />
-                        <span className="text-sm" data-testid={`text-comment-count-${stock.ticker}`}>
-                          {getCommentCount(stock.ticker)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
                 </TableCell>
               </TableRow>
             );

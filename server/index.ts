@@ -1328,6 +1328,38 @@ function startDailyBriefJob() {
                 userOwnsPosition
               });
               
+              // Check for stance change notification (hold→sell on owned position)
+              if (userOwnsPosition && brief.recommendedStance === 'sell') {
+                try {
+                  // Get yesterday's brief to check for stance change
+                  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                  const yesterdayBrief = await storage.getDailyBriefForUser(user.id, ticker, yesterday);
+                  
+                  if (yesterdayBrief && yesterdayBrief.recommendedStance === 'hold') {
+                    // Stance changed from hold to sell on owned position - notify!
+                    log(`[DailyBrief] Stance change detected for ${ticker} (${user.name}): hold→sell on owned position`);
+                    await storage.createNotification({
+                      userId: user.id,
+                      ticker,
+                      type: 'stance_change',
+                      message: `${ticker}: Stance changed from HOLD to SELL on your position`,
+                      metadata: {
+                        previousStance: 'hold',
+                        newStance: 'sell',
+                        confidence: brief.confidence
+                      },
+                      isRead: false,
+                    });
+                    log(`[DailyBrief] Created stance_change notification for ${ticker} (${user.name})`);
+                  }
+                } catch (notifError) {
+                  // Ignore duplicate notification errors
+                  if (notifError instanceof Error && !notifError.message.includes('unique constraint')) {
+                    log(`[DailyBrief] Failed to create stance change notification for ${ticker} (${user.name}): ${notifError.message}`);
+                  }
+                }
+              }
+              
               generatedCount++;
               userGeneratedCount++;
               log(`[DailyBrief] Generated brief for ${ticker} (${user.name}): ${brief.recommendedStance} (confidence: ${brief.confidence}/10)`);

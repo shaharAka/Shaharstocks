@@ -24,6 +24,10 @@ import {
   MessageSquare,
   Star,
   Settings as SettingsIcon,
+  LayoutGrid,
+  LayoutList,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -52,6 +56,7 @@ type StockWithUserStatus = Stock & {
 type SortOption = "aiScore" | "daysFromTrade" | "marketCap";
 type RecommendationFilter = "all" | "buy" | "sell";
 type FunnelSection = "worthExploring" | "recents" | "processing" | "communityPicks" | "rejected";
+type ViewMode = "cards" | "table";
 
 type GroupedStock = {
   ticker: string;
@@ -78,6 +83,7 @@ export default function Purchase() {
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
   const [fetchConfigOpen, setFetchConfigOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("cards");
 
   // Selection handlers
   const toggleSelection = (ticker: string) => {
@@ -622,7 +628,7 @@ export default function Purchase() {
         </div>
       </div>
 
-      {/* Stats Bar */}
+      {/* Stats Bar and View Toggle */}
       <div className="flex gap-4 text-sm items-center justify-between">
         <div className="flex gap-4">
           <div>
@@ -630,6 +636,30 @@ export default function Purchase() {
             <span className="font-medium" data-testid="text-total-count">{opportunities.length}</span>
           </div>
         </div>
+        
+        {/* View Mode Toggle */}
+        {!selectedTickers.size && (
+          <div className="flex gap-2">
+            <Button
+              variant={viewMode === "cards" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("cards")}
+              data-testid="button-view-cards"
+            >
+              <LayoutGrid className="h-4 w-4 mr-2" />
+              Cards
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("table")}
+              data-testid="button-view-table"
+            >
+              <LayoutList className="h-4 w-4 mr-2" />
+              Table
+            </Button>
+          </div>
+        )}
 
         {/* Bulk Actions */}
         {selectedTickers.size > 0 && (
@@ -706,7 +736,7 @@ export default function Purchase() {
             </p>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === "table" ? (
         <StockTable
           stocks={opportunities}
           users={users}
@@ -721,6 +751,158 @@ export default function Purchase() {
             setExplorerOpen(true);
           }}
         />
+      ) : (
+        <div className="space-y-6">
+          {opportunities.map((stock) => (
+            <div key={stock.ticker} className="space-y-3">
+              {/* Company Header */}
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  {stock.ticker}
+                  <a
+                    href={`https://finance.yahoo.com/quote/${stock.ticker}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </h2>
+                {stock.companyName !== stock.ticker && (
+                  <span className="text-sm text-muted-foreground">{stock.companyName}</span>
+                )}
+                {(stock as any)._groupedData?.transactionCount > 1 && (
+                  <Badge variant="outline" className="ml-auto">
+                    {(stock as any)._groupedData.transactionCount} transactions
+                  </Badge>
+                )}
+              </div>
+
+              {/* Transaction Cards */}
+              <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {((stock as any)._groupedData?.allTransactions || [stock]).map((transaction: StockWithUserStatus) => {
+                  const aiScore = (stock as any).integratedScore ?? (stock as any).aiScore ?? null;
+                  const daysSinceTrade = getDaysFromBuy(stock.insiderTradeDate);
+                  
+                  const compositeKey = `${stock.ticker}-${stock.insiderName}-${stock.insiderTradeDate}`;
+
+                  return (
+                    <Card 
+                      key={stock.id || compositeKey} 
+                      className="hover-elevate relative cursor-pointer"
+                      onClick={() => {
+                        setExplorerStock(stock);
+                        setExplorerOpen(true);
+                      }}
+                      data-testid={`card-opportunity-${compositeKey}`}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <span className="truncate" data-testid={`text-insider-${compositeKey}`}>
+                                {stock.insiderName || "Insider"}
+                              </span>
+                            </CardTitle>
+                            {stock.insiderTitle && (
+                              <p className="text-xs text-muted-foreground truncate mt-1">
+                                {stock.insiderTitle}
+                              </p>
+                            )}
+                            {stock.insiderTradeDate && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Trade: {new Date(stock.insiderTradeDate).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              followMutation.mutate(stock.ticker);
+                            }}
+                            className="shrink-0"
+                            data-testid={`button-follow-${stock.ticker}`}
+                          >
+                            {stock.isFollowing ? (
+                              <Star className="h-4 w-4 fill-current" />
+                            ) : (
+                              <Star className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {/* Price Info */}
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Current Price:</span>
+                          <span className="font-medium">${stock.currentPrice}</span>
+                        </div>
+
+                        {/* Market Cap */}
+                        {stock.marketCap && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Market Cap:</span>
+                            <span className="font-medium">{stock.marketCap}</span>
+                          </div>
+                        )}
+
+                        {/* Insider Price & Quantity */}
+                        {stock.insiderPrice && stock.insiderQuantity && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Insider Trade:</span>
+                            <span className="font-medium text-xs">
+                              {stock.insiderQuantity.toLocaleString()} @ ${stock.insiderPrice}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Transaction Type */}
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">{getTerm("transactionType")}:</span>
+                          <Badge variant={stock.recommendation?.toLowerCase().includes("buy") ? "default" : "destructive"}>
+                            {getTerm(stock.recommendation?.toLowerCase().includes("buy") ? "insiderPurchase" : "insiderSale")}
+                          </Badge>
+                        </div>
+
+                        {/* Days Since Trade */}
+                        {daysSinceTrade > 0 && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Days from Trade:</span>
+                            <span className="font-medium" data-testid={`text-days-${stock.ticker}`}>
+                              {daysSinceTrade}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* AI Score */}
+                        {aiScore !== null && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">AI Score:</span>
+                              <Badge 
+                                variant={aiScore >= 75 ? "default" : aiScore >= 50 ? "secondary" : "outline"}
+                                data-testid={`badge-score-${stock.ticker}`}
+                              >
+                                {aiScore}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {stock.recommendation?.toLowerCase().includes("buy") 
+                                ? "Likelihood of price appreciation" 
+                                : "Likelihood of price decline"}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       <StockExplorer

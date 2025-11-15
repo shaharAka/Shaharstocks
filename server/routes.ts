@@ -2992,9 +2992,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let filteredNoQuote = 0;
       
       console.log(`[OpeninsiderFetch] Processing ${newTransactions.length} new transactions with backend filters...`);
+      console.log(`[OpeninsiderFetch] Market cap filter: >$${minMarketCap}M, Options deal filter: ${optionsDealThreshold}%`);
       
       for (const transaction of newTransactions) {
         try {
+          console.log(`[OpeninsiderFetch] → Processing ${transaction.ticker} (${transaction.insiderName})...`);
           // Get pre-fetched quote
           const quote = quotesMap.get(transaction.ticker);
           if (!quote || !quote.currentPrice) {

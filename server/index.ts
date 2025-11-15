@@ -1235,14 +1235,14 @@ function startDailyBriefJob() {
             continue;
           }
           
-          // Fetch current price from Finnhub with validation
+          // Fetch current price from Alpha Vantage with validation
           let quote;
           try {
-            quote = await finnhubService.getQuote(ticker);
+            quote = await stockService.getQuote(ticker);
             
             // Validate quote data - must have valid current and previous close
-            if (!quote || quote.currentPrice === 0 || quote.previousClose === 0) {
-              log(`[DailyBrief] Skipping ${ticker} - invalid or missing price data from Finnhub`);
+            if (!quote || quote.price === 0 || quote.previousClose === 0) {
+              log(`[DailyBrief] Skipping ${ticker} - invalid or missing price data from Alpha Vantage`);
               skippedCount++;
               continue;
             }
@@ -1283,7 +1283,7 @@ function startDailyBriefJob() {
           log(`[DailyBrief] Generating brief for ${ticker}...`);
           const brief = await aiAnalysisService.generateDailyBrief({
             ticker,
-            currentPrice: quote.currentPrice,
+            currentPrice: quote.price,
             previousPrice: quote.previousClose,
             recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
             previousAnalysis
@@ -1293,7 +1293,7 @@ function startDailyBriefJob() {
           await storage.createDailyBrief({
             ticker,
             briefDate: today,
-            priceSnapshot: quote.currentPrice.toString(),
+            priceSnapshot: quote.price.toString(),
             priceChange: quote.change.toString(),
             priceChangePercent: quote.changePercent.toString(),
             recommendedStance: brief.recommendedStance,

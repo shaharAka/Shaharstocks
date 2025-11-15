@@ -145,23 +145,24 @@ export default function Purchase() {
     meta: { ignoreError: true },
   });
 
-  // Refresh all stocks mutation
+  // Manual fetch from OpenInsider mutation
   const refreshMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/stocks/refresh-all", {});
+      const res = await apiRequest("POST", "/api/openinsider/fetch", {});
       return await res.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock-analyses"] });
       toast({
-        title: getTerm("dataRefreshed"),
-        description: `Updated ${data.success} ${getTerm("opportunities")}`,
+        title: "Fetched New Opportunities",
+        description: data.message || `Found ${data.created || 0} new insider trades`,
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
-        title: "Refresh Failed",
-        description: "Unable to fetch market data",
+        title: "Fetch Failed",
+        description: error.message || "Unable to fetch from OpenInsider",
         variant: "destructive",
       });
     },

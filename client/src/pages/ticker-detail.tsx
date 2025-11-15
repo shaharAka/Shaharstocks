@@ -107,6 +107,7 @@ export default function TickerDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "daily-briefs"] }); // Fetch daily briefs after following
       toast({
         title: "Stock Followed",
@@ -133,6 +134,7 @@ export default function TickerDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       toast({
         title: "Stock Unfollowed",
         description: "You are no longer following this stock",

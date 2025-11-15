@@ -1941,7 +1941,14 @@ export class DatabaseStorage implements IStorage {
   }>> {
     const followedWithPrices = await this.getFollowedStocksWithPrices(userId);
     
-    const results = [];
+    const results: Array<FollowedStock & { 
+      currentPrice: string; 
+      priceChange: string; 
+      priceChangePercent: string;
+      jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
+      latestStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+      stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
+    }> = [];
     
     for (const followed of followedWithPrices) {
       // Get latest analysis job status
@@ -1964,19 +1971,42 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
       
       const latestBrief = briefs[0];
-      const latestStance = latestBrief?.stance as 'BUY' | 'SELL' | 'HOLD' | null || null;
+      // Fallback to legacy 'stance' field for compatibility with existing data
+      const rawStance = (latestBrief?.recommendedStance ?? (latestBrief as any)?.stance);
+      const latestStance = rawStance?.toUpperCase() as 'BUY' | 'SELL' | 'HOLD' | null || null;
       
       // Calculate stance alignment
+      // BUY + positive price change = positive (good, buying while price going up)
+      // BUY + negative price change = negative (bad, buying while price going down)
+      // BUY + zero price change = neutral (no clear trend)
+      // SELL + positive price change = negative (bad, selling while price going up)
+      // SELL + negative price change = positive (good, selling while price going down)
+      // SELL + zero price change = neutral (no clear trend)
+      // HOLD = neutral (regardless of price change)
+      // Missing price data = neutral (can't determine alignment)
       let stanceAlignment: 'positive' | 'negative' | 'neutral' | null = null;
-      if (latestStance && followed.priceChange) {
-        const priceChange = parseFloat(followed.priceChange);
-        const isTrendPositive = priceChange > 0;
-        
-        if (latestStance === 'BUY') {
-          stanceAlignment = isTrendPositive ? 'positive' : 'negative';
-        } else if (latestStance === 'SELL') {
-          stanceAlignment = isTrendPositive ? 'negative' : 'positive';
+      if (latestStance) {
+        if (latestStance === 'HOLD') {
+          // HOLD is always neutral, regardless of price change
+          stanceAlignment = 'neutral';
+        } else if (followed.priceChange !== null && followed.priceChange !== undefined) {
+          // Price data exists (including zero)
+          const priceChange = parseFloat(followed.priceChange);
+          
+          if (priceChange === 0) {
+            // Zero price change = neutral (no trend)
+            stanceAlignment = 'neutral';
+          } else {
+            const isTrendPositive = priceChange > 0;
+            
+            if (latestStance === 'BUY') {
+              stanceAlignment = isTrendPositive ? 'positive' : 'negative';
+            } else if (latestStance === 'SELL') {
+              stanceAlignment = isTrendPositive ? 'negative' : 'positive';
+            }
+          }
         } else {
+          // Price change missing - default to neutral for BUY/SELL
           stanceAlignment = 'neutral';
         }
       }
@@ -1984,7 +2014,7 @@ export class DatabaseStorage implements IStorage {
       results.push({
         ...followed,
         jobStatus,
-        latestStance,
+        latestStance, // Include the normalized stance in the response
         stanceAlignment,
       });
     }

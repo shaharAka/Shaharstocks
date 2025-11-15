@@ -8,6 +8,9 @@ import {
   MessageSquare,
   ChevronDown,
   Star,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import {
   Sidebar,
@@ -75,11 +78,17 @@ export function AppSidebar() {
     staleTime: Infinity, // Version doesn't change during runtime
   });
 
-  // Fetch followed stocks with prices
-  const { data: followedStocks = [] } = useQuery<Array<{ ticker: string; currentPrice: string }>>({
-    queryKey: ["/api/followed-stocks-with-prices"],
+  // Fetch followed stocks with status (includes job status, stance, alignment)
+  const { data: followedStocks = [] } = useQuery<Array<{ 
+    ticker: string; 
+    currentPrice: string;
+    jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
+    latestStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+    stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
+  }>>({
+    queryKey: ["/api/followed-stocks-with-status"],
     enabled: !!user,
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 10000, // Refresh every 10 seconds for job status updates
     retry: false,
     meta: { ignoreError: true },
   });
@@ -167,6 +176,26 @@ export function AppSidebar() {
                         {followedStocks.map((stock) => {
                           const tickerPath = `/ticker/${stock.ticker}`;
                           const isTickerActive = currentPath === tickerPath;
+                          const isProcessing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
+                          
+                          // Get stance indicator
+                          // Show loader when processing
+                          // Show green up arrow when alignment is positive (BUY+uptrend or SELL+downtrend)
+                          // Show red down arrow when alignment is negative (BUY+downtrend or SELL+uptrend)
+                          // Neutral (HOLD) shows no icon
+                          let StanceIcon = null;
+                          let stanceColor = "";
+                          if (isProcessing) {
+                            StanceIcon = Loader2;
+                            stanceColor = "text-muted-foreground animate-spin";
+                          } else if (stock.stanceAlignment === 'positive') {
+                            StanceIcon = TrendingUp;
+                            stanceColor = "text-green-600 dark:text-green-400";
+                          } else if (stock.stanceAlignment === 'negative') {
+                            StanceIcon = TrendingDown;
+                            stanceColor = "text-red-600 dark:text-red-400";
+                          }
+                          // Neutral (HOLD) or null shows no icon
                           
                           return (
                             <SidebarMenuSubItem key={stock.ticker}>
@@ -176,7 +205,10 @@ export function AppSidebar() {
                                 data-testid={`link-ticker-${stock.ticker}`}
                               >
                                 <Link href={tickerPath} onClick={handleNavClick}>
-                                  <span className="font-mono font-medium">{stock.ticker}</span>
+                                  <span className="font-mono font-medium flex items-center gap-1.5">
+                                    {StanceIcon && <StanceIcon className={`h-3 w-3 ${stanceColor}`} />}
+                                    {stock.ticker}
+                                  </span>
                                   <span className="ml-auto text-xs font-mono text-muted-foreground">
                                     ${parseFloat(stock.currentPrice).toFixed(2)}
                                   </span>

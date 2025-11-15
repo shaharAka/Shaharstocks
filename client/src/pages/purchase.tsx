@@ -18,8 +18,6 @@ import {
   TrendingUp,
   TrendingDown,
   RefreshCw,
-  LayoutGrid,
-  LayoutList,
   ExternalLink,
   Clock,
   MessageSquare,
@@ -47,7 +45,6 @@ type StockWithUserStatus = Stock & {
 };
 
 type SortOption = "aiScore" | "daysFromTrade" | "marketCap";
-type ViewMode = "cards" | "table";
 type RecommendationFilter = "all" | "buy" | "sell";
 type FunnelSection = "worthExploring" | "recents" | "processing" | "communityPicks" | "rejected";
 
@@ -70,7 +67,6 @@ export default function Purchase() {
   // State management
   const [sortBy, setSortBy] = useState<SortOption>("aiScore");
   const [tickerSearch, setTickerSearch] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("all");
   const [funnelSection, setFunnelSection] = useState<FunnelSection>("worthExploring");
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
@@ -525,28 +521,6 @@ export default function Purchase() {
             </SelectContent>
           </Select>
         </div>
-
-        {/* View Mode Toggle */}
-        <div className="flex gap-1">
-          <Button
-            variant={viewMode === "table" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("table")}
-            data-testid="button-view-table"
-          >
-            <LayoutList className="h-4 w-4 mr-2" />
-            Table
-          </Button>
-          <Button
-            variant={viewMode === "cards" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("cards")}
-            data-testid="button-view-cards"
-          >
-            <LayoutGrid className="h-4 w-4 mr-2" />
-            Cards
-          </Button>
-        </div>
       </div>
 
       {/* Stats Bar */}
@@ -633,7 +607,7 @@ export default function Purchase() {
             </p>
           </CardContent>
         </Card>
-      ) : viewMode === "table" ? (
+      ) : (
         <StockTable
           stocks={opportunities}
           users={users}
@@ -649,170 +623,6 @@ export default function Purchase() {
             setExplorerOpen(true);
           }}
         />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {opportunities.map((stock) => {
-            const currentPrice = parseFloat(stock.currentPrice);
-            const previousPrice = parseFloat(stock.previousClose || stock.currentPrice);
-            const priceChange = currentPrice - previousPrice;
-            const priceChangePercent = (priceChange / previousPrice) * 100;
-            const isPositive = priceChange >= 0;
-
-            const insiderPrice = stock.insiderPrice ? parseFloat(stock.insiderPrice) : currentPrice;
-            const priceDiff = currentPrice - insiderPrice;
-            const priceDiffPercent = insiderPrice > 0 ? (priceDiff / insiderPrice) * 100 : 0;
-            const isProfitable = priceDiff >= 0;
-
-            const stockInterests = getStockInterests(stock.ticker);
-            const aiScore = (stock as any).integratedScore ?? (stock as any).aiScore ?? null;
-
-            return (
-              <Card
-                key={stock.id}
-                className="hover-elevate cursor-pointer relative"
-                data-testid={`card-stock-${stock.ticker}`}
-                onClick={() => {
-                  setExplorerStock(stock);
-                  setExplorerOpen(true);
-                }}
-              >
-                <div
-                  className="absolute top-2 right-2 z-10"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Checkbox
-                    checked={selectedTickers.has(stock.ticker)}
-                    onCheckedChange={() => toggleSelection(stock.ticker)}
-                    aria-label={`Select ${stock.ticker}`}
-                    data-testid={`checkbox-card-${stock.ticker}`}
-                  />
-                </div>
-                <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2 pr-10">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <CardTitle className="text-lg font-semibold" data-testid={`text-ticker-${stock.ticker}`}>
-                        {stock.ticker}
-                      </CardTitle>
-                      {isNewStock(stock.ticker, stock.insiderTradeDate) && (
-                        <Badge variant="default" className="text-xs px-1.5 py-0" data-testid={`badge-new-${stock.ticker}`}>
-                          NEW
-                        </Badge>
-                      )}
-                      {stock.isFollowing && (
-                        <Star className="h-3.5 w-3.5 text-primary fill-current" data-testid={`icon-following-${stock.ticker}`} />
-                      )}
-                    </div>
-                    <CardDescription className="text-xs line-clamp-1" data-testid={`text-company-${stock.ticker}`}>
-                      {stock.companyName}
-                    </CardDescription>
-                  </div>
-                  {stock.recommendation && (
-                    <Badge
-                      variant={stock.recommendation.toLowerCase().includes("buy") ? "default" : "destructive"}
-                      className="text-xs shrink-0"
-                      data-testid={`badge-recommendation-${stock.ticker}`}
-                    >
-                      {stock.recommendation.toLowerCase().includes("buy") ? "BUY" : "SELL"}
-                    </Badge>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-3 pb-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-mono font-semibold" data-testid={`text-price-${stock.ticker}`}>
-                      ${currentPrice.toFixed(2)}
-                    </span>
-                    <div
-                      className={`flex items-center gap-1 ${
-                        isPositive ? "text-success" : "text-destructive"
-                      }`}
-                      data-testid={`text-change-${stock.ticker}`}
-                    >
-                      {isPositive ? (
-                        <TrendingUp className="h-3 w-3" />
-                      ) : (
-                        <TrendingDown className="h-3 w-3" />
-                      )}
-                      <span className="text-sm font-mono font-medium">
-                        {isPositive ? "+" : ""}
-                        {priceChangePercent.toFixed(2)}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {stock.insiderPrice && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Insider @ ${parseFloat(stock.insiderPrice).toFixed(2)}</span>
-                      <span className={`font-mono text-sm ${isProfitable ? "text-success" : "text-destructive"}`} data-testid={`text-price-diff-${stock.ticker}`}>
-                        {isProfitable ? "+" : ""}{priceDiffPercent.toFixed(1)}%
-                      </span>
-                    </div>
-                  )}
-
-                  {stock.insiderTradeDate && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`text-days-from-buy-${stock.ticker}`}>
-                      <Clock className="h-3 w-3" />
-                      <span>{getDaysFromBuy(stock.insiderTradeDate)} days from buy</span>
-                    </div>
-                  )}
-
-                  {stock.candlesticks && stock.candlesticks.length > 0 && (
-                    <div className="-mx-2" data-testid={`chart-candlestick-${stock.ticker}`}>
-                      <MiniCandlestickChart data={stock.candlesticks} height={50} />
-                    </div>
-                  )}
-
-                  {stock.marketCap && (
-                    <div className="text-xs text-muted-foreground" data-testid={`text-marketcap-${stock.ticker}`}>
-                      {stock.marketCap} market cap
-                    </div>
-                  )}
-
-                  {aiScore !== null && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">AI Score:</span>
-                      <Badge
-                        variant={aiScore >= 75 ? "default" : aiScore >= 50 ? "secondary" : "outline"}
-                        data-testid={`badge-score-${stock.ticker}`}
-                      >
-                        {aiScore}
-                      </Badge>
-                    </div>
-                  )}
-
-                  {(stockInterests.length > 0 || getCommentCount(stock.ticker) > 0) && (
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex gap-1">
-                        {stockInterests.map((interest) => (
-                          <Avatar
-                            key={interest.id}
-                            className="h-6 w-6"
-                            style={{ backgroundColor: interest.user.avatarColor }}
-                            data-testid={`avatar-interest-${stock.ticker}-${interest.user.name.toLowerCase()}`}
-                          >
-                            <AvatarFallback
-                              className="text-white text-xs"
-                              style={{ backgroundColor: interest.user.avatarColor }}
-                            >
-                              {getInitials(interest.user.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                        ))}
-                      </div>
-                      {getCommentCount(stock.ticker) > 0 && (
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <MessageSquare className="h-4 w-4" />
-                          <span className="text-sm" data-testid={`text-comment-count-${stock.ticker}`}>
-                            {getCommentCount(stock.ticker)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
       )}
 
       <StockExplorer

@@ -40,6 +40,12 @@ const mainMenuItems = [
     icon: ShoppingCart,
     testId: "link-opportunities",
   },
+  {
+    title: "Following",
+    url: "/following",
+    icon: Star,
+    testId: "link-following",
+  },
 ];
 
 const communityMenuItems = [

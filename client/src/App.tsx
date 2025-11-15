@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import Portfolio from "@/pages/portfolio";
 import Purchase from "@/pages/purchase";
+import Following from "@/pages/following";
 import Trading from "@/pages/trading";
 import Settings from "@/pages/settings";
 import CommunityDiscussion from "@/pages/community-discussion";
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/" component={Purchase} />
       <Route path="/recommendations" component={Purchase} />
+      <Route path="/following" component={Following} />
       <Route path="/watchlist" component={Portfolio} />
       <Route path="/trading" component={Trading} />
       <Route path="/ticker/:ticker" component={TickerDetail} />

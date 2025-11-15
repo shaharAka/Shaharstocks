@@ -404,15 +404,39 @@ export default function Purchase() {
       </div>
 
       {/* Stats Bar */}
-      <div className="flex gap-4 text-sm">
-        <div>
-          <span className="text-muted-foreground">Total {getTerm("opportunities")}: </span>
-          <span className="font-medium" data-testid="text-total-count">{opportunities.length}</span>
+      <div className="flex gap-4 text-sm items-center justify-between">
+        <div className="flex gap-4">
+          <div>
+            <span className="text-muted-foreground">Total {getTerm("opportunities")}: </span>
+            <span className="font-medium" data-testid="text-total-count">{opportunities.length}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Picked: </span>
+            <span className="font-medium" data-testid="text-picked-count">{pinnedOpportunities.length}</span>
+          </div>
         </div>
-        <div>
-          <span className="text-muted-foreground">Picked: </span>
-          <span className="font-medium" data-testid="text-picked-count">{pinnedOpportunities.length}</span>
-        </div>
+
+        {/* Bulk Actions */}
+        {selectedTickers.size > 0 && (
+          <div className="flex gap-2 items-center">
+            <span className="text-sm text-muted-foreground">
+              {selectedTickers.size} selected
+            </span>
+            <Button
+              size="sm"
+              onClick={() => {
+                Array.from(selectedTickers).forEach(ticker => {
+                  followMutation.mutate(ticker);
+                });
+                setSelectedTickers(new Set());
+              }}
+              disabled={followMutation.isPending}
+              data-testid="button-bulk-follow"
+            >
+              Follow Selected
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Opportunities List */}

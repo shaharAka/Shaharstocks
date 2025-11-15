@@ -1919,29 +1919,36 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
       
       const latestBrief = briefs[0];
-      // Use watching scenario as primary stance (entry evaluation is most relevant for sidebar)
-      const rawStance = latestBrief?.watchingStance;
-      const aiStance = rawStance?.toUpperCase() as 'BUY' | 'SELL' | 'HOLD' | null || null;
+      const watchingStance = latestBrief?.watchingStance?.toLowerCase() || null;
+      const owningStance = latestBrief?.owningStance?.toLowerCase() || null;
       const aiScore = latestBrief?.watchingConfidence ?? null;
       
-      // Calculate stance alignment based on insider action vs AI stance
-      // "act" = AI stance aligns with insider action (strong signal to act on opportunity)
-      // "hold" = AI stance conflicts with insider action (weak signal, hold off)
+      // Calculate stance alignment using NEW dual-scenario logic
+      // "act" = Either scenario recommends action (ENTER for entry, SELL for owned)
+      // "hold" = Both scenarios recommend wait/hold
+      // 
+      // New stance values:
+      // - Watching scenario: "enter" (act) or "wait" (hold)
+      // - Owning scenario: "sell" (act) or "hold" (hold)
+      //
       // Examples:
-      // - Insider BUY + AI BUY = "act" (strong buy signal)
-      // - Insider BUY + AI SELL/HOLD = "hold" (conflicting, don't buy yet)
-      // - Insider SELL + AI SELL = "act" (strong sell signal) 
-      // - Insider SELL + AI BUY/HOLD = "hold" (conflicting, don't sell yet)
+      // - Watching ENTER + Owning HOLD = "act" (entry opportunity)
+      // - Watching WAIT + Owning SELL = "act" (exit signal)
+      // - Watching WAIT + Owning HOLD = "hold" (no action)
+      // - Watching ENTER + Owning SELL = "act" (both scenarios agree on action)
       let stanceAlignment: 'act' | 'hold' | null = null;
-      if (insiderAction && aiStance) {
-        if (insiderAction === aiStance) {
-          // AI agrees with insider action - strong signal to act
+      if (watchingStance || owningStance) {
+        // ACT when either scenario recommends action (case-insensitive check)
+        if (watchingStance === 'enter' || owningStance === 'sell') {
           stanceAlignment = 'act';
         } else {
-          // AI disagrees with insider action - weak signal, hold off
+          // HOLD when both scenarios recommend wait/hold
           stanceAlignment = 'hold';
         }
       }
+      
+      // For backward compatibility, derive aiStance from watching scenario (uppercase for display)
+      const aiStance = latestBrief?.watchingStance?.toUpperCase() as 'ENTER' | 'WAIT' | null || null;
       
       results.push({
         ...followed,

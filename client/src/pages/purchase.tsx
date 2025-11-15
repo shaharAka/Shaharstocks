@@ -517,92 +517,8 @@ export default function Purchase() {
         </div>
       </div>
 
-      {/* Quick Filters */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Quick Filters:</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge
-              variant={funnelSection === "worthExploring" ? "default" : "outline"}
-              className="cursor-pointer hover-elevate active-elevate-2"
-              onClick={() => setFunnelSection("worthExploring")}
-              data-testid="filter-worth-exploring"
-            >
-              High Signal ({funnelSections.worthExploring?.length || 0})
-            </Badge>
-            <Badge
-              variant={funnelSection === "recents" ? "default" : "outline"}
-              className="cursor-pointer hover-elevate active-elevate-2"
-              onClick={() => setFunnelSection("recents")}
-              data-testid="filter-recents"
-            >
-              Recent ({funnelSections.recents?.length || 0})
-            </Badge>
-            <Badge
-              variant={funnelSection === "processing" ? "default" : "outline"}
-              className="cursor-pointer hover-elevate active-elevate-2"
-              onClick={() => setFunnelSection("processing")}
-              data-testid="filter-processing"
-            >
-              Processing ({funnelSections.processing?.length || 0})
-            </Badge>
-            <Badge
-              variant={funnelSection === "communityPicks" ? "default" : "outline"}
-              className="cursor-pointer hover-elevate active-elevate-2"
-              onClick={() => setFunnelSection("communityPicks")}
-              data-testid="filter-community"
-            >
-              Community ({funnelSections.communityPicks?.length || 0})
-            </Badge>
-            <Badge
-              variant={funnelSection === "rejected" ? "destructive" : "outline"}
-              className="cursor-pointer hover-elevate active-elevate-2"
-              onClick={() => setFunnelSection("rejected")}
-              data-testid="filter-rejected"
-            >
-              Rejected ({funnelSections.rejected?.length || 0})
-            </Badge>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Type:</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge
-              variant={recommendationFilter === "all" ? "default" : "outline"}
-              className="cursor-pointer hover-elevate active-elevate-2"
-              onClick={() => setRecommendationFilter("all")}
-              data-testid="filter-all"
-            >
-              All
-            </Badge>
-            <Badge
-              variant={recommendationFilter === "buy" ? "default" : "outline"}
-              className="cursor-pointer hover-elevate active-elevate-2"
-              onClick={() => setRecommendationFilter("buy")}
-              data-testid="filter-buy"
-            >
-              Buy Only
-            </Badge>
-            <Badge
-              variant={recommendationFilter === "sell" ? "default" : "outline"}
-              className="cursor-pointer hover-elevate active-elevate-2"
-              onClick={() => setRecommendationFilter("sell")}
-              data-testid="filter-sell"
-            >
-              Sell Only
-            </Badge>
-          </div>
-        </div>
-      </div>
-
-      {/* Search and Sort */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* Search, Filters, and Controls - Consolidated Row */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -613,7 +529,21 @@ export default function Purchase() {
             data-testid="input-search"
           />
         </div>
-        <div className="w-full sm:w-56">
+        
+        <div className="w-full sm:w-40">
+          <Select value={recommendationFilter} onValueChange={(value) => setRecommendationFilter(value as RecommendationFilter)}>
+            <SelectTrigger data-testid="select-type">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="buy">Buy Only</SelectItem>
+              <SelectItem value="sell">Sell Only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="w-full sm:w-48">
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
             <SelectTrigger data-testid="select-sort">
               <SortAsc className="h-4 w-4 mr-2" />
@@ -626,9 +556,74 @@ export default function Purchase() {
             </SelectContent>
           </Select>
         </div>
+        
+        <div className="flex gap-2">
+          <Button
+            variant={viewMode === "cards" ? "default" : "outline"}
+            size="icon"
+            onClick={() => setViewMode("cards")}
+            data-testid="button-view-cards"
+            title="Card view"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "table" ? "default" : "outline"}
+            size="icon"
+            onClick={() => setViewMode("table")}
+            data-testid="button-view-table"
+            title="Table view"
+          >
+            <LayoutList className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Bar and View Toggle */}
+      {/* Funnel Section Filters */}
+      <div className="flex flex-wrap gap-2">
+        <Badge
+          variant={funnelSection === "worthExploring" ? "default" : "outline"}
+          className="cursor-pointer hover-elevate active-elevate-2"
+          onClick={() => setFunnelSection("worthExploring")}
+          data-testid="filter-worth-exploring"
+        >
+          High Signal ({funnelSections.worthExploring?.length || 0})
+        </Badge>
+        <Badge
+          variant={funnelSection === "recents" ? "default" : "outline"}
+          className="cursor-pointer hover-elevate active-elevate-2"
+          onClick={() => setFunnelSection("recents")}
+          data-testid="filter-recents"
+        >
+          Recent ({funnelSections.recents?.length || 0})
+        </Badge>
+        <Badge
+          variant={funnelSection === "processing" ? "default" : "outline"}
+          className="cursor-pointer hover-elevate active-elevate-2"
+          onClick={() => setFunnelSection("processing")}
+          data-testid="filter-processing"
+        >
+          Processing ({funnelSections.processing?.length || 0})
+        </Badge>
+        <Badge
+          variant={funnelSection === "communityPicks" ? "default" : "outline"}
+          className="cursor-pointer hover-elevate active-elevate-2"
+          onClick={() => setFunnelSection("communityPicks")}
+          data-testid="filter-community"
+        >
+          Community ({funnelSections.communityPicks?.length || 0})
+        </Badge>
+        <Badge
+          variant={funnelSection === "rejected" ? "destructive" : "outline"}
+          className="cursor-pointer hover-elevate active-elevate-2"
+          onClick={() => setFunnelSection("rejected")}
+          data-testid="filter-rejected"
+        >
+          Rejected ({funnelSections.rejected?.length || 0})
+        </Badge>
+      </div>
+
+      {/* Stats Bar */}
       <div className="flex gap-4 text-sm items-center justify-between">
         <div className="flex gap-4">
           <div>
@@ -636,30 +631,6 @@ export default function Purchase() {
             <span className="font-medium" data-testid="text-total-count">{opportunities.length}</span>
           </div>
         </div>
-        
-        {/* View Mode Toggle */}
-        {!selectedTickers.size && (
-          <div className="flex gap-2">
-            <Button
-              variant={viewMode === "cards" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("cards")}
-              data-testid="button-view-cards"
-            >
-              <LayoutGrid className="h-4 w-4 mr-2" />
-              Cards
-            </Button>
-            <Button
-              variant={viewMode === "table" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("table")}
-              data-testid="button-view-table"
-            >
-              <LayoutList className="h-4 w-4 mr-2" />
-              Table
-            </Button>
-          </div>
-        )}
 
         {/* Bulk Actions */}
         {selectedTickers.size > 0 && (

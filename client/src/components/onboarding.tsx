@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -13,9 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Database, TrendingUp, Rocket } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Database, TrendingUp, Bell, Star, Calendar, Sparkles } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 
 interface OnboardingProps {
@@ -27,53 +24,15 @@ interface OnboardingProps {
 export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) {
   const [step, setStep] = useState(1);
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
   const { completeOnboarding } = useUser();
 
-  const fetchOpeninsiderMutation = useMutation({
-    mutationFn: async () => {
-      // First, ensure insider trading data source is enabled with meaningful default filters
-      await apiRequest("POST", "/api/openinsider/config", {
-        enabled: true,
-        fetchLimit: 500,
-        fetchInterval: "hourly",
-        // Default filters for high-quality recommendations
-        insiderTitles: ["CEO", "CFO", "Director", "President", "COO", "CTO", "10% Owner"],
-        minTransactionValue: 100000, // $100k minimum transaction value
-        optionsDealThresholdPercent: 15, // Filter out stock options deals (insider price must be ≥15% of market)
-      });
-      
-      // Then fetch the data
-      const res = await apiRequest("POST", "/api/openinsider/fetch", {
-        limit: 500,
-      });
-      return await res.json();
-    },
-    onSuccess: async (data) => {
-      // Invalidate queries to refresh stocks and user state (which includes initialDataFetched flag)
-      await queryClient.invalidateQueries({ queryKey: ["/api/stocks"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
-      toast({
-        title: "Data fetched successfully",
-        description: data.message || `Fetched ${data.transactionsFetched} insider trading transactions`,
-      });
-      setStep(3);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to fetch insider trading data. You can try again later from Settings.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleStartFetching = () => {
-    setStep(2);
-    fetchOpeninsiderMutation.mutate();
+  const handleNext = () => {
+    if (step < 3) {
+      setStep(step + 1);
+    }
   };
 
-  const handleViewRecommendations = async () => {
+  const handleGetStarted = async () => {
     await completeOnboarding();
     onOpenChange(false);
     setLocation("/recommendations");
@@ -83,6 +42,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
   const handleSkip = async () => {
     await completeOnboarding();
     onOpenChange(false);
+    setLocation("/recommendations");
     onComplete();
   };
 
@@ -106,64 +66,52 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
           {step === 1 && (
             <>
               <DialogDescription className="text-base">
-                signal2 helps you track insider trading activity and make informed investment decisions. 
-                Follow company insiders who are buying or selling their own stock.
+                signal2 surfaces high-quality trading opportunities from SEC insider trading filings, 
+                scored and analyzed by AI to help you make informed investment decisions.
               </DialogDescription>
 
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
                 <Card data-testid="card-feature-insider">
                   <CardHeader className="pb-3">
                     <Database className="h-8 w-8 mb-2 text-primary" />
-                    <CardTitle className="text-lg">Insider Data</CardTitle>
+                    <CardTitle className="text-lg">SEC Filings</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Track real insider transactions from SEC regulatory filings
+                      Real insider transactions from SEC regulatory filings, filtered for quality
                     </CardDescription>
                   </CardContent>
                 </Card>
 
                 <Card data-testid="card-feature-ai">
                   <CardHeader className="pb-3">
-                    <TrendingUp className="h-8 w-8 mb-2 text-primary" />
-                    <CardTitle className="text-lg">AI Analysis</CardTitle>
+                    <Sparkles className="h-8 w-8 mb-2 text-primary" />
+                    <CardTitle className="text-lg">AI Scoring</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Get dual-agent AI insights analyzing company fundamentals and market conditions
+                      Dual-agent AI analyzes fundamentals and market conditions, scoring each opportunity
                     </CardDescription>
                   </CardContent>
                 </Card>
 
-                <Card data-testid="card-feature-automated">
+                <Card data-testid="card-feature-briefs">
                   <CardHeader className="pb-3">
-                    <Rocket className="h-8 w-8 mb-2 text-primary" />
-                    <CardTitle className="text-lg">Automated Trading</CardTitle>
+                    <TrendingUp className="h-8 w-8 mb-2 text-primary" />
+                    <CardTitle className="text-lg">Daily Briefs</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Create rules to automatically manage positions based on price triggers
+                      Get daily trading guidance with buy/hold/sell stances for stocks you follow
                     </CardDescription>
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="bg-muted/50 p-4 rounded-lg" data-testid="section-openinsider">
-                <h3 className="font-semibold mb-2">Let's Start with Data</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  We'll fetch the latest 500 insider trading transactions from SEC regulatory filings. 
-                  This will give you a solid foundation of recent insider activity to review.
-                </p>
-                <div className="space-y-2 mb-4">
-                  <p className="text-xs font-medium">Smart Filtering Applied:</p>
-                  <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
-                    <li>Only companies with market cap over $500M</li>
-                    <li>Filters out stock options deals (insider price must be ≥15% of market price)</li>
-                    <li>Focuses on high-quality insider purchase signals</li>
-                  </ul>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Takes 30-60 seconds. You can adjust these filters and add more data sources in Settings.
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  Data updates automatically in the background. You'll see opportunities from the last 2 weeks, 
+                  filtered for companies over $500M market cap.
                 </p>
               </div>
             </>
@@ -171,25 +119,61 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
           {step === 2 && (
             <div className="space-y-4">
-              <div className="flex flex-col items-center justify-center py-8" data-testid="section-fetching">
-                <div className="relative mb-6">
-                  <div className="h-16 w-16 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-                  <Database className="h-8 w-8 text-primary absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Fetching Insider Trading Data</h3>
-                <p className="text-sm text-muted-foreground text-center max-w-md mb-3">
-                  We're pulling the latest 500 transactions from SEC regulatory filings. 
-                  This includes company insider purchases and sales with detailed transaction information.
-                </p>
-                <div className="bg-muted/50 p-3 rounded-lg max-w-md mx-auto">
-                  <p className="text-xs font-medium mb-2 text-center">Quality Filters Active</p>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Filtering for companies over $500M market cap and excluding stock options deals. 
-                    These settings can be customized in Settings later.
-                  </p>
-                </div>
-                <p className="text-xs text-muted-foreground mt-4">
-                  This may take 30-60 seconds...
+              <DialogDescription className="text-base mb-4">
+                Stay informed with smart notifications and follow stocks to track them over time.
+              </DialogDescription>
+
+              <div className="space-y-4">
+                <Card data-testid="card-follow-system">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Star className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-base">Follow Stocks</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Click the star button on any stock to follow it. Followed stocks get daily AI briefs 
+                      and appear in your watchlist. They won't be auto-removed after 2 weeks.
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-daily-briefs">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-base">Daily Briefs</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Every day, followed stocks get fresh AI recommendations (BUY/HOLD/SELL) with 
+                      confidence scores and key highlights. Quick insights for fast decisions.
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-notifications">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-base">Smart Notifications</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Get alerts for high-score buy/sell signals (AI score &gt;70 or &lt;30), 
+                      popular stocks (&gt;10 followers), and stance changes on your positions.
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <p className="text-xs text-muted-foreground">
+                  <strong>2-Week Event Horizon:</strong> Opportunities older than 2 weeks are automatically 
+                  removed unless you follow them. This keeps your feed fresh and focused.
                 </p>
               </div>
             </div>
@@ -197,88 +181,93 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
           {step === 3 && (
             <div className="space-y-4">
-              <div className="flex flex-col items-center justify-center py-6" data-testid="section-success">
-                <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mb-4">
-                  <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-500" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">You're All Set!</h3>
-                <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
-                  We've successfully loaded insider trading recommendations. 
-                  Let's take a look at what company insiders are buying and selling.
-                </p>
+              <DialogDescription className="text-base mb-4">
+                You're ready to start exploring trading opportunities!
+              </DialogDescription>
 
-                <Card className="w-full" data-testid="card-next-steps">
-                  <CardHeader>
-                    <CardTitle>Next Steps</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-xs font-semibold text-primary">1</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Review Recommendations</p>
-                        <p className="text-sm text-muted-foreground">
-                          Check out the insider trading recommendations and see which stocks insiders are buying
-                        </p>
-                      </div>
+              <Card className="w-full" data-testid="card-next-steps">
+                <CardHeader>
+                  <CardTitle>Quick Start Guide</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-xs font-semibold text-primary">1</span>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-xs font-semibold text-primary">2</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Get AI Insights</p>
-                        <p className="text-sm text-muted-foreground">
-                          Click on any stock to get detailed AI analysis of company fundamentals and market conditions
-                        </p>
-                      </div>
+                    <div>
+                      <p className="font-medium">Browse Opportunities</p>
+                      <p className="text-sm text-muted-foreground">
+                        Review AI-scored opportunities from insider trading. High-value alerts appear for 
+                        BUY (&gt;70 score) and SELL (&lt;30 score) recommendations.
+                      </p>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-xs font-semibold text-primary">3</span>
-                      </div>
-                      <div>
-                        <p className="font-medium">Start Building Your Portfolio</p>
-                        <p className="text-sm text-muted-foreground">
-                          Approve stocks you like to add them to your portfolio and create automated trading rules
-                        </p>
-                      </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-xs font-semibold text-primary">2</span>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div>
+                      <p className="font-medium">Follow Interesting Stocks</p>
+                      <p className="text-sm text-muted-foreground">
+                        Click any stock card to see detailed analysis, then follow it to receive daily briefs 
+                        and simulation charts.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-xs font-semibold text-primary">3</span>
+                    </div>
+                    <div>
+                      <p className="font-medium">Stay Informed</p>
+                      <p className="text-sm text-muted-foreground">
+                        Check the notification bell for high-value alerts and review daily briefs 
+                        on your followed stocks.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg">
+                <div className="flex items-start gap-2 mb-1">
+                  <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium">Pro Tip</p>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">
+                  Visit Settings to customize data sources, fetch intervals, and quality filters. 
+                  You can also explore the Analysis page to run backtests and create trading rules.
+                </p>
               </div>
             </div>
           )}
         </div>
 
         <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
-          {step === 1 && (
-            <>
-              <Button
-                variant="ghost"
-                onClick={handleSkip}
-                className="w-full sm:w-auto"
-                data-testid="button-skip-onboarding"
-              >
-                Skip for now
-              </Button>
-              <Button
-                onClick={handleStartFetching}
-                className="w-full sm:w-auto"
-                data-testid="button-fetch-openinsider"
-              >
-                Start Fetching Data
-              </Button>
-            </>
-          )}
-          {step === 3 && (
+          <Button
+            variant="ghost"
+            onClick={handleSkip}
+            className="w-full sm:w-auto"
+            data-testid="button-skip-onboarding"
+          >
+            {step === 3 ? "Skip" : "Skip Tutorial"}
+          </Button>
+          
+          {step < 3 ? (
             <Button
-              onClick={handleViewRecommendations}
-              className="w-full sm:w-auto ml-auto"
-              data-testid="button-view-recommendations"
+              onClick={handleNext}
+              className="w-full sm:w-auto"
+              data-testid="button-next-onboarding"
             >
-              View Recommendations
+              Next
+            </Button>
+          ) : (
+            <Button
+              onClick={handleGetStarted}
+              className="w-full sm:w-auto"
+              data-testid="button-get-started"
+            >
+              Get Started
             </Button>
           )}
         </DialogFooter>

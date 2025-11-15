@@ -114,6 +114,7 @@ export function StockExplorer({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
       toast({
         title: "Success",
         description: `Unfollowed ${stock?.ticker}`,

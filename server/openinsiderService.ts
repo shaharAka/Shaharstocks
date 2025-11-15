@@ -102,11 +102,13 @@ class OpenInsiderService {
    * Fetch insider purchase transactions from OpenInsider.com
    * @param limit Number of transactions to fetch (default: 100)
    * @param filters Optional filters for transactions
+   * @param tradeType "P" for purchases or "S" for sales (default: "P")
    * @returns Scraper response with transactions and filtering statistics
    */
   async fetchInsiderPurchases(
     limit: number = 100,
-    filters?: OpenInsiderFilters
+    filters?: OpenInsiderFilters,
+    tradeType: "P" | "S" = "P"
   ): Promise<ScraperResponse> {
     try {
       // Validate and clamp limit to prevent command injection
@@ -114,8 +116,9 @@ class OpenInsiderService {
       const numericLimit = Number.isFinite(limit) ? limit : 100;
       const safeLimit = Math.max(1, Math.min(Math.floor(numericLimit), 500));
       
+      const transactionTypeLabel = tradeType === "S" ? "sale" : "purchase";
       const filterInfo = filters ? ` with filters: ${JSON.stringify(filters)}` : '';
-      console.log(`[OpenInsider] Fetching ${safeLimit} insider purchase transactions${filterInfo}...`);
+      console.log(`[OpenInsider] Fetching ${safeLimit} insider ${transactionTypeLabel} transactions${filterInfo}...`);
 
       // Build arguments for Python script
       const args = [this.pythonScriptPath, safeLimit.toString()];
@@ -131,7 +134,13 @@ class OpenInsiderService {
         if (filters.ticker) pythonFilters.ticker = filters.ticker;
         
         args.push(JSON.stringify(pythonFilters));
+      } else {
+        // Add empty filters placeholder to maintain correct arg position
+        args.push("{}");
       }
+      
+      // Add trade_type parameter as third argument
+      args.push(tradeType);
 
       const { stdout, stderr } = await execFileAsync(
         "python3",
@@ -250,6 +259,20 @@ class OpenInsiderService {
   ): Promise<any[]> {
     const scraperResponse = await this.fetchInsiderPurchases(limit, filters);
     return scraperResponse.transactions.map((t: OpenInsiderTransaction) => this.transactionToMessage(t));
+  }
+
+  /**
+   * Fetch insider SALES transactions from OpenInsider.com
+   * Thin wrapper around fetchInsiderPurchases with tradeType="S"
+   * @param limit Number of transactions to fetch (default: 100)
+   * @param filters Optional filters for transactions
+   * @returns Scraper response with sale transactions and filtering statistics
+   */
+  async fetchInsiderSales(
+    limit: number = 100,
+    filters?: OpenInsiderFilters
+  ): Promise<ScraperResponse> {
+    return this.fetchInsiderPurchases(limit, filters, "S");
   }
 
   /**

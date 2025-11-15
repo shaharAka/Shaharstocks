@@ -3133,13 +3133,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[OpeninsiderFetch] Options deal threshold: ${optionsDealThreshold}% (insider price >= market price)`);
       console.log(`[OpeninsiderFetch] ==============================================`);
       
-      // Fetch insider transactions with filters
-      const scraperResponse = await openinsiderService.fetchInsiderPurchases(
-        config.fetchLimit || 50,
-        Object.keys(filters).length > 0 ? filters : undefined
-      );
-      const transactions = scraperResponse.transactions;
-      const stage1Stats = scraperResponse.stats;
+      // Fetch BOTH purchase and sale transactions
+      console.log(`[OpeninsiderFetch] Fetching both purchases AND sales...`);
+      const [purchasesResponse, salesResponse] = await Promise.all([
+        openinsiderService.fetchInsiderPurchases(
+          config.fetchLimit || 50,
+          Object.keys(filters).length > 0 ? filters : undefined,
+          "P"
+        ),
+        openinsiderService.fetchInsiderSales(
+          config.fetchLimit || 50,
+          Object.keys(filters).length > 0 ? filters : undefined
+        )
+      ]);
+      
+      // Merge transactions from both sources
+      const transactions = [...purchasesResponse.transactions, ...salesResponse.transactions];
+      
+      // Merge stats
+      const stage1Stats = {
+        total_rows_scraped: purchasesResponse.stats.total_rows_scraped + salesResponse.stats.total_rows_scraped,
+        filtered_not_purchase: purchasesResponse.stats.filtered_not_purchase + salesResponse.stats.filtered_not_purchase,
+        filtered_invalid_data: purchasesResponse.stats.filtered_invalid_data + salesResponse.stats.filtered_invalid_data,
+        filtered_by_date: purchasesResponse.stats.filtered_by_date + salesResponse.stats.filtered_by_date,
+        filtered_by_title: purchasesResponse.stats.filtered_by_title + salesResponse.stats.filtered_by_title,
+        filtered_by_transaction_value: purchasesResponse.stats.filtered_by_transaction_value + salesResponse.stats.filtered_by_transaction_value,
+        filtered_by_insider_name: purchasesResponse.stats.filtered_by_insider_name + salesResponse.stats.filtered_by_insider_name,
+      };
+      
+      console.log(`[OpeninsiderFetch] Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
       
       const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
                                    stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 
@@ -3173,7 +3195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           transaction.ticker,
           transaction.filingDate,
           transaction.insiderName,
-          "buy" // All OpenInsider transactions are buys
+          transaction.recommendation // Use actual recommendation (buy or sell)
         );
         if (!existingTransaction) {
           newTransactions.push(transaction);

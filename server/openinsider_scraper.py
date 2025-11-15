@@ -33,10 +33,11 @@ class OpenInsiderScraper:
         previous_day_only: bool = False,
         insider_name: str | None = None,
         ticker: str | None = None,
-        max_days_back: int = 14
+        max_days_back: int = 14,
+        trade_type: str = "P"
     ) -> Dict[str, Any]:
         """
-        Fetch recent insider purchase transactions with pagination and retry logic
+        Fetch recent insider purchase or sale transactions with pagination and retry logic
         
         Args:
             limit: Maximum number of transactions to fetch (after filtering)
@@ -46,6 +47,7 @@ class OpenInsiderScraper:
             insider_name: Filter by specific insider name (case-insensitive partial match)
             ticker: Filter by specific stock ticker (uses OpenInsider's screener endpoint)
             max_days_back: Maximum number of days back to fetch (default: 14 for 2-week horizon)
+            trade_type: "P" for purchases or "S" for sales (default: "P")
         
         Returns:
             Dictionary with transactions and filtering statistics
@@ -83,8 +85,13 @@ class OpenInsiderScraper:
                 if page > 1:
                     url += f"&page={page}"
             else:
-                # Use latest-insider-purchases-25k for purchases (known to work)
-                url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
+                # Swap between purchases and sales endpoints based on trade_type
+                if trade_type == "S":
+                    # Fetch sales from latest-insider-sales-25k endpoint
+                    url = f"{self.base_url}/latest-insider-sales-25k?page={page}"
+                else:
+                    # Default to purchases from latest-insider-purchases-25k endpoint
+                    url = f"{self.base_url}/latest-insider-purchases-25k?page={page}"
             
             last_error = None
             page_transactions = None
@@ -221,7 +228,13 @@ class OpenInsiderScraper:
                                 # Filter by date horizon (2-week default)
                                 # Use filing date for consistency with backend filtering
                                 try:
-                                    filing_date = datetime.strptime(filing_date_text, "%Y-%m-%d")
+                                    # Try parsing with timestamp first (YYYY-MM-DD HH:MM:SS)
+                                    # If that fails, try just date (YYYY-MM-DD)
+                                    try:
+                                        filing_date = datetime.strptime(filing_date_text, "%Y-%m-%d %H:%M:%S")
+                                    except ValueError:
+                                        filing_date = datetime.strptime(filing_date_text, "%Y-%m-%d")
+                                    
                                     cutoff_date = datetime.now() - timedelta(days=max_days_back)
                                     
                                     # If transaction is older than max_days_back, skip it
@@ -354,7 +367,7 @@ class OpenInsiderScraper:
 def main():
     """Main entry point for the scraper"""
     if len(sys.argv) < 2:
-        print("Usage: python openinsider_scraper.py <limit> [filters_json]", file=sys.stderr)
+        print("Usage: python openinsider_scraper.py <limit> [filters_json] [trade_type]", file=sys.stderr)
         sys.exit(1)
     
     try:
@@ -381,6 +394,14 @@ def main():
         except json.JSONDecodeError as e:
             print(f"Warning: Invalid filters JSON: {e}", file=sys.stderr)
     
+    # Parse optional trade_type parameter (default to "P" for backward compatibility)
+    trade_type = "P"
+    if len(sys.argv) >= 4:
+        trade_type = sys.argv[3]
+        if trade_type not in ["P", "S"]:
+            print(f"Warning: Invalid trade_type '{trade_type}', defaulting to 'P'", file=sys.stderr)
+            trade_type = "P"
+    
     scraper = OpenInsiderScraper()
     result = scraper.fetch_insider_purchases(
         limit=limit,
@@ -388,7 +409,8 @@ def main():
         min_transaction_value=min_transaction_value,
         previous_day_only=previous_day_only,
         insider_name=insider_name,
-        ticker=ticker
+        ticker=ticker,
+        trade_type=trade_type
     )
     
     # Output as JSON to stdout

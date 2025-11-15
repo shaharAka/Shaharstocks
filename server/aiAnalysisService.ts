@@ -279,6 +279,88 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     const score = analysis.financialHealth.score;
     return `${rating} (${score}/100) - ${analysis.summary}`;
   }
+
+  /**
+   * Generate a lightweight daily brief for a followed stock
+   * This is NOT the full AI analysis - it's a quick daily update (<120 words)
+   * with buy/hold/sell guidance based on current price, news, and context
+   */
+  async generateDailyBrief(params: {
+    ticker: string;
+    currentPrice: number;
+    previousPrice: number;
+    recentNews?: { title: string; sentiment: number; source: string }[];
+    previousAnalysis?: { overallRating: string; summary: string };
+  }): Promise<{
+    recommendedStance: "buy" | "hold" | "sell";
+    confidence: number; // 1-10
+    briefText: string; // <120 words
+    keyHighlights: string[]; // 2-3 bullet points
+  }> {
+    const { ticker, currentPrice, previousPrice, recentNews, previousAnalysis } = params;
+    
+    const priceChange = currentPrice - previousPrice;
+    const priceChangePercent = ((priceChange / previousPrice) * 100).toFixed(2);
+    
+    const prompt = `You are a professional stock trader providing a DAILY BRIEF for ${ticker}.
+
+CURRENT STATUS:
+- Current Price: $${currentPrice.toFixed(2)}
+- Previous Close: $${previousPrice.toFixed(2)}
+- Change: ${priceChange >= 0 ? '+' : ''}$${priceChange.toFixed(2)} (${priceChangePercent}%)
+
+${previousAnalysis ? `PREVIOUS ANALYSIS CONTEXT:
+Rating: ${previousAnalysis.overallRating}
+Summary: ${previousAnalysis.summary}
+` : ''}
+
+${recentNews && recentNews.length > 0 ? `RECENT NEWS (last 24h):
+${recentNews.slice(0, 3).map(n => `- ${n.title} (${n.source}, sentiment: ${n.sentiment > 0 ? 'positive' : n.sentiment < 0 ? 'negative' : 'neutral'})`).join('\n')}
+` : 'No significant news in last 24h'}
+
+YOUR TASK: Provide a BRIEF daily trading recommendation (<120 words total).
+
+Return JSON in this EXACT format:
+{
+  "recommendedStance": "buy" | "hold" | "sell",
+  "confidence": 1-10 (where 10 is highest confidence),
+  "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on what matters TODAY for trading decisions.",
+  "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
+}
+
+GUIDANCE:
+- "buy" = Strong positive signals, good entry point or accumulation opportunity
+- "hold" = Maintain current position, wait for clearer signals  
+- "sell" = Warning signs, consider taking profits or cutting losses
+- Be direct and actionable
+- Focus on TODAY's trading context, not long-term fundamentals
+- If price is moving significantly, explain why in highlights`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4.1",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 500, // Keep it lightweight
+      });
+
+      const content = response.choices[0]?.message?.content || "{}";
+      const brief = JSON.parse(content);
+      
+      // Validate and enforce word limit on briefText
+      const wordCount = brief.briefText?.split(/\s+/).length || 0;
+      if (wordCount > 120) {
+        console.warn(`[AIAnalysisService] Daily brief for ${ticker} exceeded 120 words (${wordCount}), truncating...`);
+        const words = brief.briefText.split(/\s+/).slice(0, 120);
+        brief.briefText = words.join(' ') + '...';
+      }
+
+      return brief;
+    } catch (error) {
+      console.error(`[AIAnalysisService] Error generating daily brief for ${ticker}:`, error);
+      throw new Error(`Failed to generate daily brief for ${ticker}: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
 }
 
 export const aiAnalysisService = new AIAnalysisService();

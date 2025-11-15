@@ -161,8 +161,8 @@ app.use((req, res, next) => {
   // Start hourly reconciliation job to re-queue incomplete analyses
   startAnalysisReconciliationJob();
   
-  // Start daily summary generation job for followed stocks
-  startDailySummaryJob();
+  // Start daily brief generation job for followed stocks
+  startDailyBriefJob();
 })();
 
 /**
@@ -1193,91 +1193,139 @@ function startAnalysisReconciliationJob() {
   log("[Reconciliation] Background job started - reconciling incomplete analyses every hour");
 }
 
-function startDailySummaryJob() {
+function startDailyBriefJob() {
   const ONE_DAY = 24 * 60 * 60 * 1000;
 
-  async function generateDailySummaries() {
+  async function generateDailyBriefs() {
     try {
-      log("[DailySummary] Starting daily summary generation job...");
+      log("[DailyBrief] Starting daily brief generation job...");
       
-      // Get all users and their followed stocks
+      // Get all users and their followed stocks (deduplicated)
       const users = await storage.getUsers();
       const followedTickersSet = new Set<string>();
       
       for (const user of users) {
         const followed = await storage.getUserFollowedStocks(user.id);
-        followed.forEach((f: { ticker: string }) => followedTickersSet.add(f.ticker));
+        followed.forEach((f: { ticker: string }) => followedTickersSet.add(f.ticker.toUpperCase()));
       }
       
       const followedTickers = Array.from(followedTickersSet);
       
       if (followedTickers.length === 0) {
-        log("[DailySummary] No followed stocks to generate summaries for");
+        log("[DailyBrief] No followed stocks to generate briefs for");
         return;
       }
       
-      log(`[DailySummary] Generating summaries for ${followedTickers.length} followed stocks`);
+      log(`[DailyBrief] Generating briefs for ${followedTickers.length} followed stocks`);
       
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       let generatedCount = 0;
       let skippedCount = 0;
+      let errorCount = 0;
       
       for (const ticker of followedTickers) {
         try {
-          // Check if summary already exists for today
-          const existingSummaries = await storage.getDailySummariesForTicker(ticker);
-          const todaySummary = existingSummaries.find(s => s.summaryDate === today);
+          // Check if brief already exists for today
+          const existingBriefs = await storage.getDailyBriefsForTicker(ticker);
+          const todayBrief = existingBriefs.find(b => b.briefDate === today);
           
-          if (todaySummary) {
-            log(`[DailySummary] Skipping ${ticker} - summary already exists for today`);
+          if (todayBrief) {
+            log(`[DailyBrief] Skipping ${ticker} - brief already exists for today`);
             skippedCount++;
             continue;
           }
           
-          // Get stock for analysis
+          // Fetch current price from Finnhub with validation
+          let quote;
+          try {
+            quote = await finnhubService.getQuote(ticker);
+            
+            // Validate quote data - must have valid current and previous close
+            if (!quote || quote.currentPrice === 0 || quote.previousClose === 0) {
+              log(`[DailyBrief] Skipping ${ticker} - invalid or missing price data from Finnhub`);
+              skippedCount++;
+              continue;
+            }
+            
+            // Guard against division by zero
+            if (quote.previousClose === 0) {
+              log(`[DailyBrief] Skipping ${ticker} - previous close is zero, cannot calculate change`);
+              skippedCount++;
+              continue;
+            }
+          } catch (quoteError) {
+            log(`[DailyBrief] Skipping ${ticker} - failed to fetch quote: ${quoteError instanceof Error ? quoteError.message : 'Unknown error'}`);
+            errorCount++;
+            continue;
+          }
+          
+          // Get previous analysis for context (if available)
           const stock = await storage.getStock(ticker);
-          if (!stock) {
-            log(`[DailySummary] Skipping ${ticker} - stock not found`);
-            skippedCount++;
-            continue;
-          }
+          const stockData = stock as any; // Cast to bypass type narrowing
+          const previousAnalysis = stockData?.overallRating ? {
+            overallRating: stockData.overallRating,
+            summary: stockData.summary || "No previous analysis available"
+          } : undefined;
           
-          // Generate summary using existing analysis or trigger new analysis
-          log(`[DailySummary] Generating summary for ${ticker}...`);
+          // Get recent news (last 24h only, if available)
+          const now = Date.now() / 1000; // Unix timestamp in seconds
+          const oneDayAgo = now - (24 * 60 * 60);
+          const recentNews = stockData?.news
+            ?.filter((article: any) => article.datetime && article.datetime >= oneDayAgo)
+            ?.slice(0, 3)
+            ?.map((article: any) => ({
+              title: article.headline || "Untitled",
+              sentiment: 0, // Finnhub news doesn't include sentiment, use neutral
+              source: article.source || "Unknown"
+            }));
           
-          // Check if there's already a pending or processing job for this ticker
-          const existingJobs = await storage.getJobsByTicker(ticker);
-          const hasPendingJob = existingJobs.some(
-            (job: any) => job.status === "pending" || job.status === "processing"
-          );
+          // Generate the brief using AI
+          log(`[DailyBrief] Generating brief for ${ticker}...`);
+          const brief = await aiAnalysisService.generateDailyBrief({
+            ticker,
+            currentPrice: quote.currentPrice,
+            previousPrice: quote.previousClose,
+            recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
+            previousAnalysis
+          });
           
-          if (hasPendingJob) {
-            log(`[DailySummary] Skipping ${ticker} - analysis job already pending or processing`);
-            skippedCount++;
-            continue;
-          }
+          // Store in database
+          await storage.createDailyBrief({
+            ticker,
+            briefDate: today,
+            priceSnapshot: quote.currentPrice.toString(),
+            priceChange: quote.change.toString(),
+            priceChangePercent: quote.changePercent.toString(),
+            recommendedStance: brief.recommendedStance,
+            confidence: brief.confidence,
+            briefText: brief.briefText,
+            keyHighlights: brief.keyHighlights
+          });
           
-          // Queue a low-priority analysis job for daily summary
-          await storage.enqueueAnalysisJob(ticker, "daily_summary", "low");
           generatedCount++;
+          log(`[DailyBrief] Generated brief for ${ticker}: ${brief.recommendedStance} (confidence: ${brief.confidence}/10)`);
           
         } catch (error) {
-          console.error(`[DailySummary] Error generating summary for ${ticker}:`, error);
+          errorCount++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          log(`[DailyBrief] Error generating brief for ${ticker}: ${errorMsg}`);
         }
       }
       
-      log(`[DailySummary] Job complete: generated ${generatedCount}, skipped ${skippedCount}`);
+      log(`[DailyBrief] Job complete: generated ${generatedCount}, skipped ${skippedCount}, errors ${errorCount}`);
     } catch (error) {
-      console.error("[DailySummary] Error in daily summary job:", error);
+      console.error("[DailyBrief] Error in daily brief job:", error);
     }
   }
 
-  // Run immediately on startup
-  generateDailySummaries().catch(err => {
-    console.error("[DailySummary] Initial generation failed:", err);
-  });
+  // Run immediately on startup (after a 10 second delay to let other services initialize)
+  setTimeout(() => {
+    generateDailyBriefs().catch(err => {
+      console.error("[DailyBrief] Initial generation failed:", err);
+    });
+  }, 10000);
 
   // Then run once a day
-  setInterval(generateDailySummaries, ONE_DAY);
-  log("[DailySummary] Background job started - generating summaries once a day");
+  setInterval(generateDailyBriefs, ONE_DAY);
+  log("[DailyBrief] Background job started - generating briefs once a day");
 }

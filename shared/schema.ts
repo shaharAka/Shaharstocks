@@ -82,20 +82,6 @@ export const insertUserStockStatusSchema = createInsertSchema(userStockStatuses)
 export type InsertUserStockStatus = z.infer<typeof insertUserStockStatusSchema>;
 export type UserStockStatus = typeof userStockStatuses.$inferSelect;
 
-// User stock pins - tracks which stocks users have pinned
-export const userStockPins = pgTable("user_stock_pins", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  ticker: text("ticker").notNull(),
-  pinnedAt: timestamp("pinned_at").defaultNow(),
-}, (table) => ({
-  userTickerPinUnique: uniqueIndex("user_ticker_pin_unique_idx").on(table.userId, table.ticker),
-}));
-
-export const insertUserStockPinSchema = createInsertSchema(userStockPins).omit({ id: true, pinnedAt: true });
-export type InsertUserStockPin = z.infer<typeof insertUserStockPinSchema>;
-export type UserStockPin = typeof userStockPins.$inferSelect;
-
 // Insider profiles - tracks individual insider trading performance
 export const insiderProfiles = pgTable("insider_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

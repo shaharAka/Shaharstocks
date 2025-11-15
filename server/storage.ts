@@ -129,6 +129,7 @@ export interface IStorage {
   deleteStock(ticker: string): Promise<boolean>;
   deleteExpiredPendingStocks(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
   deleteExpiredRejectedStocks(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
+  deleteStocksOlderThan(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
   unrejectStock(ticker: string): Promise<Stock | undefined>;
 
   // Portfolio Holdings
@@ -702,6 +703,122 @@ export class DatabaseStorage implements IStorage {
       .where(eq(stocks.ticker, ticker))
       .returning();
     return updatedStock;
+  }
+
+  async deleteStocksOlderThan(ageInDays: number): Promise<{ count: number; tickers: string[] }> {
+    const startTime = Date.now();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - ageInDays);
+    const cutoffDateString = cutoffDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    
+    console.log(`[CLEANUP] Starting 2-week horizon cleanup: deleting stocks older than ${ageInDays} days (before ${cutoffDateString}), excluding followed stocks`);
+    
+    // Use transaction to ensure atomicity
+    const result = await db.transaction(async (tx) => {
+      // 1. Find candidate stocks (older than cutoff + NOT followed by any user)
+      // insiderTradeDate is stored as text (YYYY-MM-DD), so compare with string
+      const candidates = await tx
+        .select({ ticker: stocks.ticker })
+        .from(stocks)
+        .leftJoin(followedStocks, eq(stocks.ticker, followedStocks.ticker))
+        .where(and(
+          lt(stocks.insiderTradeDate, cutoffDateString),
+          sql`${followedStocks.ticker} IS NULL` // Not followed by anyone
+        ))
+        .for('update'); // Lock rows for deletion
+      
+      if (candidates.length === 0) {
+        console.log('[CLEANUP] No old non-followed stocks found');
+        return { count: 0, tickers: [] };
+      }
+      
+      const candidateTickers = candidates.map(c => c.ticker);
+      console.log(`[CLEANUP] Found ${candidateTickers.length} old non-followed stocks: ${candidateTickers.join(', ')}`);
+      
+      // 2. Safety check: verify no portfolio holdings or trades exist for these tickers
+      const holdingsCheck = await tx
+        .select({ ticker: portfolioHoldings.ticker })
+        .from(portfolioHoldings)
+        .where(inArray(portfolioHoldings.ticker, candidateTickers))
+        .limit(1);
+      
+      if (holdingsCheck.length > 0) {
+        console.warn(`[CLEANUP] WARNING: Found portfolio holdings for stocks marked for deletion. Skipping cleanup for safety.`);
+        return { count: 0, tickers: [] };
+      }
+      
+      const tradesCheck = await tx
+        .select({ ticker: trades.ticker })
+        .from(trades)
+        .where(inArray(trades.ticker, candidateTickers))
+        .limit(1);
+      
+      if (tradesCheck.length > 0) {
+        console.warn(`[CLEANUP] WARNING: Found trades for stocks marked for deletion. Skipping cleanup for safety.`);
+        return { count: 0, tickers: [] };
+      }
+      
+      // 3. Delete all related child records first
+      const deleteCounts = {
+        aiJobs: 0,
+        analyses: 0,
+        interests: 0,
+        views: 0,
+        userStatuses: 0,
+        comments: 0,
+      };
+      
+      // Delete AI analysis jobs
+      const deletedJobs = await tx.delete(aiAnalysisJobs)
+        .where(inArray(aiAnalysisJobs.ticker, candidateTickers))
+        .returning({ ticker: aiAnalysisJobs.ticker });
+      deleteCounts.aiJobs = deletedJobs.length;
+      
+      // Delete stock analyses
+      const deletedAnalyses = await tx.delete(stockAnalyses)
+        .where(inArray(stockAnalyses.ticker, candidateTickers))
+        .returning({ ticker: stockAnalyses.ticker });
+      deleteCounts.analyses = deletedAnalyses.length;
+      
+      // Delete stock interests
+      const deletedInterests = await tx.delete(stockInterests)
+        .where(inArray(stockInterests.ticker, candidateTickers))
+        .returning({ ticker: stockInterests.ticker });
+      deleteCounts.interests = deletedInterests.length;
+      
+      // Delete stock views
+      const deletedViews = await tx.delete(stockViews)
+        .where(inArray(stockViews.ticker, candidateTickers))
+        .returning({ ticker: stockViews.ticker });
+      deleteCounts.views = deletedViews.length;
+      
+      // Delete user stock statuses
+      const deletedStatuses = await tx.delete(userStockStatuses)
+        .where(inArray(userStockStatuses.ticker, candidateTickers))
+        .returning({ ticker: userStockStatuses.ticker });
+      deleteCounts.userStatuses = deletedStatuses.length;
+      
+      // Delete stock comments
+      const deletedComments = await tx.delete(stockComments)
+        .where(inArray(stockComments.ticker, candidateTickers))
+        .returning({ ticker: stockComments.ticker });
+      deleteCounts.comments = deletedComments.length;
+      
+      // 4. Finally, delete the stocks themselves
+      const deletedStocks = await tx.delete(stocks)
+        .where(inArray(stocks.ticker, candidateTickers))
+        .returning({ ticker: stocks.ticker });
+      
+      console.log(`[CLEANUP] Deleted child records:`, deleteCounts);
+      console.log(`[CLEANUP] Deleted ${deletedStocks.length} old stocks: ${deletedStocks.map(s => s.ticker).join(', ')}`);
+      
+      return { count: deletedStocks.length, tickers: deletedStocks.map(s => s.ticker) };
+    });
+    
+    const elapsedMs = Date.now() - startTime;
+    console.log(`[CLEANUP] 2-week horizon cleanup completed in ${elapsedMs}ms - Deleted ${result.count} stocks`);
+    
+    return result;
   }
 
   // Portfolio Holdings
@@ -1851,11 +1968,13 @@ export class DatabaseStorage implements IStorage {
       // Calculate 2 weeks ago date
       const twoWeeksAgo = new Date();
       twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const twoWeeksAgoString = twoWeeksAgo.toISOString().split('T')[0]; // Format as YYYY-MM-DD
       
       // Get all stocks with user statuses, filtered by 2-week horizon unless followed
       // Stocks must be either:
       // 1. Within last 2 weeks (insiderTradeDate >= 2 weeks ago), OR
       // 2. Followed by the user
+      // Note: insiderTradeDate is stored as text (YYYY-MM-DD), so compare with string
       const results = await db
         .select({
           stock: stocks,
@@ -1881,7 +2000,7 @@ export class DatabaseStorage implements IStorage {
           )
         )
         .where(
-          sql`(${stocks.insiderTradeDate} >= ${twoWeeksAgo.toISOString()} OR ${followedStocks.ticker} IS NOT NULL)`
+          sql`(${stocks.insiderTradeDate} >= ${twoWeeksAgoString} OR ${followedStocks.ticker} IS NOT NULL)`
         )
         .orderBy(desc(stocks.insiderTradeDate))
         .limit(limit);

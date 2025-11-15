@@ -11,6 +11,16 @@ export async function runStaleStockCleanup(storage: IStorage): Promise<void> {
   try {
     console.log('[CLEANUP JOB] Starting daily stale stock cleanup...');
     
+    // Delete stocks older than 2 weeks (unless followed)
+    const twoWeekResult = await storage.deleteStocksOlderThan(14);
+    
+    if (twoWeekResult.count > 0) {
+      console.log(`[CLEANUP JOB] ✅ Successfully deleted ${twoWeekResult.count} stocks older than 2 weeks (non-followed)`);
+      console.log(`[CLEANUP JOB] Deleted tickers: ${twoWeekResult.tickers.join(', ')}`);
+    } else {
+      console.log('[CLEANUP JOB] ✅ No old non-followed stocks to delete (2-week horizon)');
+    }
+    
     // Delete pending stocks older than 10 days
     const pendingResult = await storage.deleteExpiredPendingStocks(10);
     

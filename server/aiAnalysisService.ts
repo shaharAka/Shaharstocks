@@ -281,8 +281,9 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
   }
 
   /**
-   * Generate a lightweight daily brief for a followed stock
-   * This is NOT the full AI analysis - it's a quick daily update (<120 words)
+   * Generate a lightweight daily brief for a followed stock - DUAL-SCENARIO VERSION
+   * Returns BOTH "watching" and "owning" scenarios so users can evaluate from both angles
+   * This is NOT the full AI analysis - it's a quick daily update (<120 words each)
    * with buy/hold/sell guidance based on current price, news, and context
    */
   async generateDailyBrief(params: {
@@ -290,24 +291,60 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     currentPrice: number;
     previousPrice: number;
     opportunityType?: "buy" | "sell"; // Type of opportunity (based on insider action)
-    userOwnsPosition?: boolean; // Whether user currently owns this stock
     recentNews?: { title: string; sentiment: number; source: string }[];
     previousAnalysis?: { overallRating: string; summary: string; technicalAnalysis?: any }; // Include technical analysis from full AI analysis
   }): Promise<{
-    recommendedStance: "buy" | "hold" | "sell";
-    confidence: number; // 1-10
-    briefText: string; // <120 words
-    keyHighlights: string[]; // 2-3 bullet points
+    watching: {
+      recommendedStance: "buy" | "hold" | "sell";
+      confidence: number; // 1-10
+      briefText: string; // <120 words
+      keyHighlights: string[]; // 2-3 bullet points
+    };
+    owning: {
+      recommendedStance: "buy" | "hold" | "sell";
+      confidence: number; // 1-10
+      briefText: string; // <120 words
+      keyHighlights: string[]; // 2-3 bullet points
+    };
   }> {
-    const { ticker, currentPrice, previousPrice, opportunityType = "buy", userOwnsPosition = false, recentNews, previousAnalysis } = params;
+    const { ticker, currentPrice, previousPrice, opportunityType = "buy", recentNews, previousAnalysis } = params;
+    
+    // Generate BOTH scenarios in parallel
+    const [watchingBrief, owningBrief] = await Promise.all([
+      this.generateSingleScenario({ ticker, currentPrice, previousPrice, opportunityType, userOwnsPosition: false, recentNews, previousAnalysis }),
+      this.generateSingleScenario({ ticker, currentPrice, previousPrice, opportunityType, userOwnsPosition: true, recentNews, previousAnalysis })
+    ]);
+    
+    return {
+      watching: watchingBrief,
+      owning: owningBrief
+    };
+  }
+
+  /**
+   * Internal helper to generate a single scenario (watching or owning)
+   */
+  private async generateSingleScenario(params: {
+    ticker: string;
+    currentPrice: number;
+    previousPrice: number;
+    opportunityType: "buy" | "sell";
+    userOwnsPosition: boolean;
+    recentNews?: { title: string; sentiment: number; source: string }[];
+    previousAnalysis?: { overallRating: string; summary: string; technicalAnalysis?: any };
+  }): Promise<{
+    recommendedStance: "buy" | "hold" | "sell";
+    confidence: number;
+    briefText: string;
+    keyHighlights: string[];
+  }> {
+    const { ticker, currentPrice, previousPrice, opportunityType, userOwnsPosition, recentNews, previousAnalysis } = params;
     
     const priceChange = currentPrice - previousPrice;
     const priceChangePercent = ((priceChange / previousPrice) * 100).toFixed(2);
     
-    // Adjust guidance based on opportunity type AND position status
     const isBuyOpportunity = opportunityType === "buy";
     
-    // Different context for users who own vs don't own the stock
     const positionContext = userOwnsPosition
       ? `USER OWNS THIS STOCK - Focus on EXIT STRATEGY (when to take profit or stop loss)`
       : `USER WATCHING - Focus on ENTRY EVALUATION (is the insider signal still valid for entry?)`;

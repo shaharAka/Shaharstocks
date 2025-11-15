@@ -1308,19 +1308,18 @@ function startDailyBriefJob() {
                   source: article.source || "Unknown"
                 }));
               
-              // Generate the brief using AI (position-aware)
-              log(`[DailyBrief] Generating brief for ${ticker} - user ${user.name} (${userOwnsPosition ? 'owns' : 'watching'}, ${opportunityType} opportunity)...`);
+              // Generate DUAL-SCENARIO brief (both watching and owning)
+              log(`[DailyBrief] Generating dual-scenario brief for ${ticker} - user ${user.name} (${userOwnsPosition ? 'owns' : 'watching'}, ${opportunityType} opportunity)...`);
               const brief = await aiAnalysisService.generateDailyBrief({
                 ticker,
                 currentPrice: quote.price,
                 previousPrice: quote.previousClose,
                 opportunityType,
-                userOwnsPosition,
                 recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
                 previousAnalysis
               });
               
-              // Store in database
+              // Store in database with BOTH scenarios
               await storage.createDailyBrief({
                 userId: user.id,
                 ticker,
@@ -1328,15 +1327,29 @@ function startDailyBriefJob() {
                 priceSnapshot: quote.price.toString(),
                 priceChange: quote.change.toString(),
                 priceChangePercent: quote.changePercent.toString(),
-                recommendedStance: brief.recommendedStance,
-                confidence: brief.confidence,
-                briefText: brief.briefText,
-                keyHighlights: brief.keyHighlights,
+                
+                // Watching scenario
+                watchingStance: brief.watching.recommendedStance,
+                watchingConfidence: brief.watching.confidence,
+                watchingText: brief.watching.briefText,
+                watchingHighlights: brief.watching.keyHighlights,
+                
+                // Owning scenario
+                owningStance: brief.owning.recommendedStance,
+                owningConfidence: brief.owning.confidence,
+                owningText: brief.owning.briefText,
+                owningHighlights: brief.owning.keyHighlights,
+                
+                // Legacy fields for backwards compat (use user's actual position)
+                recommendedStance: userOwnsPosition ? brief.owning.recommendedStance : brief.watching.recommendedStance,
+                confidence: userOwnsPosition ? brief.owning.confidence : brief.watching.confidence,
+                briefText: userOwnsPosition ? brief.owning.briefText : brief.watching.briefText,
+                keyHighlights: userOwnsPosition ? brief.owning.keyHighlights : brief.watching.keyHighlights,
                 userOwnsPosition
               });
               
-              // Check for stance change notification (hold→sell on owned position)
-              if (userOwnsPosition && brief.recommendedStance === 'sell') {
+              // Check for stance change notification (hold→sell on OWNING scenario)
+              if (userOwnsPosition && brief.owning.recommendedStance === 'sell') {
                 try {
                   // Get yesterday's brief to check for stance change
                   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -1368,7 +1381,7 @@ function startDailyBriefJob() {
               
               generatedCount++;
               userGeneratedCount++;
-              log(`[DailyBrief] Generated brief for ${ticker} (${user.name}): ${brief.recommendedStance} (confidence: ${brief.confidence}/10)`);
+              log(`[DailyBrief] Generated dual-scenario brief for ${ticker} (${user.name}): Watching=${brief.watching.recommendedStance}(${brief.watching.confidence}), Owning=${brief.owning.recommendedStance}(${brief.owning.confidence})`);
               
             } catch (error) {
               errorCount++;

@@ -2146,18 +2146,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               source: article.source || "Unknown"
             }));
           
-          // Generate the brief
+          // Generate the DUAL-SCENARIO brief (both watching and owning)
           const brief = await aiAnalysisService.generateDailyBrief({
             ticker,
             currentPrice: quote.price,
             previousPrice: quote.previousClose,
             opportunityType,
-            userOwnsPosition,
             recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
             previousAnalysis
           });
           
-          // Store in database
+          // Store in database with BOTH scenarios
           await storage.createDailyBrief({
             userId: req.session.userId,
             ticker,
@@ -2165,14 +2164,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
             priceSnapshot: quote.price.toString(),
             priceChange: quote.change.toString(),
             priceChangePercent: quote.changePercent.toString(),
-            recommendedStance: brief.recommendedStance,
-            confidence: brief.confidence,
-            briefText: brief.briefText,
-            keyHighlights: brief.keyHighlights,
+            
+            // Watching scenario
+            watchingStance: brief.watching.recommendedStance,
+            watchingConfidence: brief.watching.confidence,
+            watchingText: brief.watching.briefText,
+            watchingHighlights: brief.watching.keyHighlights,
+            
+            // Owning scenario
+            owningStance: brief.owning.recommendedStance,
+            owningConfidence: brief.owning.confidence,
+            owningText: brief.owning.briefText,
+            owningHighlights: brief.owning.keyHighlights,
+            
+            // Legacy fields for backwards compat (use user's actual position)
+            recommendedStance: userOwnsPosition ? brief.owning.recommendedStance : brief.watching.recommendedStance,
+            confidence: userOwnsPosition ? brief.owning.confidence : brief.watching.confidence,
+            briefText: userOwnsPosition ? brief.owning.briefText : brief.watching.briefText,
+            keyHighlights: userOwnsPosition ? brief.owning.keyHighlights : brief.watching.keyHighlights,
             userOwnsPosition
           });
           
-          console.log(`[Follow] Generated day-0 brief for ${ticker}: ${brief.recommendedStance} (confidence: ${brief.confidence}/10)`);
+          console.log(`[Follow] Generated day-0 dual-scenario brief for ${ticker}: Watching=${brief.watching.recommendedStance}(${brief.watching.confidence}), Owning=${brief.owning.recommendedStance}(${brief.owning.confidence})`);
         } else {
           console.log(`[Follow] Daily brief already exists for ${ticker} today, skipping`);
         }
@@ -4223,18 +4236,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               source: article.source || "Unknown"
             }));
           
-          // Generate brief
+          // Generate DUAL-SCENARIO brief (both watching and owning)
           const brief = await aiAnalysisService.generateDailyBrief({
             ticker,
             currentPrice: quote.price,
             previousPrice: quote.previousClose,
             opportunityType,
-            userOwnsPosition,
             recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
             previousAnalysis
           });
           
-          // Create or update brief (createDailyBrief handles both)
+          // Create or update brief with BOTH scenarios
           await storage.createDailyBrief({
             userId: req.session.userId,
             ticker,
@@ -4242,15 +4254,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             priceSnapshot: quote.price.toString(),
             priceChange: quote.change.toString(),
             priceChangePercent: quote.changePercent.toString(),
-            recommendedStance: brief.recommendedStance,
-            confidence: brief.confidence,
-            briefText: brief.briefText,
-            keyHighlights: brief.keyHighlights,
+            
+            // Watching scenario
+            watchingStance: brief.watching.recommendedStance,
+            watchingConfidence: brief.watching.confidence,
+            watchingText: brief.watching.briefText,
+            watchingHighlights: brief.watching.keyHighlights,
+            
+            // Owning scenario
+            owningStance: brief.owning.recommendedStance,
+            owningConfidence: brief.owning.confidence,
+            owningText: brief.owning.briefText,
+            owningHighlights: brief.owning.keyHighlights,
+            
+            // Legacy fields for backwards compat (use user's actual position)
+            recommendedStance: userOwnsPosition ? brief.owning.recommendedStance : brief.watching.recommendedStance,
+            confidence: userOwnsPosition ? brief.owning.confidence : brief.watching.confidence,
+            briefText: userOwnsPosition ? brief.owning.briefText : brief.watching.briefText,
+            keyHighlights: userOwnsPosition ? brief.owning.keyHighlights : brief.watching.keyHighlights,
             userOwnsPosition
           });
           
           generatedCount++;
-          console.log(`[AdminRegenerate] Generated brief for ${ticker}: ${brief.recommendedStance} (${opportunityType} opportunity, confidence: ${brief.confidence}/10)`);
+          console.log(`[AdminRegenerate] Generated dual-scenario brief for ${ticker}: Watching=${brief.watching.recommendedStance}(${brief.watching.confidence}), Owning=${brief.owning.recommendedStance}(${brief.owning.confidence})`);
         } catch (error) {
           errorCount++;
           console.error(`[AdminRegenerate] Error generating brief for ${ticker}:`, error);

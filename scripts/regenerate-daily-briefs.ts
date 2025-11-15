@@ -105,18 +105,17 @@ async function regenerateDailyBriefs() {
         console.log(`   Opportunity: ${opportunityType.toUpperCase()}`);
         console.log(`   Position: ${userOwnsPosition ? 'OWNS' : 'watching'}`);
         
-        // Generate the brief
+        // Generate the DUAL-SCENARIO brief (both watching and owning)
         const brief = await aiAnalysisService.generateDailyBrief({
           ticker,
           currentPrice: quote.price,
           previousPrice: quote.previousClose,
           opportunityType,
-          userOwnsPosition,
           recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
           previousAnalysis
         });
         
-        // Store in database
+        // Store in database with BOTH scenarios
         await storage.createDailyBrief({
           userId: superAdmin.id,
           ticker,
@@ -124,15 +123,30 @@ async function regenerateDailyBriefs() {
           priceSnapshot: quote.price.toString(),
           priceChange: quote.change.toString(),
           priceChangePercent: quote.changePercent.toString(),
-          recommendedStance: brief.recommendedStance,
-          confidence: brief.confidence,
-          briefText: brief.briefText,
-          keyHighlights: brief.keyHighlights,
+          
+          // Watching scenario
+          watchingStance: brief.watching.recommendedStance,
+          watchingConfidence: brief.watching.confidence,
+          watchingText: brief.watching.briefText,
+          watchingHighlights: brief.watching.keyHighlights,
+          
+          // Owning scenario
+          owningStance: brief.owning.recommendedStance,
+          owningConfidence: brief.owning.confidence,
+          owningText: brief.owning.briefText,
+          owningHighlights: brief.owning.keyHighlights,
+          
+          // Legacy fields for backwards compat (use user's actual position)
+          recommendedStance: userOwnsPosition ? brief.owning.recommendedStance : brief.watching.recommendedStance,
+          confidence: userOwnsPosition ? brief.owning.confidence : brief.watching.confidence,
+          briefText: userOwnsPosition ? brief.owning.briefText : brief.watching.briefText,
+          keyHighlights: userOwnsPosition ? brief.owning.keyHighlights : brief.watching.keyHighlights,
           userOwnsPosition
         });
         
-        console.log(`   ✅ Generated: ${brief.recommendedStance.toUpperCase()} (confidence: ${brief.confidence}/10)`);
-        console.log(`   📝 ${brief.briefText.substring(0, 100)}...`);
+        console.log(`   ✅ WATCHING: ${brief.watching.recommendedStance.toUpperCase()} (confidence: ${brief.watching.confidence}/10)`);
+        console.log(`   ✅ OWNING: ${brief.owning.recommendedStance.toUpperCase()} (confidence: ${brief.owning.confidence}/10)`);
+        console.log(`   📝 ${brief.watching.briefText.substring(0, 80)}...`);
         successCount++;
         
       } catch (error) {

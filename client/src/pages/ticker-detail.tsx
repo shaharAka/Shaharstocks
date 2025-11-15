@@ -30,6 +30,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { StockSimulationPlot } from "@/components/stock-simulation-plot";
+import { StockAIAnalysis } from "@/components/stock-ai-analysis";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
@@ -80,13 +81,6 @@ export default function TickerDetail() {
     (job: any) => job.status === "pending" || job.status === "processing"
   );
 
-  // Fetch AI analysis
-  const { data: aiAnalysis } = useQuery<any>({
-    queryKey: ["/api/stocks", ticker, "analysis"],
-    enabled: !!ticker,
-    retry: false,
-    meta: { ignoreError: true },
-  });
 
   // Fetch comments
   const { data: comments = [] } = useQuery<StockCommentWithUser[]>({
@@ -524,68 +518,10 @@ export default function TickerDetail() {
         </TabsContent>
 
         {/* AI Analysis Tab */}
-        <TabsContent value="analysis" className="space-y-4">
-          {aiAnalysis ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUpIcon className="h-5 w-5" />
-                  Complete AI Analysis
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {aiAnalysis.confidenceScore !== undefined && (
-                  <div>
-                    <Badge variant={aiAnalysis.confidenceScore > 70 ? "default" : "secondary"}>
-                      Confidence Score: {aiAnalysis.confidenceScore}/100
-                    </Badge>
-                  </div>
-                )}
-                {aiAnalysis.summary && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Summary</h4>
-                    <p className="text-sm text-muted-foreground">{aiAnalysis.summary}</p>
-                  </div>
-                )}
-                {aiAnalysis.strengths && aiAnalysis.strengths.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Strengths</h4>
-                    <ul className="list-disc list-inside space-y-1">
-                      {aiAnalysis.strengths.map((s: string, i: number) => (
-                        <li key={i} className="text-sm text-muted-foreground">{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {aiAnalysis.weaknesses && aiAnalysis.weaknesses.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Weaknesses</h4>
-                    <ul className="list-disc list-inside space-y-1">
-                      {aiAnalysis.weaknesses.map((w: string, i: number) => (
-                        <li key={i} className="text-sm text-muted-foreground">{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {aiAnalysis.redFlags && aiAnalysis.redFlags.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2 text-red-600 dark:text-red-400">Red Flags</h4>
-                    <ul className="list-disc list-inside space-y-1">
-                      {aiAnalysis.redFlags.map((r: string, i: number) => (
-                        <li key={i} className="text-sm text-red-600 dark:text-red-400">{r}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <p className="text-muted-foreground">No AI analysis available yet</p>
-              </CardContent>
-            </Card>
-          )}
+        <TabsContent value="analysis" className="w-full max-w-full min-w-0 overflow-hidden">
+          <div className="w-full max-w-full min-w-0">
+            <StockAIAnalysis ticker={ticker} />
+          </div>
         </TabsContent>
 
         {/* News Tab */}

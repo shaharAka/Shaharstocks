@@ -1011,7 +1011,7 @@ export type FollowedStock = typeof followedStocks.$inferSelect;
 
 // Daily Stock Briefs - Lightweight daily reports for followed stocks (< 120 words)
 // Provides quick buy/sell/hold guidance without full AI analysis
-// PERSONALIZED: Each user gets their own brief based on whether they own the stock
+// DUAL-SCENARIO: Shows both "if watching" and "if owning" recommendations side-by-side
 export const dailyBriefs = pgTable("daily_briefs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // User-specific briefs
@@ -1020,11 +1020,26 @@ export const dailyBriefs = pgTable("daily_briefs", {
   priceSnapshot: decimal("price_snapshot", { precision: 12, scale: 2 }).notNull(), // Price at time of brief
   priceChange: decimal("price_change", { precision: 12, scale: 2 }), // Dollar change vs previous close
   priceChangePercent: decimal("price_change_percent", { precision: 10, scale: 2 }), // Percent change
-  keyHighlights: text("key_highlights").array().default([]), // Top 2-3 news/catalyst bullets
-  recommendedStance: text("recommended_stance").notNull(), // "buy", "hold", "sell"
-  confidence: integer("confidence").notNull(), // 1-10 confidence in recommendation
-  briefText: text("brief_text").notNull(), // Short narrative summary (< 120 words)
-  userOwnsPosition: boolean("user_owns_position").notNull().default(false), // Whether user owned the stock when brief was generated
+  
+  // WATCHING SCENARIO (Entry Evaluation) - "If I enter now, what should I do?"
+  watchingStance: text("watching_stance").notNull(), // "buy", "hold", "sell"
+  watchingConfidence: integer("watching_confidence").notNull(), // 1-10
+  watchingText: text("watching_text").notNull(), // Brief for watching scenario
+  watchingHighlights: text("watching_highlights").array().default([]), // Key points for watching
+  
+  // OWNING SCENARIO (Exit Strategy) - "If I already own it, what should I do?"
+  owningStance: text("owning_stance").notNull(), // "buy", "hold", "sell"
+  owningConfidence: integer("owning_confidence").notNull(), // 1-10
+  owningText: text("owning_text").notNull(), // Brief for owning scenario
+  owningHighlights: text("owning_highlights").array().default([]), // Key points for owning
+  
+  // Legacy fields - kept for backwards compatibility, now optional
+  keyHighlights: text("key_highlights").array().default([]),
+  recommendedStance: text("recommended_stance"),
+  confidence: integer("confidence"),
+  briefText: text("brief_text"),
+  userOwnsPosition: boolean("user_owns_position").default(false),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   userTickerDateUnique: uniqueIndex("daily_brief_user_ticker_date_idx").on(table.userId, table.ticker, table.briefDate),

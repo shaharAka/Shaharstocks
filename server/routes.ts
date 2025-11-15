@@ -2137,6 +2137,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Get opportunity type from stock recommendation
           const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
           
+          // Check if user owns this stock (real holdings only, not simulated)
+          const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
+          const userOwnsPosition = holding !== undefined && holding.quantity > 0;
+          
           // Get recent news (last 24h only, if available)
           const now = Date.now() / 1000;
           const oneDayAgo = now - (24 * 60 * 60);
@@ -2155,12 +2159,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentPrice: quote.price,
             previousPrice: quote.previousClose,
             opportunityType,
+            userOwnsPosition,
             recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
             previousAnalysis
           });
           
           // Store in database
           await storage.createDailyBrief({
+            userId: req.session.userId,
             ticker,
             briefDate: today,
             priceSnapshot: quote.price.toString(),
@@ -2169,7 +2175,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             recommendedStance: brief.recommendedStance,
             confidence: brief.confidence,
             briefText: brief.briefText,
-            keyHighlights: brief.keyHighlights
+            keyHighlights: brief.keyHighlights,
+            userOwnsPosition
           });
           
           console.log(`[Follow] Generated day-0 brief for ${ticker}: ${brief.recommendedStance} (confidence: ${brief.confidence}/10)`);
@@ -4187,6 +4194,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             summary: stockData.summary || "No previous analysis available"
           } : undefined;
           
+          // Check if user owns this stock (real holdings only, not simulated)
+          const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
+          const userOwnsPosition = holding !== undefined && holding.quantity > 0;
+          
           // Get recent news
           const now = Date.now() / 1000;
           const oneDayAgo = now - (24 * 60 * 60);
@@ -4205,12 +4216,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentPrice: quote.price,
             previousPrice: quote.previousClose,
             opportunityType,
+            userOwnsPosition,
             recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
             previousAnalysis
           });
           
           // Create or update brief (createDailyBrief handles both)
           await storage.createDailyBrief({
+            userId: req.session.userId,
             ticker,
             briefDate: today,
             priceSnapshot: quote.price.toString(),
@@ -4219,7 +4232,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             recommendedStance: brief.recommendedStance,
             confidence: brief.confidence,
             briefText: brief.briefText,
-            keyHighlights: brief.keyHighlights
+            keyHighlights: brief.keyHighlights,
+            userOwnsPosition
           });
           
           generatedCount++;

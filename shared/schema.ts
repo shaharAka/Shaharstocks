@@ -988,8 +988,10 @@ export type FollowedStock = typeof followedStocks.$inferSelect;
 
 // Daily Stock Briefs - Lightweight daily reports for followed stocks (< 120 words)
 // Provides quick buy/sell/hold guidance without full AI analysis
+// PERSONALIZED: Each user gets their own brief based on whether they own the stock
 export const dailyBriefs = pgTable("daily_briefs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // User-specific briefs
   ticker: text("ticker").notNull(),
   briefDate: text("brief_date").notNull(), // YYYY-MM-DD format
   priceSnapshot: decimal("price_snapshot", { precision: 12, scale: 2 }).notNull(), // Price at time of brief
@@ -999,9 +1001,10 @@ export const dailyBriefs = pgTable("daily_briefs", {
   recommendedStance: text("recommended_stance").notNull(), // "buy", "hold", "sell"
   confidence: integer("confidence").notNull(), // 1-10 confidence in recommendation
   briefText: text("brief_text").notNull(), // Short narrative summary (< 120 words)
+  userOwnsPosition: boolean("user_owns_position").notNull().default(false), // Whether user owned the stock when brief was generated
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
-  tickerDateUnique: uniqueIndex("daily_brief_ticker_date_idx").on(table.ticker, table.briefDate),
+  userTickerDateUnique: uniqueIndex("daily_brief_user_ticker_date_idx").on(table.userId, table.ticker, table.briefDate),
 }));
 
 export const insertDailyBriefSchema = createInsertSchema(dailyBriefs).omit({ id: true, createdAt: true });

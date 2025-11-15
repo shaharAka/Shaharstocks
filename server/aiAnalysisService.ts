@@ -290,6 +290,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     currentPrice: number;
     previousPrice: number;
     opportunityType?: "buy" | "sell"; // Type of opportunity (based on insider action)
+    userOwnsPosition?: boolean; // Whether user currently owns this stock
     recentNews?: { title: string; sentiment: number; source: string }[];
     previousAnalysis?: { overallRating: string; summary: string };
   }): Promise<{
@@ -298,40 +299,83 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     briefText: string; // <120 words
     keyHighlights: string[]; // 2-3 bullet points
   }> {
-    const { ticker, currentPrice, previousPrice, opportunityType = "buy", recentNews, previousAnalysis } = params;
+    const { ticker, currentPrice, previousPrice, opportunityType = "buy", userOwnsPosition = false, recentNews, previousAnalysis } = params;
     
     const priceChange = currentPrice - previousPrice;
     const priceChangePercent = ((priceChange / previousPrice) * 100).toFixed(2);
     
-    // Adjust guidance based on opportunity type
+    // Adjust guidance based on opportunity type AND position status
     const isBuyOpportunity = opportunityType === "buy";
+    
+    // Different context for users who own vs don't own the stock
+    const positionContext = userOwnsPosition
+      ? `USER OWNS THIS STOCK - Focus on EXIT STRATEGY (when to take profit or stop loss)`
+      : `USER WATCHING - Focus on ENTRY EVALUATION (is the insider signal still valid for entry?)`;
+    
     const opportunityContext = isBuyOpportunity
       ? "This is a BUY OPPORTUNITY - insiders recently BOUGHT shares, signaling potential upside."
       : "This is a SELL OPPORTUNITY - insiders recently SOLD shares, signaling potential downside or overvaluation.";
     
-    const stanceRules = isBuyOpportunity
-      ? `STANCE RULES for BUY OPPORTUNITY (1-2 week horizon):
-- "buy" = Positive momentum (+2%+), positive catalysts, or dip buying opportunity → accumulate for near-term gains
-- "hold" = Flat/sideways (-1% to +1%) with no clear catalysts → wait for clearer direction
-- "sell" = Significant negative momentum (-3%+), broken support, or fundamental concerns → cut losses
+    // Different stance rules based on ownership
+    let stanceRules: string;
+    
+    if (userOwnsPosition) {
+      // User owns the stock - focus on exit strategy
+      stanceRules = isBuyOpportunity
+        ? `STANCE RULES for OWNED POSITION (Buy Opportunity):
+YOUR GOAL: Maximize gains or minimize losses on your existing position
 
-⚠️ IMPORTANT: 
-- +5-6% move = "buy" (ride momentum) or "sell" (take profits if overbought)
-- -5-6% move = "buy" (dip buying if fundamentals intact) or "sell" (cut losses if broken)
-- Reserve "hold" ONLY for minimal movement (<2%) with no catalysts`
-      : `STANCE RULES for SELL OPPORTUNITY (1-2 week horizon):
-- "sell" = Positive momentum (+2%+) confirms insiders were right → short or avoid (stock overvalued)
-- "hold" = Flat/sideways (-1% to +1%) → wait for clearer direction or avoid entirely  
-- "buy" = ONLY if significant negative momentum (-5%+) AND strong reversal signals → contrarian dip buy
+- "hold" = Uptrend intact (+1% to +4%), no sell signals → let it run, trail stop
+- "sell" = Strong gain (+5%+) OR broken support (-3%+) → take profits or cut losses
+- "buy" = Dip (-2% to -4%) on low volume with support holding → average down if fundamentals strong
 
-⚠️ IMPORTANT: 
-- +5-6% move = "sell" (insiders were right to exit, avoid or short)
-- -5-6% move = "hold" (falling as expected) or "buy" ONLY if oversold with reversal signals
-- Bias toward "sell" or "hold" - be very cautious with "buy" on sell opportunities`;
+EXIT SIGNALS:
+- Take profit at +5-8% if near resistance or overbought
+- Stop loss at -3-5% if support breaks or fundamentals deteriorate
+- Trail stops on +6%+ gains to lock in profits`
+        : `STANCE RULES for OWNED POSITION (Sell Opportunity - Contrarian Hold):
+REMEMBER: Insiders sold, so you're holding a contrarian position
+
+- "sell" = Any weakness (-2%+) OR sideways action → exit while you can, insiders were right
+- "hold" = Strong reversal (+4%+) with volume → position validated, trail stop
+- "buy" = RARELY - only if massive dip creates value AND fundamentals improved
+
+HIGH ALERT:
+- This position goes against insider selling - be ready to exit quickly
+- Any negative catalyst = immediate sell
+- Set tight stop loss (-3% max)`;
+    } else {
+      // User doesn't own - focus on entry evaluation
+      stanceRules = isBuyOpportunity
+        ? `STANCE RULES for ENTRY DECISION (Buy Opportunity):
+YOUR GOAL: Decide if insider buying signal is still valid for entry NOW
+
+- "buy" = Positive momentum (+2%+) OR dip with support (-2% to 0%) → insider signal still valid, enter
+- "hold" = Flat/sideways (-1% to +1%), waiting for breakout → insider signal unclear, wait
+- "sell" = Broken down (-3%+) OR negative catalysts → insider signal invalidated, avoid entry
+
+ENTRY CRITERIA:
+- Buy on strength if +2-4% with volume (ride insider momentum)
+- Buy on weakness if -2-3% at support (entry discount)
+- Avoid if -5%+ (insider timing may be off, wait for reversal)`
+        : `STANCE RULES for ENTRY DECISION (Sell Opportunity):
+REMEMBER: Insiders sold - be very skeptical about buying
+
+- "sell" = Any uptrend (+2%+) → insiders were right, short or avoid
+- "hold" = Sideways (-1% to +1%) → wait for clearer direction, no entry
+- "buy" = ONLY if severe oversold (-6%+) AND strong reversal signals → contrarian value play
+
+DEFAULT BIAS: AVOID ENTRY
+- Insiders know more than you - respect the sell signal
+- Only enter if overwhelmingly oversold with reversal confirmation
+- "buy" should be rare on sell opportunities`;
+    }
     
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.
 
 ⚡ CRITICAL: This is SHORT-TERM TRADING, not long-term investing. Even small trends demand action.
+
+${positionContext}
 
 OPPORTUNITY TYPE: ${opportunityContext}
 

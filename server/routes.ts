@@ -2187,17 +2187,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get daily summaries for a ticker
-  app.get("/api/stocks/:ticker/daily-summaries", async (req, res) => {
+  // Get daily briefs for a stock (lightweight daily reports for followed stocks)
+  app.get("/api/stocks/:ticker/daily-briefs", async (req, res) => {
     try {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const summaries = await storage.getDailySummariesForTicker(req.params.ticker.toUpperCase());
-      res.json(summaries);
+      
+      const ticker = req.params.ticker.toUpperCase();
+      
+      // Check if user follows this stock
+      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
+      const isFollowing = followedStocks.some(fs => fs.ticker === ticker);
+      
+      if (!isFollowing) {
+        return res.status(403).json({ error: "You must follow this stock to view daily briefs" });
+      }
+      
+      const briefs = await storage.getDailyBriefsForTicker(ticker);
+      res.json(briefs);
     } catch (error) {
-      console.error("Get daily summaries error:", error);
-      res.status(500).json({ error: "Failed to fetch daily summaries" });
+      console.error("Get daily briefs error:", error);
+      res.status(500).json({ error: "Failed to fetch daily briefs" });
     }
   });
 

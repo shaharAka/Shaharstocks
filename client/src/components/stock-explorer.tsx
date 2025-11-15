@@ -126,13 +126,6 @@ export function StockExplorer({
           <DialogTitle className="text-2xl font-semibold break-words" data-testid={`text-explorer-title-${stock.ticker}`}>
             {stock.ticker} - {stock.companyName}
           </DialogTitle>
-          {stock.source && (
-            <div className="mt-1">
-              <Badge variant="outline">
-                Source: {stock.source}
-              </Badge>
-            </div>
-          )}
         </DialogHeader>
 
         <Tabs defaultValue="overview" className="w-full min-w-0">

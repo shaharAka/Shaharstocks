@@ -122,6 +122,13 @@ export default function Purchase() {
     meta: { ignoreError: true },
   });
 
+  // Fetch OpenInsider config for community engagement threshold
+  const { data: openinsiderConfig } = useQuery<any>({
+    queryKey: ["/api/openinsider-config"],
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
   // Fetch viewed tickers
   const { data: viewedTickers = [] } = useQuery<string[]>({
     queryKey: ["/api/stock-views", currentUser?.id],
@@ -351,8 +358,12 @@ export default function Purchase() {
         sections.recents.push(group);
       }
 
-      // Community Picks: Sort all by community score later
-      sections.communityPicks.push(group);
+      // Community Picks: Only stocks with high engagement (comments >= threshold)
+      const minEngagement = openinsiderConfig?.minCommunityEngagement ?? 10;
+      
+      if (group.communityScore >= minEngagement) {
+        sections.communityPicks.push(group);
+      }
     });
 
     // Sort each section
@@ -385,11 +396,11 @@ export default function Purchase() {
     sections.recents = sortGroupedStocks(sections.recents);
     sections.rejected = sortGroupedStocks(sections.rejected);
     
-    // Community picks sorted by community score
+    // Community picks sorted by comment count
     sections.communityPicks = [...sections.communityPicks].sort((a, b) => b.communityScore - a.communityScore);
 
     return { groupedStocks: groupedArray, funnelSections: sections };
-  }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks, users, commentCounts]);
+  }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks, users, commentCounts, openinsiderConfig]);
 
   // Get current section's stocks and flatten for rendering
   const groupedOpportunities = funnelSections[funnelSection] || [];

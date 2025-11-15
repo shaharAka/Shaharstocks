@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useUser } from "@/contexts/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import {
 } from "recharts";
 
 export default function Management() {
+  const { user } = useUser();
   const { toast } = useToast();
   const [editingRule, setEditingRule] = useState<TradingRule | null>(null);
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
@@ -52,8 +54,9 @@ export default function Management() {
   });
 
   const { data: rules, isLoading: rulesLoading } = useQuery<TradingRule[]>({
-    queryKey: ["/api/rules"],
+    queryKey: ["/api/rules", user?.id],
     refetchInterval: 300000, // Refetch every 5 minutes
+    enabled: !!user,
   });
 
   const updateRuleMutation = useMutation({
@@ -72,7 +75,7 @@ export default function Management() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
       toast({
         title: "Rule Updated",
         description: "Trading rule boundary has been updated successfully",

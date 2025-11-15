@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useUser } from "@/contexts/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ interface PortfolioManagementProps {
 }
 
 export function PortfolioManagement({ holdings, stocks, rules, isLoading }: PortfolioManagementProps) {
+  const { user } = useUser();
   const { toast } = useToast();
   const [editingRule, setEditingRule] = useState<TradingRule | null>(null);
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
@@ -49,7 +51,7 @@ export function PortfolioManagement({ holdings, stocks, rules, isLoading }: Port
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
       toast({
         title: "Rule Updated",
         description: "Trading rule boundary has been updated successfully",

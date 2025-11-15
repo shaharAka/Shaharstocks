@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/contexts/UserContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ const CHART_COLORS = [
 ];
 
 export default function Simulation() {
+  const { user } = useUser();
   // Read tab from URL query params
   const urlParams = new URLSearchParams(window.location.search);
   const tabFromUrl = urlParams.get('tab');
@@ -85,8 +87,9 @@ export default function Simulation() {
   });
 
   const { data: rules, isLoading: rulesLoading } = useQuery<TradingRule[]>({
-    queryKey: ["/api/rules"],
+    queryKey: ["/api/rules", user?.id],
     refetchInterval: 300000, // Refetch every 5 minutes
+    enabled: !!user,
   });
 
   const { data: trades, isLoading: tradesLoading } = useQuery<Trade[]>({
@@ -258,7 +261,7 @@ export default function Simulation() {
         title: "Scenario imported",
         description: "Trading rule created successfully. Check the Rules page to enable it.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
       setImportDialogOpen(false);
       setScenarioToImport(null);
       setImportScope("all_holdings");

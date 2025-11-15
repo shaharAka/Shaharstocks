@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { PortfolioHolding, Stock, Trade, TradingRule } from "@shared/schema";
 import { stockSchema } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import { useUser } from "@/contexts/UserContext";
 
 export function usePortfolioHoldings() {
   return useQuery<PortfolioHolding[]>({
@@ -22,9 +23,11 @@ export function useStocks() {
 }
 
 export function useTradingRules() {
+  const { user } = useUser();
   return useQuery<TradingRule[]>({
-    queryKey: ["/api/rules"],
+    queryKey: ["/api/rules", user?.id],
     refetchInterval: 300000, // Refetch every 5 minutes
+    enabled: !!user,
   });
 }
 

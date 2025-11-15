@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useUser } from "@/contexts/UserContext";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ const ruleFormSchema = insertTradingRuleSchema.extend({
 type RuleFormData = z.infer<typeof ruleFormSchema>;
 
 export default function Rules() {
+  const { user } = useUser();
   const { toast } = useToast();
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<TradingRule | null>(null);
@@ -84,7 +86,8 @@ export default function Rules() {
   });
 
   const { data: rules, isLoading: rulesLoading } = useQuery<TradingRule[]>({
-    queryKey: ["/api/rules"],
+    queryKey: ["/api/rules", user?.id],
+    enabled: !!user,
   });
 
   const { data: stocks } = useQuery<Stock[]>({
@@ -110,7 +113,7 @@ export default function Rules() {
       return await apiRequest("POST", "/api/rules", rule);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
       toast({
         title: "Rule Created",
         description: "Trading rule has been created successfully",
@@ -146,7 +149,7 @@ export default function Rules() {
       return await apiRequest("PATCH", `/api/rules/${id}`, rule);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
       toast({
         title: "Rule Updated",
         description: "Trading rule has been updated successfully",
@@ -169,7 +172,7 @@ export default function Rules() {
       return await apiRequest("PATCH", `/api/rules/${id}`, { enabled });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
     },
     onError: () => {
       toast({
@@ -185,7 +188,7 @@ export default function Rules() {
       return await apiRequest("DELETE", `/api/rules/${id}`, null);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/rules", user?.id] });
       toast({
         title: "Rule Deleted",
         description: "Trading rule has been deleted successfully",

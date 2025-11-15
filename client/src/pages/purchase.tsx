@@ -34,6 +34,7 @@ import { StockTable } from "@/components/stock-table";
 import { StockExplorer } from "@/components/stock-explorer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type StockWithUserStatus = Stock & {
   userStatus: string;
@@ -48,6 +49,19 @@ type StockWithUserStatus = Stock & {
 type SortOption = "aiScore" | "daysFromTrade" | "marketCap";
 type ViewMode = "cards" | "table";
 type RecommendationFilter = "all" | "buy" | "sell";
+type FunnelSection = "worthExploring" | "recents" | "processing" | "communityPicks" | "rejected";
+
+type GroupedStock = {
+  ticker: string;
+  companyName: string;
+  transactions: StockWithUserStatus[];
+  latestTransaction: StockWithUserStatus;
+  transactionCount: number;
+  highestScore: number | null;
+  daysSinceLatest: number;
+  communityScore: number; // follows + interests
+  isFollowing: boolean;
+};
 
 export default function Purchase() {
   const { toast } = useToast();
@@ -58,6 +72,7 @@ export default function Purchase() {
   const [tickerSearch, setTickerSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("all");
+  const [funnelSection, setFunnelSection] = useState<FunnelSection>("worthExploring");
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
@@ -227,13 +242,12 @@ export default function Purchase() {
     return Math.floor((now.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  // Filter and sort opportunities
-  const opportunities = useMemo(() => {
-    if (!stocks) return [];
+  // Group stocks by ticker and categorize into funnel sections
+  const { groupedStocks, funnelSections } = useMemo(() => {
+    if (!stocks) return { groupedStocks: [], funnelSections: {} as Record<FunnelSection, GroupedStock[]> };
 
-    // Start with pending stocks
+    // Start with pending or rejected stocks
     let filtered = stocks.filter(stock => {
-      if (stock.userStatus !== "pending") return false;
       const rec = stock.recommendation?.toLowerCase();
       if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
       
@@ -268,41 +282,141 @@ export default function Purchase() {
       };
     });
 
-    // Apply 14-day filter
-    const within14Days = stocksWithScores.filter(stock => {
-      const days = (stock as any).daysSinceTrade;
-      return days !== null && days <= 14;
-    });
-
-    // Sort
-    const sorted = [...within14Days].sort((a, b) => {
-      if (sortBy === "aiScore") {
-        const aScore = (a as any).integratedScore ?? (a as any).aiScore ?? 0;
-        const bScore = (b as any).integratedScore ?? (b as any).aiScore ?? 0;
-        return bScore - aScore;
-      } else if (sortBy === "daysFromTrade") {
-        const aDays = (a as any).daysSinceTrade ?? 999;
-        const bDays = (b as any).daysSinceTrade ?? 999;
-        return aDays - bDays;
-      } else if (sortBy === "marketCap") {
-        const parseMarketCap = (mc: string | null) => {
-          if (!mc) return 0;
-          const match = mc.match(/\$?([\d.]+)([BMK])?/i);
-          if (!match) return 0;
-          const value = parseFloat(match[1]);
-          const unit = match[2]?.toUpperCase();
-          if (unit === "B") return value * 1000;
-          if (unit === "M") return value;
-          if (unit === "K") return value / 1000;
-          return value;
-        };
-        return parseMarketCap(b.marketCap) - parseMarketCap(a.marketCap);
+    // Group by ticker
+    const grouped = new Map<string, GroupedStock>();
+    stocksWithScores.forEach(stock => {
+      const existing = grouped.get(stock.ticker);
+      const score = (stock as any).integratedScore ?? (stock as any).aiScore;
+      const daysSince = (stock as any).daysSinceTrade;
+      
+      // Calculate community score (interests from all users)
+      // Note: We only have access to interests, not aggregate follows across all users
+      const stockInterests = getStockInterests(stock.ticker);
+      const communityScore = stockInterests.length;
+      
+      if (!existing) {
+        grouped.set(stock.ticker, {
+          ticker: stock.ticker,
+          companyName: stock.companyName || stock.ticker,
+          transactions: [stock],
+          latestTransaction: stock,
+          transactionCount: 1,
+          highestScore: score,
+          daysSinceLatest: daysSince,
+          communityScore,
+          isFollowing: (stock as any).isFollowing || false,
+        });
+      } else {
+        existing.transactions.push(stock);
+        existing.transactionCount++;
+        
+        // Update latest transaction if newer
+        if (daysSince < existing.daysSinceLatest) {
+          existing.latestTransaction = stock;
+          existing.daysSinceLatest = daysSince;
+        }
+        
+        // Update highest score
+        if (score !== null && (existing.highestScore === null || score > existing.highestScore)) {
+          existing.highestScore = score;
+        }
       }
-      return 0;
     });
 
-    return sorted;
-  }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks]);
+    const groupedArray = Array.from(grouped.values());
+
+    // Categorize into funnel sections
+    const sections: Record<FunnelSection, GroupedStock[]> = {
+      processing: [],
+      worthExploring: [],
+      recents: [],
+      communityPicks: [],
+      rejected: [],
+    };
+
+    groupedArray.forEach(group => {
+      const score = group.highestScore;
+      const isUserRejected = group.latestTransaction.userStatus === "rejected";
+      
+      // Processing: No AI score yet
+      if (score === null) {
+        sections.processing.push(group);
+        return;
+      }
+
+      // Rejected: User rejected OR auto-rejected (score < 40, unless multiple transactions)
+      if (isUserRejected || (score < 40 && group.transactionCount === 1)) {
+        sections.rejected.push(group);
+        return;
+      }
+
+      // Worth Exploring: Score > 70
+      if (score > 70) {
+        sections.worthExploring.push(group);
+      }
+
+      // Recents: Score 40-70 and < 2 days old
+      if (score >= 40 && score <= 70 && group.daysSinceLatest < 2) {
+        sections.recents.push(group);
+      }
+
+      // Community Picks: Sort all by community score later
+      sections.communityPicks.push(group);
+    });
+
+    // Sort each section
+    const sortGroupedStocks = (groups: GroupedStock[]) => {
+      return [...groups].sort((a, b) => {
+        if (sortBy === "aiScore") {
+          return (b.highestScore ?? 0) - (a.highestScore ?? 0);
+        } else if (sortBy === "daysFromTrade") {
+          return a.daysSinceLatest - b.daysSinceLatest;
+        } else if (sortBy === "marketCap") {
+          const parseMarketCap = (mc: string | null) => {
+            if (!mc) return 0;
+            const match = mc.match(/\$?([\d.]+)([BMK])?/i);
+            if (!match) return 0;
+            const value = parseFloat(match[1]);
+            const unit = match[2]?.toUpperCase();
+            if (unit === "B") return value * 1000;
+            if (unit === "M") return value;
+            if (unit === "K") return value / 1000;
+            return value;
+          };
+          return parseMarketCap(b.latestTransaction.marketCap) - parseMarketCap(a.latestTransaction.marketCap);
+        }
+        return 0;
+      });
+    };
+
+    sections.processing = sortGroupedStocks(sections.processing);
+    sections.worthExploring = sortGroupedStocks(sections.worthExploring);
+    sections.recents = sortGroupedStocks(sections.recents);
+    sections.rejected = sortGroupedStocks(sections.rejected);
+    
+    // Community picks sorted by community score
+    sections.communityPicks = [...sections.communityPicks].sort((a, b) => b.communityScore - a.communityScore);
+
+    return { groupedStocks: groupedArray, funnelSections: sections };
+  }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks, allInterests, users]);
+
+  // Get current section's stocks and flatten for rendering
+  const groupedOpportunities = funnelSections[funnelSection] || [];
+  
+  // Convert grouped stocks back to individual stocks for rendering
+  // Use latestTransaction as the main stock, but add metadata about grouping
+  const opportunities = groupedOpportunities.map(group => ({
+    ...group.latestTransaction,
+    _groupedData: {
+      transactionCount: group.transactionCount,
+      highestScore: group.highestScore,
+      allTransactions: group.transactions,
+      communityScore: group.communityScore,
+    },
+    integratedScore: group.highestScore,
+    aiScore: group.highestScore,
+    isFollowing: group.isFollowing,
+  }));
 
 
   if (isLoading) {
@@ -350,6 +464,27 @@ export default function Purchase() {
           <span className="ml-2">{getTerm("refresh")}</span>
         </Button>
       </div>
+
+      {/* Funnel Section Tabs */}
+      <Tabs value={funnelSection} onValueChange={(value) => setFunnelSection(value as FunnelSection)}>
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="worthExploring" data-testid="tab-worth-exploring">
+            Worth Exploring ({funnelSections.worthExploring?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="recents" data-testid="tab-recents">
+            Recents ({funnelSections.recents?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="processing" data-testid="tab-processing">
+            Processing ({funnelSections.processing?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="communityPicks" data-testid="tab-community-picks">
+            Community ({funnelSections.communityPicks?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="rejected" data-testid="tab-rejected">
+            Rejected ({funnelSections.rejected?.length || 0})
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-4">

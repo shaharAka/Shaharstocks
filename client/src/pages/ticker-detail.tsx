@@ -30,6 +30,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
+import { LoadingStrikeBorder } from "@/components/loading-strike-border";
 
 export default function TickerDetail() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -60,6 +61,19 @@ export default function TickerDetail() {
     retry: false,
     meta: { ignoreError: true },
   });
+
+  // Check if there's an active analysis job for this stock
+  const { data: analysisJobs = [] } = useQuery<any[]>({
+    queryKey: ["/api/analysis-jobs", { ticker }],
+    enabled: !!ticker,
+    refetchInterval: 5000, // Poll every 5 seconds
+    retry: false,
+    meta: { ignoreError: true },
+  });
+  
+  const hasActiveAnalysisJob = analysisJobs.some(
+    (job: any) => job.status === "pending" || job.status === "processing"
+  );
 
   // Fetch AI analysis
   const { data: aiAnalysis } = useQuery<any>({
@@ -320,14 +334,22 @@ export default function TickerDetail() {
 
         {/* Daily Brief Tab */}
         <TabsContent value="summary" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Daily Stock Briefs</CardTitle>
-              <CardDescription>
-                Lightweight daily reports with quick buy/sell/hold guidance for followed stocks
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <LoadingStrikeBorder isLoading={hasActiveAnalysisJob}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Daily Stock Briefs
+                  {hasActiveAnalysisJob && (
+                    <Badge variant="secondary" className="ml-2">
+                      Analyzing...
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Lightweight daily reports with quick buy/sell/hold guidance for followed stocks
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
               {briefsLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-full" />
@@ -402,8 +424,9 @@ export default function TickerDetail() {
                   })}
                 </div>
               )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </LoadingStrikeBorder>
 
           {/* Company Information */}
           {(stock.description || stock.industry || stock.country || stock.webUrl) && (

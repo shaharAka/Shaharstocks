@@ -354,16 +354,16 @@ export default function Purchase() {
 
       // SELL opportunity logic
       if (isSell) {
-        // High Signal: Score < 30 (low score = company is weak, good for shorting)
-        if (score < 30) {
+        // High Signal: Score < 40 (low score = company is weak, good for shorting)
+        if (score < 40) {
           sections.worthExploring.push(group);
         }
         // Auto-reject: Score > 70 (high score = company is strong, bad for shorting)
         else if (score > 70) {
           sections.rejected.push(group);
         }
-        // Recents: Score 30-70 (neutral zone)
-        else if (score >= 30 && score <= 70) {
+        // Recents: Score 40-70 (neutral zone)
+        else if (score >= 40 && score <= 70) {
           sections.recents.push(group);
         }
       }

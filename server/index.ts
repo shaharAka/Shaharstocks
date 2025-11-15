@@ -1092,12 +1092,84 @@ function startAIAnalysisJob() {
             businessOverview: secFilingData.businessOverview,
           } : undefined;
           
-          // Insider trading strength
-          const insiderTradingStrength = {
-            recentPurchases: 1,
-            totalValue: stock.currentPrice ? `$${parseFloat(stock.currentPrice).toFixed(2)}` : "N/A",
-            confidence: "Medium" // Based on insider trading activity
-          };
+          // Insider trading strength - fetch from all transactions for this ticker
+          const insiderTradingStrength = await (async () => {
+            try {
+              const allStocks = await storage.getAllStocksForTicker(stock.ticker);
+              
+              if (allStocks.length === 0) {
+                return undefined;
+              }
+              
+              const buyTransactions = allStocks.filter(s => s.recommendation?.toLowerCase().includes("buy"));
+              const sellTransactions = allStocks.filter(s => s.recommendation?.toLowerCase().includes("sell"));
+              
+              let direction: string;
+              let transactionType: string;
+              let dominantSignal: string;
+              
+              if (buyTransactions.length > 0 && sellTransactions.length === 0) {
+                direction = "buy";
+                transactionType = "purchase";
+                dominantSignal = "BULLISH - Only insider BUYING detected";
+              } else if (sellTransactions.length > 0 && buyTransactions.length === 0) {
+                direction = "sell";
+                transactionType = "sale";
+                dominantSignal = "BEARISH - Only insider SELLING detected";
+              } else if (buyTransactions.length > 0 && sellTransactions.length > 0) {
+                const sortedByDate = allStocks.sort((a, b) => 
+                  new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime()
+                );
+                const mostRecentSignal = sortedByDate.find(s => 
+                  s.recommendation?.toLowerCase().includes("buy") || s.recommendation?.toLowerCase().includes("sell")
+                );
+                direction = mostRecentSignal?.recommendation?.toLowerCase().includes("buy") ? "buy" : "sell";
+                transactionType = direction === "buy" ? "purchase" : "sale";
+                dominantSignal = `MIXED SIGNALS - ${buyTransactions.length} BUY, ${sellTransactions.length} SELL (most recent: ${direction.toUpperCase()})`;
+              } else {
+                direction = "unknown";
+                transactionType = "transaction";
+                dominantSignal = "Unknown signal - no clear insider transactions";
+              }
+              
+              const primaryStock = allStocks.sort((a, b) => 
+                new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime()
+              )[0];
+              
+              return {
+                direction,
+                transactionType,
+                dominantSignal,
+                buyCount: buyTransactions.length,
+                sellCount: sellTransactions.length,
+                totalTransactions: allStocks.length,
+                quantityStr: primaryStock.insiderQuantity ? `${primaryStock.insiderQuantity.toLocaleString()} shares` : "Unknown",
+                insiderPrice: primaryStock.insiderPrice ? `$${parseFloat(primaryStock.insiderPrice).toFixed(2)}` : "Unknown",
+                currentPrice: primaryStock.currentPrice ? `$${parseFloat(primaryStock.currentPrice).toFixed(2)}` : "Unknown",
+                insiderName: primaryStock.insiderName || "Unknown",
+                insiderTitle: primaryStock.insiderTitle || "Unknown",
+                tradeDate: primaryStock.insiderTradeDate || "Unknown",
+                totalValue: primaryStock.insiderPrice && primaryStock.insiderQuantity 
+                  ? `$${(parseFloat(primaryStock.insiderPrice) * primaryStock.insiderQuantity).toFixed(2)}` 
+                  : "Unknown",
+                confidence: primaryStock.confidenceScore?.toString() || "Medium",
+                allTransactions: allStocks.map(s => ({
+                  direction: s.recommendation?.toLowerCase() || "unknown",
+                  insiderName: s.insiderName || "Unknown",
+                  insiderTitle: s.insiderTitle || "Unknown",
+                  quantityStr: s.insiderQuantity ? `${s.insiderQuantity.toLocaleString()} shares` : "Unknown",
+                  price: s.insiderPrice ? `$${parseFloat(s.insiderPrice).toFixed(2)}` : "Unknown",
+                  date: s.insiderTradeDate || "Unknown",
+                  value: s.insiderPrice && s.insiderQuantity 
+                    ? `$${(parseFloat(s.insiderPrice) * s.insiderQuantity).toFixed(2)}` 
+                    : "Unknown"
+                }))
+              };
+            } catch (error) {
+              console.error(`[Reconciliation] Error getting insider trading data for ${stock.ticker}:`, error);
+              return undefined;
+            }
+          })();
           
           // Run comprehensive AI analysis with all signals including SEC filings
           const analysis = await aiAnalysisService.analyzeStock({

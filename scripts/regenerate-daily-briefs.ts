@@ -75,7 +75,13 @@ async function regenerateDailyBriefs() {
         const stockData = await storage.getStock(ticker);
         const previousAnalysis = (stockData as any)?.overallRating ? {
           overallRating: (stockData as any).overallRating,
-          summary: (stockData as any).summary || "No previous analysis available"
+          summary: (stockData as any).summary || "No previous analysis available",
+          technicalAnalysis: (stockData as any).technicalAnalysis ? {
+            trend: (stockData as any).technicalAnalysis.trend,
+            momentum: (stockData as any).technicalAnalysis.momentum,
+            score: (stockData as any).technicalAnalysis.score,
+            signals: (stockData as any).technicalAnalysis.signals
+          } : undefined
         } : undefined;
         
         const opportunityType = (stockData as any)?.recommendation === "sell" ? "sell" : "buy";

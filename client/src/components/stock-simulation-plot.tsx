@@ -293,7 +293,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
       <CardContent>
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground))" opacity={0.3} />
             <XAxis 
               dataKey="date" 
               stroke="hsl(var(--muted-foreground))"

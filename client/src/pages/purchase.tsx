@@ -96,14 +96,16 @@ export default function Purchase() {
     setSelectedTickers(new Set(tickers));
   };
 
-  // Fetch opportunities
+  // Fetch opportunities - auto-refresh every 10 seconds to show real-time updates
   const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
+    refetchInterval: 10000, // Auto-refresh every 10 seconds
   });
 
-  // Fetch AI analyses
+  // Fetch AI analyses - auto-refresh every 10 seconds to show real-time updates
   const { data: analyses = [] } = useQuery<any[]>({
     queryKey: ["/api/stock-analyses"],
+    refetchInterval: 10000, // Auto-refresh every 10 seconds
   });
 
   // Fetch users

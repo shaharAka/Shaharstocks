@@ -679,8 +679,9 @@ function startOpeninsiderFetchJob() {
 
       // Queue ONE AI analysis job per unique ticker (not per transaction)
       if (createdTickers.size > 0) {
-        log(`[OpeninsiderFetch] Queuing AI analysis for ${createdTickers.size} unique tickers...`);
-        for (const ticker of createdTickers) {
+        const uniqueTickersArray = Array.from(createdTickers);
+        log(`[OpeninsiderFetch] Queuing AI analysis for ${uniqueTickersArray.length} unique tickers...`);
+        for (const ticker of uniqueTickersArray) {
           try {
             await storage.enqueueAnalysisJob(ticker, "openinsider_fetch", "normal");
             log(`[OpeninsiderFetch] ✓ Queued AI analysis for ${ticker}`);

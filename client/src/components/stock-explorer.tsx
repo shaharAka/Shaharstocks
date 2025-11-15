@@ -103,6 +103,31 @@ export function StockExplorer({
     },
   });
 
+  const unfollowMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      const response = await fetch(`/api/stocks/${ticker}/follow`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to unfollow stock");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
+      toast({
+        title: "Success",
+        description: `Unfollowed ${stock?.ticker}`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to unfollow stock",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (!stock) return null;
 
   const currentPrice = parseFloat(stock.currentPrice);
@@ -313,11 +338,18 @@ export function StockExplorer({
               <Button
                 variant={isFollowing ? "outline" : "default"}
                 className="flex-1"
-                onClick={() => onFollow?.(stock)}
+                onClick={() => {
+                  if (isFollowing) {
+                    unfollowMutation.mutate(stock.ticker);
+                  } else {
+                    onFollow?.(stock);
+                  }
+                }}
+                disabled={unfollowMutation.isPending}
                 data-testid={`button-explorer-follow-${stock.ticker}`}
               >
                 <Star className={`h-4 w-4 mr-2 ${isFollowing ? "fill-current" : ""}`} />
-                {isFollowing ? "Unfollow" : "Follow"}
+                {unfollowMutation.isPending ? "Processing..." : isFollowing ? "Unfollow" : "Follow"}
               </Button>
               <Button
                 variant="outline"

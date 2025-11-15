@@ -1919,10 +1919,10 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
       
       const latestBrief = briefs[0];
-      // Fallback to legacy 'stance' field for compatibility with existing data
-      const rawStance = (latestBrief?.recommendedStance ?? (latestBrief as any)?.stance);
+      // Use watching scenario as primary stance (entry evaluation is most relevant for sidebar)
+      const rawStance = latestBrief?.watchingStance;
       const aiStance = rawStance?.toUpperCase() as 'BUY' | 'SELL' | 'HOLD' | null || null;
-      const aiScore = latestBrief?.confidenceScore ?? null;
+      const aiScore = latestBrief?.watchingConfidence ?? null;
       
       // Calculate stance alignment based on insider action vs AI stance
       // "act" = AI stance aligns with insider action (strong signal to act on opportunity)

@@ -1850,6 +1850,14 @@ export class DatabaseStorage implements IStorage {
           priceChange: priceChange.toFixed(2),
           priceChangePercent: priceChangePercent.toFixed(2),
         });
+      } else {
+        // Include followed stocks even if no stock data exists yet
+        results.push({
+          ...followed,
+          currentPrice: "0.00",
+          priceChange: "0.00",
+          priceChangePercent: "0.00",
+        });
       }
     }
     

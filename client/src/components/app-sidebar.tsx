@@ -74,7 +74,7 @@ export function AppSidebar() {
   });
 
   // Fetch followed stocks with status (includes insider action, AI stance, alignment)
-  const { data: followedStocks = [] } = useQuery<Array<{ 
+  const { data: followedStocks = [], isLoading: isLoadingFollowed, error: followedError } = useQuery<Array<{ 
     ticker: string; 
     currentPrice: string;
     jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
@@ -88,6 +88,15 @@ export function AppSidebar() {
     refetchInterval: 10000, // Refresh every 10 seconds for job status updates
     retry: false,
     meta: { ignoreError: true },
+  });
+
+  // Debug logging
+  console.log('[Sidebar] Followed stocks data:', { 
+    count: followedStocks.length, 
+    isLoading: isLoadingFollowed, 
+    error: followedError,
+    hasUser: !!user,
+    stocks: followedStocks 
   });
 
   const handleNavClick = () => {

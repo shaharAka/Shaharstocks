@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertStockInterestSchema, insertUserStockPinSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema } from "@shared/schema";
+import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertStockInterestSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema } from "@shared/schema";
 import { z } from "zod";
 import { telegramService } from "./telegram";
 import { stockService } from "./stockService";
@@ -2058,49 +2058,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stock pin routes
-  app.get("/api/users/me/pins", async (req, res) => {
-    try {
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      const pins = await storage.getUserStockPins(req.session.userId);
-      res.json(pins);
-    } catch (error) {
-      console.error("Get user pins error:", error);
-      res.status(500).json({ error: "Failed to fetch pinned stocks" });
-    }
-  });
-
-  app.post("/api/stocks/:ticker/pin", async (req, res) => {
-    try {
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      const validatedData = insertUserStockPinSchema.parse({
-        ticker: req.params.ticker,
-        userId: req.session.userId,
-      });
-      const pin = await storage.createStockPin(validatedData);
-      res.status(201).json(pin);
-    } catch (error) {
-      console.error("Create pin error:", error);
-      res.status(400).json({ error: "Invalid pin data" });
-    }
-  });
-
-  app.delete("/api/stocks/:ticker/pin", async (req, res) => {
-    try {
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      await storage.deleteStockPin(req.params.ticker, req.session.userId);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Delete pin error:", error);
-      res.status(500).json({ error: "Failed to delete pin" });
-    }
-  });
 
   // Stock follow routes
   app.get("/api/users/me/followed", async (req, res) => {

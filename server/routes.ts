@@ -2122,6 +2122,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker.toUpperCase();
+      
+      // Check if already following
+      const existingFollows = await storage.getUserFollowedStocks(req.session.userId);
+      const alreadyFollowing = existingFollows.some(f => f.ticker === ticker);
+      
+      if (alreadyFollowing) {
+        return res.status(409).json({ error: "You are already following this stock" });
+      }
+      
       const validatedData = insertFollowedStockSchema.parse({
         ticker,
         userId: req.session.userId,

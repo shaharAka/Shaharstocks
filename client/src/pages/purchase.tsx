@@ -176,16 +176,20 @@ export default function Purchase() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
       toast({
         title: "Stock Followed",
-        description: "You are now following this stock",
+        description: "Day-0 AI analysis has been queued for this stock",
       });
       setExplorerOpen(false);
     },
-    onError: () => {
+    onError: (error: any) => {
+      const message = error.message?.includes("already following") 
+        ? "You are already following this stock"
+        : "Failed to follow stock";
       toast({
         title: "Error",
-        description: "Failed to follow stock",
+        description: message,
         variant: "destructive",
       });
     },

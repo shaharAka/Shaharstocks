@@ -919,13 +919,13 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
       queryClient.invalidateQueries({ queryKey: ["/api/stocks"] });
       toast({
         title: "Settings saved",
-        description: "OpenInsider configuration has been updated successfully.",
+        description: "Insider trading data configuration has been updated successfully.",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to save OpenInsider configuration.",
+        description: "Failed to save insider trading data configuration.",
         variant: "destructive",
       });
     },
@@ -933,7 +933,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
 
   const fetchOpeninsiderDataMutation = useMutation({
     mutationFn: async () => {
-      addLog('openinsider', 'attempt', 'Attempting to fetch insider trading data from OpenInsider.com', {});
+      addLog('openinsider', 'attempt', 'Attempting to fetch insider trading data from SEC filings', {});
       try {
         const res = await apiRequest("POST", "/api/openinsider/fetch", {});
         const data = await res.json();
@@ -955,7 +955,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to fetch OpenInsider data.",
+        description: error.message || "Failed to fetch insider trading data.",
         variant: "destructive",
       });
     },
@@ -985,10 +985,10 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <RefreshCw className="h-5 w-5" />
-            OpenInsider Configuration
+            Insider Trading Data Configuration
           </CardTitle>
           <CardDescription>
-            Fetch insider trading data from OpenInsider.com
+            Fetch insider trading data from SEC regulatory filings
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1002,7 +1002,7 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
                   data-testid="switch-openinsider-enabled"
                 />
                 <Label htmlFor="openinsider-enabled" className="cursor-pointer">
-                  Enable OpenInsider data source
+                  Enable insider trading data source
                 </Label>
               </div>
 
@@ -1164,16 +1164,16 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
 
       <Card data-testid="card-openinsider-info">
         <CardHeader>
-          <CardTitle>OpenInsider Data Source</CardTitle>
+          <CardTitle>Insider Trading Data Source</CardTitle>
           <CardDescription>
-            Web scraping from OpenInsider.com
+            Automated collection from SEC regulatory filings
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <h4 className="text-sm font-medium">Automated Data Collection</h4>
             <p className="text-xs text-muted-foreground">
-              The system automatically scrapes insider trading data from OpenInsider.com every hour,
+              The system automatically collects insider trading data from SEC regulatory filings every hour,
               focusing on purchase transactions that indicate insider confidence.
             </p>
           </div>

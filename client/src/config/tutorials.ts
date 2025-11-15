@@ -221,7 +221,7 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       },
       {
         target: '[data-testid="select-data-source"]',
-        content: "Choose between Telegram or OpenInsider data sources for historical analysis",
+        content: "Choose between Telegram or SEC insider trading filings for historical analysis",
         placement: "bottom",
       },
     ],
@@ -242,7 +242,7 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       },
       {
         target: '[data-testid="section-openinsider"]',
-        content: "Configure OpenInsider scraper to fetch insider trading transactions",
+        content: "Configure insider trading data source to fetch transactions from SEC filings",
         placement: "top",
       },
     ],
@@ -258,11 +258,11 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       },
       {
         target: '[data-testid="section-openinsider"]',
-        content: "OpenInsider.com scrapes real insider trading transactions. We'll start by fetching the first batch of recommendations.",
+        content: "Our system collects real insider trading transactions from SEC regulatory filings. We'll start by fetching the first batch of recommendations.",
         placement: "center",
       },
       {
-        target: '[data-testid="button-fetch-openinsider"]',
+        target: '[data-testid="button-fetch-openinsider"]', // Internal testid stays same
         content: "Click here to start fetching insider trading data. This will get you the latest 500 transactions.",
         placement: "top",
       },

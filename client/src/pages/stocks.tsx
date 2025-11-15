@@ -239,7 +239,7 @@ export default function Stocks() {
                           className="text-xs shrink-0"
                           data-testid={`badge-source-${stock.ticker}`}
                         >
-                          {stock.source === "telegram" ? "Telegram" : "OpenInsider"}
+                          {stock.source === "telegram" ? "Telegram" : "SEC Filings"}
                         </Badge>
                       )}
                       {staleness.daysOld > 0 && (

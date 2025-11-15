@@ -32,7 +32,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
   const fetchOpeninsiderMutation = useMutation({
     mutationFn: async () => {
-      // First, ensure OpenInsider is enabled with meaningful default filters
+      // First, ensure insider trading data source is enabled with meaningful default filters
       await apiRequest("POST", "/api/openinsider/config", {
         enabled: true,
         fetchLimit: 500,
@@ -118,7 +118,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Track real insider transactions from SEC filings via OpenInsider.com
+                      Track real insider transactions from SEC regulatory filings
                     </CardDescription>
                   </CardContent>
                 </Card>
@@ -151,7 +151,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
               <div className="bg-muted/50 p-4 rounded-lg" data-testid="section-openinsider">
                 <h3 className="font-semibold mb-2">Let's Start with Data</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  We'll fetch the latest 500 insider trading transactions from OpenInsider.com. 
+                  We'll fetch the latest 500 insider trading transactions from SEC regulatory filings. 
                   This will give you a solid foundation of recent insider activity to review.
                 </p>
                 <div className="space-y-2 mb-4">
@@ -178,7 +178,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                 </div>
                 <h3 className="text-lg font-semibold mb-2">Fetching Insider Trading Data</h3>
                 <p className="text-sm text-muted-foreground text-center max-w-md mb-3">
-                  We're pulling the latest 500 transactions from OpenInsider.com. 
+                  We're pulling the latest 500 transactions from SEC regulatory filings. 
                   This includes company insider purchases and sales with detailed transaction information.
                 </p>
                 <div className="bg-muted/50 p-3 rounded-lg max-w-md mx-auto">

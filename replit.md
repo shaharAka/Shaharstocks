@@ -25,7 +25,7 @@ The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tai
 ### Feature Specifications
 - **PayPal Subscription Integration**: Production-ready automated subscription activation with secure webhook verification.
 - **Company Info & News**: Integrates Finnhub for company profiles, market cap, and news with negative sentiment detection; excludes stocks below $500M market cap from purchase recommendations.
-- **Data Sources**: Real-time Telegram channel monitoring via GramJS and Python-based scraping of OpenInsider.com for insider trading data.
+- **Data Sources**: Real-time Telegram channel monitoring via GramJS and automated collection of SEC insider trading regulatory filings.
 - **AI-Powered Analysis**: Dual-agent system comprising a Micro Agent (SEC EDGAR, Alpha Vantage fundamentals) and a Macro Agent (industry-specific ETF performance) for comprehensive financial analysis.
 - **2-Week Event Horizon**: Opportunities page implements automatic cleanup of stocks older than 2 weeks (based on insider trade date). Old stocks are automatically removed from the board UNLESS the user is following them. Python scraper limited to fetching transactions from last 2 weeks maximum. Daily cleanup job removes stale non-followed stocks while preserving followed stocks indefinitely.
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
@@ -49,7 +49,7 @@ The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tai
 - **Integration Points**:
     - **PayPal**: @paypal/checkout-server-sdk for subscription payments and webhook verification.
     - **Telegram**: GramJS for MTProto API communication.
-    - **OpenInsider.com**: Python (BeautifulSoup4) for web scraping.
+    - **SEC Insider Trading Filings**: Automated collection from SEC regulatory data sources using Python (BeautifulSoup4).
     - **SEC EDGAR API**: For company filings and narrative sections.
     - **Alpha Vantage API**: For financial fundamentals, technical indicators, and news sentiment.
     - **Finnhub API**: For real-time stock prices, company profiles, market cap, and historical data.

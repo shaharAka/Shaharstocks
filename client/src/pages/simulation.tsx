@@ -53,7 +53,7 @@ export default function Simulation() {
   );
   const [viewMode, setViewMode] = useState<"actual" | "normalized">("actual");
   const [messageCount, setMessageCount] = useState(20);
-  const [dataSource, setDataSource] = useState<"telegram" | "openinsider">("openinsider");
+  const [dataSource, setDataSource] = useState<"telegram" | "openinsider">("openinsider"); // Keep internal key as 'openinsider'
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [scenarioToImport, setScenarioToImport] = useState<string | null>(null);
   const [importScope, setImportScope] = useState<"all_holdings" | "specific_stock">("all_holdings");
@@ -158,7 +158,7 @@ export default function Simulation() {
       return response.json();
     },
     onSuccess: () => {
-      const sourceName = dataSource === "telegram" ? "Telegram messages" : "OpenInsider trades";
+      const sourceName = dataSource === "telegram" ? "Telegram messages" : "SEC insider trading filings";
       toast({
         title: "Backtest launched",
         description: `Processing ${messageCount} ${sourceName} in the background...`,
@@ -1398,14 +1398,14 @@ export default function Simulation() {
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="openinsider" id="openinsider" data-testid="radio-openinsider" />
                         <Label htmlFor="openinsider" className="font-normal cursor-pointer">
-                          OpenInsider.com
+                          SEC Insider Trading Filings
                         </Label>
                       </div>
                     </RadioGroup>
                     <p className="text-xs text-muted-foreground">
                       {dataSource === "telegram" 
                         ? "Analyze historical messages from configured Telegram channel" 
-                        : "Analyze latest insider trading transactions from OpenInsider.com"}
+                        : "Analyze latest insider trading transactions from SEC regulatory filings"}
                     </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1453,7 +1453,7 @@ export default function Simulation() {
                     <li>
                       {dataSource === "telegram" 
                         ? "Fetches the last N messages from Telegram channel"
-                        : "Fetches the last N insider purchase transactions from OpenInsider.com"}
+                        : "Fetches the last N insider purchase transactions from SEC regulatory filings"}
                     </li>
                     <li>Filters purchase candidates (market cap &gt; $100M, valid insider trades)</li>
                     <li>Builds price matrix (1 month before to today)</li>

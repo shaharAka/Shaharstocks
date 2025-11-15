@@ -126,7 +126,7 @@ export default function Login() {
                 <div>
                   <h3 className="font-semibold text-sm mb-1">Insider Trading Alerts</h3>
                   <p className="text-sm text-muted-foreground">
-                    OpenInsider integration for tracking corporate insider transactions and C-suite buying activity
+                    SEC regulatory filing integration for tracking corporate insider transactions and C-suite buying activity
                   </p>
                 </div>
               </div>

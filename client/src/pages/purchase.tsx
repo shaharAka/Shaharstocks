@@ -258,6 +258,16 @@ export default function Purchase() {
         if (recommendationFilter === "sell" && !rec.includes("sell")) return false;
       }
       
+      // Runtime filter: Exclude BUY opportunities that are likely options deals
+      // (insider price < 15% of current market price)
+      if (rec.includes("buy")) {
+        const insiderPrice = stock.insiderPrice ? parseFloat(stock.insiderPrice) : 0;
+        const currentPrice = stock.currentPrice ? parseFloat(stock.currentPrice) : 0;
+        if (currentPrice > 0 && insiderPrice < currentPrice * 0.15) {
+          return false; // Filter out options deals
+        }
+      }
+      
       // Apply ticker search
       if (tickerSearch.trim() !== "") {
         const searchTerm = tickerSearch.trim().toLowerCase();

@@ -263,25 +263,27 @@ function startCandlestickDataJob() {
     try {
       log("[CandlestickData] Starting candlestick data fetch job...");
       
-      // Get all stocks with pending recommendations (both buy and sell)
+      // Get all stocks that need candlestick data (pending OR missing candlesticks)
       const stocks = await storage.getStocks();
-      const pendingStocks = stocks.filter(
-        stock => stock.recommendationStatus === "pending"
+      const stocksNeedingData = stocks.filter(
+        stock => stock.recommendationStatus === "pending" || 
+                 !stock.candlesticks || 
+                 stock.candlesticks.length === 0
       );
 
-      if (pendingStocks.length === 0) {
-        log("[CandlestickData] No pending stocks to update");
+      if (stocksNeedingData.length === 0) {
+        log("[CandlestickData] No stocks need candlestick data");
         return;
       }
 
-      log(`[CandlestickData] Fetching candlestick data for ${pendingStocks.length} stocks (${pendingStocks.filter(s => s.recommendation === 'buy').length} buys, ${pendingStocks.filter(s => s.recommendation === 'sell').length} sells)`);
+      log(`[CandlestickData] Fetching candlestick data for ${stocksNeedingData.length} stocks (${stocksNeedingData.filter(s => s.recommendation === 'buy').length} buys, ${stocksNeedingData.filter(s => s.recommendation === 'sell').length} sells)`);
 
       // Import stockService here to avoid circular dependencies
       const { stockService } = await import('./stockService.js');
 
       // Fetch candlestick data for each stock (with rate limiting handled by stockService)
       let successCount = 0;
-      for (const stock of pendingStocks) {
+      for (const stock of stocksNeedingData) {
         try {
           log(`[CandlestickData] Fetching data for ${stock.ticker}...`);
           const candlesticks = await stockService.getCandlestickData(stock.ticker);
@@ -306,7 +308,7 @@ function startCandlestickDataJob() {
         }
       }
 
-      log(`[CandlestickData] Successfully updated ${successCount}/${pendingStocks.length} stocks`);
+      log(`[CandlestickData] Successfully updated ${successCount}/${stocksNeedingData.length} stocks`);
     } catch (error) {
       console.error("[CandlestickData] Error in candlestick data job:", error);
     }

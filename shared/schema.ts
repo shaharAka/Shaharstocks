@@ -897,12 +897,20 @@ export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   ticker: text("ticker").notNull(),
-  score: integer("score").notNull(), // AI integrated score
+  type: text("type").notNull(), // "high_score_buy", "high_score_sell", "popular_stock", "stance_change"
+  score: integer("score"), // AI integrated score (nullable for non-score notifications)
   message: text("message").notNull(),
+  metadata: jsonb("metadata").$type<{
+    followerCount?: number; // For popular_stock type
+    previousStance?: string; // For stance_change type
+    newStance?: string; // For stance_change type
+  }>(),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   userIdIdx: uniqueIndex("notifications_user_id_idx").on(table.userId, table.isRead, table.createdAt),
+  // Deduplication: prevent duplicate notifications for same user+ticker+type
+  userTickerTypeUnique: uniqueIndex("notifications_user_ticker_type_idx").on(table.userId, table.ticker, table.type),
 }));
 
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ 

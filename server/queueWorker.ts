@@ -328,22 +328,41 @@ class QueueWorker {
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'combined');
       console.log(`[QueueWorker] ✅ All analysis phases complete for ${job.ticker}`);
 
-      // Create notifications for high-value opportunities (score > 75)
-      if (integratedScore > 75) {
-        console.log(`[QueueWorker] 🔔 High-value stock detected (${integratedScore}/100), creating notifications...`);
+      // Create notifications for high-value opportunities
+      // Buy opportunities: score > 70
+      // Sell opportunities: score < 30
+      const isBuyOpportunity = analysis.recommendation === 'buy' && integratedScore > 70;
+      const isSellOpportunity = analysis.recommendation === 'sell' && integratedScore < 30;
+      
+      if (isBuyOpportunity || isSellOpportunity) {
+        const notificationType = isBuyOpportunity ? 'high_score_buy' : 'high_score_sell';
+        const opportunityText = isBuyOpportunity 
+          ? `Strong BUY opportunity with score ${integratedScore}/100` 
+          : `Strong SELL signal with score ${integratedScore}/100`;
+        
+        console.log(`[QueueWorker] 🔔 ${notificationType} detected for ${job.ticker} (${integratedScore}/100), creating notifications...`);
+        
         const allUsers = await storage.getUsers();
         const activeUsers = allUsers.filter(u => u.subscriptionStatus === 'active' && !u.archived);
         
         for (const user of activeUsers) {
-          await storage.createNotification({
-            userId: user.id,
-            ticker: job.ticker,
-            score: integratedScore,
-            message: `${job.ticker} received a high AI score of ${integratedScore}/100 - Strong ${analysis.overallRating || 'buy'} opportunity`,
-            isRead: false,
-          });
+          try {
+            await storage.createNotification({
+              userId: user.id,
+              ticker: job.ticker,
+              type: notificationType,
+              score: integratedScore,
+              message: `${job.ticker}: ${opportunityText}`,
+              isRead: false,
+            });
+          } catch (error) {
+            // Ignore duplicate notification errors (constraint violation)
+            if (error instanceof Error && !error.message.includes('unique constraint')) {
+              console.error(`[QueueWorker] Failed to create notification for user ${user.id}:`, error);
+            }
+          }
         }
-        console.log(`[QueueWorker] ✅ Created ${activeUsers.length} notifications for ${job.ticker}`);
+        console.log(`[QueueWorker] ✅ Created ${activeUsers.length} ${notificationType} notifications for ${job.ticker}`);
       }
 
       // Final progress update

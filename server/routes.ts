@@ -2100,6 +2100,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const follow = await storage.followStock(validatedData);
       
+      // Check if stock became popular (>10 followers) and notify all followers
+      try {
+        const allFollowedStocks = await storage.getUserFollowedStocks(''); // Get all follows for this ticker across users
+        const followerCount = allFollowedStocks.filter((f: any) => f.ticker === ticker).length;
+        
+        if (followerCount > 10) {
+          console.log(`[Follow] Stock ${ticker} is popular with ${followerCount} followers, creating notifications...`);
+          
+          // Get stock data for the notification
+          const stock = await storage.getStock(ticker);
+          const stockData = stock as any;
+          
+          // Notify all followers (including the one who just followed)
+          for (const follower of allFollowedStocks.filter((f: any) => f.ticker === ticker)) {
+            try {
+              await storage.createNotification({
+                userId: follower.userId,
+                ticker,
+                type: 'popular_stock',
+                message: `${ticker} is trending! ${followerCount} traders are now following this stock`,
+                metadata: { followerCount },
+                isRead: false,
+              });
+            } catch (notifError) {
+              // Ignore duplicate notification errors
+              if (notifError instanceof Error && !notifError.message.includes('unique constraint')) {
+                console.error(`[Follow] Failed to create popular stock notification for user ${follower.userId}:`, notifError);
+              }
+            }
+          }
+          console.log(`[Follow] Created ${followerCount} popular_stock notifications for ${ticker}`);
+        }
+      } catch (popularError) {
+        console.error(`[Follow] Failed to check/create popular stock notifications:`, popularError);
+        // Don't fail the follow request
+      }
+      
       // Trigger immediate "day 0" analysis for this stock
       try {
         console.log(`[Follow] Triggering day 0 analysis for ${ticker}`);
@@ -3897,6 +3934,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to mark all notifications as read:", error);
       res.status(500).json({ error: "Failed to mark all notifications as read" });
+    }
+  });
+
+  app.delete("/api/notifications/clear-all", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const count = await storage.clearAllNotifications(req.session.userId);
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error("Failed to clear all notifications:", error);
+      res.status(500).json({ error: "Failed to clear all notifications" });
     }
   });
 

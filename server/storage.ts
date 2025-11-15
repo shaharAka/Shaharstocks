@@ -323,6 +323,7 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationAsRead(id: string, userId: string): Promise<Notification | undefined>;
   markAllNotificationsAsRead(userId: string): Promise<number>;
+  clearAllNotifications(userId: string): Promise<number>;
 
   // Announcements
   getAnnouncements(userId: string): Promise<(Announcement & { readAt?: Date | null })[]>;
@@ -2823,6 +2824,13 @@ export class DatabaseStorage implements IStorage {
           eq(notifications.isRead, false)
         )
       );
+    return result.rowCount || 0;
+  }
+
+  async clearAllNotifications(userId: string): Promise<number> {
+    const result = await db
+      .delete(notifications)
+      .where(eq(notifications.userId, userId));
     return result.rowCount || 0;
   }
 

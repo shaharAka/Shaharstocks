@@ -1,6 +1,5 @@
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import {
   Activity,
   ShoppingCart,
@@ -10,11 +9,10 @@ import {
   ChevronDown,
   Star,
   Loader2,
-  TrendingUp,
-  TrendingDown,
   Minus,
   ChevronRight,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -75,13 +73,15 @@ export function AppSidebar() {
     staleTime: Infinity, // Version doesn't change during runtime
   });
 
-  // Fetch followed stocks with status (includes job status, stance, alignment)
+  // Fetch followed stocks with status (includes insider action, AI stance, alignment)
   const { data: followedStocks = [] } = useQuery<Array<{ 
     ticker: string; 
     currentPrice: string;
     jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
-    latestStance?: 'BUY' | 'SELL' | 'HOLD' | null;
-    stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
+    insiderAction?: 'BUY' | 'SELL' | null;
+    aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+    aiScore?: number | null;
+    stanceAlignment?: 'act' | 'hold' | null;
   }>>({
     queryKey: ["/api/followed-stocks-with-status"],
     enabled: !!user,
@@ -153,10 +153,13 @@ export function AppSidebar() {
               
               {/* Following Submenu */}
               {followedStocks.length > 0 && (() => {
-                // Group stocks by stance
-                const buyStocks = followedStocks.filter(s => s.latestStance === 'BUY');
-                const sellStocks = followedStocks.filter(s => s.latestStance === 'SELL');
-                const holdStocks = followedStocks.filter(s => s.latestStance === 'HOLD' || !s.latestStance);
+                // Group stocks by stanceAlignment
+                // ACT: AI agrees with insider (strong signal)
+                // HOLD: AI conflicts with insider (weak signal)
+                // No alignment: Missing data (shown after ACT stocks, no special grouping)
+                const actStocks = followedStocks.filter(s => s.stanceAlignment === 'act');
+                const holdStocks = followedStocks.filter(s => s.stanceAlignment === 'hold');
+                const noAlignmentStocks = followedStocks.filter(s => !s.stanceAlignment);
                 
                 // Determine if hold stocks should be grouped
                 const HOLD_DISPLAY_LIMIT = 3;
@@ -167,24 +170,31 @@ export function AppSidebar() {
                   const isTickerActive = currentPath === tickerPath;
                   const isProcessing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
                   
-                  // Get stance indicator
-                  let StanceIcon = null;
-                  let stanceColor = "";
+                  // Only show badges when we have complete data (insider action, AI stance, and alignment)
+                  // Use explicit null checks to ensure data completeness
+                  const hasCompleteData = stock.insiderAction != null && stock.aiStance != null && stock.stanceAlignment != null;
                   
-                  if (stock.latestStance) {
-                    if (stock.stanceAlignment === 'positive') {
-                      StanceIcon = TrendingUp;
-                      stanceColor = "text-success";
-                    } else if (stock.stanceAlignment === 'negative') {
-                      StanceIcon = TrendingDown;
-                      stanceColor = "text-destructive";
-                    } else {
-                      StanceIcon = Minus;
-                      stanceColor = "text-muted-foreground";
+                  // Determine buy/sell tag based on INSIDER ACTION (left of ticker)
+                  // BUY uses green success color, SELL uses red destructive color
+                  let insiderTag: { text: string; isBuy: boolean } | null = null;
+                  if (hasCompleteData) {
+                    if (stock.insiderAction === 'BUY') {
+                      insiderTag = { text: 'B', isBuy: true };
+                    } else if (stock.insiderAction === 'SELL') {
+                      insiderTag = { text: 'S', isBuy: false };
                     }
-                  } else if (isProcessing) {
-                    StanceIcon = Loader2;
-                    stanceColor = "text-muted-foreground animate-spin";
+                  }
+                  
+                  // Determine act/hold status based on STANCE ALIGNMENT (right of price)
+                  // "act" = AI agrees with insider action (strong signal)
+                  // "hold" = AI conflicts with insider action (weak signal)
+                  let actionTag: { text: string; variant: 'default' | 'secondary' } | null = null;
+                  if (hasCompleteData) {
+                    if (stock.stanceAlignment === 'act') {
+                      actionTag = { text: 'act', variant: 'default' };
+                    } else if (stock.stanceAlignment === 'hold') {
+                      actionTag = { text: 'hold', variant: 'secondary' };
+                    }
                   }
                   
                   return (
@@ -195,13 +205,48 @@ export function AppSidebar() {
                         data-testid={`link-ticker-${stock.ticker}`}
                       >
                         <Link href={tickerPath} onClick={handleNavClick}>
-                          <span className="font-mono font-medium flex items-center gap-1.5">
-                            {StanceIcon && <StanceIcon className={`h-3 w-3 ${stanceColor}`} />}
-                            {stock.ticker}
-                          </span>
-                          <span className="ml-auto text-xs font-mono text-muted-foreground">
-                            ${parseFloat(stock.currentPrice).toFixed(2)}
-                          </span>
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            {/* Insider action badge (left of ticker) */}
+                            {insiderTag && !isProcessing && (
+                              insiderTag.isBuy ? (
+                                <Badge 
+                                  className="h-4 px-1 text-[10px] font-bold flex-shrink-0 bg-success text-success-foreground hover-elevate"
+                                  data-testid={`badge-insider-${stock.ticker}`}
+                                >
+                                  {insiderTag.text}
+                                </Badge>
+                              ) : (
+                                <Badge 
+                                  variant="destructive"
+                                  className="h-4 px-1 text-[10px] font-bold flex-shrink-0"
+                                  data-testid={`badge-insider-${stock.ticker}`}
+                                >
+                                  {insiderTag.text}
+                                </Badge>
+                              )
+                            )}
+                            <span className="font-mono font-medium">
+                              {stock.ticker}
+                            </span>
+                            {isProcessing && (
+                              <Loader2 className="h-3 w-3 text-muted-foreground animate-spin flex-shrink-0" />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+                            <span className="text-xs font-mono text-muted-foreground">
+                              ${parseFloat(stock.currentPrice).toFixed(2)}
+                            </span>
+                            {/* Act/hold badge (right of price) */}
+                            {actionTag && !isProcessing && (
+                              <Badge 
+                                variant={actionTag.variant} 
+                                className="h-4 px-1.5 text-[10px]"
+                                data-testid={`badge-action-${stock.ticker}`}
+                              >
+                                {actionTag.text}
+                              </Badge>
+                            )}
+                          </div>
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
@@ -226,34 +271,36 @@ export function AppSidebar() {
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <SidebarMenuSub>
-                          {/* BUY stocks first */}
-                          {buyStocks.map(renderStockItem)}
+                          {/* ACT stocks first (strong signals - AI agrees with insider) */}
+                          {actStocks.map(renderStockItem)}
                           
-                          {/* SELL stocks */}
-                          {sellStocks.map(renderStockItem)}
-                          
-                          {/* HOLD stocks - either individual or grouped */}
-                          {shouldGroupHoldStocks ? (
-                            <Collapsible className="group/hold-collapsible">
-                              <SidebarMenuSubItem>
-                                <CollapsibleTrigger asChild>
-                                  <SidebarMenuSubButton
-                                    className="text-muted-foreground hover:text-foreground cursor-pointer"
-                                    data-testid="button-toggle-hold-stocks"
-                                  >
-                                    <Minus className="h-3 w-3" />
-                                    <span className="text-xs">HOLD ({holdStocks.length})</span>
-                                    <ChevronRight className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/hold-collapsible:rotate-90" />
-                                  </SidebarMenuSubButton>
-                                </CollapsibleTrigger>
-                              </SidebarMenuSubItem>
-                              <CollapsibleContent>
-                                {holdStocks.map(renderStockItem)}
-                              </CollapsibleContent>
-                            </Collapsible>
-                          ) : (
-                            holdStocks.map(renderStockItem)
+                          {/* HOLD stocks - either individual or grouped (weak signals - AI conflicts with insider) */}
+                          {holdStocks.length > 0 && (
+                            shouldGroupHoldStocks ? (
+                              <Collapsible className="group/hold-collapsible">
+                                <SidebarMenuSubItem>
+                                  <CollapsibleTrigger asChild>
+                                    <SidebarMenuSubButton
+                                      className="text-muted-foreground hover:text-foreground cursor-pointer"
+                                      data-testid="button-toggle-hold-stocks"
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                      <span className="text-xs">HOLD ({holdStocks.length})</span>
+                                      <ChevronRight className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/hold-collapsible:rotate-90" />
+                                    </SidebarMenuSubButton>
+                                  </CollapsibleTrigger>
+                                </SidebarMenuSubItem>
+                                <CollapsibleContent>
+                                  {holdStocks.map(renderStockItem)}
+                                </CollapsibleContent>
+                              </Collapsible>
+                            ) : (
+                              holdStocks.map(renderStockItem)
+                            )
                           )}
+                          
+                          {/* Stocks without alignment data (missing insider or AI data) */}
+                          {noAlignmentStocks.map(renderStockItem)}
                         </SidebarMenuSub>
                       </CollapsibleContent>
                     </SidebarMenuItem>

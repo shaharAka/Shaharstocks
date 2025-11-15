@@ -13,9 +13,8 @@ import { NotificationBell } from "@/components/notification-bell";
 import { AnnouncementBell } from "@/components/announcement-bell";
 import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { TutorialManager } from "@/components/TutorialManager";
-import { HelpCircle, Settings as SettingsIcon } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import Portfolio from "@/pages/portfolio";
 import Purchase from "@/pages/purchase";
 import Trading from "@/pages/trading";
@@ -28,7 +27,7 @@ import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Terms from "@/pages/terms";
 import NotFound from "@/pages/not-found";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 function Router() {
   return (
@@ -62,7 +61,6 @@ function Router() {
 function AuthenticatedApp() {
   const { user, isLoading } = useUser();
   const [location, setLocation] = useLocation();
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/terms") {
@@ -111,26 +109,12 @@ function AuthenticatedApp() {
               >
                 <HelpCircle className="h-5 w-5" />
               </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setSettingsOpen(true)}
-                data-testid="button-settings"
-                className="h-11 w-11"
-              >
-                <SettingsIcon className="h-5 w-5" />
-              </Button>
               <NotificationBell />
               <AnnouncementBell />
               <UserProfile />
               <ThemeToggle />
             </div>
           </header>
-          <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-            <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-auto">
-              <Settings />
-            </DialogContent>
-          </Dialog>
           <main className="flex-1 overflow-auto">
             <TrialStatusBanner />
             <Router />

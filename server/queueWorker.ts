@@ -328,11 +328,11 @@ class QueueWorker {
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'combined');
       console.log(`[QueueWorker] ✅ All analysis phases complete for ${job.ticker}`);
 
-      // Create notifications for high-value opportunities
-      // Buy opportunities: score > 70
-      // Sell opportunities: score < 30
+      // Create notifications for high-value opportunities (high confidence signals)
+      // High score BUY: score > 70 with BUY recommendation (highest buy scores)
+      // High score SELL: score > 70 with SELL recommendation (highest sell scores)
       const isBuyOpportunity = analysis.recommendation === 'buy' && integratedScore > 70;
-      const isSellOpportunity = analysis.recommendation === 'sell' && integratedScore < 30;
+      const isSellOpportunity = analysis.recommendation === 'sell' && integratedScore > 70;
       
       if (isBuyOpportunity || isSellOpportunity) {
         const notificationType = isBuyOpportunity ? 'high_score_buy' : 'high_score_sell';

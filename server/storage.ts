@@ -250,8 +250,10 @@ export interface IStorage {
     priceChange: string; 
     priceChangePercent: string;
     jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
-    latestStance?: 'BUY' | 'SELL' | 'HOLD' | null;
-    stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
+    insiderAction?: 'BUY' | 'SELL' | null;
+    aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+    aiScore?: number | null;
+    stanceAlignment?: 'act' | 'hold' | null;
   }>>;
   getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]>;
   getDailyBriefForUser(userId: string, ticker: string, briefDate: string): Promise<DailyBrief | undefined>;
@@ -1859,8 +1861,10 @@ export class DatabaseStorage implements IStorage {
     priceChange: string; 
     priceChangePercent: string;
     jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
-    latestStance?: 'BUY' | 'SELL' | 'HOLD' | null;
-    stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
+    insiderAction?: 'BUY' | 'SELL' | null;
+    aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+    aiScore?: number | null;
+    stanceAlignment?: 'act' | 'hold' | null;
   }>> {
     const followedWithPrices = await this.getFollowedStocksWithPrices(userId);
     
@@ -1869,11 +1873,24 @@ export class DatabaseStorage implements IStorage {
       priceChange: string; 
       priceChangePercent: string;
       jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
-      latestStance?: 'BUY' | 'SELL' | 'HOLD' | null;
-      stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
+      insiderAction?: 'BUY' | 'SELL' | null;
+      aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+      aiScore?: number | null;
+      stanceAlignment?: 'act' | 'hold' | null;
     }> = [];
     
     for (const followed of followedWithPrices) {
+      // Get stock data for insider action (recommendation)
+      const stockData = await db
+        .select()
+        .from(stocks)
+        .where(eq(stocks.ticker, followed.ticker))
+        .orderBy(desc(stocks.lastUpdated))
+        .limit(1);
+      
+      const stock = stockData[0];
+      const insiderAction = stock?.recommendation?.toUpperCase() as 'BUY' | 'SELL' | null || null;
+      
       // Get latest analysis job status
       const jobs = await db
         .select()
@@ -1885,7 +1902,7 @@ export class DatabaseStorage implements IStorage {
       const latestJob = jobs[0];
       const jobStatus = latestJob?.status as 'pending' | 'processing' | 'completed' | 'failed' | null || null;
       
-      // Get latest daily brief for stance
+      // Get latest daily brief for AI stance and score
       const briefs = await db
         .select()
         .from(dailyBriefs)
@@ -1896,48 +1913,34 @@ export class DatabaseStorage implements IStorage {
       const latestBrief = briefs[0];
       // Fallback to legacy 'stance' field for compatibility with existing data
       const rawStance = (latestBrief?.recommendedStance ?? (latestBrief as any)?.stance);
-      const latestStance = rawStance?.toUpperCase() as 'BUY' | 'SELL' | 'HOLD' | null || null;
+      const aiStance = rawStance?.toUpperCase() as 'BUY' | 'SELL' | 'HOLD' | null || null;
+      const aiScore = latestBrief?.confidenceScore ?? null;
       
-      // Calculate stance alignment
-      // BUY + positive price change = positive (good, buying while price going up)
-      // BUY + negative price change = negative (bad, buying while price going down)
-      // BUY + zero price change = neutral (no clear trend)
-      // SELL + positive price change = negative (bad, selling while price going up)
-      // SELL + negative price change = positive (good, selling while price going down)
-      // SELL + zero price change = neutral (no clear trend)
-      // HOLD = neutral (regardless of price change)
-      // Missing price data = neutral (can't determine alignment)
-      let stanceAlignment: 'positive' | 'negative' | 'neutral' | null = null;
-      if (latestStance) {
-        if (latestStance === 'HOLD') {
-          // HOLD is always neutral, regardless of price change
-          stanceAlignment = 'neutral';
-        } else if (followed.priceChange !== null && followed.priceChange !== undefined) {
-          // Price data exists (including zero)
-          const priceChange = parseFloat(followed.priceChange);
-          
-          if (priceChange === 0) {
-            // Zero price change = neutral (no trend)
-            stanceAlignment = 'neutral';
-          } else {
-            const isTrendPositive = priceChange > 0;
-            
-            if (latestStance === 'BUY') {
-              stanceAlignment = isTrendPositive ? 'positive' : 'negative';
-            } else if (latestStance === 'SELL') {
-              stanceAlignment = isTrendPositive ? 'negative' : 'positive';
-            }
-          }
+      // Calculate stance alignment based on insider action vs AI stance
+      // "act" = AI stance aligns with insider action (strong signal to act on opportunity)
+      // "hold" = AI stance conflicts with insider action (weak signal, hold off)
+      // Examples:
+      // - Insider BUY + AI BUY = "act" (strong buy signal)
+      // - Insider BUY + AI SELL/HOLD = "hold" (conflicting, don't buy yet)
+      // - Insider SELL + AI SELL = "act" (strong sell signal) 
+      // - Insider SELL + AI BUY/HOLD = "hold" (conflicting, don't sell yet)
+      let stanceAlignment: 'act' | 'hold' | null = null;
+      if (insiderAction && aiStance) {
+        if (insiderAction === aiStance) {
+          // AI agrees with insider action - strong signal to act
+          stanceAlignment = 'act';
         } else {
-          // Price change missing - default to neutral for BUY/SELL
-          stanceAlignment = 'neutral';
+          // AI disagrees with insider action - weak signal, hold off
+          stanceAlignment = 'hold';
         }
       }
       
       results.push({
         ...followed,
         jobStatus,
-        latestStance, // Include the normalized stance in the response
+        insiderAction,
+        aiStance,
+        aiScore,
         stanceAlignment,
       });
     }

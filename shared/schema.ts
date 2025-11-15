@@ -985,3 +985,45 @@ export const insertAdminNotificationSchema = createInsertSchema(adminNotificatio
 });
 export type InsertAdminNotification = z.infer<typeof insertAdminNotificationSchema>;
 export type AdminNotification = typeof adminNotifications.$inferSelect;
+
+// Followed Stocks - tracks which stocks users are following
+export const followedStocks = pgTable("followed_stocks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  ticker: text("ticker").notNull(),
+  followedAt: timestamp("followed_at").notNull().defaultNow(),
+}, (table) => ({
+  userTickerFollowUnique: uniqueIndex("user_ticker_follow_unique_idx").on(table.userId, table.ticker),
+}));
+
+export const insertFollowedStockSchema = createInsertSchema(followedStocks).omit({ id: true, followedAt: true });
+export type InsertFollowedStock = z.infer<typeof insertFollowedStockSchema>;
+export type FollowedStock = typeof followedStocks.$inferSelect;
+
+// Daily Stock Summaries - stores daily micro/macro analysis for followed stocks
+export const dailySummaries = pgTable("daily_summaries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticker: text("ticker").notNull(),
+  summaryDate: text("summary_date").notNull(), // YYYY-MM-DD format
+  microAnalysis: jsonb("micro_analysis").$type<{
+    score: number;
+    summary: string;
+    keyFindings: string[];
+    sentiment: "bullish" | "bearish" | "neutral";
+  }>(),
+  macroAnalysis: jsonb("macro_analysis").$type<{
+    score: number;
+    summary: string;
+    industryTrends: string[];
+    sentiment: "bullish" | "bearish" | "neutral";
+  }>(),
+  combinedScore: integer("combined_score"), // 0-100 overall score
+  priceAtSummary: decimal("price_at_summary", { precision: 12, scale: 2 }), // Stock price when summary was generated
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  tickerDateUnique: uniqueIndex("ticker_date_unique_idx").on(table.ticker, table.summaryDate),
+}));
+
+export const insertDailySummarySchema = createInsertSchema(dailySummaries).omit({ id: true, createdAt: true });
+export type InsertDailySummary = z.infer<typeof insertDailySummarySchema>;
+export type DailySummary = typeof dailySummaries.$inferSelect;

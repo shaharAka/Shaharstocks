@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertStockInterestSchema, insertUserStockPinSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema } from "@shared/schema";
+import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertStockInterestSchema, insertUserStockPinSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema } from "@shared/schema";
 import { z } from "zod";
 import { telegramService } from "./telegram";
 import { stockService } from "./stockService";
@@ -2099,6 +2099,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete pin error:", error);
       res.status(500).json({ error: "Failed to delete pin" });
+    }
+  });
+
+  // Stock follow routes
+  app.get("/api/users/me/followed", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const followed = await storage.getUserFollowedStocks(req.session.userId);
+      res.json(followed);
+    } catch (error) {
+      console.error("Get user followed stocks error:", error);
+      res.status(500).json({ error: "Failed to fetch followed stocks" });
+    }
+  });
+
+  app.post("/api/stocks/:ticker/follow", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const validatedData = insertFollowedStockSchema.parse({
+        ticker: req.params.ticker.toUpperCase(),
+        userId: req.session.userId,
+      });
+      const follow = await storage.followStock(validatedData);
+      res.status(201).json(follow);
+    } catch (error) {
+      console.error("Follow stock error:", error);
+      res.status(400).json({ error: "Failed to follow stock" });
+    }
+  });
+
+  app.delete("/api/stocks/:ticker/follow", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      await storage.unfollowStock(req.params.ticker.toUpperCase(), req.session.userId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Unfollow stock error:", error);
+      res.status(500).json({ error: "Failed to unfollow stock" });
+    }
+  });
+
+  app.post("/api/stocks/bulk-follow", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const validationResult = bulkTickersSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ error: "Invalid request", details: validationResult.error.errors });
+      }
+      const { tickers } = validationResult.data;
+      
+      let followedCount = 0;
+      for (const ticker of tickers) {
+        try {
+          await storage.followStock({
+            ticker: ticker.toUpperCase(),
+            userId: req.session.userId,
+          });
+          followedCount++;
+        } catch (error) {
+          console.error(`Failed to follow ${ticker}:`, error);
+        }
+      }
+
+      res.json({ 
+        total: tickers.length,
+        followed: followedCount,
+        message: `Followed ${followedCount} stocks`
+      });
+    } catch (error) {
+      console.error("Bulk follow error:", error);
+      res.status(500).json({ error: "Failed to bulk follow" });
+    }
+  });
+
+  // Get followed stocks with current prices
+  app.get("/api/followed-stocks-with-prices", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const followedStocks = await storage.getFollowedStocksWithPrices(req.session.userId);
+      res.json(followedStocks);
+    } catch (error) {
+      console.error("Get followed stocks with prices error:", error);
+      res.status(500).json({ error: "Failed to fetch followed stocks" });
+    }
+  });
+
+  // Get daily summaries for a ticker
+  app.get("/api/stocks/:ticker/daily-summaries", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const summaries = await storage.getDailySummariesForTicker(req.params.ticker.toUpperCase());
+      res.json(summaries);
+    } catch (error) {
+      console.error("Get daily summaries error:", error);
+      res.status(500).json({ error: "Failed to fetch daily summaries" });
     }
   });
 

@@ -73,6 +73,10 @@ import {
   type InsertAnnouncementRead,
   type AdminNotification,
   type InsertAdminNotification,
+  type FollowedStock,
+  type InsertFollowedStock,
+  type DailySummary,
+  type InsertDailySummary,
   stocks,
   portfolioHoldings,
   trades,
@@ -108,6 +112,8 @@ import {
   announcements,
   announcementReads,
   adminNotifications,
+  followedStocks,
+  dailySummaries,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
@@ -250,6 +256,13 @@ export interface IStorage {
   getUserStockPins(userId: string): Promise<UserStockPin[]>;
   createStockPin(pin: InsertUserStockPin): Promise<UserStockPin>;
   deleteStockPin(ticker: string, userId: string): Promise<boolean>;
+
+  // Followed Stocks
+  getUserFollowedStocks(userId: string): Promise<FollowedStock[]>;
+  followStock(follow: InsertFollowedStock): Promise<FollowedStock>;
+  unfollowStock(ticker: string, userId: string): Promise<boolean>;
+  getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>>;
+  getDailySummariesForTicker(ticker: string): Promise<DailySummary[]>;
 
   // User Stock Statuses
   getUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus | undefined>;
@@ -1766,6 +1779,72 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return true;
+  }
+
+  // Followed Stocks
+  async getUserFollowedStocks(userId: string): Promise<FollowedStock[]> {
+    return await db
+      .select()
+      .from(followedStocks)
+      .where(eq(followedStocks.userId, userId))
+      .orderBy(desc(followedStocks.followedAt));
+  }
+
+  async followStock(follow: InsertFollowedStock): Promise<FollowedStock> {
+    const [newFollow] = await db.insert(followedStocks).values(follow).returning();
+    return newFollow;
+  }
+
+  async unfollowStock(ticker: string, userId: string): Promise<boolean> {
+    await db
+      .delete(followedStocks)
+      .where(
+        and(
+          eq(followedStocks.ticker, ticker),
+          eq(followedStocks.userId, userId)
+        )
+      );
+    return true;
+  }
+
+  async getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>> {
+    const followedStocksList = await this.getUserFollowedStocks(userId);
+    
+    const results: Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }> = [];
+    
+    for (const followed of followedStocksList) {
+      const stockData = await db
+        .select()
+        .from(stocks)
+        .where(eq(stocks.ticker, followed.ticker))
+        .orderBy(desc(stocks.lastUpdated))
+        .limit(1);
+      
+      if (stockData.length > 0) {
+        const stock = stockData[0];
+        const currentPrice = parseFloat(stock.currentPrice);
+        const previousPrice = stock.previousClose ? parseFloat(stock.previousClose) : currentPrice;
+        const priceChange = currentPrice - previousPrice;
+        const priceChangePercent = previousPrice !== 0 ? (priceChange / previousPrice) * 100 : 0;
+        
+        results.push({
+          ...followed,
+          currentPrice: stock.currentPrice,
+          priceChange: priceChange.toFixed(2),
+          priceChangePercent: priceChangePercent.toFixed(2),
+        });
+      }
+    }
+    
+    return results;
+  }
+
+  async getDailySummariesForTicker(ticker: string): Promise<DailySummary[]> {
+    return await db
+      .select()
+      .from(dailySummaries)
+      .where(eq(dailySummaries.ticker, ticker))
+      .orderBy(desc(dailySummaries.summaryDate));
   }
 
   async getUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus | undefined> {

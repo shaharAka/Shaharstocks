@@ -180,27 +180,34 @@ export function AppSidebar() {
                           const isProcessing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
                           
                           // Get stance indicator
-                          // Show loader when processing
-                          // Show green up arrow when alignment is positive (BUY+uptrend or SELL+downtrend)
-                          // Show red down arrow when alignment is negative (BUY+downtrend or SELL+uptrend)
-                          // Show minus sign for neutral (HOLD) or when stance exists but alignment is neutral
-                          // No icon only when no daily brief exists yet
+                          // Priority: Show the stance icon if a brief exists, otherwise show processing status
+                          // - Green up arrow when alignment is positive (BUY+uptrend or SELL+downtrend)
+                          // - Red down arrow when alignment is negative (BUY+downtrend or SELL+uptrend)
+                          // - Minus sign for neutral (HOLD) or when stance exists but alignment is neutral
+                          // - Loader when no brief exists but job is processing
+                          // - No icon when no brief and no active job
                           let StanceIcon = null;
                           let stanceColor = "";
-                          if (isProcessing) {
+                          
+                          // If we have a brief with stance, show the stance indicator
+                          if (stock.latestStance) {
+                            if (stock.stanceAlignment === 'positive') {
+                              StanceIcon = TrendingUp;
+                              stanceColor = "text-green-600 dark:text-green-400";
+                            } else if (stock.stanceAlignment === 'negative') {
+                              StanceIcon = TrendingDown;
+                              stanceColor = "text-red-600 dark:text-red-400";
+                            } else {
+                              // Neutral (HOLD or no clear trend)
+                              StanceIcon = Minus;
+                              stanceColor = "text-muted-foreground";
+                            }
+                          } else if (isProcessing) {
+                            // No brief yet, but analysis is in progress
                             StanceIcon = Loader2;
                             stanceColor = "text-muted-foreground animate-spin";
-                          } else if (stock.stanceAlignment === 'positive') {
-                            StanceIcon = TrendingUp;
-                            stanceColor = "text-green-600 dark:text-green-400";
-                          } else if (stock.stanceAlignment === 'negative') {
-                            StanceIcon = TrendingDown;
-                            stanceColor = "text-red-600 dark:text-red-400";
-                          } else if (stock.stanceAlignment === 'neutral' && stock.latestStance) {
-                            StanceIcon = Minus;
-                            stanceColor = "text-muted-foreground";
                           }
-                          // No icon only when no daily brief exists (null latestStance)
+                          // else: No brief and no active job = no icon
                           
                           return (
                             <SidebarMenuSubItem key={stock.ticker}>

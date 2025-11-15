@@ -278,8 +278,8 @@ class OpenInsiderScraper:
                                         filter_stats["filtered_by_title"] += 1
                                         continue
                                 
-                                # Filter by minimum transaction value
-                                if min_transaction_value and value < min_transaction_value:
+                                # Filter by minimum transaction value (use absolute value for both buys and sells)
+                                if min_transaction_value and abs(value) < min_transaction_value:
                                     filter_stats["filtered_by_transaction_value"] += 1
                                     continue
                                 

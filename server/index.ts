@@ -182,26 +182,26 @@ function startPriceUpdateJob() {
       
       log("[PriceUpdate] Starting stock price update job...");
       
-      // Get all stocks with pending buy recommendations
+      // Get all stocks with pending recommendations (both buy and sell)
       const stocks = await storage.getStocks();
-      const buyStocks = stocks.filter(
-        stock => stock.recommendation?.toLowerCase() === "buy" && stock.recommendationStatus === "pending"
+      const pendingStocks = stocks.filter(
+        stock => stock.recommendationStatus === "pending"
       );
 
-      if (buyStocks.length === 0) {
-        log("[PriceUpdate] No pending buy stocks to update");
+      if (pendingStocks.length === 0) {
+        log("[PriceUpdate] No pending stocks to update");
         return;
       }
 
-      log(`[PriceUpdate] Updating prices for ${buyStocks.length} stocks`);
+      log(`[PriceUpdate] Updating prices for ${pendingStocks.length} stocks (${pendingStocks.filter(s => s.recommendation === 'buy').length} buys, ${pendingStocks.filter(s => s.recommendation === 'sell').length} sells)`);
 
-      // Fetch quotes, market cap, company info, and news for all buy stocks
-      const tickers = buyStocks.map(s => s.ticker);
+      // Fetch quotes, market cap, company info, and news for all pending stocks
+      const tickers = pendingStocks.map(s => s.ticker);
       const stockData = await finnhubService.getBatchStockData(tickers);
 
       // Update each stock with new price, previous close, market cap, company info, and news
       let successCount = 0;
-      for (const stock of buyStocks) {
+      for (const stock of pendingStocks) {
         const data = stockData.get(stock.ticker);
         if (data) {
           // Fetch historical price at insider trade date if available and not already fetched
@@ -236,7 +236,7 @@ function startPriceUpdateJob() {
         }
       }
 
-      log(`[PriceUpdate] Successfully updated ${successCount}/${buyStocks.length} stocks`);
+      log(`[PriceUpdate] Successfully updated ${successCount}/${pendingStocks.length} stocks`);
     } catch (error) {
       console.error("[PriceUpdate] Error updating stock prices:", error);
     }
@@ -263,25 +263,25 @@ function startCandlestickDataJob() {
     try {
       log("[CandlestickData] Starting candlestick data fetch job...");
       
-      // Get all stocks with pending buy recommendations
+      // Get all stocks with pending recommendations (both buy and sell)
       const stocks = await storage.getStocks();
-      const buyStocks = stocks.filter(
-        stock => stock.recommendation?.toLowerCase() === "buy" && stock.recommendationStatus === "pending"
+      const pendingStocks = stocks.filter(
+        stock => stock.recommendationStatus === "pending"
       );
 
-      if (buyStocks.length === 0) {
-        log("[CandlestickData] No pending buy stocks to update");
+      if (pendingStocks.length === 0) {
+        log("[CandlestickData] No pending stocks to update");
         return;
       }
 
-      log(`[CandlestickData] Fetching candlestick data for ${buyStocks.length} stocks`);
+      log(`[CandlestickData] Fetching candlestick data for ${pendingStocks.length} stocks (${pendingStocks.filter(s => s.recommendation === 'buy').length} buys, ${pendingStocks.filter(s => s.recommendation === 'sell').length} sells)`);
 
       // Import stockService here to avoid circular dependencies
       const { stockService } = await import('./stockService.js');
 
       // Fetch candlestick data for each stock (with rate limiting handled by stockService)
       let successCount = 0;
-      for (const stock of buyStocks) {
+      for (const stock of pendingStocks) {
         try {
           log(`[CandlestickData] Fetching data for ${stock.ticker}...`);
           const candlesticks = await stockService.getCandlestickData(stock.ticker);
@@ -306,7 +306,7 @@ function startCandlestickDataJob() {
         }
       }
 
-      log(`[CandlestickData] Successfully updated ${successCount}/${buyStocks.length} stocks`);
+      log(`[CandlestickData] Successfully updated ${successCount}/${pendingStocks.length} stocks`);
     } catch (error) {
       console.error("[CandlestickData] Error in candlestick data job:", error);
     }
@@ -729,10 +729,9 @@ function startRecommendationCleanupJob() {
       let rejectedCount = 0;
       let deletedCount = 0;
 
-      // 1. Reject old pending recommendations (older than 2 weeks by insider trade date)
+      // 1. Reject old pending recommendations (older than 2 weeks by insider trade date, both buy and sell)
       const pendingStocks = stocks.filter(
-        stock => stock.recommendation?.toLowerCase() === "buy" && 
-                 stock.recommendationStatus === "pending" && 
+        stock => stock.recommendationStatus === "pending" && 
                  stock.insiderTradeDate
       );
 
@@ -988,11 +987,10 @@ function startAIAnalysisJob() {
     try {
       log("[AIAnalysis] Checking for stocks needing AI analysis...");
       
-      // Get all pending purchase recommendations
+      // Get all pending recommendations (both buy and sell)
       const stocks = await storage.getStocks();
       const pendingStocks = stocks.filter(
-        stock => stock.recommendation?.toLowerCase() === "buy" && 
-                 stock.recommendationStatus === "pending"
+        stock => stock.recommendationStatus === "pending"
       );
       
       if (pendingStocks.length === 0) {
@@ -1000,7 +998,9 @@ function startAIAnalysisJob() {
         return;
       }
       
-      log(`[AIAnalysis] Found ${pendingStocks.length} pending stocks, checking for missing analyses...`);
+      const buyCount = pendingStocks.filter(s => s.recommendation === 'buy').length;
+      const sellCount = pendingStocks.filter(s => s.recommendation === 'sell').length;
+      log(`[AIAnalysis] Found ${pendingStocks.length} pending stocks (${buyCount} buys, ${sellCount} sells), checking for missing analyses...`);
       
       let analyzedCount = 0;
       let skippedCount = 0;

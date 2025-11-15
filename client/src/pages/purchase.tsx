@@ -83,7 +83,7 @@ export default function Purchase() {
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
   const [fetchConfigOpen, setFetchConfigOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("cards");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
 
   // Selection handlers
   const toggleSelection = (ticker: string) => {

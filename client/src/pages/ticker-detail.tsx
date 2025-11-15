@@ -406,7 +406,7 @@ export default function TickerDetail() {
                             <watchingConfig.icon className={`h-5 w-5 ${watchingConfig.color}`} />
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <h4 className="text-sm font-bold text-muted-foreground">IF I ENTER</h4>
+                                <h4 className="text-sm font-bold text-muted-foreground">IF I CONSIDER ENTERING</h4>
                                 <Badge variant={watchingIsAct ? "default" : "outline"} className={watchingIsAct ? "bg-primary" : ""}>
                                   {watchingConfig.text}
                                 </Badge>

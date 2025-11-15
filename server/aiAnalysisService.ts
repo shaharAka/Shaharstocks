@@ -346,8 +346,8 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     const isBuyOpportunity = opportunityType === "buy";
     
     const positionContext = userOwnsPosition
-      ? `USER OWNS THIS STOCK - Focus on EXIT STRATEGY (when to take profit or stop loss)`
-      : `USER WATCHING - Focus on ENTRY EVALUATION (is the insider signal still valid for entry?)`;
+      ? `USER OWNS THIS STOCK - Focus on EXIT STRATEGY ONLY (when to sell or hold). NEVER recommend adding to position.`
+      : `USER CONSIDERING ENTRY - Focus on ENTRY EVALUATION (should they enter now, wait, or avoid?)`;
     
     const opportunityContext = isBuyOpportunity
       ? "This is a BUY OPPORTUNITY - insiders recently BOUGHT shares, signaling potential upside."
@@ -374,23 +374,27 @@ ${signals.length > 0 ? `- Signals: ${signals.join(', ')}` : ''}`;
     let stanceRules: string;
     
     if (userOwnsPosition) {
-      // User owns the stock - focus on exit strategy with trend-based ACT logic
+      // User owns the stock - focus ONLY on exit strategy (sell or hold, NEVER buy/add)
       stanceRules = isBuyOpportunity
         ? `STANCE RULES for OWNED POSITION (Buy Opportunity):
-Use initial trend as baseline. Compare current price action to decide stance.
+Use initial trend as baseline. Focus on WHEN TO EXIT or HOLD.
 
-ACT (buy/sell):
-- "sell" if price +5%+ AND initial trend weakening
+⚠️ CRITICAL: You can ONLY recommend "sell" or "hold" - NEVER "buy". This is exit strategy, not adding to position.
+
+ACT (sell only):
+- "sell" if price +5%+ AND initial trend weakening (take profit)
 - "sell" if price -3%+ AND violates initial bullish trend (stop loss)
-- "buy" if price -2% to -4% AND initial trend still bullish/moderate (add to position)
 
 HOLD:
-- Modest gains +1-4% with initial trend intact
-- Sideways action, initial trend neutral
+- Gains +1-4% with initial trend intact (let it run)
+- Sideways action, initial trend neutral (wait for clarity)
+- Price -2% to -4% but initial trend still bullish/moderate (don't panic sell on small dips)
 
-Decision: ACT when price confirms or violates initial trend. HOLD when unclear.`
+Decision: SELL when trend confirms exit. HOLD when trend supports staying in. NEVER recommend "buy".`
         : `STANCE RULES for OWNED POSITION (Sell Opportunity - Contrarian):
 You hold against insider sell. Prioritize capital preservation.
+
+⚠️ CRITICAL: You can ONLY recommend "sell" or "hold" - NEVER "buy".
 
 ACT (sell):
 - "sell" if ANY decline -2%+ (stop loss)
@@ -399,7 +403,7 @@ ACT (sell):
 HOLD (rare):
 - Small gain 0-3% with initial trend reversing bullish
 
-Decision: Default "sell" on ANY weakness. ACT = exit quickly.`
+Decision: Default "sell" on ANY weakness. ACT = exit quickly. NEVER recommend "buy".`
     } else {
       // User doesn't own - focus on entry evaluation with trend-based ACT logic
       stanceRules = isBuyOpportunity

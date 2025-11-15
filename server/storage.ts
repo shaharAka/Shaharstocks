@@ -390,7 +390,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStock(ticker: string): Promise<Stock | undefined> {
-    const [stock] = await db.select().from(stocks).where(eq(stocks.ticker, ticker));
+    // Handle multiple transactions per ticker by getting the most recent one
+    const [stock] = await db
+      .select()
+      .from(stocks)
+      .where(eq(stocks.ticker, ticker))
+      .orderBy(desc(stocks.lastUpdated))
+      .limit(1);
     return stock;
   }
 

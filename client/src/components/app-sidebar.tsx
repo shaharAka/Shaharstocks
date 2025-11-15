@@ -7,6 +7,7 @@ import {
   Lightbulb,
   MessageSquare,
   ChevronDown,
+  Star,
 } from "lucide-react";
 import {
   Sidebar,
@@ -66,6 +67,15 @@ export function AppSidebar() {
   const { data: versionInfo } = useQuery<{ version: string; name: string }>({
     queryKey: ["/api/version"],
     staleTime: Infinity, // Version doesn't change during runtime
+  });
+
+  // Fetch followed stocks with prices
+  const { data: followedStocks = [] } = useQuery<Array<{ ticker: string; currentPrice: string }>>({
+    queryKey: ["/api/followed-stocks-with-prices"],
+    enabled: !!user,
+    refetchInterval: 60000, // Refresh every minute
+    retry: false,
+    meta: { ignoreError: true },
   });
 
   const handleNavClick = () => {
@@ -128,6 +138,52 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+              
+              {/* Following Submenu */}
+              {followedStocks.length > 0 && (
+                <Collapsible 
+                  defaultOpen={currentPath.startsWith("/ticker/")}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip={isCollapsed ? "Following" : undefined}
+                        data-testid="link-following"
+                      >
+                        <Star className="h-4 w-4" />
+                        <span>Following</span>
+                        <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {followedStocks.map((stock) => {
+                          const tickerPath = `/ticker/${stock.ticker}`;
+                          const isTickerActive = currentPath === tickerPath;
+                          
+                          return (
+                            <SidebarMenuSubItem key={stock.ticker}>
+                              <SidebarMenuSubButton
+                                asChild
+                                className={isTickerActive ? "bg-sidebar-accent" : ""}
+                                data-testid={`link-ticker-${stock.ticker}`}
+                              >
+                                <Link href={tickerPath} onClick={handleNavClick}>
+                                  <span className="font-mono font-medium">{stock.ticker}</span>
+                                  <span className="ml-auto text-xs font-mono text-muted-foreground">
+                                    ${parseFloat(stock.currentPrice).toFixed(2)}
+                                  </span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
               
               {/* Community Submenu */}
               <Collapsible 

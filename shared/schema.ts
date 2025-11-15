@@ -358,6 +358,7 @@ export const tradingRules = pgTable("trading_rules", {
     operator: string;
     value: number;
     logic?: "AND" | "OR";
+    baselinePrice?: number; // For percentage rules, stores the baseline price at creation time
   }[]>(),
   action: text("action"), // "buy", "sell", "sell_all", "notify"
   actionParams: jsonb("action_params").$type<{

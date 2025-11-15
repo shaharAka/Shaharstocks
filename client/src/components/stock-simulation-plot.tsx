@@ -150,7 +150,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
 
   // Calculate sell rule boundaries
   const sellRuleLines = useMemo(() => {
-    if (!rules || !holding) return [];
+    if (!rules) return [];
 
     const lines: Array<{
       rule: TradingRule;
@@ -172,12 +172,15 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
       const condition = rule.conditions[0];
       let boundaryPrice = 0;
 
-      if (condition.metric === "price_change_percent" && purchasePrice) {
-        boundaryPrice = purchasePrice * (1 + condition.value / 100);
+      if (condition.metric === "price_change_percent") {
+        // Use stored baseline, or purchase price, or current price as fallback
+        const basePrice = (condition as any).baselinePrice || purchasePrice || parseFloat(stock.currentPrice);
+        boundaryPrice = basePrice * (1 + condition.value / 100);
       } else if (condition.metric === "price_change_from_close_percent") {
         const previousClose = parseFloat(stock.previousClose || stock.currentPrice);
         boundaryPrice = previousClose * (1 + condition.value / 100);
       } else if (condition.metric === "price_absolute") {
+        // Absolute price rules work without a position
         boundaryPrice = condition.value;
       }
 
@@ -188,7 +191,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     });
 
     return lines;
-  }, [rules, holding, ticker, purchasePrice, stock]);
+  }, [rules, ticker, purchasePrice, stock]);
 
   const handleCreateRule = () => {
     const value = parseFloat(conditionValue);
@@ -213,6 +216,11 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
       operator = "less_than_or_equal";
     }
 
+    // For percentage rules, store the baseline price (purchase price or current price)
+    const baselinePrice = conditionMetric === 'price_change_percent' 
+      ? (purchasePrice || parseFloat(stock.currentPrice))
+      : undefined;
+
     const newRule = {
       name: `${ticker} ${ruleAction} at ${conditionMetric === 'price_change_percent' ? `${value > 0 ? '+' : ''}${value}%` : `$${conditionValue_normalized}`}`,
       scope: "specific_stock" as const,
@@ -223,6 +231,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
           metric: conditionMetric,
           operator,
           value: conditionValue_normalized,
+          baselinePrice, // Store baseline for percentage rules
         },
       ],
       enabled: true,

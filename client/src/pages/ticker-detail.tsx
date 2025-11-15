@@ -43,10 +43,10 @@ export default function TickerDetail() {
     enabled: !!ticker,
   });
 
-  // Fetch daily summaries
-  const { data: dailySummaries = [], isLoading: summariesLoading } = useQuery<any[]>({
-    queryKey: ["/api/stocks", ticker, "daily-summaries"],
-    enabled: !!ticker,
+  // Fetch daily briefs (lightweight daily reports for followed stocks)
+  const { data: dailyBriefs = [], isLoading: briefsLoading } = useQuery<any[]>({
+    queryKey: ["/api/stocks", ticker, "daily-briefs"],
+    enabled: !!ticker && (userStatus?.isFollowing ?? false), // Only fetch if following
     retry: false,
     meta: { ignoreError: true },
   });
@@ -317,57 +317,88 @@ export default function TickerDetail() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Daily Summary Tab */}
+        {/* Daily Brief Tab */}
         <TabsContent value="summary" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Daily Analysis Summary</CardTitle>
+              <CardTitle>Daily Stock Briefs</CardTitle>
               <CardDescription>
-                AI-powered micro and macro analysis runs daily for followed stocks
+                Lightweight daily reports with quick buy/sell/hold guidance for followed stocks
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {summariesLoading ? (
+              {briefsLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-full" />
                   <Skeleton className="h-4 w-3/4" />
                 </div>
-              ) : dailySummaries.length === 0 ? (
+              ) : dailyBriefs.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
-                  Daily analysis summaries will appear here once generated. The first analysis will run shortly after following this stock.
+                  {userStatus?.isFollowing 
+                    ? "Daily briefs will appear here once generated. Briefs are created daily for stocks you follow."
+                    : "Follow this stock to receive daily briefs with quick trading guidance."
+                  }
                 </p>
               ) : (
                 <div className="space-y-4">
-                  {dailySummaries.map((summary: any) => (
-                    <div key={summary.id} className="border-l-4 border-l-primary pl-4 py-2">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="outline" data-testid={`badge-date-${summary.summaryDate}`}>
-                          {new Date(summary.summaryDate).toLocaleDateString()}
-                        </Badge>
-                        {summary.aiScore && (
-                          <Badge variant={summary.aiScore > 7 ? "default" : "secondary"} data-testid={`badge-score-${summary.id}`}>
-                            AI Score: {summary.aiScore}/10
-                          </Badge>
+                  {dailyBriefs.map((brief: any) => {
+                    const priceChange = parseFloat(brief.priceChange || 0);
+                    const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
+                    const isPositive = priceChange >= 0;
+                    
+                    return (
+                      <div key={brief.id} className="border rounded-lg p-4 space-y-3">
+                        {/* Header with date, stance, and price info */}
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
+                              {new Date(brief.briefDate).toLocaleDateString()}
+                            </Badge>
+                            <Badge 
+                              variant={
+                                brief.recommendedStance === "buy" ? "default" : 
+                                brief.recommendedStance === "sell" ? "destructive" : 
+                                "secondary"
+                              }
+                              data-testid={`badge-stance-${brief.id}`}
+                            >
+                              {brief.recommendedStance?.toUpperCase()}
+                            </Badge>
+                            <Badge variant="outline" data-testid={`badge-confidence-${brief.id}`}>
+                              Confidence: {brief.confidence}/10
+                            </Badge>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-mono font-medium">
+                              ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
+                            </p>
+                            <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Brief text */}
+                        <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
+                          {brief.briefText}
+                        </p>
+
+                        {/* Key highlights */}
+                        {brief.keyHighlights && brief.keyHighlights.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-1">Key Highlights</h4>
+                            <ul className="list-disc list-inside space-y-1">
+                              {brief.keyHighlights.map((highlight: string, idx: number) => (
+                                <li key={idx} className="text-sm text-muted-foreground">
+                                  {highlight}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
                       </div>
-                      {summary.microAnalysis && (
-                        <div className="mb-2">
-                          <h4 className="text-sm font-medium mb-1">Micro Analysis</h4>
-                          <p className="text-sm text-muted-foreground" data-testid={`text-micro-${summary.id}`}>
-                            {summary.microAnalysis}
-                          </p>
-                        </div>
-                      )}
-                      {summary.macroAnalysis && (
-                        <div>
-                          <h4 className="text-sm font-medium mb-1">Macro Analysis</h4>
-                          <p className="text-sm text-muted-foreground" data-testid={`text-macro-${summary.id}`}>
-                            {summary.macroAnalysis}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

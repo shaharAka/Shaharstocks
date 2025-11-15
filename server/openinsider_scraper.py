@@ -203,14 +203,17 @@ class OpenInsiderScraper:
                                 insider_title_cell = cells[insider_title_idx] if len(cells) > insider_title_idx else None
                                 insider_title = insider_title_cell.get_text(strip=True) if insider_title_cell else ""
                                 
-                                # Only include purchases (P or "P - Purchase") with valid data
-                                if not trade_type.startswith("P"):
+                                # Only include purchases (P) and sales (S) with valid data
+                                if not (trade_type.startswith("P") or trade_type.startswith("S")):
                                     filter_stats["filtered_not_purchase"] += 1
                                     continue
                                 
                                 if not (ticker_text and price > 0):
                                     filter_stats["filtered_invalid_data"] += 1
                                     continue
+                                
+                                # Map trade type to recommendation
+                                recommendation = "buy" if trade_type.startswith("P") else "sell"
                                 
                                 # Apply filters
                                 # Filter by previous day only
@@ -258,7 +261,7 @@ class OpenInsiderScraper:
                                     "price": price,
                                     "quantity": quantity,
                                     "value": value,
-                                    "recommendation": "buy",  # All purchases are BUY signals
+                                    "recommendation": recommendation,  # "buy" for purchases (P), "sell" for sales (S)
                                     "confidence": 75  # Default confidence score
                                 }
                                 page_transactions.append(transaction)

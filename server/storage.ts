@@ -1679,6 +1679,22 @@ export class DatabaseStorage implements IStorage {
     return newComment;
   }
 
+  async getAllStockComments(): Promise<StockCommentWithUser[]> {
+    const comments = await db
+      .select({
+        comment: stockComments,
+        user: users,
+      })
+      .from(stockComments)
+      .leftJoin(users, eq(stockComments.userId, users.id))
+      .orderBy(desc(stockComments.createdAt));
+
+    return comments.map((row) => ({
+      ...row.comment,
+      user: row.user!,
+    }));
+  }
+
   async getStockCommentCounts(): Promise<{ ticker: string; count: number }[]> {
     const counts = await db
       .select({

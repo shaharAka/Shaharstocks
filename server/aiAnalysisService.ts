@@ -302,7 +302,9 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     const priceChange = currentPrice - previousPrice;
     const priceChangePercent = ((priceChange / previousPrice) * 100).toFixed(2);
     
-    const prompt = `You are a professional stock trader providing a DAILY BRIEF for ${ticker}.
+    const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.
+
+⚡ CRITICAL: This is SHORT-TERM TRADING, not long-term investing. Even small trends demand action.
 
 CURRENT STATUS:
 - Current Price: $${currentPrice.toFixed(2)}
@@ -318,23 +320,26 @@ ${recentNews && recentNews.length > 0 ? `RECENT NEWS (last 24h):
 ${recentNews.slice(0, 3).map(n => `- ${n.title} (${n.source}, sentiment: ${n.sentiment > 0 ? 'positive' : n.sentiment < 0 ? 'negative' : 'neutral'})`).join('\n')}
 ` : 'No significant news in last 24h'}
 
-YOUR TASK: Provide a BRIEF daily trading recommendation (<120 words total).
+YOUR TASK: Provide an ACTION-ORIENTED brief (<120 words). Near-term traders MUST act on trends.
 
 Return JSON in this EXACT format:
 {
   "recommendedStance": "buy" | "hold" | "sell",
   "confidence": 1-10 (where 10 is highest confidence),
-  "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on what matters TODAY for trading decisions.",
+  "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on NEAR-TERM action.",
   "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
 }
 
-GUIDANCE:
-- "buy" = Strong positive signals, good entry point or accumulation opportunity
-- "hold" = Maintain current position, wait for clearer signals  
-- "sell" = Warning signs, consider taking profits or cutting losses
-- Be direct and actionable
-- Focus on TODAY's trading context, not long-term fundamentals
-- If price is moving significantly, explain why in highlights`;
+STANCE RULES (1-2 week trading horizon):
+- "buy" = ANY positive momentum (even +2-3%), positive catalysts, or recovery signals → accumulate for near-term gains
+- "hold" = ONLY for flat/sideways price action (-1% to +1%) with no clear catalysts → wait for clearer direction
+- "sell" = ANY negative momentum (even -2-3%), warning signs, or overbought conditions → take profits or cut losses
+
+⚠️ IMPORTANT: 
+- A +5-6% move should NEVER be "hold" - recommend "buy" (ride momentum) or "sell" (take profits)
+- A -5-6% move should NEVER be "hold" - recommend "buy" (dip buying) or "sell" (cut losses)
+- Reserve "hold" ONLY for minimal movement (<2% change) with no catalysts
+- BE DECISIVE. Near-term traders need action, not patience.`;
 
     try {
       const response = await openai.chat.completions.create({

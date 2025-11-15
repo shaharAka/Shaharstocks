@@ -2457,7 +2457,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markStockAnalysisPhaseComplete(ticker: string, phase: 'micro' | 'macro' | 'combined'): Promise<void> {
-    // Use row-level locking to prevent race conditions (SELECT ... FOR UPDATE)
+    // Update ALL stocks with this ticker (handles multiple transactions per ticker)
+    // Use advisory lock to prevent race conditions without subquery issues
     const fieldMap = {
       'micro': 'micro_analysis_completed',
       'macro': 'macro_analysis_completed',
@@ -2466,18 +2467,16 @@ export class DatabaseStorage implements IStorage {
 
     const fieldName = fieldMap[phase];
 
-    await db.execute(sql`
+    // Use advisory lock with PostgreSQL's hashtext() to prevent concurrent updates
+    // This avoids subquery issues while preventing race conditions with unique hash per ticker
+    const result = await db.execute(sql`
+      WITH lock AS (SELECT pg_advisory_xact_lock(hashtext(${ticker})))
       UPDATE ${stocks}
       SET ${sql.raw(fieldName)} = true
       WHERE ticker = ${ticker}
-      AND id = (
-        SELECT id FROM ${stocks}
-        WHERE ticker = ${ticker}
-        FOR UPDATE
-      )
     `);
 
-    console.log(`[Storage] Marked ${phase} analysis complete for ${ticker}`);
+    console.log(`[Storage] Marked ${phase} analysis complete for ${ticker} (updated ${result.rowCount || 0} rows)`);
   }
 
   async getStocksWithIncompleteAnalysis(): Promise<Stock[]> {

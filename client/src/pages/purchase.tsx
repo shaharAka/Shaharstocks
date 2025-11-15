@@ -559,15 +559,6 @@ export default function Purchase() {
         
         <div className="flex gap-2">
           <Button
-            variant={viewMode === "cards" ? "default" : "outline"}
-            size="icon"
-            onClick={() => setViewMode("cards")}
-            data-testid="button-view-cards"
-            title="Card view"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
             variant={viewMode === "table" ? "default" : "outline"}
             size="icon"
             onClick={() => setViewMode("table")}
@@ -575,6 +566,15 @@ export default function Purchase() {
             title="Table view"
           >
             <LayoutList className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "cards" ? "default" : "outline"}
+            size="icon"
+            onClick={() => setViewMode("cards")}
+            data-testid="button-view-cards"
+            title="Card view"
+          >
+            <LayoutGrid className="h-4 w-4" />
           </Button>
         </div>
       </div>

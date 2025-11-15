@@ -647,6 +647,14 @@ function startOpeninsiderFetchJob() {
 
           createdCount++;
           log(`[OpeninsiderFetch] Created stock recommendation for ${transaction.ticker}`);
+          
+          // Queue AI analysis job for the new stock (both buys and sells)
+          try {
+            await storage.enqueueAnalysisJob(newStock.ticker, "openinsider_fetch", "normal");
+            log(`[OpeninsiderFetch] Queued AI analysis job for ${transaction.ticker} (${transaction.recommendation})`);
+          } catch (error) {
+            console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${transaction.ticker}:`, error);
+          }
 
           // Send Telegram notification (only if feature enabled)
           if (ENABLE_TELEGRAM && telegramNotificationService.isReady()) {

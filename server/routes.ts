@@ -3328,6 +3328,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdCount++;
           createdTickers.push(transaction.ticker); // Track this ticker for AI analysis
           
+          // Queue AI analysis job for the new stock (both buys and sells)
+          try {
+            await storage.enqueueAnalysisJob(newStock.ticker, "openinsider_fetch", "normal");
+            console.log(`[OpeninsiderFetch] ✓ Queued AI analysis job for ${transaction.ticker} (${transaction.recommendation})`);
+          } catch (error) {
+            console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${transaction.ticker}:`, error);
+          }
+          
           // Log successful creation
           console.log(`[OpeninsiderFetch] ✓ Created recommendation for ${transaction.ticker}:`);
           console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);

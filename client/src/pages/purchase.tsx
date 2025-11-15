@@ -62,6 +62,27 @@ export default function Purchase() {
     queryKey: ["/api/stock-analyses"],
   });
 
+  // Fetch users (for interest indicators) - only works for admin users
+  const { data: users = [] } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  // Fetch stock interests
+  const { data: interests = [] } = useQuery<any[]>({
+    queryKey: ["/api/stock-interests"],
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  // Fetch comment counts
+  const { data: commentCounts = [] } = useQuery<{ ticker: string; count: number }[]>({
+    queryKey: ["/api/stock-comment-counts"],
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
   // Refresh all stocks mutation
   const refreshMutation = useMutation({
     mutationFn: async () => {
@@ -368,9 +389,9 @@ export default function Purchase() {
       ) : viewMode === "table" ? (
         <StockTable
           stocks={opportunities}
-          users={[]}
-          interests={[]}
-          commentCounts={[]}
+          users={users}
+          interests={interests}
+          commentCounts={commentCounts}
           analyses={analyses}
           onStockClick={() => {}}
         />

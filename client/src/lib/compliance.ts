@@ -364,10 +364,22 @@ export function applyRiskPresetFilters(
     }
 
     // AI score filter - check merged fields first, then fallback to analysisJob
+    // IMPORTANT: For SELL recommendations, LOW scores are good signals
+    // - Show all sell opportunities with scores < 70
+    // - For BUY recommendations, apply minAIScore filter normally
     if (minAIScore !== undefined) {
       const aiScore = (opp as any).integratedScore ?? (opp as any).aiScore ?? opp.analysisJob?.integratedScore;
-      // Treat missing or zero scores as not meeting the requirement
-      if (!aiScore || aiScore < minAIScore) return false;
+      const isSellOpportunity = opp.recommendation === 'sell';
+      
+      if (isSellOpportunity) {
+        // For sell opportunities, keep all stocks with scores below 70
+        // (lower scores = stronger sell signals)
+        if (aiScore && aiScore >= 70) return false;
+      } else {
+        // For buy opportunities, apply normal minAIScore filter
+        // Treat missing or zero scores as not meeting the requirement
+        if (!aiScore || aiScore < minAIScore) return false;
+      }
     }
 
     return true;

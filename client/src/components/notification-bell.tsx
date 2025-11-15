@@ -125,46 +125,59 @@ export function NotificationBell() {
               <Bell className="h-12 w-12 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">No notifications yet</p>
               <p className="text-xs text-muted-foreground mt-1">
-                You'll be notified when stocks score above 75
+                You'll be notified of high-value opportunities and important changes
               </p>
             </div>
           ) : (
             <div className="divide-y" data-testid="list-notifications">
-              {notifications.map((notification) => (
-                <button
-                  key={notification.id}
-                  onClick={() => handleNotificationClick(notification)}
-                  className={`w-full text-left p-4 hover-elevate transition-colors ${
-                    !notification.isRead ? "bg-accent/50" : ""
-                  }`}
-                  data-testid={`notification-${notification.ticker}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{notification.ticker}</span>
-                        <Badge
-                          variant={notification.score > 85 ? "default" : "secondary"}
-                          data-testid={`badge-score-${notification.ticker}`}
-                        >
-                          {notification.score}/100
-                        </Badge>
+              {notifications.map((notification) => {
+                // Determine badge content based on notification type
+                const showScore = notification.type === 'high_score_buy' || notification.type === 'high_score_sell';
+                const badgeVariant = notification.type === 'high_score_buy' ? 'default' : 
+                                    notification.type === 'high_score_sell' ? 'destructive' :
+                                    notification.type === 'popular_stock' ? 'secondary' :
+                                    'outline';
+                const badgeText = showScore ? `${notification.score}/100` :
+                                 notification.type === 'popular_stock' ? 'Trending' :
+                                 notification.type === 'stance_change' ? 'Alert' :
+                                 'New';
+                
+                return (
+                  <button
+                    key={notification.id}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`w-full text-left p-4 hover-elevate transition-colors ${
+                      !notification.isRead ? "bg-accent/50" : ""
+                    }`}
+                    data-testid={`notification-${notification.ticker}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{notification.ticker}</span>
+                          <Badge
+                            variant={badgeVariant}
+                            data-testid={`badge-type-${notification.ticker}`}
+                          >
+                            {badgeText}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {notification.message}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(notification.createdAt), {
+                            addSuffix: true,
+                          })}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {notification.message}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(notification.createdAt), {
-                          addSuffix: true,
-                        })}
-                      </p>
+                      {!notification.isRead && (
+                        <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
+                      )}
                     </div>
-                    {!notification.isRead && (
-                      <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
-                    )}
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </ScrollArea>

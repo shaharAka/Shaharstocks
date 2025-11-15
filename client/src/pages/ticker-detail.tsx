@@ -336,32 +336,43 @@ export default function TickerDetail() {
                   const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
                   const isPositive = priceChange >= 0;
                   
-                  // Check if either scenario recommends ACT (buy/sell)
-                  const watchingIsAct = brief.watchingStance === "buy" || brief.watchingStance === "sell";
-                  const owningIsAct = brief.owningStance === "buy" || brief.owningStance === "sell";
+                  // Check if either scenario recommends ACT
+                  // Watching scenario: ACT = "enter"
+                  // Owning scenario: ACT = "sell"
+                  const watchingIsAct = brief.watchingStance === "enter";
+                  const owningIsAct = brief.owningStance === "sell";
                   const hasActRecommendation = watchingIsAct || owningIsAct;
                   
                   const getStanceConfig = (stance: string) => {
-                    if (stance === "buy") {
+                    if (stance === "enter") {
                       return {
                         icon: ArrowUpCircle,
-                        text: "Buy",
+                        text: "ENTER",
                         color: "text-green-600 dark:text-green-400",
                         bgColor: "bg-green-50 dark:bg-green-950/30",
                         borderColor: "border-green-500",
                       };
+                    } else if (stance === "wait") {
+                      return {
+                        icon: MinusCircle,
+                        text: "WAIT",
+                        color: "text-muted-foreground",
+                        bgColor: "bg-muted/20",
+                        borderColor: "border-gray-400 dark:border-gray-600",
+                      };
                     } else if (stance === "sell") {
                       return {
                         icon: ArrowDownCircle,
-                        text: "Sell",
+                        text: "SELL",
                         color: "text-red-600 dark:text-red-400",
                         bgColor: "bg-red-50 dark:bg-red-950/30",
                         borderColor: "border-red-500",
                       };
                     } else {
+                      // Default to "hold" for owning scenario
                       return {
                         icon: MinusCircle,
-                        text: "Hold",
+                        text: "HOLD",
                         color: "text-muted-foreground",
                         bgColor: "bg-muted/20",
                         borderColor: "border-gray-400 dark:border-gray-600",

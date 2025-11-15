@@ -405,32 +405,36 @@ HOLD (rare):
 
 Decision: Default "sell" on ANY weakness. ACT = exit quickly. NEVER recommend "buy".`
     } else {
-      // User doesn't own - focus on entry evaluation with trend-based ACT logic
+      // User doesn't own - focus on entry evaluation with ENTER/WAIT logic
       stanceRules = isBuyOpportunity
         ? `STANCE RULES for ENTRY DECISION (Buy Opportunity):
 Use initial trend to validate insider signal for entry.
 
-ACT:
-- "buy" if initial trend bullish/strong + price stable or up
-- "buy" if initial trend bullish/moderate + price -2% to -4% (dip entry)
-- "sell" if initial trend bearish/weak + price falling (avoid entry)
+⚠️ CRITICAL: You must choose "enter" or "wait" - NO OTHER VALUES.
 
-HOLD:
-- Initial trend neutral, price sideways (wait for clarity)
-- Initial trend bullish but price action mixed
+ENTER (ACT):
+- "enter" if initial trend bullish/strong + price stable or up
+- "enter" if initial trend bullish/moderate + price -2% to -4% (dip entry)
 
-Decision: ACT when initial trend confirms insider buy signal. Avoid if trend weak.`
+WAIT:
+- "wait" if initial trend neutral, price sideways (wait for clarity)
+- "wait" if initial trend bullish but price action mixed
+- "wait" if initial trend bearish/weak + price falling (avoid entry)
+
+Decision: ENTER when initial trend confirms insider buy signal. WAIT if trend weak or unclear.`
         : `STANCE RULES for ENTRY DECISION (Sell Opportunity):
 Insiders sold. Default = avoid entry.
 
-ACT:
-- "sell" if initial trend bearish + price breaking down (avoid/short)
-- "buy" ONLY if initial trend STRONG bullish + massive oversold (rare contrarian)
+⚠️ CRITICAL: You must choose "enter" or "wait" - NO OTHER VALUES.
 
-HOLD:
-- Initial trend neutral, price sideways
+ENTER (ACT - rare):
+- "enter" ONLY if initial trend STRONG bullish + massive oversold (rare contrarian entry)
 
-Decision: Default "sell" stance. ACT when trend confirms insider sell.`
+WAIT:
+- "wait" if initial trend bearish + price breaking down (avoid entry)
+- "wait" if initial trend neutral, price sideways (no clear signal)
+
+Decision: Default "wait" stance. ENTER only on rare strong contrarian signals.`
     }
     
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.
@@ -473,11 +477,13 @@ BE DECISIVE. Near-term traders need action, not patience.
 
 Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
 {
-  "recommendedStance": "buy" | "hold" | "sell",
+  "recommendedStance": ${userOwnsPosition ? '"sell" | "hold"' : '"enter" | "wait"'},
   "confidence": 1-10,
   "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on NEAR-TERM action.",
   "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
-}`;
+}
+
+${userOwnsPosition ? '⚠️ CRITICAL: For owned positions, you can ONLY use "sell" or "hold" - NEVER "enter" or "wait".' : '⚠️ CRITICAL: For entry evaluation, you can ONLY use "enter" or "wait" - NEVER "buy", "hold", or "sell".'}`;
 
     try {
       const response = await openai.chat.completions.create({

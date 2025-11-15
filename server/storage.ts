@@ -264,6 +264,7 @@ export interface IStorage {
     stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
   }>>;
   getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]>;
+  getDailyBriefForUser(userId: string, ticker: string, briefDate: string): Promise<DailyBrief | undefined>;
   createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief>;
 
   // User Stock Statuses
@@ -2032,13 +2033,29 @@ export class DatabaseStorage implements IStorage {
       .limit(7);
   }
 
+  async getDailyBriefForUser(userId: string, ticker: string, briefDate: string): Promise<DailyBrief | undefined> {
+    const [brief] = await db
+      .select()
+      .from(dailyBriefs)
+      .where(
+        and(
+          eq(dailyBriefs.userId, userId),
+          eq(dailyBriefs.ticker, ticker),
+          eq(dailyBriefs.briefDate, briefDate)
+        )
+      )
+      .limit(1);
+    return brief;
+  }
+
   async createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief> {
-    // Check if brief already exists for this ticker and date
+    // Check if brief already exists for this user+ticker+date
     const [existing] = await db
       .select()
       .from(dailyBriefs)
       .where(
         and(
+          eq(dailyBriefs.userId, brief.userId),
           eq(dailyBriefs.ticker, brief.ticker),
           eq(dailyBriefs.briefDate, brief.briefDate)
         )

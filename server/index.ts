@@ -1200,119 +1200,154 @@ function startDailyBriefJob() {
     try {
       log("[DailyBrief] Starting daily brief generation job...");
       
-      // Get all users and their followed stocks (deduplicated)
+      // Get all users
       const users = await storage.getUsers();
-      const followedTickersSet = new Set<string>();
       
-      for (const user of users) {
-        const followed = await storage.getUserFollowedStocks(user.id);
-        followed.forEach((f: { ticker: string }) => followedTickersSet.add(f.ticker.toUpperCase()));
-      }
-      
-      const followedTickers = Array.from(followedTickersSet);
-      
-      if (followedTickers.length === 0) {
-        log("[DailyBrief] No followed stocks to generate briefs for");
+      if (users.length === 0) {
+        log("[DailyBrief] No users found");
         return;
       }
       
-      log(`[DailyBrief] Generating briefs for ${followedTickers.length} followed stocks`);
+      log(`[DailyBrief] Processing ${users.length} users...`);
       
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       let generatedCount = 0;
       let skippedCount = 0;
       let errorCount = 0;
       
-      for (const ticker of followedTickers) {
+      // Process each user individually
+      for (const user of users) {
+        let userGeneratedCount = 0;
+        let userSkippedCount = 0;
+        let userErrorCount = 0;
+        
         try {
-          // Check if brief already exists for today
-          const existingBriefs = await storage.getDailyBriefsForTicker(ticker);
-          const todayBrief = existingBriefs.find(b => b.briefDate === today);
+          // Get user's followed stocks
+          const followedStocks = await storage.getUserFollowedStocks(user.id);
           
-          if (todayBrief) {
-            log(`[DailyBrief] Skipping ${ticker} - brief already exists for today`);
-            skippedCount++;
+          if (followedStocks.length === 0) {
+            log(`[DailyBrief] User ${user.name} has no followed stocks, skipping`);
             continue;
           }
           
-          // Fetch current price from Alpha Vantage with validation
-          let quote;
-          try {
-            quote = await stockService.getQuote(ticker);
+          log(`[DailyBrief] Processing ${followedStocks.length} followed stocks for user ${user.name}...`);
+          
+          // Generate brief for each followed stock
+          for (const followedStock of followedStocks) {
+            const ticker = followedStock.ticker.toUpperCase();
             
-            // Validate quote data - must have valid current and previous close
-            if (!quote || quote.price === 0 || quote.previousClose === 0) {
-              log(`[DailyBrief] Skipping ${ticker} - invalid or missing price data from Alpha Vantage`);
-              skippedCount++;
-              continue;
+            try {
+              // Check if brief already exists for this user+ticker+date
+              const todayBrief = await storage.getDailyBriefForUser(user.id, ticker, today);
+              
+              if (todayBrief) {
+                log(`[DailyBrief] Skipping ${ticker} for ${user.name} - brief already exists for today`);
+                skippedCount++;
+                userSkippedCount++;
+                continue;
+              }
+              
+              // Fetch current price from Alpha Vantage with validation
+              let quote;
+              try {
+                quote = await stockService.getQuote(ticker);
+                
+                // Validate quote data - must have valid current and previous close
+                if (!quote || quote.price === 0 || quote.previousClose === 0) {
+                  log(`[DailyBrief] Skipping ${ticker} - invalid or missing price data from Alpha Vantage`);
+                  skippedCount++;
+                  userSkippedCount++;
+                  continue;
+                }
+                
+                // Guard against division by zero
+                if (quote.previousClose === 0) {
+                  log(`[DailyBrief] Skipping ${ticker} - previous close is zero, cannot calculate change`);
+                  skippedCount++;
+                  userSkippedCount++;
+                  continue;
+                }
+              } catch (quoteError) {
+                log(`[DailyBrief] Skipping ${ticker} - failed to fetch quote: ${quoteError instanceof Error ? quoteError.message : 'Unknown error'}`);
+                errorCount++;
+                userErrorCount++;
+                continue;
+              }
+              
+              // Check if user owns this stock
+              const holding = await storage.getPortfolioHoldingByTicker(user.id, ticker);
+              const userOwnsPosition = holding !== null;
+              
+              // Get previous analysis for context (if available)
+              const stock = await storage.getStock(ticker);
+              const stockData = stock as any; // Cast to bypass type narrowing
+              const previousAnalysis = stockData?.overallRating ? {
+                overallRating: stockData.overallRating,
+                summary: stockData.summary || "No previous analysis available"
+              } : undefined;
+              
+              // Get opportunity type from stock recommendation
+              const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
+              
+              // Get recent news (last 24h only, if available)
+              const now = Date.now() / 1000; // Unix timestamp in seconds
+              const oneDayAgo = now - (24 * 60 * 60);
+              const recentNews = stockData?.news
+                ?.filter((article: any) => article.datetime && article.datetime >= oneDayAgo)
+                ?.slice(0, 3)
+                ?.map((article: any) => ({
+                  title: article.headline || "Untitled",
+                  sentiment: 0, // Finnhub news doesn't include sentiment, use neutral
+                  source: article.source || "Unknown"
+                }));
+              
+              // Generate the brief using AI (position-aware)
+              log(`[DailyBrief] Generating brief for ${ticker} - user ${user.name} (${userOwnsPosition ? 'owns' : 'watching'}, ${opportunityType} opportunity)...`);
+              const brief = await aiAnalysisService.generateDailyBrief({
+                ticker,
+                currentPrice: quote.price,
+                previousPrice: quote.previousClose,
+                opportunityType,
+                userOwnsPosition,
+                recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
+                previousAnalysis
+              });
+              
+              // Store in database
+              await storage.createDailyBrief({
+                userId: user.id,
+                ticker,
+                briefDate: today,
+                priceSnapshot: quote.price.toString(),
+                priceChange: quote.change.toString(),
+                priceChangePercent: quote.changePercent.toString(),
+                recommendedStance: brief.recommendedStance,
+                confidence: brief.confidence,
+                briefText: brief.briefText,
+                keyHighlights: brief.keyHighlights,
+                userOwnsPosition
+              });
+              
+              generatedCount++;
+              userGeneratedCount++;
+              log(`[DailyBrief] Generated brief for ${ticker} (${user.name}): ${brief.recommendedStance} (confidence: ${brief.confidence}/10)`);
+              
+            } catch (error) {
+              errorCount++;
+              userErrorCount++;
+              const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+              log(`[DailyBrief] Error generating brief for ${ticker} (${user.name}): ${errorMsg}`);
             }
-            
-            // Guard against division by zero
-            if (quote.previousClose === 0) {
-              log(`[DailyBrief] Skipping ${ticker} - previous close is zero, cannot calculate change`);
-              skippedCount++;
-              continue;
-            }
-          } catch (quoteError) {
-            log(`[DailyBrief] Skipping ${ticker} - failed to fetch quote: ${quoteError instanceof Error ? quoteError.message : 'Unknown error'}`);
-            errorCount++;
-            continue;
           }
           
-          // Get previous analysis for context (if available)
-          const stock = await storage.getStock(ticker);
-          const stockData = stock as any; // Cast to bypass type narrowing
-          const previousAnalysis = stockData?.overallRating ? {
-            overallRating: stockData.overallRating,
-            summary: stockData.summary || "No previous analysis available"
-          } : undefined;
-          
-          // Get opportunity type from stock recommendation
-          const opportunityType = stockData?.recommendation === "sell" ? "sell" : "buy";
-          
-          // Get recent news (last 24h only, if available)
-          const now = Date.now() / 1000; // Unix timestamp in seconds
-          const oneDayAgo = now - (24 * 60 * 60);
-          const recentNews = stockData?.news
-            ?.filter((article: any) => article.datetime && article.datetime >= oneDayAgo)
-            ?.slice(0, 3)
-            ?.map((article: any) => ({
-              title: article.headline || "Untitled",
-              sentiment: 0, // Finnhub news doesn't include sentiment, use neutral
-              source: article.source || "Unknown"
-            }));
-          
-          // Generate the brief using AI
-          log(`[DailyBrief] Generating brief for ${ticker} (${opportunityType} opportunity)...`);
-          const brief = await aiAnalysisService.generateDailyBrief({
-            ticker,
-            currentPrice: quote.price,
-            previousPrice: quote.previousClose,
-            opportunityType,
-            recentNews: recentNews && recentNews.length > 0 ? recentNews : undefined,
-            previousAnalysis
-          });
-          
-          // Store in database
-          await storage.createDailyBrief({
-            ticker,
-            briefDate: today,
-            priceSnapshot: quote.price.toString(),
-            priceChange: quote.change.toString(),
-            priceChangePercent: quote.changePercent.toString(),
-            recommendedStance: brief.recommendedStance,
-            confidence: brief.confidence,
-            briefText: brief.briefText,
-            keyHighlights: brief.keyHighlights
-          });
-          
-          generatedCount++;
-          log(`[DailyBrief] Generated brief for ${ticker}: ${brief.recommendedStance} (confidence: ${brief.confidence}/10)`);
+          // Log per-user summary for operational visibility
+          log(`[DailyBrief] User ${user.name} complete: generated ${userGeneratedCount}, skipped ${userSkippedCount}, errors ${userErrorCount}`);
           
         } catch (error) {
           errorCount++;
+          userErrorCount++;
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-          log(`[DailyBrief] Error generating brief for ${ticker}: ${errorMsg}`);
+          log(`[DailyBrief] Error processing user ${user.name}: ${errorMsg}`);
         }
       }
       

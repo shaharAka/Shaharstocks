@@ -33,6 +33,8 @@ import { StockExplorer } from "@/components/stock-explorer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Filter, Search, SortAsc } from "lucide-react";
 
 type StockWithUserStatus = Stock & {
   userStatus: string;
@@ -461,63 +463,112 @@ export default function Purchase() {
         </Button>
       </div>
 
-      {/* Funnel Section Tabs */}
-      <Tabs value={funnelSection} onValueChange={(value) => setFunnelSection(value as FunnelSection)}>
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="worthExploring" data-testid="tab-worth-exploring">
-            Worth Exploring ({funnelSections.worthExploring?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="recents" data-testid="tab-recents">
-            Recents ({funnelSections.recents?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="processing" data-testid="tab-processing">
-            Processing ({funnelSections.processing?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="communityPicks" data-testid="tab-community-picks">
-            Community ({funnelSections.communityPicks?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="rejected" data-testid="tab-rejected">
-            Rejected ({funnelSections.rejected?.length || 0})
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* Quick Filters */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Quick Filters:</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge
+              variant={funnelSection === "worthExploring" ? "default" : "outline"}
+              className="cursor-pointer hover-elevate active-elevate-2"
+              onClick={() => setFunnelSection("worthExploring")}
+              data-testid="filter-worth-exploring"
+            >
+              High Score ({funnelSections.worthExploring?.length || 0})
+            </Badge>
+            <Badge
+              variant={funnelSection === "recents" ? "default" : "outline"}
+              className="cursor-pointer hover-elevate active-elevate-2"
+              onClick={() => setFunnelSection("recents")}
+              data-testid="filter-recents"
+            >
+              Recent ({funnelSections.recents?.length || 0})
+            </Badge>
+            <Badge
+              variant={funnelSection === "processing" ? "default" : "outline"}
+              className="cursor-pointer hover-elevate active-elevate-2"
+              onClick={() => setFunnelSection("processing")}
+              data-testid="filter-processing"
+            >
+              Processing ({funnelSections.processing?.length || 0})
+            </Badge>
+            <Badge
+              variant={funnelSection === "communityPicks" ? "default" : "outline"}
+              className="cursor-pointer hover-elevate active-elevate-2"
+              onClick={() => setFunnelSection("communityPicks")}
+              data-testid="filter-community"
+            >
+              Community ({funnelSections.communityPicks?.length || 0})
+            </Badge>
+            <Badge
+              variant={funnelSection === "rejected" ? "destructive" : "outline"}
+              className="cursor-pointer hover-elevate active-elevate-2"
+              onClick={() => setFunnelSection("rejected")}
+              data-testid="filter-rejected"
+            >
+              Rejected ({funnelSections.rejected?.length || 0})
+            </Badge>
+          </div>
+        </div>
 
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        {/* Search */}
-        <div className="flex-1">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Type:</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge
+              variant={recommendationFilter === "all" ? "default" : "outline"}
+              className="cursor-pointer hover-elevate active-elevate-2"
+              onClick={() => setRecommendationFilter("all")}
+              data-testid="filter-all"
+            >
+              All
+            </Badge>
+            <Badge
+              variant={recommendationFilter === "buy" ? "default" : "outline"}
+              className="cursor-pointer hover-elevate active-elevate-2"
+              onClick={() => setRecommendationFilter("buy")}
+              data-testid="filter-buy"
+            >
+              Buy Only
+            </Badge>
+            <Badge
+              variant={recommendationFilter === "sell" ? "default" : "outline"}
+              className="cursor-pointer hover-elevate active-elevate-2"
+              onClick={() => setRecommendationFilter("sell")}
+              data-testid="filter-sell"
+            >
+              Sell Only
+            </Badge>
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Sort */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by ticker or company name..."
+            placeholder="Search ticker or company..."
             value={tickerSearch}
             onChange={(e) => setTickerSearch(e.target.value)}
+            className="pl-9"
             data-testid="input-search"
           />
         </div>
-
-        {/* Recommendation Filter */}
-        <div className="w-full sm:w-40">
-          <Select value={recommendationFilter} onValueChange={(value) => setRecommendationFilter(value as RecommendationFilter)}>
-            <SelectTrigger data-testid="select-recommendation-filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="buy">Buy Only</SelectItem>
-              <SelectItem value="sell">Sell Only</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Sort Control */}
-        <div className="w-full sm:w-48">
+        <div className="w-full sm:w-56">
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger data-testid="select-sort-by">
+            <SelectTrigger data-testid="select-sort">
+              <SortAsc className="h-4 w-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="aiScore">AI Score (High to Low)</SelectItem>
-              <SelectItem value="daysFromTrade">Days from Trade (Recent First)</SelectItem>
-              <SelectItem value="marketCap">Market Cap (Large to Small)</SelectItem>
+              <SelectItem value="aiScore">AI Score</SelectItem>
+              <SelectItem value="daysFromTrade">Most Recent</SelectItem>
+              <SelectItem value="marketCap">Market Cap</SelectItem>
             </SelectContent>
           </Select>
         </div>

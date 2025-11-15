@@ -47,6 +47,7 @@ type StockWithUserStatus = Stock & {
 
 type SortOption = "aiScore" | "daysFromTrade" | "marketCap";
 type ViewMode = "cards" | "table";
+type RecommendationFilter = "all" | "buy" | "sell";
 
 export default function Purchase() {
   const { toast } = useToast();
@@ -56,6 +57,7 @@ export default function Purchase() {
   const [sortBy, setSortBy] = useState<SortOption>("aiScore");
   const [tickerSearch, setTickerSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("all");
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
@@ -235,6 +237,12 @@ export default function Purchase() {
       const rec = stock.recommendation?.toLowerCase();
       if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
       
+      // Apply recommendation filter
+      if (recommendationFilter !== "all") {
+        if (recommendationFilter === "buy" && !rec.includes("buy")) return false;
+        if (recommendationFilter === "sell" && !rec.includes("sell")) return false;
+      }
+      
       // Apply ticker search
       if (tickerSearch.trim() !== "") {
         const searchTerm = tickerSearch.trim().toLowerCase();
@@ -294,7 +302,7 @@ export default function Purchase() {
     });
 
     return sorted;
-  }, [stocks, analyses, sortBy, tickerSearch, followedStocks]);
+  }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks]);
 
 
   if (isLoading) {
@@ -353,6 +361,20 @@ export default function Purchase() {
             onChange={(e) => setTickerSearch(e.target.value)}
             data-testid="input-search"
           />
+        </div>
+
+        {/* Recommendation Filter */}
+        <div className="w-full sm:w-40">
+          <Select value={recommendationFilter} onValueChange={(value) => setRecommendationFilter(value as RecommendationFilter)}>
+            <SelectTrigger data-testid="select-recommendation-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="buy">Buy Only</SelectItem>
+              <SelectItem value="sell">Sell Only</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Sort Control */}

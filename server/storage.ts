@@ -255,6 +255,14 @@ export interface IStorage {
   followStock(follow: InsertFollowedStock): Promise<FollowedStock>;
   unfollowStock(ticker: string, userId: string): Promise<boolean>;
   getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>>;
+  getFollowedStocksWithStatus(userId: string): Promise<Array<FollowedStock & { 
+    currentPrice: string; 
+    priceChange: string; 
+    priceChangePercent: string;
+    jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
+    latestStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+    stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
+  }>>;
   getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]>;
   createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief>;
 
@@ -1918,6 +1926,67 @@ export class DatabaseStorage implements IStorage {
           priceChangePercent: priceChangePercent.toFixed(2),
         });
       }
+    }
+    
+    return results;
+  }
+
+  async getFollowedStocksWithStatus(userId: string): Promise<Array<FollowedStock & { 
+    currentPrice: string; 
+    priceChange: string; 
+    priceChangePercent: string;
+    jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
+    latestStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+    stanceAlignment?: 'positive' | 'negative' | 'neutral' | null;
+  }>> {
+    const followedWithPrices = await this.getFollowedStocksWithPrices(userId);
+    
+    const results = [];
+    
+    for (const followed of followedWithPrices) {
+      // Get latest analysis job status
+      const jobs = await db
+        .select()
+        .from(aiAnalysisJobs)
+        .where(eq(aiAnalysisJobs.ticker, followed.ticker))
+        .orderBy(desc(aiAnalysisJobs.createdAt))
+        .limit(1);
+      
+      const latestJob = jobs[0];
+      const jobStatus = latestJob?.status as 'pending' | 'processing' | 'completed' | 'failed' | null || null;
+      
+      // Get latest daily brief for stance
+      const briefs = await db
+        .select()
+        .from(dailyBriefs)
+        .where(eq(dailyBriefs.ticker, followed.ticker))
+        .orderBy(desc(dailyBriefs.briefDate))
+        .limit(1);
+      
+      const latestBrief = briefs[0];
+      const latestStance = latestBrief?.stance as 'BUY' | 'SELL' | 'HOLD' | null || null;
+      
+      // Calculate stance alignment
+      let stanceAlignment: 'positive' | 'negative' | 'neutral' | null = null;
+      if (latestStance && followed.priceChange) {
+        const priceChange = parseFloat(followed.priceChange);
+        const isTrendPositive = priceChange > 0;
+        
+        if (latestStance === 'BUY') {
+          stanceAlignment = isTrendPositive ? 'positive' : 'negative';
+        } else if (latestStance === 'SELL') {
+          stanceAlignment = isTrendPositive ? 'negative' : 'positive';
+        } else {
+          stanceAlignment = 'neutral';
+        }
+      }
+      
+      results.push({
+        ...followed,
+        jobStatus,
+        latestStance,
+        stanceAlignment,
+      });
     }
     
     return results;

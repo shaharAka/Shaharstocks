@@ -2187,6 +2187,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get followed stocks with status (includes job status, stance, alignment)
+  app.get("/api/followed-stocks-with-status", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const followedStocks = await storage.getFollowedStocksWithStatus(req.session.userId);
+      res.json(followedStocks);
+    } catch (error) {
+      console.error("Get followed stocks with status error:", error);
+      res.status(500).json({ error: "Failed to fetch followed stocks with status" });
+    }
+  });
+
   // Get daily briefs for a stock (lightweight daily reports for followed stocks)
   app.get("/api/stocks/:ticker/daily-briefs", async (req, res) => {
     try {

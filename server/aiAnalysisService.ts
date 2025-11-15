@@ -467,19 +467,21 @@ HOLD:
 - Price -2% to -4% but initial trend still bullish/moderate (don't panic sell on small dips)
 
 Decision: SELL when trend confirms exit. HOLD when trend supports staying in. NEVER recommend "buy".`
-        : `STANCE RULES for OWNED POSITION (Sell Opportunity - Contrarian):
-You hold against insider sell. Prioritize capital preservation.
+        : `STANCE RULES for OWNED POSITION (Sell Opportunity - Bearish Signal):
+Insiders SOLD. You currently own LONG shares. Focus on PROTECTING CAPITAL and EXIT TIMING.
 
 ⚠️ CRITICAL: You can ONLY recommend "sell" or "hold" - NEVER "buy".
 
 ACT (sell):
-- "sell" if ANY decline -2%+ (stop loss)
-- "sell" if gain +4%+ (take contrarian profit)
+- "sell" if price down -2%+ (insider signal confirming, cut losses)
+- "sell" if price flat/up but initial trend bearish + news negative (exit on strength)
+- "sell" if price up +3%+ AND initial trend weakening (take profit before downturn)
 
-HOLD (rare):
-- Small gain 0-3% with initial trend reversing bullish
+HOLD (cautious):
+- Price stable, initial trend neutral, no news catalysts (wait for clarity)
+- Small decline -1% to -2% with initial trend mixed (don't panic on noise)
 
-Decision: Default "sell" on ANY weakness. ACT = exit quickly. NEVER recommend "buy".`
+Decision: Insider SELL is bearish - prioritize capital preservation. ACT = exit on weakness or strength with deteriorating trend. NEVER recommend "buy".`
     } else {
       // User doesn't own - focus on entry evaluation with ENTER/WAIT logic
       stanceRules = isBuyOpportunity
@@ -498,19 +500,20 @@ WAIT:
 - "wait" if initial trend bearish/weak + price falling (avoid entry)
 
 Decision: ENTER when initial trend confirms insider buy signal. WAIT if trend weak or unclear.`
-        : `STANCE RULES for ENTRY DECISION (Sell Opportunity):
-Insiders sold. Default = avoid entry.
+        : `STANCE RULES for ENTRY DECISION (Sell Opportunity - Bearish Signal):
+Insiders SOLD. This is a BEARISH signal - avoid initiating new LONG positions.
 
 ⚠️ CRITICAL: You must choose "enter" or "wait" - NO OTHER VALUES.
 
-ENTER (ACT - rare):
-- "enter" ONLY if initial trend STRONG bullish + massive oversold (rare contrarian entry)
+ENTER (extremely rare):
+- "enter" ONLY if initial trend STRONGLY bullish + price massively oversold + exceptional contrarian catalyst (almost never)
 
-WAIT:
-- "wait" if initial trend bearish + price breaking down (avoid entry)
-- "wait" if initial trend neutral, price sideways (no clear signal)
+WAIT (default):
+- "wait" if initial trend bearish/neutral (respect insider sell signal, stay away)
+- "wait" if price falling or sideways (no reason to catch falling knife)
+- "wait" even if price rising without clear trend reversal (temporary bounce, not entry)
 
-Decision: Default "wait" stance. ENTER only on rare strong contrarian signals.`
+Decision: Insider SELL = bearish signal. Default "wait" - do NOT enter longs when insiders are selling. ENTER only on extremely rare contrarian setups with overwhelming bullish evidence.`
     }
     
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.

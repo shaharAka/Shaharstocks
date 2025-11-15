@@ -336,9 +336,46 @@ class QueueWorker {
       
       if (isBuyOpportunity || isSellOpportunity) {
         const notificationType = isBuyOpportunity ? 'high_score_buy' : 'high_score_sell';
-        const opportunityText = isBuyOpportunity 
-          ? `Strong BUY opportunity with score ${integratedScore}/100` 
-          : `Strong SELL signal with score ${integratedScore}/100`;
+        
+        // Calculate price change from insider transaction or previous close (if stock data is available)
+        let currentPrice: number | undefined;
+        let insiderPrice: number | undefined;
+        let previousClose: number | undefined;
+        let priceChange: number | undefined;
+        let priceChangePercent: number | undefined;
+        
+        if (stock) {
+          currentPrice = parseFloat(stock.currentPrice);
+          insiderPrice = stock.insiderPrice ? parseFloat(stock.insiderPrice) : undefined;
+          previousClose = stock.previousClose ? parseFloat(stock.previousClose) : undefined;
+          
+          // Only calculate price changes if we have valid comparison price
+          const comparisonPrice = insiderPrice || previousClose;
+          if (comparisonPrice && isFinite(comparisonPrice) && comparisonPrice > 0 && isFinite(currentPrice)) {
+            priceChange = currentPrice - comparisonPrice;
+            priceChangePercent = ((priceChange / comparisonPrice) * 100);
+          }
+        }
+        
+        // Create actionable message based on price movement
+        let opportunityText = '';
+        if (isBuyOpportunity) {
+          if (priceChangePercent !== undefined && priceChangePercent > 5) {
+            opportunityText = `STRONG BUY - Price up ${priceChangePercent.toFixed(1)}% since insider bought. Consider entry.`;
+          } else if (priceChangePercent !== undefined && priceChangePercent < -3) {
+            opportunityText = `BUY OPPORTUNITY - Price down ${Math.abs(priceChangePercent).toFixed(1)}% since insider bought. Better entry point!`;
+          } else {
+            opportunityText = `Strong BUY signal (${integratedScore}/100). Insider confidence confirmed.`;
+          }
+        } else {
+          if (priceChangePercent !== undefined && priceChangePercent < -5) {
+            opportunityText = `SELL NOW - Price dropped ${Math.abs(priceChangePercent).toFixed(1)}% since insider sold. Exit position!`;
+          } else if (priceChangePercent !== undefined && priceChangePercent > 3) {
+            opportunityText = `SELL SIGNAL - Price up ${priceChangePercent.toFixed(1)}% despite insider selling. Take profits!`;
+          } else {
+            opportunityText = `Strong SELL signal (${integratedScore}/100). Insider caution confirmed.`;
+          }
+        }
         
         console.log(`[QueueWorker] 🔔 ${notificationType} detected for ${job.ticker} (${integratedScore}/100), creating notifications...`);
         
@@ -353,6 +390,12 @@ class QueueWorker {
               type: notificationType,
               score: integratedScore,
               message: `${job.ticker}: ${opportunityText}`,
+              metadata: {
+                currentPrice,
+                priceChange,
+                priceChangePercent,
+                insiderPrice,
+              },
               isRead: false,
             });
           } catch (error) {

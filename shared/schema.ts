@@ -904,6 +904,10 @@ export const notifications = pgTable("notifications", {
     followerCount?: number; // For popular_stock type
     previousStance?: string; // For stance_change type
     newStance?: string; // For stance_change type
+    currentPrice?: number; // Current stock price
+    priceChange?: number; // Price change amount in dollars
+    priceChangePercent?: number; // Price change percentage
+    insiderPrice?: number; // Insider transaction price (for comparison)
   }>(),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),

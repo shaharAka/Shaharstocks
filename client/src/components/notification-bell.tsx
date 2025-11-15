@@ -23,7 +23,7 @@ export function NotificationBell() {
 
   const markAsReadMutation = useMutation({
     mutationFn: (id: string) =>
-      apiRequest(`/api/notifications/${id}/read`, "PATCH"),
+      apiRequest("PATCH", `/api/notifications/${id}/read`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({
@@ -33,7 +33,7 @@ export function NotificationBell() {
   });
 
   const markAllAsReadMutation = useMutation({
-    mutationFn: () => apiRequest("/api/notifications/read-all", "PATCH"),
+    mutationFn: () => apiRequest("PATCH", "/api/notifications/read-all"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({
@@ -43,7 +43,7 @@ export function NotificationBell() {
   });
 
   const clearAllMutation = useMutation({
-    mutationFn: () => apiRequest("/api/notifications/clear-all", "DELETE"),
+    mutationFn: () => apiRequest("DELETE", "/api/notifications/clear-all"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({
@@ -142,6 +142,15 @@ export function NotificationBell() {
                                  notification.type === 'stance_change' ? 'Alert' :
                                  'New';
                 
+                // Extract price change data from metadata
+                const priceChangePercent = notification.metadata?.priceChangePercent;
+                const hasPriceChange = priceChangePercent !== undefined && priceChangePercent !== null;
+                const priceChangeColor = hasPriceChange 
+                  ? priceChangePercent > 0 
+                    ? 'text-green-600 dark:text-green-400' 
+                    : 'text-red-600 dark:text-red-400'
+                  : '';
+                
                 return (
                   <button
                     key={notification.id}
@@ -153,7 +162,7 @@ export function NotificationBell() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold">{notification.ticker}</span>
                           <Badge
                             variant={badgeVariant}
@@ -161,10 +170,23 @@ export function NotificationBell() {
                           >
                             {badgeText}
                           </Badge>
+                          {hasPriceChange && (
+                            <Badge variant="outline" className={priceChangeColor}>
+                              {priceChangePercent > 0 ? '+' : ''}{priceChangePercent.toFixed(1)}%
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {notification.message}
                         </p>
+                        {notification.metadata?.currentPrice && (
+                          <p className="text-xs text-muted-foreground">
+                            Current: ${notification.metadata.currentPrice.toFixed(2)}
+                            {notification.metadata.insiderPrice && (
+                              <> · Insider: ${notification.metadata.insiderPrice.toFixed(2)}</>
+                            )}
+                          </p>
+                        )}
                         <p className="text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(notification.createdAt), {
                             addSuffix: true,

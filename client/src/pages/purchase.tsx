@@ -420,9 +420,7 @@ export default function Purchase() {
     sections.worthExploring = sortGroupedStocks(sections.worthExploring);
     sections.recents = sortGroupedStocks(sections.recents);
     sections.rejected = sortGroupedStocks(sections.rejected);
-    
-    // Community picks sorted by comment count
-    sections.communityPicks = [...sections.communityPicks].sort((a, b) => b.communityScore - a.communityScore);
+    sections.communityPicks = sortGroupedStocks(sections.communityPicks);
 
     return { groupedStocks: groupedArray, funnelSections: sections };
   }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks, users, commentCounts, openinsiderConfig]);

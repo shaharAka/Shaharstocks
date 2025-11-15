@@ -1,7 +1,16 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tantml:invoke>
-<invoke name="use_integration">
-<parameter name="integration_id">connector:notion
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useUser } from "@/contexts/UserContext";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ThumbsUp, Trash2, CheckCircle2, Lightbulb, MessageSquare, Users } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 type FeatureSuggestion = {
   id: string;

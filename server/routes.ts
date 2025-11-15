@@ -1977,15 +1977,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // User routes
   // Stock comment routes
-  app.get("/api/stock-comments", async (req, res) => {
-    try {
-      const comments = await storage.getAllStockComments();
-      res.json(comments);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch all comments" });
-    }
-  });
-
   app.get("/api/stocks/:ticker/comments", async (req, res) => {
     try {
       const comments = await storage.getStockComments(req.params.ticker);

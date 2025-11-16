@@ -577,23 +577,12 @@ function startOpeninsiderFetchJob() {
       let filteredDuplicates = 0;
       const createdTickers = new Set<string>(); // Track unique tickers for AI analysis
       
+      // Get all users to create stocks for each one
+      const users = await storage.getUsers();
+      
       for (const transaction of transactions) {
         try {
-          // Check if this exact transaction already exists using composite key
-          const existingTransaction = await storage.getTransactionByCompositeKey(
-            transaction.ticker,
-            transaction.filingDate,
-            transaction.insiderName,
-            transaction.recommendation // Use actual recommendation (buy or sell)
-          );
-          
-          if (existingTransaction) {
-            // Transaction already exists, skip
-            filteredDuplicates++;
-            continue;
-          }
-
-          // Get current market price from Finnhub
+          // Get current market price from Finnhub (once per transaction)
           const quote = await finnhubService.getQuote(transaction.ticker);
           if (!quote || !quote.currentPrice) {
             filteredNoQuote++;
@@ -601,19 +590,18 @@ function startOpeninsiderFetchJob() {
             continue;
           }
 
-          // Fetch company profile, market cap, and news (regardless of market hours)
+          // Fetch company profile, market cap, and news
           const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
           const data = stockData.get(transaction.ticker);
           
-          // Apply market cap filter using configurable threshold
-          // Note: data.marketCap is already in millions from Finnhub
+          // Apply market cap filter
           if (!data?.marketCap || data.marketCap < minMarketCap) {
             filteredMarketCap++;
             log(`[OpeninsiderFetch] ${transaction.ticker} market cap too low: $${data?.marketCap || 0}M (need >$${minMarketCap}M), skipping`);
             continue;
           }
 
-          // Apply options deal filter ONLY to BUY transactions (doesn't apply to sales)
+          // Apply options deal filter ONLY to BUY transactions
           if (transaction.recommendation === "buy") {
             const insiderPriceNum = transaction.price;
             const thresholdPercent = optionsDealThreshold / 100;
@@ -624,48 +612,66 @@ function startOpeninsiderFetchJob() {
             }
           }
 
-          // Create stock recommendation with complete information
-          const newStock = await storage.createStock({
-            ticker: transaction.ticker,
-            companyName: transaction.companyName || transaction.ticker,
-            currentPrice: quote.currentPrice.toString(),
-            previousClose: quote.previousClose?.toString() || quote.currentPrice.toString(),
-            insiderPrice: transaction.price.toString(),
-            insiderQuantity: transaction.quantity,
-            insiderTradeDate: transaction.filingDate, // Use filing date as that's when the info became public
-            insiderName: transaction.insiderName,
-            insiderTitle: transaction.insiderTitle,
-            recommendation: transaction.recommendation, // Use actual recommendation (buy or sell)
-            source: "openinsider",
-            confidenceScore: transaction.confidence || 75,
-            peRatio: null,
-            marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-            description: data?.companyInfo?.description || null,
-            industry: data?.companyInfo?.industry || null,
-            country: data?.companyInfo?.country || null,
-            webUrl: data?.companyInfo?.webUrl || null,
-            ipo: data?.companyInfo?.ipo || null,
-            news: data?.news || [],
-            insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
-            insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
-            priceHistory: [],
-          });
+          // Create stock for ALL users (shared market data)
+          for (const user of users) {
+            // Check if transaction already exists for this user
+            const existingTransaction = await storage.getTransactionByCompositeKey(
+              user.id,
+              transaction.ticker,
+              transaction.filingDate,
+              transaction.insiderName,
+              transaction.recommendation
+            );
+            
+            if (existingTransaction) {
+              filteredDuplicates++;
+              continue;
+            }
+
+            // Create stock recommendation for this user
+            await storage.createStock({
+              userId: user.id,
+              ticker: transaction.ticker,
+              companyName: transaction.companyName || transaction.ticker,
+              currentPrice: quote.currentPrice.toString(),
+              previousClose: quote.previousClose?.toString() || quote.currentPrice.toString(),
+              insiderPrice: transaction.price.toString(),
+              insiderQuantity: transaction.quantity,
+              insiderTradeDate: transaction.filingDate,
+              insiderName: transaction.insiderName,
+              insiderTitle: transaction.insiderTitle,
+              recommendation: transaction.recommendation,
+              source: "openinsider",
+              confidenceScore: transaction.confidence || 75,
+              peRatio: null,
+              marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
+              description: data?.companyInfo?.description || null,
+              industry: data?.companyInfo?.industry || null,
+              country: data?.companyInfo?.country || null,
+              webUrl: data?.companyInfo?.webUrl || null,
+              ipo: data?.companyInfo?.ipo || null,
+              news: data?.news || [],
+              insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
+              insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
+              priceHistory: [],
+            });
+          }
 
           createdCount++;
-          createdTickers.add(transaction.ticker); // Track unique ticker
+          createdTickers.add(transaction.ticker);
           log(`[OpeninsiderFetch] Created stock recommendation for ${transaction.ticker}`)
 
-          // Send Telegram notification (only if feature enabled)
+          // Send Telegram notification using transaction data
           if (ENABLE_TELEGRAM && telegramNotificationService.isReady()) {
             try {
               const notificationSent = await telegramNotificationService.sendStockAlert({
-                ticker: newStock.ticker,
-                companyName: newStock.companyName,
-                recommendation: newStock.recommendation || 'buy',
-                currentPrice: newStock.currentPrice,
-                insiderPrice: newStock.insiderPrice || undefined,
-                insiderQuantity: newStock.insiderQuantity || undefined,
-                confidenceScore: newStock.confidenceScore || undefined,
+                ticker: transaction.ticker,
+                companyName: transaction.companyName || transaction.ticker,
+                recommendation: transaction.recommendation || 'buy',
+                currentPrice: quote.currentPrice.toString(),
+                insiderPrice: transaction.price.toString(),
+                insiderQuantity: transaction.quantity,
+                confidenceScore: transaction.confidence || 75,
               });
               if (notificationSent) {
                 log(`[OpeninsiderFetch] Sent Telegram notification for ${transaction.ticker}`);
@@ -1122,10 +1128,10 @@ function startAIAnalysisJob() {
             businessOverview: secFilingData.businessOverview,
           } : undefined;
           
-          // Insider trading strength - fetch from all transactions for this ticker
+          // Insider trading strength - fetch from all transactions for this ticker for this user
           const insiderTradingStrength = await (async () => {
             try {
-              const allStocks = await storage.getAllStocksForTicker(stock.ticker);
+              const allStocks = await storage.getAllStocksForTicker(stock.userId, stock.ticker);
               
               if (allStocks.length === 0) {
                 return undefined;
@@ -1423,7 +1429,7 @@ function startDailyBriefJob() {
               const userOwnsPosition = holding !== null;
               
               // Get previous analysis for context (if available)
-              const stock = await storage.getStock(ticker);
+              const stock = await storage.getStock(user.id, ticker);
               const stockData = stock as any; // Cast to bypass type narrowing
               const previousAnalysis = stockData?.overallRating ? {
                 overallRating: stockData.overallRating,

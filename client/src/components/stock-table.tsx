@@ -390,7 +390,9 @@ export function StockTable({
                         <Badge variant={badgeVariant} className="text-xs font-mono">
                           {score}/100
                         </Badge>
-                        {analysis.integratedScore && analysis.confidenceScore !== analysis.integratedScore && (
+                        {analysis.integratedScore && 
+                         analysis.confidenceScore !== analysis.integratedScore && 
+                         stock.recommendation !== "sell" && (
                           <span className="text-[10px] text-muted-foreground">
                             (micro: {analysis.confidenceScore})
                           </span>

@@ -397,34 +397,34 @@ function startHoldingsPriceHistoryJob() {
       
       let successCount = 0;
       
-      // Update price history for each ticker
+      // Update price history for each ticker (iterate users once, update their stocks)
       for (const ticker of tickers) {
         const quote = quotes.get(ticker);
         if (!quote || !quote.currentPrice) {
           continue;
         }
 
-        // Get the stock record
-        const stocks = await storage.getStocks();
-        const stock = stocks.find(s => s.ticker === ticker);
-        if (!stock) {
-          continue;
-        }
+        // Update each user's stock with this ticker
+        for (const user of users) {
+          const userStocks = await storage.getStocks(user.id);
+          const stock = userStocks.find(s => s.ticker === ticker);
+          if (!stock) continue;
 
-        // Get existing price history
-        const priceHistory = stock.priceHistory || [];
-        
-        // Always add a new price point with current timestamp
-        priceHistory.push({
-          date: now,
-          price: quote.currentPrice,
-        });
-        
-        // Update stock with new price history
-        await storage.updateStock(ticker, {
-          priceHistory,
-          currentPrice: quote.currentPrice.toString(),
-        });
+          // Get existing price history
+          const priceHistory = stock.priceHistory || [];
+          
+          // Always add a new price point with current timestamp
+          priceHistory.push({
+            date: now,
+            price: quote.currentPrice,
+          });
+          
+          // Update this user's stock with new price history
+          await storage.updateStock(user.id, ticker, {
+            priceHistory,
+            currentPrice: quote.currentPrice.toString(),
+          });
+        }
         
         successCount++;
       }
@@ -744,67 +744,73 @@ function startRecommendationCleanupJob() {
     try {
       log("[Cleanup] Starting recommendation cleanup job...");
       
-      // Get all stocks
-      const stocks = await storage.getStocks();
+      // Get all users to process their stocks
+      const users = await storage.getUsers();
       const now = new Date();
       let rejectedCount = 0;
       let deletedCount = 0;
+      let totalStocksChecked = 0;
 
-      // 1. Reject old pending recommendations (older than 2 weeks by insider trade date, both buy and sell)
-      const pendingStocks = stocks.filter(
-        stock => stock.recommendationStatus === "pending" && 
-                 stock.insiderTradeDate
-      );
+      for (const user of users) {
+        const stocks = await storage.getStocks(user.id);
+        totalStocksChecked += stocks.length;
 
-      for (const stock of pendingStocks) {
-        try {
-          // Parse date in DD.MM.YYYY format
-          const dateParts = stock.insiderTradeDate!.split(' ')[0].split('.');
-          if (dateParts.length >= 3) {
-            const day = parseInt(dateParts[0], 10);
-            const month = parseInt(dateParts[1], 10) - 1; // JS months are 0-indexed
-            const year = parseInt(dateParts[2], 10);
-            
-            const tradeDate = new Date(year, month, day);
-            const ageMs = now.getTime() - tradeDate.getTime();
+        // 1. Reject old pending recommendations (older than 2 weeks by insider trade date, both buy and sell)
+        const pendingStocks = stocks.filter(
+          stock => stock.recommendationStatus === "pending" && 
+                   stock.insiderTradeDate
+        );
 
-            // If trade is older than 2 weeks, reject the recommendation
-            if (ageMs > TWO_WEEKS_MS) {
-              await storage.updateStock(stock.ticker, {
-                recommendationStatus: "rejected",
-                rejectedAt: new Date()
-              });
-              rejectedCount++;
-              log(`[Cleanup] Rejected ${stock.ticker} - trade date ${stock.insiderTradeDate} is older than 2 weeks`);
+        for (const stock of pendingStocks) {
+          try {
+            // Parse date in DD.MM.YYYY format
+            const dateParts = stock.insiderTradeDate!.split(' ')[0].split('.');
+            if (dateParts.length >= 3) {
+              const day = parseInt(dateParts[0], 10);
+              const month = parseInt(dateParts[1], 10) - 1; // JS months are 0-indexed
+              const year = parseInt(dateParts[2], 10);
+              
+              const tradeDate = new Date(year, month, day);
+              const ageMs = now.getTime() - tradeDate.getTime();
+
+              // If trade is older than 2 weeks, reject the recommendation
+              if (ageMs > TWO_WEEKS_MS) {
+                await storage.updateStock(user.id, stock.ticker, {
+                  recommendationStatus: "rejected",
+                  rejectedAt: new Date()
+                });
+                rejectedCount++;
+                log(`[Cleanup] Rejected ${stock.ticker} for user ${user.id} - trade date ${stock.insiderTradeDate} is older than 2 weeks`);
+              }
             }
+          } catch (parseError) {
+            console.error(`[Cleanup] Error parsing date for ${stock.ticker}:`, parseError);
           }
-        } catch (parseError) {
-          console.error(`[Cleanup] Error parsing date for ${stock.ticker}:`, parseError);
+        }
+
+        // 2. Delete rejected stocks that were rejected more than 2 weeks ago
+        const rejectedStocks = stocks.filter(
+          stock => stock.recommendationStatus === "rejected" && stock.rejectedAt
+        );
+
+        for (const stock of rejectedStocks) {
+          try {
+            const rejectedDate = new Date(stock.rejectedAt!);
+            const ageMs = now.getTime() - rejectedDate.getTime();
+
+            // If rejected more than 2 weeks ago, delete it
+            if (ageMs > TWO_WEEKS_MS) {
+              await storage.deleteStock(user.id, stock.ticker);
+              deletedCount++;
+              log(`[Cleanup] Deleted ${stock.ticker} for user ${user.id} - was rejected on ${stock.rejectedAt}`);
+            }
+          } catch (deleteError) {
+            console.error(`[Cleanup] Error deleting rejected stock ${stock.ticker}:`, deleteError);
+          }
         }
       }
 
-      // 2. Delete rejected stocks that were rejected more than 2 weeks ago
-      const rejectedStocks = stocks.filter(
-        stock => stock.recommendationStatus === "rejected" && stock.rejectedAt
-      );
-
-      for (const stock of rejectedStocks) {
-        try {
-          const rejectedDate = new Date(stock.rejectedAt!);
-          const ageMs = now.getTime() - rejectedDate.getTime();
-
-          // If rejected more than 2 weeks ago, delete it
-          if (ageMs > TWO_WEEKS_MS) {
-            await storage.deleteStock(stock.ticker);
-            deletedCount++;
-            log(`[Cleanup] Deleted ${stock.ticker} - was rejected on ${stock.rejectedAt}`);
-          }
-        } catch (deleteError) {
-          console.error(`[Cleanup] Error deleting rejected stock ${stock.ticker}:`, deleteError);
-        }
-      }
-
-      log(`[Cleanup] Rejected ${rejectedCount} old recommendations, deleted ${deletedCount} old rejected stocks (checked ${stocks.length} total stocks)`);
+      log(`[Cleanup] Rejected ${rejectedCount} old recommendations, deleted ${deletedCount} old rejected stocks (checked ${totalStocksChecked} total stocks across ${users.length} users)`);
     } catch (error) {
       console.error("[Cleanup] Error in cleanup job:", error);
     }
@@ -863,9 +869,17 @@ function startSimulatedRuleExecutionJob() {
         return;
       }
       
-      // Get all stocks to get current prices
-      const stocks = await storage.getStocks();
-      const stockMap = new Map(stocks.map(s => [s.ticker, s]));
+      // Build a map of all stocks across all users for price lookup
+      const stockMap = new Map();
+      for (const user of users) {
+        const userStocks = await storage.getStocks(user.id);
+        for (const stock of userStocks) {
+          // Store by ticker - we just need current prices which are the same for all users
+          if (!stockMap.has(stock.ticker)) {
+            stockMap.set(stock.ticker, stock);
+          }
+        }
+      }
       
       let executedCount = 0;
       
@@ -1008,11 +1022,23 @@ function startAIAnalysisJob() {
     try {
       log("[AIAnalysis] Checking for stocks needing AI analysis...");
       
-      // Get all pending recommendations (both buy and sell)
-      const stocks = await storage.getStocks();
-      const pendingStocks = stocks.filter(
-        stock => stock.recommendationStatus === "pending"
-      );
+      // Get all users and their pending recommendations
+      const users = await storage.getUsers();
+      const allStocks = [];
+      for (const user of users) {
+        const userStocks = await storage.getStocks(user.id);
+        allStocks.push(...userStocks);
+      }
+      
+      // Get unique pending stocks (only analyze each ticker once across all users)
+      const uniqueTickersSet = new Set();
+      const pendingStocks = allStocks.filter(stock => {
+        if (stock.recommendationStatus === "pending" && !uniqueTickersSet.has(stock.ticker)) {
+          uniqueTickersSet.add(stock.ticker);
+          return true;
+        }
+        return false;
+      });
       
       if (pendingStocks.length === 0) {
         log("[AIAnalysis] No pending stocks to analyze");

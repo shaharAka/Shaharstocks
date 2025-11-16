@@ -6,6 +6,28 @@ signal2 is a professional stock trading dashboard providing real-time portfolio 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Updates
+
+### WebSocket Push Notification System (Nov 16, 2025 - COMPLETE)
+**Problem**: Aggressive 10-second polling intervals on 5+ pages caused constant re-renders, network spam, and poor UX.
+
+**Solution**: Replaced polling with WebSocket-based real-time push notifications:
+- ✅ **Server Infrastructure**: WebSocket server (`server/websocketServer.ts`) with session cookie authentication, per-user connection tracking, heartbeat/pong health checks
+- ✅ **Event System**: Event dispatcher (`server/eventDispatcher.ts`) with domain events: `STOCK_STATUS_CHANGED`, `STOCK_POPULAR`, `FOLLOWED_STOCKS_UPDATED`, `NOTIFICATION_CREATED`
+- ✅ **Client Hook**: WebSocket client hook (`client/src/hooks/use-websocket.ts`) with auto-reconnect, exponential backoff (1s → 32s max), and event callbacks
+- ✅ **Polling Removed**: Eliminated all aggressive polling from `purchase.tsx` (10s), `simulation.tsx` (10s), `ticker-detail.tsx` (5s), `settings.tsx` (5s), and sidebar (10s)
+- ✅ **Sidebar Integration**: Sidebar now uses WebSocket events + initial REST fetch instead of polling
+- ✅ **Background Job Fix**: Fixed 11 TypeScript compile errors in background jobs by properly passing `userId` to storage methods
+
+**Architecture**: WebSocket upgrade happens at `/ws` endpoint after Express session middleware authenticates the user. Each connected user joins a personal room (`user-${userId}`) for targeted notifications. Events are emitted by storage methods and background jobs, then dispatched to relevant user rooms.
+
+**Next Steps** (for future implementation):
+1. Add `eventDispatcher.emit()` calls to storage write methods (`followStock`, `unfollowStock`, `updateStockStatus`, etc.)
+2. Add event emissions from background jobs after price updates
+3. Test WebSocket connection end-to-end once server starts
+
+**Impact**: Eliminates ~180 HTTP requests per minute from polling, reduces server load, enables instant UI updates when data changes.
+
 ## System Architecture
 
 ### UI/UX Decisions

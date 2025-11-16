@@ -1,12 +1,14 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Stock opportunity information from insider trading data feeds
+// Per-user tenant isolation: Each user has their own isolated stock collection
 // Each row represents an individual insider transaction (multiple transactions per ticker allowed)
 export const stocks = pgTable("stocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(), // Per-tenant isolation - each stock belongs to one user
   ticker: text("ticker").notNull(), // Removed .unique() to allow multiple transactions per company
   companyName: text("company_name").notNull(),
   currentPrice: decimal("current_price", { precision: 12, scale: 2 }).notNull(), // Real-time market price
@@ -49,13 +51,17 @@ export const stocks = pgTable("stocks", {
   lastUpdated: timestamp("last_updated").defaultNow(),
   rejectedAt: timestamp("rejected_at"), // When the recommendation was rejected
 }, (table) => ({
-  // Unique constraint: Each transaction is unique by ticker + trade date + insider + type
+  // Unique constraint: Each transaction is unique per user by ticker + trade date + insider + type
+  // This allows the same real-world transaction to exist in multiple users' isolated collections
   transactionUnique: uniqueIndex("stock_transaction_unique_idx").on(
+    table.userId,
     table.ticker,
     table.insiderTradeDate,
     table.insiderName,
     table.recommendation
   ),
+  // Index on userId for efficient per-tenant queries
+  userIdIdx: index("stocks_user_id_idx").on(table.userId),
 }));
 
 export const stockSchema = createSelectSchema(stocks);

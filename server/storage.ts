@@ -113,16 +113,16 @@ import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
 import { isStockStale, getStockAgeInDays } from "@shared/time";
 
 export interface IStorage {
-  // Stocks
-  getStocks(): Promise<Stock[]>;
-  getStocksByStatus(status: string): Promise<Stock[]>;
+  // Stocks (Per-user tenant isolation)
+  getStocks(userId: string): Promise<Stock[]>;
+  getStocksByStatus(userId: string, status: string): Promise<Stock[]>;
   getStocksByUserStatus(userId: string, status: string): Promise<Stock[]>;
-  getStock(ticker: string): Promise<Stock | undefined>;
-  getAllStocksForTicker(ticker: string): Promise<Stock[]>;
-  getTransactionByCompositeKey(ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Stock | undefined>;
+  getStock(userId: string, ticker: string): Promise<Stock | undefined>;
+  getAllStocksForTicker(userId: string, ticker: string): Promise<Stock[]>;
+  getTransactionByCompositeKey(userId: string, ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Stock | undefined>;
   createStock(stock: InsertStock): Promise<Stock>;
-  updateStock(ticker: string, stock: Partial<Stock>): Promise<Stock | undefined>;
-  deleteStock(ticker: string): Promise<boolean>;
+  updateStock(userId: string, ticker: string, stock: Partial<Stock>): Promise<Stock | undefined>;
+  deleteStock(userId: string, ticker: string): Promise<boolean>;
   deleteExpiredPendingStocks(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
   deleteExpiredRejectedStocks(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
   deleteStocksOlderThan(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
@@ -386,27 +386,34 @@ export class DatabaseStorage implements IStorage {
       .where(eq(portfolioHoldings.id, holding.id));
   }
 
-  // Stocks
-  async getStocks(): Promise<Stock[]> {
-    return await db.select().from(stocks);
+  // Stocks (Per-user tenant isolation)
+  async getStocks(userId: string): Promise<Stock[]> {
+    return await db.select().from(stocks).where(eq(stocks.userId, userId));
   }
 
-  async getStock(ticker: string): Promise<Stock | undefined> {
+  async getStock(userId: string, ticker: string): Promise<Stock | undefined> {
     // Handle multiple transactions per ticker by getting the most recent one
     const [stock] = await db
       .select()
       .from(stocks)
-      .where(eq(stocks.ticker, ticker))
+      .where(and(
+        eq(stocks.userId, userId),
+        eq(stocks.ticker, ticker)
+      ))
       .orderBy(desc(stocks.lastUpdated))
       .limit(1);
     return stock;
   }
 
-  async getAllStocksForTicker(ticker: string): Promise<Stock[]> {
-    return await db.select().from(stocks).where(eq(stocks.ticker, ticker));
+  async getAllStocksForTicker(userId: string, ticker: string): Promise<Stock[]> {
+    return await db.select().from(stocks).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.ticker, ticker)
+    ));
   }
 
   async getTransactionByCompositeKey(
+    userId: string,
     ticker: string,
     insiderTradeDate: string,
     insiderName: string,
@@ -417,6 +424,7 @@ export class DatabaseStorage implements IStorage {
       .from(stocks)
       .where(
         and(
+          eq(stocks.userId, userId),
           eq(stocks.ticker, ticker),
           eq(stocks.insiderTradeDate, insiderTradeDate),
           eq(stocks.insiderName, insiderName),
@@ -431,11 +439,14 @@ export class DatabaseStorage implements IStorage {
     return newStock;
   }
 
-  async updateStock(ticker: string, updates: Partial<Stock>): Promise<Stock | undefined> {
+  async updateStock(userId: string, ticker: string, updates: Partial<Stock>): Promise<Stock | undefined> {
     const [updatedStock] = await db
       .update(stocks)
       .set({ ...updates, lastUpdated: sql`now()` })
-      .where(eq(stocks.ticker, ticker))
+      .where(and(
+        eq(stocks.userId, userId),
+        eq(stocks.ticker, ticker)
+      ))
       .returning();
 
     if (updatedStock) {
@@ -443,7 +454,10 @@ export class DatabaseStorage implements IStorage {
       const holdings = await db
         .select()
         .from(portfolioHoldings)
-        .where(eq(portfolioHoldings.ticker, ticker));
+        .where(and(
+          eq(portfolioHoldings.userId, userId),
+          eq(portfolioHoldings.ticker, ticker)
+        ));
       
       for (const holding of holdings) {
         await this.updateHoldingValues(holding);
@@ -453,8 +467,11 @@ export class DatabaseStorage implements IStorage {
     return updatedStock;
   }
 
-  async deleteStock(ticker: string): Promise<boolean> {
-    const result = await db.delete(stocks).where(eq(stocks.ticker, ticker));
+  async deleteStock(userId: string, ticker: string): Promise<boolean> {
+    const result = await db.delete(stocks).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.ticker, ticker)
+    ));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 

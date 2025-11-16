@@ -12,7 +12,7 @@ Preferred communication style: Simple, everyday language.
 The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tailwind CSS for styling, supporting light/dark modes. Typography uses Inter for UI and JetBrains Mono for numerical data. A mobile-first, 12-column CSS Grid layout ensures responsiveness. Visuals include auto-scaling charts, color-coded avatars, and interactive guided tours (`react-joyride`) managed by a `TutorialManager` component.
 
 ### Critical Architecture Decisions
-- **Per-User Tenant Isolation** (Nov 16, 2025 - Major Refactor):
+- **Per-User Tenant Isolation** (Nov 16, 2025 - Major Refactor COMPLETE):
   - **Complete Data Privacy**: Each user has their own isolated stock collection - stocks table includes `userId` foreign key with cascade delete
   - **Unique Constraint**: `(userId, ticker, insiderTradeDate, insiderName, recommendation)` allows multiple transactions per ticker per user
   - **Performance Index**: Added index on `(userId, recommendation_status)` for fast per-user queries

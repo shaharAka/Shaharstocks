@@ -1051,24 +1051,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stock routes
+  // Stock routes - Per-user tenant isolation: all stocks are user-specific
   app.get("/api/stocks", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
       const { status } = req.query;
       
-      // For user-specific statuses like "rejected", require authentication
+      // For user-specific statuses like "rejected"
       if (status === "rejected") {
-        if (!req.session.userId) {
-          return res.status(401).json({ error: "Not authenticated" });
-        }
         const stocks = await storage.getStocksByUserStatus(req.session.userId, status as string);
         return res.json(stocks);
       }
       
-      // For global statuses or no status filter
-      const stocks = status 
-        ? await storage.getStocksByStatus(status as string)
-        : await storage.getStocks();
+      // All stocks are user-specific now
+      const stocks = await storage.getStocks(req.session.userId);
       res.json(stocks);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stocks" });
@@ -1995,13 +1994,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk analyze all pending stocks
+  // Bulk analyze all pending stocks for current user
   app.post("/api/stocks/analyze-all", async (req, res) => {
     try {
-      console.log("[Bulk AI Analysis] Starting bulk analysis of all pending stocks...");
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       
-      // Get all pending purchase recommendations
-      const stocks = await storage.getStocks();
+      console.log(`[Bulk AI Analysis] Starting bulk analysis for user ${req.session.userId}...`);
+      
+      // Get user's pending purchase recommendations
+      const stocks = await storage.getStocks(req.session.userId);
       const pendingStocks = stocks.filter(
         stock => stock.recommendation?.toLowerCase() === "buy" && 
                  stock.recommendationStatus === "pending"
@@ -2015,7 +2018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      console.log(`[Bulk AI Analysis] Found ${pendingStocks.length} pending stocks`);
+      console.log(`[Bulk AI Analysis] Found ${pendingStocks.length} pending stocks for user ${req.session.userId}`);
       
       // Queue all stocks for analysis (force re-analysis of existing jobs)
       let queuedCount = 0;
@@ -3158,6 +3161,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/openinsider/fetch", async (req, res) => {
     try {
+      // DEPRECATED: In per-user tenant isolation model, each user gets stocks during onboarding
+      // This endpoint is kept for admin testing but should not be used in production
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(req.session.userId);
+      if (!user?.isAdmin) {
+        return res.status(403).json({ error: "Admin access required. Use onboarding to fetch your personal stocks." });
+      }
+      
       // Get OpenInsider config
       const config = await storage.getOpeninsiderConfig();
       if (!config || !config.enabled) {
@@ -3252,11 +3266,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let filteredCount = 0;
       const createdTickers: string[] = []; // Track newly created tickers for AI analysis
       
-      // Step 1: Filter out existing transactions (check composite key, not just ticker)
-      console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions...`);
+      // Step 1: Filter out existing transactions for this admin user (check composite key)
+      console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions for admin user ${req.session.userId}...`);
       const newTransactions = [];
       for (const transaction of transactions) {
         const existingTransaction = await storage.getTransactionByCompositeKey(
+          req.session.userId!, // Admin user's stocks
           transaction.ticker,
           transaction.filingDate,
           transaction.insiderName,
@@ -3337,9 +3352,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          // Create stock recommendation with complete information
-          console.log(`[OpeninsiderFetch] Creating stock for ${transaction.ticker}...`);
+          // Create stock recommendation for admin user only
+          console.log(`[OpeninsiderFetch] Creating stock for admin user ${req.session.userId}: ${transaction.ticker}...`);
           const newStock = await storage.createStock({
+            userId: req.session.userId!, // Admin user only
             ticker: transaction.ticker,
             companyName: transaction.companyName || transaction.ticker,
             currentPrice: quote.currentPrice.toString(),

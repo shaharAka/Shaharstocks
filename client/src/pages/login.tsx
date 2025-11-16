@@ -204,7 +204,7 @@ export default function Login() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-sm">
-              An active subscription is required to access signal2.
+              New users get a 30-day free trial. An active subscription is required after trial expires.
             </AlertDescription>
           </Alert>
 

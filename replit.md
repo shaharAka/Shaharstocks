@@ -12,13 +12,20 @@ Preferred communication style: Simple, everyday language.
 The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tailwind CSS for styling, supporting light/dark modes. Typography uses Inter for UI and JetBrains Mono for numerical data. A mobile-first, 12-column CSS Grid layout ensures responsiveness. Visuals include auto-scaling charts, color-coded avatars, and interactive guided tours (`react-joyride`) managed by a `TutorialManager` component.
 
 ### Critical Architecture Decisions
-- **User-Specific Stock Rejection System**: The `rejectTickerForUser(userId, ticker)` method handles stock rejections on a per-user basis:
-  - Updates ONLY user_stock_statuses to 'rejected' with timestamp (not global stock status)
-  - Cancels any in-flight AI analysis jobs for that ticker for the user
-  - Rejected stocks appear in user's "rejected" filter while remaining visible to other users
-  - Global stock status remains 'pending' for visibility to other users
-  - FIX (Nov 16, 2025): Changed from global rejection to user-specific rejection to prevent stocks from disappearing entirely
-- **Opportunities Query Filter**: Queries fetch stocks where global `recommendation_status='pending'`, then frontend filters by user-specific `userStatus` to show/hide stocks per user.
+- **Per-User Tenant Isolation** (Nov 16, 2025 - Major Refactor):
+  - **Complete Data Privacy**: Each user has their own isolated stock collection - stocks table includes `userId` foreign key with cascade delete
+  - **Unique Constraint**: `(userId, ticker, insiderTradeDate, insiderName, recommendation)` allows multiple transactions per ticker per user
+  - **Performance Index**: Added index on `(userId, recommendation_status)` for fast per-user queries
+  - **Storage Layer**: All 30+ stock CRUD methods require `userId` parameter to enforce isolation
+  - **Background Jobs**: Efficient global update pattern using helper methods:
+    - `getAllUniquePendingTickers()` - Get distinct tickers needing price updates across all users
+    - `getAllUniqueTickersNeedingData()` - Get distinct tickers needing candlestick data
+    - `updateStocksByTickerGlobally(ticker, updates)` - Fan out shared market data (prices, news, candlesticks) to all users' instances of a ticker
+  - **Security**: Foreign key constraint ensures referential integrity, cascade delete removes user's stocks on account deletion
+- **User-Specific Stock Actions**: All stock operations are user-scoped:
+  - `rejectTickerForUser(userId, ticker)` - Updates user_stock_statuses to 'rejected' for that user only
+  - `unrejectStock(userId, ticker)` - Unrejects stock for specific user without affecting other users
+  - `deleteStock(userId, ticker)` - Deletes stock from specific user's collection only
 - **Session Security & Data Isolation**: Full page reload on authentication state changes to prevent cross-user data contamination:
   - Logout: Forces full page reload to /login (clears all state, cache, and queries)
   - Login: Forces full page reload to / (ensures fresh session with correct user data)
@@ -29,9 +36,9 @@ The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tai
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (with optimistic updates and user-scoped cache keys), React Hook Form with Zod for validation.
 - **Backend**: Express.js with TypeScript, RESTful API design, JSON body parsing, Zod schema validation.
-- **Database**: PostgreSQL (Neon serverless) with Drizzle ORM for type-safe queries, migrations, UUID primary keys, Decimal types, JSONB, and timestamp tracking.
-- **Data Models**: Key entities include Stocks, Portfolio Holdings, Trades, Trigger-based Trading Rules, Backtest Jobs/Price Data/Scenarios, Telegram Config, OpenInsider Config, Users, and Stock Comments.
-- **Cache Isolation**: User-scoped cache keys and custom query functions are used across critical components to prevent cross-user data contamination, with backend enforcement via session authentication.
+- **Database**: PostgreSQL (Neon serverless) with Drizzle ORM for type-safe queries, migrations, UUID primary keys, Decimal types, JSONB, and timestamp tracking. Per-user tenant isolation with foreign key constraints ensures complete data privacy and referential integrity.
+- **Data Models**: Key entities include Stocks (per-user isolation via userId FK), Portfolio Holdings, Trades, Trigger-based Trading Rules, Backtest Jobs/Price Data/Scenarios, Telegram Config, OpenInsider Config, Users, and Stock Comments.
+- **Cache Isolation**: User-scoped cache keys and custom query functions are used across critical components to prevent cross-user data contamination, with backend enforcement via session authentication and database-level foreign key constraints.
 - **Chart Visibility**: Stock simulation plots dynamically calculate Y-axis domains to ensure all price data and reference lines are visible.
 
 ### Feature Specifications

@@ -283,6 +283,9 @@ function startCandlestickDataJob() {
 
       // Fetch candlestick data for each stock (with rate limiting handled by stockService)
       let successCount = 0;
+      let errorCount = 0;
+      const errors: { ticker: string; error: string }[] = [];
+      
       for (const stock of stocksNeedingData) {
         try {
           log(`[CandlestickData] Fetching data for ${stock.ticker}...`);
@@ -302,13 +305,27 @@ function startCandlestickDataJob() {
             });
             log(`[CandlestickData] ✓ ${stock.ticker} - fetched ${candlesticks.length} days`);
             successCount++;
+          } else {
+            log(`[CandlestickData] ⚠️ ${stock.ticker} - no candlestick data returned`);
+            errorCount++;
+            errors.push({ ticker: stock.ticker, error: "No data returned from API" });
           }
         } catch (error: any) {
-          console.error(`[CandlestickData] Error fetching data for ${stock.ticker}:`, error.message);
+          errorCount++;
+          const errorMsg = error.message || String(error);
+          errors.push({ ticker: stock.ticker, error: errorMsg });
+          console.error(`[CandlestickData] ✗ ${stock.ticker} - Error: ${errorMsg}`);
         }
       }
 
       log(`[CandlestickData] Successfully updated ${successCount}/${stocksNeedingData.length} stocks`);
+      
+      if (errorCount > 0) {
+        log(`[CandlestickData] Failed to fetch data for ${errorCount} stocks:`);
+        errors.forEach(({ ticker, error }) => {
+          log(`  - ${ticker}: ${error}`);
+        });
+      }
     } catch (error) {
       console.error("[CandlestickData] Error in candlestick data job:", error);
     }

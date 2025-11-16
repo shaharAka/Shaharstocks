@@ -1159,6 +1159,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Diagnostic endpoint: Check candlestick data status
+  app.get("/api/stocks/diagnostics/candlesticks", async (req, res) => {
+    try {
+      const stocks = await storage.getStocks();
+      const pendingStocks = stocks.filter(s => s.recommendationStatus === "pending");
+      
+      const diagnostics = {
+        totalStocks: stocks.length,
+        pendingStocks: pendingStocks.length,
+        withCandlesticks: stocks.filter(s => s.candlesticks && s.candlesticks.length > 0).length,
+        withoutCandlesticks: stocks.filter(s => !s.candlesticks || s.candlesticks.length === 0).length,
+        pendingWithCandlesticks: pendingStocks.filter(s => s.candlesticks && s.candlesticks.length > 0).length,
+        pendingWithoutCandlesticks: pendingStocks.filter(s => !s.candlesticks || s.candlesticks.length === 0).length,
+        sampleStocksWithoutData: stocks
+          .filter(s => !s.candlesticks || s.candlesticks.length === 0)
+          .slice(0, 10)
+          .map(s => ({ ticker: s.ticker, status: s.recommendationStatus, recommendation: s.recommendation })),
+      };
+      
+      res.json(diagnostics);
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to fetch diagnostics", details: error.message });
+    }
+  });
+
   // Refresh stock data with real-time market prices
   app.post("/api/stocks/:ticker/refresh", async (req, res) => {
     try {

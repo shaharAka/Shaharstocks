@@ -8,7 +8,7 @@ import { z } from "zod";
 // Each row represents an individual insider transaction (multiple transactions per ticker allowed)
 export const stocks = pgTable("stocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(), // Per-tenant isolation - each stock belongs to one user
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // Per-tenant isolation with foreign key
   ticker: text("ticker").notNull(), // Removed .unique() to allow multiple transactions per company
   companyName: text("company_name").notNull(),
   currentPrice: decimal("current_price", { precision: 12, scale: 2 }).notNull(), // Real-time market price

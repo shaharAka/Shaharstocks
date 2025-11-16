@@ -182,46 +182,29 @@ function startPriceUpdateJob() {
       
       log("[PriceUpdate] Starting stock price update job...");
       
-      // Get all stocks with pending recommendations (both buy and sell)
-      const stocks = await storage.getStocks();
-      const pendingStocks = stocks.filter(
-        stock => stock.recommendationStatus === "pending"
-      );
+      // Get unique pending tickers across all users (per-user isolation)
+      const tickers = await storage.getAllUniquePendingTickers();
 
-      if (pendingStocks.length === 0) {
+      if (tickers.length === 0) {
         log("[PriceUpdate] No pending stocks to update");
         return;
       }
 
-      log(`[PriceUpdate] Updating prices for ${pendingStocks.length} stocks (${pendingStocks.filter(s => s.recommendation === 'buy').length} buys, ${pendingStocks.filter(s => s.recommendation === 'sell').length} sells)`);
+      log(`[PriceUpdate] Updating prices for ${tickers.length} unique pending tickers across all users`);
 
       // Fetch quotes, market cap, company info, and news for all pending stocks
-      const tickers = pendingStocks.map(s => s.ticker);
       const stockData = await finnhubService.getBatchStockData(tickers);
 
-      // Update each stock with new price, previous close, market cap, company info, and news
+      // Update each ticker globally (across all users) with shared market data
       let successCount = 0;
-      for (const stock of pendingStocks) {
-        const data = stockData.get(stock.ticker);
+      for (const ticker of tickers) {
+        const data = stockData.get(ticker);
         if (data) {
-          // Fetch historical price at insider trade date if available and not already fetched
-          let marketPriceAtInsiderDate = stock.marketPriceAtInsiderDate ? parseFloat(stock.marketPriceAtInsiderDate) : null;
-          
-          if (stock.insiderTradeDate && !marketPriceAtInsiderDate) {
-            log(`[PriceUpdate] Fetching historical price for ${stock.ticker} on ${stock.insiderTradeDate}`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const historicalPrice = await finnhubService.getHistoricalPrice(stock.ticker, stock.insiderTradeDate);
-            if (historicalPrice) {
-              marketPriceAtInsiderDate = historicalPrice;
-              log(`[PriceUpdate] Got historical price for ${stock.ticker}: $${historicalPrice.toFixed(2)}`);
-            }
-          }
-          
-          await storage.updateStock(stock.ticker, {
+          // Update all instances of this ticker (across all users) with the same market data
+          const updatedCount = await storage.updateStocksByTickerGlobally(ticker, {
             currentPrice: data.quote.currentPrice.toString(),
             previousClose: data.quote.previousClose.toString(),
             marketCap: data.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-            marketPriceAtInsiderDate: marketPriceAtInsiderDate ? marketPriceAtInsiderDate.toString() : null,
             description: data.companyInfo?.description || null,
             industry: data.companyInfo?.industry || null,
             country: data.companyInfo?.country || null,
@@ -230,13 +213,15 @@ function startPriceUpdateJob() {
             news: data.news || [],
             insiderSentimentMspr: data.insiderSentiment?.mspr.toString() || null,
             insiderSentimentChange: data.insiderSentiment?.change.toString() || null,
-            lastUpdated: new Date(),
           });
-          successCount++;
+          if (updatedCount > 0) {
+            successCount++;
+            log(`[PriceUpdate] Updated ${ticker}: ${updatedCount} instances across users`);
+          }
         }
       }
 
-      log(`[PriceUpdate] Successfully updated ${successCount}/${pendingStocks.length} stocks`);
+      log(`[PriceUpdate] Successfully updated ${successCount}/${tickers.length} tickers`);
     } catch (error) {
       console.error("[PriceUpdate] Error updating stock prices:", error);
     }
@@ -263,36 +248,32 @@ function startCandlestickDataJob() {
     try {
       log("[CandlestickData] Starting candlestick data fetch job...");
       
-      // Get all stocks that need candlestick data (pending OR missing candlesticks)
-      const stocks = await storage.getStocks();
-      const stocksNeedingData = stocks.filter(
-        stock => stock.recommendationStatus === "pending" || 
-                 !stock.candlesticks || 
-                 stock.candlesticks.length === 0
-      );
+      // Get unique tickers that need candlestick data across all users (per-user isolation)
+      const tickers = await storage.getAllUniqueTickersNeedingData();
 
-      if (stocksNeedingData.length === 0) {
+      if (tickers.length === 0) {
         log("[CandlestickData] No stocks need candlestick data");
         return;
       }
 
-      log(`[CandlestickData] Fetching candlestick data for ${stocksNeedingData.length} stocks (${stocksNeedingData.filter(s => s.recommendation === 'buy').length} buys, ${stocksNeedingData.filter(s => s.recommendation === 'sell').length} sells)`);
+      log(`[CandlestickData] Fetching candlestick data for ${tickers.length} unique tickers across all users`);
 
       // Import stockService here to avoid circular dependencies
       const { stockService } = await import('./stockService.js');
 
-      // Fetch candlestick data for each stock (with rate limiting handled by stockService)
+      // Fetch candlestick data for each ticker (with rate limiting handled by stockService)
       let successCount = 0;
       let errorCount = 0;
       const errors: { ticker: string; error: string }[] = [];
       
-      for (const stock of stocksNeedingData) {
+      for (const ticker of tickers) {
         try {
-          log(`[CandlestickData] Fetching data for ${stock.ticker}...`);
-          const candlesticks = await stockService.getCandlestickData(stock.ticker);
+          log(`[CandlestickData] Fetching data for ${ticker}...`);
+          const candlesticks = await stockService.getCandlestickData(ticker);
           
           if (candlesticks && candlesticks.length > 0) {
-            await storage.updateStock(stock.ticker, {
+            // Update all instances of this ticker (across all users) with the same candlestick data
+            const updatedCount = await storage.updateStocksByTickerGlobally(ticker, {
               candlesticks: candlesticks.map(c => ({
                 date: c.date,
                 open: c.open,
@@ -301,24 +282,23 @@ function startCandlestickDataJob() {
                 close: c.close,
                 volume: c.volume
               })),
-              lastUpdated: new Date(),
             });
-            log(`[CandlestickData] ✓ ${stock.ticker} - fetched ${candlesticks.length} days`);
+            log(`[CandlestickData] ✓ ${ticker} - fetched ${candlesticks.length} days, updated ${updatedCount} instances`);
             successCount++;
           } else {
-            log(`[CandlestickData] ⚠️ ${stock.ticker} - no candlestick data returned`);
+            log(`[CandlestickData] ⚠️ ${ticker} - no candlestick data returned`);
             errorCount++;
-            errors.push({ ticker: stock.ticker, error: "No data returned from API" });
+            errors.push({ ticker, error: "No data returned from API" });
           }
         } catch (error: any) {
           errorCount++;
           const errorMsg = error.message || String(error);
-          errors.push({ ticker: stock.ticker, error: errorMsg });
-          console.error(`[CandlestickData] ✗ ${stock.ticker} - Error: ${errorMsg}`);
+          errors.push({ ticker, error: errorMsg });
+          console.error(`[CandlestickData] ✗ ${ticker} - Error: ${errorMsg}`);
         }
       }
 
-      log(`[CandlestickData] Successfully updated ${successCount}/${stocksNeedingData.length} stocks`);
+      log(`[CandlestickData] Successfully updated ${successCount}/${tickers.length} tickers`);
       
       if (errorCount > 0) {
         log(`[CandlestickData] Failed to fetch data for ${errorCount} stocks:`);

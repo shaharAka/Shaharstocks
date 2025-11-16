@@ -103,6 +103,7 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
       try {
         // Check if this exact transaction already exists using composite key
         const existingTransaction = await storage.getTransactionByCompositeKey(
+          userId, // Per-user tenant isolation
           transaction.ticker,
           transaction.filingDate,
           transaction.insiderName,
@@ -144,8 +145,9 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           }
         }
 
-        // Create stock recommendation with complete information
+        // Create stock recommendation with complete information (per-user tenant isolation)
         await storage.createStock({
+          userId, // Per-user tenant isolation - this stock belongs to this user only
           ticker: transaction.ticker,
           companyName: transaction.companyName || transaction.ticker,
           currentPrice: quote.currentPrice.toString(),
@@ -1115,7 +1117,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/stocks/:ticker", async (req, res) => {
     try {
-      const stock = await storage.getStock(req.params.ticker);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const stock = await storage.getStock(req.session.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1137,7 +1142,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/stocks/:ticker", async (req, res) => {
     try {
-      const stock = await storage.updateStock(req.params.ticker, req.body);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const stock = await storage.updateStock(req.session.userId, req.params.ticker, req.body);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1149,7 +1157,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/stocks/:ticker", async (req, res) => {
     try {
-      const deleted = await storage.deleteStock(req.params.ticker);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const deleted = await storage.deleteStock(req.session.userId, req.params.ticker);
       if (!deleted) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1162,7 +1173,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Diagnostic endpoint: Check candlestick data status
   app.get("/api/stocks/diagnostics/candlesticks", async (req, res) => {
     try {
-      const stocks = await storage.getStocks();
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const stocks = await storage.getStocks(req.session.userId);
       const pendingStocks = stocks.filter(s => s.recommendationStatus === "pending");
       
       const diagnostics = {
@@ -1187,8 +1201,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Refresh stock data with real-time market prices
   app.post("/api/stocks/:ticker/refresh", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const ticker = req.params.ticker;
-      const stock = await storage.getStock(ticker);
+      const stock = await storage.getStock(req.session.userId, ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1196,7 +1213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[StockAPI] Refreshing market data for ${ticker}...`);
       const marketData = await stockService.getComprehensiveData(ticker);
 
-      const updatedStock = await storage.updateStock(ticker, {
+      const updatedStock = await storage.updateStock(req.session.userId, ticker, {
         currentPrice: marketData.currentPrice,
         previousClose: marketData.previousClose,
         marketCap: marketData.marketCap,
@@ -1216,7 +1233,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Refresh all pending stocks with market data
   app.post("/api/stocks/refresh-all", async (req, res) => {
     try {
-      const stocks = await storage.getStocks();
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const stocks = await storage.getStocks(req.session.userId);
       const pendingStocks = stocks.filter(s => s.recommendationStatus === "pending");
 
       console.log(`[StockAPI] Refreshing ${pendingStocks.length} pending stocks...`);
@@ -1232,7 +1252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const stock of pendingStocks) {
         try {
           const marketData = await stockService.getComprehensiveData(stock.ticker);
-          await storage.updateStock(stock.ticker, {
+          await storage.updateStock(req.session.userId, stock.ticker, {
             currentPrice: marketData.currentPrice,
             previousClose: marketData.previousClose,
             marketCap: marketData.marketCap,
@@ -1265,7 +1285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.getStock(req.params.ticker);
+      const stock = await storage.getStock(req.session.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1330,7 +1350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         priceHistory.push(initialPricePoint);
         
         // Update stock with new price history
-        await storage.updateStock(stock.ticker, {
+        await storage.updateStock(req.session.userId, stock.ticker, {
           priceHistory,
         });
       }
@@ -1417,7 +1437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.getStock(req.params.ticker);
+      const stock = await storage.getStock(req.session.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1442,7 +1462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
         
         // Update stock with converted price history
-        await storage.updateStock(stock.ticker, { priceHistory });
+        await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
       } else if (priceHistory.length === 0 && stock.insiderTradeDate) {
         // Fall back to fetching if no candlesticks available
         console.log(`[Simulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
@@ -1459,7 +1479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               price: p.close
             }));
             
-            await storage.updateStock(stock.ticker, { priceHistory });
+            await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
             console.log(`[Simulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
           }
         } catch (error) {
@@ -1491,7 +1511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Update stock with new price history
-        await storage.updateStock(stock.ticker, {
+        await storage.updateStock(req.session.userId, stock.ticker, {
           priceHistory,
         });
       }
@@ -1583,7 +1603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           if (!stock) {
             errors.push(`${ticker}: not found`);
             continue;
@@ -1593,7 +1613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const purchasePrice = parseFloat(stock.currentPrice);
           const purchaseQuantity = 10;
 
-          await storage.updateStock(ticker, {
+          await storage.updateStock(req.session.userId, ticker, {
             recommendationStatus: "approved"
           });
 
@@ -1699,6 +1719,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-refresh", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const validationResult = bulkTickersSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({ error: "Invalid request", details: validationResult.error.errors });
@@ -1710,7 +1733,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           if (!stock) {
             errors.push(`${ticker}: not found`);
             continue;
@@ -1720,7 +1743,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit: 1 req/sec
           const quote = await finnhubService.getQuote(ticker);
           if (quote && quote.currentPrice) {
-            await storage.updateStock(ticker, {
+            await storage.updateStock(req.session.userId, ticker, {
               currentPrice: quote.currentPrice.toFixed(2),
               previousClose: quote.previousClose?.toFixed(2) || stock.previousClose,
             });
@@ -1747,6 +1770,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-analyze", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const validationResult = bulkTickersSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({ error: "Invalid request", details: validationResult.error.errors });
@@ -1757,7 +1783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let queuedCount = 0;
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           if (stock && stock.recommendationStatus === "pending") {
             await storage.enqueueAnalysisJob(ticker, "manual", "high", true);
             queuedCount++;
@@ -2095,8 +2121,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (followerCount > 10) {
           console.log(`[Follow] Stock ${ticker} is popular with ${followerCount} followers, creating notifications...`);
           
-          // Get stock data for the notification
-          const stock = await storage.getStock(ticker);
+          // Get stock data for the notification (use current user's userId - stock data same across users in per-user model)
+          const stock = await storage.getStock(req.session.userId, ticker);
           const stockData = stock as any;
           
           // Notify all followers (including the one who just followed)
@@ -2151,7 +2177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Get previous analysis for context (if available)
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           const stockData = stock as any;
           const previousAnalysis = stockData?.overallRating ? {
             overallRating: stockData.overallRating,
@@ -2762,7 +2788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create a simulated holding for each ticker
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           if (!stock) {
             errors.push({ ticker, error: "Stock not found" });
             continue;
@@ -2795,7 +2821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }));
             
             // Update stock with converted price history
-            await storage.updateStock(stock.ticker, { priceHistory });
+            await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
           } else if (priceHistory.length === 0 && stock.insiderTradeDate) {
             // Fall back to fetching if no candlesticks available
             console.log(`[BulkSimulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
@@ -2812,7 +2838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   price: p.close
                 }));
                 
-                await storage.updateStock(stock.ticker, { priceHistory });
+                await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
                 console.log(`[BulkSimulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
               }
             } catch (error) {
@@ -3586,14 +3612,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid action. Must be 'buy' or 'sell'" });
       }
 
-      // Get current stock price to record in trades table
-      const stock = await storage.getStock(ticker);
-      const price = stock ? parseFloat(stock.currentPrice) : 0;
-
       // Record the trade in our database
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
+
+      // Get current stock price to record in trades table
+      const stock = await storage.getStock(req.session.userId, ticker);
+      const price = stock ? parseFloat(stock.currentPrice) : 0;
       await storage.createTrade({
         userId: req.session.userId,
         ticker,
@@ -4268,7 +4294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Get stock data for context and opportunity type
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           const stockData = stock as any;
           const opportunityType = stockData?.recommendation?.toLowerCase().includes("sell") ? "sell" : "buy";
           const previousAnalysis = stockData?.overallRating ? {

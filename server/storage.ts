@@ -126,7 +126,11 @@ export interface IStorage {
   deleteExpiredPendingStocks(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
   deleteExpiredRejectedStocks(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
   deleteStocksOlderThan(ageInDays: number): Promise<{ count: number; tickers: string[] }>;
-  unrejectStock(ticker: string): Promise<Stock | undefined>;
+  unrejectStock(userId: string, ticker: string): Promise<Stock | undefined>;
+  // Global helpers for background jobs (update shared market data across all users' stocks)
+  getAllUniquePendingTickers(): Promise<string[]>;
+  getAllUniqueTickersNeedingData(): Promise<string[]>;
+  updateStocksByTickerGlobally(ticker: string, updates: Partial<Stock>): Promise<number>;
 
   // Portfolio Holdings
   getPortfolioHoldings(userId: string, isSimulated?: boolean): Promise<PortfolioHolding[]>;
@@ -708,7 +712,7 @@ export class DatabaseStorage implements IStorage {
     return results.map(row => row.stock);
   }
 
-  async unrejectStock(ticker: string): Promise<Stock | undefined> {
+  async unrejectStock(userId: string, ticker: string): Promise<Stock | undefined> {
     const [updatedStock] = await db
       .update(stocks)
       .set({ 
@@ -716,9 +720,43 @@ export class DatabaseStorage implements IStorage {
         rejectedAt: null,
         lastUpdated: sql`now()` 
       })
-      .where(eq(stocks.ticker, ticker))
+      .where(and(
+        eq(stocks.userId, userId),
+        eq(stocks.ticker, ticker)
+      ))
       .returning();
     return updatedStock;
+  }
+
+  // Global helpers for background jobs (efficiently update market data across all users)
+  async getAllUniquePendingTickers(): Promise<string[]> {
+    const result = await db
+      .selectDistinct({ ticker: stocks.ticker })
+      .from(stocks)
+      .where(eq(stocks.recommendationStatus, 'pending'));
+    return result.map(r => r.ticker);
+  }
+
+  async getAllUniqueTickersNeedingData(): Promise<string[]> {
+    const result = await db
+      .selectDistinct({ ticker: stocks.ticker })
+      .from(stocks)
+      .where(
+        or(
+          eq(stocks.recommendationStatus, 'pending'),
+          sql`${stocks.candlesticks} IS NULL`,
+          sql`jsonb_array_length(${stocks.candlesticks}) = 0`
+        )
+      );
+    return result.map(r => r.ticker);
+  }
+
+  async updateStocksByTickerGlobally(ticker: string, updates: Partial<Stock>): Promise<number> {
+    const result = await db
+      .update(stocks)
+      .set({ ...updates, lastUpdated: sql`now()` })
+      .where(eq(stocks.ticker, ticker));
+    return result.rowCount || 0;
   }
 
   async deleteStocksOlderThan(ageInDays: number): Promise<{ count: number; tickers: string[] }> {

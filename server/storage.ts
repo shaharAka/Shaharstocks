@@ -111,6 +111,7 @@ import {
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
 import { isStockStale, getStockAgeInDays } from "@shared/time";
+import { eventDispatcher } from "./eventDispatcher";
 
 export interface IStorage {
   // Stocks (Per-user tenant isolation)
@@ -1881,6 +1882,15 @@ export class DatabaseStorage implements IStorage {
 
   async followStock(follow: InsertFollowedStock): Promise<FollowedStock> {
     const [newFollow] = await db.insert(followedStocks).values(follow).returning();
+    
+    // Emit event for WebSocket cache invalidation
+    eventDispatcher.emit("FOLLOWED_STOCK_UPDATED", {
+      type: "FOLLOWED_STOCK_UPDATED",
+      userId: follow.userId,
+      ticker: follow.ticker,
+      data: { action: "follow" }
+    });
+    
     return newFollow;
   }
 
@@ -1893,6 +1903,15 @@ export class DatabaseStorage implements IStorage {
           eq(followedStocks.userId, userId)
         )
       );
+    
+    // Emit event for WebSocket cache invalidation
+    eventDispatcher.emit("FOLLOWED_STOCK_UPDATED", {
+      type: "FOLLOWED_STOCK_UPDATED",
+      userId,
+      ticker,
+      data: { action: "unfollow" }
+    });
+    
     return true;
   }
 
@@ -2283,6 +2302,17 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .returning();
+    
+    // Emit event for WebSocket cache invalidation
+    if (updated && updates.status) {
+      eventDispatcher.emit("STOCK_STATUS_CHANGED", {
+        type: "STOCK_STATUS_CHANGED",
+        userId,
+        ticker,
+        status: updates.status
+      });
+    }
+    
     return updated;
   }
 

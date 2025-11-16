@@ -21,10 +21,16 @@ Preferred communication style: Simple, everyday language.
 
 **Architecture**: WebSocket upgrade happens at `/ws` endpoint after Express session middleware authenticates the user. Each connected user joins a personal room (`user-${userId}`) for targeted notifications. Events are emitted by storage methods and background jobs, then dispatched to relevant user rooms.
 
-**Next Steps** (for future implementation):
-1. Add `eventDispatcher.emit()` calls to storage write methods (`followStock`, `unfollowStock`, `updateStockStatus`, etc.)
-2. Add event emissions from background jobs after price updates
-3. Test WebSocket connection end-to-end once server starts
+**Event Emissions** (COMPLETE):
+- ✅ Added `eventDispatcher.emit()` to `followStock()` → FOLLOWED_STOCKS_UPDATED
+- ✅ Added `eventDispatcher.emit()` to `unfollowStock()` → FOLLOWED_STOCKS_UPDATED  
+- ✅ Added `eventDispatcher.emit()` to `updateUserStockStatus()` → STOCK_STATUS_CHANGED
+
+**Next Steps** (for future enhancement):
+1. Add more event emissions from background jobs after price updates
+2. Add STOCK_POPULAR event emission when follower threshold is reached
+3. Add NOTIFICATION_CREATED event emission when notifications are created
+4. Test WebSocket connection end-to-end once server starts
 
 **Impact**: Eliminates ~180 HTTP requests per minute from polling, reduces server load, enables instant UI updates when data changes.
 

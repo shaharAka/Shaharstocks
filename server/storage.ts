@@ -135,7 +135,7 @@ export interface IStorage {
 
   // Portfolio Holdings
   getPortfolioHoldings(userId: string, isSimulated?: boolean): Promise<PortfolioHolding[]>;
-  getPortfolioHolding(id: string): Promise<PortfolioHolding | undefined>;
+  getPortfolioHolding(id: string, userId?: string): Promise<PortfolioHolding | undefined>;
   getPortfolioHoldingByTicker(userId: string, ticker: string, isSimulated?: boolean): Promise<PortfolioHolding | undefined>;
   createPortfolioHolding(holding: InsertPortfolioHolding): Promise<PortfolioHolding>;
   updatePortfolioHolding(id: string, holding: Partial<PortfolioHolding>): Promise<PortfolioHolding | undefined>;
@@ -144,7 +144,7 @@ export interface IStorage {
 
   // Trades
   getTrades(userId: string, isSimulated?: boolean): Promise<Trade[]>;
-  getTrade(id: string): Promise<Trade | undefined>;
+  getTrade(id: string, userId?: string): Promise<Trade | undefined>;
   createTrade(trade: InsertTrade): Promise<Trade>;
   updateTrade(id: string, trade: Partial<Trade>): Promise<Trade | undefined>;
   deleteSimulatedTradesByTicker(userId: string, ticker: string): Promise<number>;
@@ -374,7 +374,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   private async updateHoldingValues(holding: PortfolioHolding): Promise<void> {
-    const [stock] = await db.select().from(stocks).where(eq(stocks.ticker, holding.ticker));
+    // CRITICAL: Filter by userId to ensure tenant isolation
+    const [stock] = await db.select().from(stocks).where(and(
+      eq(stocks.ticker, holding.ticker),
+      eq(stocks.userId, holding.userId)
+    ));
     if (!stock) return;
 
     const currentPrice = parseFloat(stock.currentPrice);
@@ -693,8 +697,12 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getStocksByStatus(status: string): Promise<Stock[]> {
-    return await db.select().from(stocks).where(eq(stocks.recommendationStatus, status));
+  async getStocksByStatus(userId: string, status: string): Promise<Stock[]> {
+    // CRITICAL: Filter by userId for tenant isolation
+    return await db.select().from(stocks).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.recommendationStatus, status)
+    ));
   }
 
   async getStocksByUserStatus(userId: string, status: string): Promise<Stock[]> {
@@ -711,7 +719,10 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .where(
-        eq(userStockStatuses.status, status)
+        and(
+          eq(stocks.userId, userId), // CRITICAL: Filter stocks by userId for tenant isolation
+          eq(userStockStatuses.status, status)
+        )
       );
     
     return results.map(row => row.stock);
@@ -893,11 +904,16 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(portfolioHoldings).where(and(...whereConditions));
   }
 
-  async getPortfolioHolding(id: string): Promise<PortfolioHolding | undefined> {
-    const [holding] = await db.select().from(portfolioHoldings).where(eq(portfolioHoldings.id, id));
+  async getPortfolioHolding(id: string, userId?: string): Promise<PortfolioHolding | undefined> {
+    // CRITICAL SECURITY: If userId provided, verify ownership for tenant isolation
+    const whereClause = userId 
+      ? and(eq(portfolioHoldings.id, id), eq(portfolioHoldings.userId, userId))
+      : eq(portfolioHoldings.id, id);
+    
+    const [holding] = await db.select().from(portfolioHoldings).where(whereClause);
     if (holding) {
       await this.updateHoldingValues(holding);
-      const [updated] = await db.select().from(portfolioHoldings).where(eq(portfolioHoldings.id, id));
+      const [updated] = await db.select().from(portfolioHoldings).where(whereClause);
       return updated;
     }
     return undefined;
@@ -976,8 +992,13 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(trades).where(and(...whereConditions)).orderBy(desc(trades.executedAt));
   }
 
-  async getTrade(id: string): Promise<Trade | undefined> {
-    const [trade] = await db.select().from(trades).where(eq(trades.id, id));
+  async getTrade(id: string, userId?: string): Promise<Trade | undefined> {
+    // CRITICAL SECURITY: If userId provided, verify ownership for tenant isolation
+    const whereClause = userId
+      ? and(eq(trades.id, id), eq(trades.userId, userId))
+      : eq(trades.id, id);
+    
+    const [trade] = await db.select().from(trades).where(whereClause);
     return trade;
   }
 
@@ -2337,13 +2358,17 @@ export class DatabaseStorage implements IStorage {
       dismissedAt: null,
     });
 
-    // Count how many stock transactions exist for this ticker (for logging)
+    // Count how many stock transactions exist for THIS USER's ticker (for logging)
+    // CRITICAL: Filter by userId for accurate logging
     const stockCount = await db
       .select()
       .from(stocks)
-      .where(eq(stocks.ticker, ticker));
+      .where(and(
+        eq(stocks.ticker, ticker),
+        eq(stocks.userId, userId)
+      ));
 
-    console.log(`[RejectTicker] User ${userId} rejected ticker ${ticker} (${stockCount.length} transactions in system)`);
+    console.log(`[RejectTicker] User ${userId} rejected ticker ${ticker} (${stockCount.length} user transactions)`);
 
     return {
       userStatus: userStatus!,

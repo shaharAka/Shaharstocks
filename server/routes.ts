@@ -2511,7 +2511,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/portfolio/holdings/:id", async (req, res) => {
     try {
-      const holding = await storage.getPortfolioHolding(req.params.id);
+      // CRITICAL SECURITY: Verify authentication and ownership
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const holding = await storage.getPortfolioHolding(req.params.id, req.session.userId);
       if (!holding) {
         return res.status(404).json({ error: "Holding not found" });
       }
@@ -2523,9 +2528,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/portfolio/holdings/:id", async (req, res) => {
     try {
+      // CRITICAL SECURITY: Verify authentication and ownership before deletion
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      // Verify ownership before deleting
+      const holding = await storage.getPortfolioHolding(req.params.id, req.session.userId);
+      if (!holding) {
+        return res.status(404).json({ error: "Holding not found" });
+      }
+      
       const success = await storage.deletePortfolioHolding(req.params.id);
       if (!success) {
-        return res.status(404).json({ error: "Holding not found" });
+        return res.status(500).json({ error: "Failed to delete holding" });
       }
       res.json({ message: "Holding deleted successfully" });
     } catch (error) {
@@ -2550,7 +2566,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/trades/:id", async (req, res) => {
     try {
-      const trade = await storage.getTrade(req.params.id);
+      // CRITICAL SECURITY: Verify authentication and ownership
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const trade = await storage.getTrade(req.params.id, req.session.userId);
       if (!trade) {
         return res.status(404).json({ error: "Trade not found" });
       }

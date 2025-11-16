@@ -61,8 +61,19 @@ export default function Signup() {
       return response.json();
     },
     onSuccess: async () => {
-      // Auto-login successful - invalidate and refetch user
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
+      // CRITICAL: Clear ALL cached data to ensure fresh start
+      queryClient.clear();
+      
+      // Clear localStorage
+      const allKeys = Object.keys(localStorage);
+      allKeys.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      // Clear sessionStorage
+      sessionStorage.clear();
+      
+      // Auto-login successful - fetch new user
       await queryClient.refetchQueries({ queryKey: ["/api/auth/current-user"] });
       
       toast({

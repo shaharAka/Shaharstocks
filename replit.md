@@ -18,6 +18,11 @@ The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tai
   - Cancels any in-flight AI analysis jobs for that ticker
   - Prevents rejected stocks from appearing in opportunities query
 - **Opportunities Query Filter**: Only shows stocks where `recommendation_status='pending'` at the global level, ensuring rejected stocks don't reappear even with multiple transactions.
+- **Session Security & Data Isolation**: Complete cache clearing on logout, login, and signup to prevent cross-user data contamination:
+  - Logout: Clears ALL React Query cache, localStorage, and sessionStorage before redirecting
+  - Login: Clears ALL cached data before fetching new user's data
+  - Signup: Clears ALL cached data to ensure fresh start for new users
+  - Prevents critical security vulnerability where users could see each other's data
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (with optimistic updates and user-scoped cache keys), React Hook Form with Zod for validation.

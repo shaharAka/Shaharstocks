@@ -53,8 +53,21 @@ export default function Login() {
         return;
       }
       
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
+      // CRITICAL: Clear ALL cached data to prevent previous user's data from leaking
+      queryClient.clear();
+      
+      // Clear localStorage (except nothing - fresh start for security)
+      const allKeys = Object.keys(localStorage);
+      allKeys.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      // Clear sessionStorage
+      sessionStorage.clear();
+      
+      // Now fetch the new user's data
       await queryClient.refetchQueries({ queryKey: ["/api/auth/current-user"] });
+      
       toast({
         title: "Welcome back!",
         description: data.subscriptionStatus === "trial" 

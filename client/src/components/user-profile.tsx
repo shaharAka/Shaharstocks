@@ -68,7 +68,21 @@ export function UserProfile() {
       await apiRequest("POST", "/api/auth/logout", {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
+      // CRITICAL: Clear ALL cached data to prevent data leakage across users
+      queryClient.clear();
+      
+      // Clear localStorage (theme, viewed timestamps, etc.)
+      const keysToPreserve: string[] = []; // No keys to preserve - fresh start
+      const allKeys = Object.keys(localStorage);
+      allKeys.forEach(key => {
+        if (!keysToPreserve.includes(key)) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // Clear sessionStorage (admin secrets, etc.)
+      sessionStorage.clear();
+      
       setLocation("/login");
     },
   });

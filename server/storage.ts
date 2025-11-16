@@ -284,6 +284,7 @@ export interface IStorage {
 
   // AI Analysis Job Queue
   enqueueAnalysisJob(ticker: string, source: string, priority?: string): Promise<AiAnalysisJob>;
+  cancelAnalysisJobsForTicker(ticker: string): Promise<void>;
   dequeueNextJob(): Promise<AiAnalysisJob | undefined>;
   getJobById(jobId: string): Promise<AiAnalysisJob | undefined>;
   getJobsByTicker(ticker: string): Promise<AiAnalysisJob[]>;
@@ -2377,6 +2378,20 @@ export class DatabaseStorage implements IStorage {
 
     console.log(`[Queue] Enqueued analysis job for ${ticker} (priority: ${priority}, source: ${source})`);
     return job;
+  }
+
+  async cancelAnalysisJobsForTicker(ticker: string): Promise<void> {
+    // Cancel any pending or processing jobs for this ticker
+    await db
+      .update(aiAnalysisJobs)
+      .set({ status: "cancelled", completedAt: new Date() })
+      .where(
+        and(
+          eq(aiAnalysisJobs.ticker, ticker),
+          sql`${aiAnalysisJobs.status} IN ('pending', 'processing')`
+        )
+      );
+    console.log(`[Queue] Cancelled any active jobs for ${ticker}`);
   }
 
   async dequeueNextJob(): Promise<AiAnalysisJob | undefined> {

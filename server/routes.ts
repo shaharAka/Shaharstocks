@@ -1366,20 +1366,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.getStock(req.params.ticker);
+      const ticker = req.params.ticker.toUpperCase();
+      const stock = await storage.getStock(ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
 
+      // Cancel any active analysis jobs for this ticker
+      await storage.cancelAnalysisJobsForTicker(ticker);
+      console.log(`[Reject] Cancelled any active analysis jobs for ${ticker}`);
+
       // Update user-specific stock status
-      await storage.ensureUserStockStatus(req.session.userId, req.params.ticker);
-      await storage.updateUserStockStatus(req.session.userId, req.params.ticker, {
+      await storage.ensureUserStockStatus(req.session.userId, ticker);
+      await storage.updateUserStockStatus(req.session.userId, ticker, {
         status: "rejected",
         rejectedAt: new Date()
       });
 
       res.json({ status: "rejected", stock });
     } catch (error) {
+      console.error(`[Reject] Error rejecting ${req.params.ticker}:`, error);
       res.status(500).json({ error: "Failed to reject recommendation" });
     }
   });

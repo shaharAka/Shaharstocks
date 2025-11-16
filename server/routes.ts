@@ -1,8 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema } from "@shared/schema";
+import { db } from "./db";
+import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema, aiAnalysisJobs } from "@shared/schema";
 import { z } from "zod";
+import { eq, or } from "drizzle-orm";
 import { telegramService } from "./telegram";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
@@ -1862,10 +1864,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all stock analyses
+  // Get all stock analyses (returns null scores for stocks with active jobs to show them as "processing")
   app.get("/api/stock-analyses", async (req, res) => {
     try {
-      const analyses = await storage.getAllStockAnalyses();
+      // Get all analyses
+      const allAnalyses = await storage.getAllStockAnalyses();
+      
+      // Get tickers with active jobs (pending or processing)
+      const activeJobs = await db
+        .selectDistinct({ ticker: aiAnalysisJobs.ticker })
+        .from(aiAnalysisJobs)
+        .where(or(
+          eq(aiAnalysisJobs.status, 'pending'),
+          eq(aiAnalysisJobs.status, 'processing')
+        ));
+      
+      const activeJobTickers = new Set(activeJobs.map(j => j.ticker));
+      
+      // Return analyses with null scores for tickers with active jobs
+      // This makes those stocks show as "processing" in the UI while preserving the ticker
+      const analyses = allAnalyses.map(a => {
+        if (activeJobTickers.has(a.ticker)) {
+          // Return clean processing object with only ticker and status
+          return {
+            ticker: a.ticker,
+            status: 'processing' as const,
+            integratedScore: null,
+            aiScore: null,
+            confidenceScore: null,
+            overallRating: null,
+            summary: null,
+            recommendation: null,
+            analyzedAt: null,
+          };
+        }
+        return a;
+      });
+      
       res.json(analyses);
     } catch (error) {
       console.error("[AI Analysis] Error fetching analyses:", error);

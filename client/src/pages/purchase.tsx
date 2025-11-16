@@ -207,8 +207,9 @@ export default function Purchase() {
     mutationFn: async (ticker: string) => {
       return await apiRequest("POST", `/api/stocks/${ticker}/reject`, null);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+    onSuccess: async () => {
+      // Force immediate refetch to update UI
+      await queryClient.refetchQueries({ queryKey: ["/api/stocks/with-user-status"] });
       toast({
         title: "Opportunity Rejected",
         description: "This opportunity has been hidden",

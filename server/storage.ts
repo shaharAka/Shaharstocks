@@ -205,6 +205,7 @@ export interface IStorage {
 
   // Users
   getUsers(options?: { includeArchived?: boolean }): Promise<User[]>;
+  getAllUserIds(): Promise<string[]>;
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;

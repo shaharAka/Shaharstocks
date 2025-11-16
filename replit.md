@@ -44,14 +44,14 @@ The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tai
 ### Feature Specifications
 - **PayPal Subscription Integration**: Automated subscription activation with secure webhook verification.
 - **Company Info & News**: Integrates Finnhub for company profiles, market cap, and news with negative sentiment detection, filtering stocks below $500M market cap for purchase recommendations.
-- **Data Sources**: Real-time Telegram channel monitoring via GramJS and automated collection of SEC insider trading regulatory filings via OpenInsider (fetching both purchases and sales).
+- **Data Sources**: Real-time Telegram channel monitoring via GramJS and automated collection of SEC insider trading regulatory filings via OpenInsider (fetching both purchases and sales). Each user can customize their own OpenInsider fetch settings (filters, limits, schedules) for their isolated opportunity list.
 - **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for **Enhanced Sector ETF Analysis**). The Macro Agent calculates volatility, momentum, and relative strength for sector ETFs, applying weighted influence on recommendations.
 - **2-Week Event Horizon**: Opportunities page automatically cleans up stocks older than 2 weeks, unless followed by the user.
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
 - **Purchase Recommendation Filters**: Enforces a minimum $500M market cap.
 - **Trading Rules**: Trigger-based system for portfolio-wide or stock-specific rules based on price changes.
 - **Collaboration**: Multi-user system with stock-specific comment threads and recommendation filtering.
-- **Adaptive Stock Fetching**: Stock fetch limits adapt based on user onboarding status and user configuration, prioritizing fresh opportunities.
+- **Adaptive Stock Fetching**: Stock fetch limits adapt based on user onboarding status and user configuration, prioritizing fresh opportunities. Users can customize OpenInsider filters (insider titles, transaction values, market cap thresholds, options deal detection) to personalize their opportunity feed.
 - **Follow Stock System**: Comprehensive follow/unfollow functionality with duplicate prevention, visual indicators, and automatic Day-0 AI analysis for new followed stocks. Followed stocks are accessible via a sidebar dropdown with real-time updates.
 - **Admin Backoffice**: Comprehensive dashboard for user, subscription, and payment management with audit trails, soft/hard deletion, and password resets, featuring a two-tier admin system. Admin UI is organized into "User Management" and "Announcements" tabs.
 - **Announcement System**: A platform-wide notification system allowing admins to create feature, update, maintenance, or general announcements. Users see published announcements via a header icon that highlights when unread announcements exist. Admins have full CRUD operations.

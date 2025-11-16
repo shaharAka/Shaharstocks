@@ -3161,18 +3161,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/openinsider/fetch", async (req, res) => {
     try {
-      // DEPRECATED: In per-user tenant isolation model, each user gets stocks during onboarding
-      // This endpoint is kept for admin testing but should not be used in production
+      // Per-user tenant isolation: Each user can fetch their own opportunity list with custom filters
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const user = await storage.getUser(req.session.userId);
-      if (!user?.isAdmin) {
-        return res.status(403).json({ error: "Admin access required. Use onboarding to fetch your personal stocks." });
-      }
-      
-      // Get OpenInsider config
+      // Get OpenInsider config (currently global, but users can customize via UI)
       const config = await storage.getOpeninsiderConfig();
       if (!config || !config.enabled) {
         return res.status(400).json({ error: "OpenInsider is not configured or disabled" });
@@ -3210,8 +3204,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[OpeninsiderFetch] Options deal threshold: ${optionsDealThreshold}% (insider price >= market price)`);
       console.log(`[OpeninsiderFetch] ==============================================`);
       
-      // Fetch BOTH purchase and sale transactions
-      console.log(`[OpeninsiderFetch] Fetching both purchases AND sales...`);
+      // Fetch BOTH purchase and sale transactions for this user
+      console.log(`[OpeninsiderFetch] User ${req.session.userId}: Fetching both purchases AND sales...`);
       const [purchasesResponse, salesResponse] = await Promise.all([
         openinsiderService.fetchInsiderPurchases(
           config.fetchLimit || 50,
@@ -3238,9 +3232,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filtered_by_insider_name: purchasesResponse.stats.filtered_by_insider_name + salesResponse.stats.filtered_by_insider_name,
       };
       
-      console.log(`[OpeninsiderFetch] Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
-      console.log(`[OpeninsiderFetch] BUY transactions: ${transactions.filter(t => t.recommendation === 'buy').length}`);
-      console.log(`[OpeninsiderFetch] SELL transactions: ${transactions.filter(t => t.recommendation === 'sell').length}`);
+      console.log(`[OpeninsiderFetch] User ${req.session.userId}: Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
+      console.log(`[OpeninsiderFetch] User ${req.session.userId}: BUY transactions: ${transactions.filter(t => t.recommendation === 'buy').length}`);
+      console.log(`[OpeninsiderFetch] User ${req.session.userId}: SELL transactions: ${transactions.filter(t => t.recommendation === 'sell').length}`);
       
       const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
                                    stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 

@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
+import { useWebSocket } from "@/hooks/use-websocket";
 
 const mainMenuItems = [
   {
@@ -66,6 +67,9 @@ export function AppSidebar() {
   const newStocksCount = useNewStocksCount();
   const { user } = useUser();
   const { setOpenMobile, isMobile, state } = useSidebar();
+  
+  // Initialize WebSocket for real-time updates (replaces aggressive polling)
+  const { isConnected: wsConnected } = useWebSocket();
 
   // Fetch version info
   const { data: versionInfo } = useQuery<{ version: string; name: string }>({
@@ -73,7 +77,7 @@ export function AppSidebar() {
     staleTime: Infinity, // Version doesn't change during runtime
   });
 
-  // Fetch followed stocks with status (includes insider action, AI stance, alignment)
+  // Fetch followed stocks with status - NO POLLING, updates come via WebSocket
   const { data: followedStocks = [], isLoading: isLoadingFollowed, error: followedError } = useQuery<Array<{ 
     ticker: string; 
     currentPrice: string;
@@ -85,7 +89,7 @@ export function AppSidebar() {
   }>>({
     queryKey: ["/api/followed-stocks-with-status"],
     enabled: !!user,
-    refetchInterval: 10000, // Refresh every 10 seconds for job status updates
+    // Removed aggressive polling - updates now come via WebSocket events
     retry: false,
     meta: { ignoreError: true },
   });

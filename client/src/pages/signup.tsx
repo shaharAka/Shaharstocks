@@ -61,25 +61,13 @@ export default function Signup() {
       return response.json();
     },
     onSuccess: async () => {
-      // CRITICAL: Clear ALL cached data to ensure fresh start
-      queryClient.clear();
-      
-      // Clear localStorage
-      const allKeys = Object.keys(localStorage);
-      allKeys.forEach(key => {
-        localStorage.removeItem(key);
-      });
-      
-      // Clear sessionStorage
-      sessionStorage.clear();
-      
       toast({
         title: "Welcome to signal2!",
         description: "Your 30-day free trial has started. Enjoy full access to all features!",
       });
       
-      // Redirect to dashboard
-      setLocation("/");
+      // CRITICAL FIX: Force full page reload for clean start
+      window.location.href = "/";
     },
     onError: (error: Error) => {
       toast({

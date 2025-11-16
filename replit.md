@@ -12,16 +12,18 @@ Preferred communication style: Simple, everyday language.
 The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tailwind CSS for styling, supporting light/dark modes. Typography uses Inter for UI and JetBrains Mono for numerical data. A mobile-first, 12-column CSS Grid layout ensures responsiveness. Visuals include auto-scaling charts, color-coded avatars, and interactive guided tours (`react-joyride`) managed by a `TutorialManager` component.
 
 ### Critical Architecture Decisions
-- **Multi-Transaction Reject Flow**: The `rejectTickerForUser(userId, ticker)` method handles stocks with multiple insider trading transactions atomically. When a user rejects a ticker, it:
-  - Updates user_stock_statuses to 'rejected' with timestamp
-  - Updates ALL stocks table rows for that ticker to 'rejected' status
-  - Cancels any in-flight AI analysis jobs for that ticker
-  - Prevents rejected stocks from appearing in opportunities query
-- **Opportunities Query Filter**: Only shows stocks where `recommendation_status='pending'` at the global level, ensuring rejected stocks don't reappear even with multiple transactions.
-- **Session Security & Data Isolation**: Complete cache clearing on logout, login, and signup to prevent cross-user data contamination:
-  - Logout: Clears ALL React Query cache, localStorage, and sessionStorage before redirecting
-  - Login: Clears ALL cached data before fetching new user's data
-  - Signup: Clears ALL cached data to ensure fresh start for new users
+- **User-Specific Stock Rejection System**: The `rejectTickerForUser(userId, ticker)` method handles stock rejections on a per-user basis:
+  - Updates ONLY user_stock_statuses to 'rejected' with timestamp (not global stock status)
+  - Cancels any in-flight AI analysis jobs for that ticker for the user
+  - Rejected stocks appear in user's "rejected" filter while remaining visible to other users
+  - Global stock status remains 'pending' for visibility to other users
+  - FIX (Nov 16, 2025): Changed from global rejection to user-specific rejection to prevent stocks from disappearing entirely
+- **Opportunities Query Filter**: Queries fetch stocks where global `recommendation_status='pending'`, then frontend filters by user-specific `userStatus` to show/hide stocks per user.
+- **Session Security & Data Isolation**: Full page reload on authentication state changes to prevent cross-user data contamination:
+  - Logout: Forces full page reload to /login (clears all state, cache, and queries)
+  - Login: Forces full page reload to / (ensures fresh session with correct user data)
+  - Signup: Forces full page reload to / (clean slate for new users)
+  - FIX (Nov 16, 2025): Changed from manual cache clearing to full page reload to prevent React Query cache persistence issues
   - Prevents critical security vulnerability where users could see each other's data
 
 ### Technical Implementations

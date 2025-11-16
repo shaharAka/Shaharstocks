@@ -2214,7 +2214,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async rejectTickerForUser(userId: string, ticker: string): Promise<{ userStatus: UserStockStatus; stocksUpdated: number }> {
-    // Update user stock status
+    // Update ONLY user-specific stock status (not global stock status)
+    // This allows the stock to remain visible to other users while hiding it for this user
     await this.ensureUserStockStatus(userId, ticker);
     const userStatus = await this.updateUserStockStatus(userId, ticker, {
       status: "rejected",
@@ -2223,21 +2224,17 @@ export class DatabaseStorage implements IStorage {
       dismissedAt: null,
     });
 
-    // Update ALL stock entries for this ticker to rejected
-    const result = await db
-      .update(stocks)
-      .set({
-        recommendationStatus: "rejected",
-        rejectedAt: new Date(),
-      })
-      .where(eq(stocks.ticker, ticker))
-      .returning();
+    // Count how many stock transactions exist for this ticker (for logging)
+    const stockCount = await db
+      .select()
+      .from(stocks)
+      .where(eq(stocks.ticker, ticker));
 
-    console.log(`[RejectTicker] Rejected ${result.length} transactions for ${ticker} (user: ${userId})`);
+    console.log(`[RejectTicker] User ${userId} rejected ticker ${ticker} (${stockCount.length} transactions in system)`);
 
     return {
       userStatus: userStatus!,
-      stocksUpdated: result.length,
+      stocksUpdated: stockCount.length,
     };
   }
 

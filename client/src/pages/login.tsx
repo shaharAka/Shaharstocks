@@ -53,18 +53,6 @@ export default function Login() {
         return;
       }
       
-      // CRITICAL: Clear ALL cached data to prevent previous user's data from leaking
-      queryClient.clear();
-      
-      // Clear localStorage (except nothing - fresh start for security)
-      const allKeys = Object.keys(localStorage);
-      allKeys.forEach(key => {
-        localStorage.removeItem(key);
-      });
-      
-      // Clear sessionStorage
-      sessionStorage.clear();
-      
       toast({
         title: "Welcome back!",
         description: data.subscriptionStatus === "trial" 
@@ -72,8 +60,9 @@ export default function Login() {
           : "You have successfully logged in.",
       });
       
-      // Navigate - the UserProvider will automatically fetch current user
-      setLocation("/");
+      // CRITICAL FIX: Force full page reload to prevent cross-user data contamination
+      // This ensures all React Query cache, component state, and ongoing queries are cleared
+      window.location.href = "/";
     },
     onError: (error: any) => {
       if (error.trialExpired) {

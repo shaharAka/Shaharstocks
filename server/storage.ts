@@ -2170,9 +2170,10 @@ export class DatabaseStorage implements IStorage {
       const twoWeeksAgoString = twoWeeksAgo.toISOString().split('T')[0]; // Format as YYYY-MM-DD
       
       // Get all stocks with user statuses, filtered by:
-      // 1. Global stock status must be 'pending' (not rejected at stock level)
-      // 2. Within last 2 weeks (insiderTradeDate >= 2 weeks ago), OR followed by user
-      // 3. User status filtering happens in frontend (excluded rejected/dismissed)
+      // 1. CRITICAL: Stocks must belong to this user (userId)
+      // 2. Global stock status must be 'pending' (not rejected at stock level)
+      // 3. Within last 2 weeks (insiderTradeDate >= 2 weeks ago), OR followed by user
+      // 4. User status filtering happens in frontend (excluded rejected/dismissed)
       // Note: insiderTradeDate is stored as text (YYYY-MM-DD), so compare with string
       const results = await db
         .select({
@@ -2200,6 +2201,7 @@ export class DatabaseStorage implements IStorage {
         )
         .where(
           and(
+            eq(stocks.userId, userId), // CRITICAL: Filter by user
             eq(stocks.recommendationStatus, 'pending'),
             sql`(${stocks.insiderTradeDate} >= ${twoWeeksAgoString} OR ${followedStocks.ticker} IS NOT NULL)`
           )

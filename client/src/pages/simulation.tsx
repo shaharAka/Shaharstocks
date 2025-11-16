@@ -120,7 +120,7 @@ export default function Simulation() {
 
   const { data: telegramStatus } = useQuery<{ isConnected: boolean }>({
     queryKey: ["/api/telegram/status"],
-    refetchInterval: 10000, // Check every 10 seconds
+    // Removed aggressive polling - WebSocket invalidates cache on updates
     enabled: featureFlags?.enableTelegram ?? false,
   });
 

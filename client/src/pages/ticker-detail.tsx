@@ -72,7 +72,7 @@ export default function TickerDetail() {
   const { data: analysisJobs = [] } = useQuery<any[]>({
     queryKey: ["/api/analysis-jobs", { ticker }],
     enabled: !!ticker,
-    refetchInterval: 5000, // Poll every 5 seconds
+    // Removed aggressive polling - WebSocket invalidates cache on updates
     retry: false,
     meta: { ignoreError: true },
   });

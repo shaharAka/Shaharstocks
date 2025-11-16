@@ -86,7 +86,7 @@ export default function Settings() {
 
   const { data: status } = useQuery<{ isConnected: boolean; hasClient: boolean }>({
     queryKey: ["/api/telegram/status"],
-    refetchInterval: 5000,
+    // Removed aggressive polling - WebSocket invalidates cache on updates
     enabled: featureFlags?.enableTelegram ?? false,
   });
 

@@ -251,9 +251,9 @@ export default function Signup() {
               <div className="flex items-start gap-3">
                 <TrendingUpIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">AI-Scored Opportunities</h3>
+                  <h3 className="font-semibold text-sm mb-1">Insider Trading Signals</h3>
                   <p className="text-sm text-muted-foreground">
-                    Browse stocks from SEC insider trading filings with AI scores and buy/hold/sell recommendations. Follow stocks to receive daily briefs with fresh trading guidance.
+                    Track SEC insider transactions with dual-agent AI analysis combining fundamental data and sector momentum. Get AI-scored buy/sell recommendations with personalized filters.
                   </p>
                 </div>
               </div>
@@ -261,9 +261,9 @@ export default function Signup() {
               <div className="flex items-start gap-3">
                 <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Smart Notifications & Daily Briefs</h3>
+                  <h3 className="font-semibold text-sm mb-1">Real-Time Portfolio Tracking</h3>
                   <p className="text-sm text-muted-foreground">
-                    Get alerts for high-score buy/sell signals, popular stocks, and stance changes. Followed stocks receive daily AI briefs with confidence scores and key highlights.
+                    Monitor holdings with live P&L tracking, automated price updates, and intelligent notifications for high-value opportunities and position changes.
                   </p>
                 </div>
               </div>
@@ -271,9 +271,9 @@ export default function Signup() {
               <div className="flex items-start gap-3">
                 <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Trading Rules & Simulation</h3>
+                  <h3 className="font-semibold text-sm mb-1">Automated Trading Rules</h3>
                   <p className="text-sm text-muted-foreground">
-                    Create automated trading rules based on price triggers. Run backtests on historical data and visualize rule boundaries with simulation charts.
+                    Create trigger-based rules for automated trade execution. Backtest strategies with historical data and visualize performance with simulation charts.
                   </p>
                 </div>
               </div>

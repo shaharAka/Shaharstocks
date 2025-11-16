@@ -73,9 +73,6 @@ export default function Signup() {
       // Clear sessionStorage
       sessionStorage.clear();
       
-      // Auto-login successful - fetch new user
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/current-user"] });
-      
       toast({
         title: "Welcome to signal2!",
         description: "Your 30-day free trial has started. Enjoy full access to all features!",

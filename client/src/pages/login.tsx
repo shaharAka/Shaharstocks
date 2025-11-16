@@ -65,15 +65,14 @@ export default function Login() {
       // Clear sessionStorage
       sessionStorage.clear();
       
-      // Now fetch the new user's data
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/current-user"] });
-      
       toast({
         title: "Welcome back!",
         description: data.subscriptionStatus === "trial" 
           ? "Enjoy your free trial!"
           : "You have successfully logged in.",
       });
+      
+      // Navigate - the UserProvider will automatically fetch current user
       setLocation("/");
     },
     onError: (error: any) => {

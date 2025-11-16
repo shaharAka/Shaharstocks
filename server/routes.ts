@@ -2115,8 +2115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if stock became popular (>10 followers) and notify all followers
       try {
-        const allFollowedStocks = await storage.getUserFollowedStocks(''); // Get all follows for this ticker across users
-        const followerCount = allFollowedStocks.filter((f: any) => f.ticker === ticker).length;
+        const followerCount = await storage.getFollowerCountForTicker(ticker);
         
         if (followerCount > 10) {
           console.log(`[Follow] Stock ${ticker} is popular with ${followerCount} followers, creating notifications...`);
@@ -2126,10 +2125,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const stockData = stock as any;
           
           // Notify all followers (including the one who just followed)
-          for (const follower of allFollowedStocks.filter((f: any) => f.ticker === ticker)) {
+          const followerUserIds = await storage.getFollowerUserIdsForTicker(ticker);
+          for (const followerUserId of followerUserIds) {
             try {
               await storage.createNotification({
-                userId: follower.userId,
+                userId: followerUserId,
                 ticker,
                 type: 'popular_stock',
                 message: `${ticker} is trending! ${followerCount} traders are now following this stock`,
@@ -2139,11 +2139,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } catch (notifError) {
               // Ignore duplicate notification errors
               if (notifError instanceof Error && !notifError.message.includes('unique constraint')) {
-                console.error(`[Follow] Failed to create popular stock notification for user ${follower.userId}:`, notifError);
+                console.error(`[Follow] Failed to create popular stock notification for user ${followerUserId}:`, notifError);
               }
             }
           }
-          console.log(`[Follow] Created ${followerCount} popular_stock notifications for ${ticker}`);
+          console.log(`[Follow] Created ${followerUserIds.length} popular_stock notifications for ${ticker}`);
         }
       } catch (popularError) {
         console.error(`[Follow] Failed to check/create popular stock notifications:`, popularError);

@@ -259,6 +259,9 @@ export interface IStorage {
     aiScore?: number | null;
     stanceAlignment?: 'act' | 'hold' | null;
   }>>;
+  // Cross-user aggregation for "popular stock" notifications
+  getFollowerCountForTicker(ticker: string): Promise<number>;
+  getFollowerUserIdsForTicker(ticker: string): Promise<string[]>;
   getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]>;
   getDailyBriefForUser(userId: string, ticker: string, briefDate: string): Promise<DailyBrief | undefined>;
   createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief>;
@@ -1885,6 +1888,23 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return true;
+  }
+
+  // Cross-user aggregation for "popular stock" notifications
+  async getFollowerCountForTicker(ticker: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(followedStocks)
+      .where(eq(followedStocks.ticker, ticker));
+    return result[0]?.count || 0;
+  }
+
+  async getFollowerUserIdsForTicker(ticker: string): Promise<string[]> {
+    const result = await db
+      .select({ userId: followedStocks.userId })
+      .from(followedStocks)
+      .where(eq(followedStocks.ticker, ticker));
+    return result.map(r => r.userId);
   }
 
   async getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>> {

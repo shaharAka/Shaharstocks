@@ -1367,23 +1367,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker.toUpperCase();
-      const stock = await storage.getStock(ticker);
-      if (!stock) {
-        return res.status(404).json({ error: "Stock not found" });
-      }
-
+      
       // Cancel any active analysis jobs for this ticker
       await storage.cancelAnalysisJobsForTicker(ticker);
       console.log(`[Reject] Cancelled any active analysis jobs for ${ticker}`);
 
-      // Update user-specific stock status
-      await storage.ensureUserStockStatus(req.session.userId, ticker);
-      await storage.updateUserStockStatus(req.session.userId, ticker, {
-        status: "rejected",
-        rejectedAt: new Date()
-      });
+      // Reject ALL transactions for this ticker (handles multiple transactions per ticker)
+      const result = await storage.rejectTickerForUser(req.session.userId, ticker);
+      
+      console.log(`[Reject] Rejected ticker ${ticker} - updated ${result.stocksUpdated} stock entries`);
 
-      res.json({ status: "rejected", stock });
+      res.json({ 
+        status: "rejected", 
+        ticker,
+        stocksUpdated: result.stocksUpdated,
+        message: `Rejected ${result.stocksUpdated} transaction(s) for ${ticker}`
+      });
     } catch (error) {
       console.error(`[Reject] Error rejecting ${req.params.ticker}:`, error);
       res.status(500).json({ error: "Failed to reject recommendation" });
@@ -1677,22 +1676,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const ticker of tickers) {
         try {
           console.log(`[BULK REJECT] Processing ticker: ${ticker}`);
-          const stock = await storage.getStock(ticker);
-          if (!stock) {
-            console.log(`[BULK REJECT] Stock ${ticker} not found`);
-            errors.push(`${ticker}: not found`);
-            continue;
-          }
-
-          console.log(`[BULK REJECT] Ensuring user stock status for user ${req.session.userId}, ticker ${ticker}`);
-          await storage.ensureUserStockStatus(req.session.userId, ticker);
           
-          console.log(`[BULK REJECT] Updating user stock status to rejected`);
-          const updated = await storage.updateUserStockStatus(req.session.userId, ticker, {
-            status: "rejected",
-            rejectedAt: new Date()
-          });
-          console.log(`[BULK REJECT] Update result for ${ticker}:`, updated);
+          // Cancel any active analysis jobs for this ticker
+          await storage.cancelAnalysisJobsForTicker(ticker);
+          
+          // Reject ALL transactions for this ticker (handles multiple transactions per ticker)
+          const result = await storage.rejectTickerForUser(req.session.userId, ticker);
+          console.log(`[BULK REJECT] Rejected ${ticker} - updated ${result.stocksUpdated} stock entries`);
 
           success++;
         } catch (err) {

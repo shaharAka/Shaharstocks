@@ -265,6 +265,7 @@ export interface IStorage {
   createUserStockStatus(status: InsertUserStockStatus): Promise<UserStockStatus>;
   updateUserStockStatus(userId: string, ticker: string, updates: Partial<UserStockStatus>): Promise<UserStockStatus | undefined>;
   ensureUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus>;
+  rejectTickerForUser(userId: string, ticker: string): Promise<{ userStatus: UserStockStatus; stocksUpdated: number }>;
 
   // Stock Views
   markStockAsViewed(ticker: string, userId: string): Promise<StockView>;
@@ -2068,10 +2069,10 @@ export class DatabaseStorage implements IStorage {
       twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
       const twoWeeksAgoString = twoWeeksAgo.toISOString().split('T')[0]; // Format as YYYY-MM-DD
       
-      // Get all stocks with user statuses, filtered by 2-week horizon unless followed
-      // Stocks must be either:
-      // 1. Within last 2 weeks (insiderTradeDate >= 2 weeks ago), OR
-      // 2. Followed by the user
+      // Get all stocks with user statuses, filtered by:
+      // 1. Global stock status must be 'pending' (not rejected at stock level)
+      // 2. Within last 2 weeks (insiderTradeDate >= 2 weeks ago), OR followed by user
+      // 3. User status filtering happens in frontend (excluded rejected/dismissed)
       // Note: insiderTradeDate is stored as text (YYYY-MM-DD), so compare with string
       const results = await db
         .select({
@@ -2098,7 +2099,10 @@ export class DatabaseStorage implements IStorage {
           )
         )
         .where(
-          sql`(${stocks.insiderTradeDate} >= ${twoWeeksAgoString} OR ${followedStocks.ticker} IS NOT NULL)`
+          and(
+            eq(stocks.recommendationStatus, 'pending'),
+            sql`(${stocks.insiderTradeDate} >= ${twoWeeksAgoString} OR ${followedStocks.ticker} IS NOT NULL)`
+          )
         )
         .orderBy(desc(stocks.insiderTradeDate))
         .limit(limit);
@@ -2207,6 +2211,34 @@ export class DatabaseStorage implements IStorage {
       return existing;
     }
     return await this.createUserStockStatus({ userId, ticker, status: "pending" });
+  }
+
+  async rejectTickerForUser(userId: string, ticker: string): Promise<{ userStatus: UserStockStatus; stocksUpdated: number }> {
+    // Update user stock status
+    await this.ensureUserStockStatus(userId, ticker);
+    const userStatus = await this.updateUserStockStatus(userId, ticker, {
+      status: "rejected",
+      rejectedAt: new Date(),
+      approvedAt: null,
+      dismissedAt: null,
+    });
+
+    // Update ALL stock entries for this ticker to rejected
+    const result = await db
+      .update(stocks)
+      .set({
+        recommendationStatus: "rejected",
+        rejectedAt: new Date(),
+      })
+      .where(eq(stocks.ticker, ticker))
+      .returning();
+
+    console.log(`[RejectTicker] Rejected ${result.length} transactions for ${ticker} (user: ${userId})`);
+
+    return {
+      userStatus: userStatus!,
+      stocksUpdated: result.length,
+    };
   }
 
   async markStockAsViewed(ticker: string, userId: string): Promise<StockView> {

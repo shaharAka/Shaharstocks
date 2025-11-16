@@ -11,6 +11,14 @@ Preferred communication style: Simple, everyday language.
 ### UI/UX Decisions
 The UI/UX is built with shadcn/ui (New York style), Radix UI primitives, and Tailwind CSS for styling, supporting light/dark modes. Typography uses Inter for UI and JetBrains Mono for numerical data. A mobile-first, 12-column CSS Grid layout ensures responsiveness. Visuals include auto-scaling charts, color-coded avatars, and interactive guided tours (`react-joyride`) managed by a `TutorialManager` component.
 
+### Critical Architecture Decisions
+- **Multi-Transaction Reject Flow**: The `rejectTickerForUser(userId, ticker)` method handles stocks with multiple insider trading transactions atomically. When a user rejects a ticker, it:
+  - Updates user_stock_statuses to 'rejected' with timestamp
+  - Updates ALL stocks table rows for that ticker to 'rejected' status
+  - Cancels any in-flight AI analysis jobs for that ticker
+  - Prevents rejected stocks from appearing in opportunities query
+- **Opportunities Query Filter**: Only shows stocks where `recommendation_status='pending'` at the global level, ensuring rejected stocks don't reappear even with multiple transactions.
+
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (with optimistic updates and user-scoped cache keys), React Hook Form with Zod for validation.
 - **Backend**: Express.js with TypeScript, RESTful API design, JSON body parsing, Zod schema validation.

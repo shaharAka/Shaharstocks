@@ -2662,9 +2662,13 @@ export class DatabaseStorage implements IStorage {
 
       // Create or update analysis record with "analyzing" status
       // This ensures the frontend can show the analyzing state immediately
+      // But DON'T overwrite completed analysis with integrated scores
       const existingAnalysis = await this.getStockAnalysis(ticker);
       if (existingAnalysis) {
-        await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
+        // Only set to "analyzing" if not already completed with an integrated score
+        if (existingAnalysis.status !== "completed" || !existingAnalysis.integratedScore) {
+          await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
+        }
       } else {
         await db.insert(stockAnalyses).values({
           ticker,

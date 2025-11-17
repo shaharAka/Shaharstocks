@@ -81,8 +81,8 @@ const getSignalTooltip = (score: number, recommendation: string): string => {
     return `Very Strong ${action} Opportunity`;
   } else if (score >= 70) {
     return `Strong ${action} Opportunity`;
-  } else if (score >= 50) {
-    return `Moderate ${action} Signal`;
+  } else if (score >= 40) {
+    return `Neutral ${action} Signal`;
   } else {
     return `Weak ${action} Signal`;
   }

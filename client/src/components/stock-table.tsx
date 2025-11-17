@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Stock, User } from "@shared/schema";
 import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 import { AnalysisPhaseIndicator } from "@/components/analysis-phase-indicator";
@@ -204,16 +205,31 @@ export function StockTable({
               </TableHead>
               <TableHead className="hidden md:table-cell min-w-[120px]">Company</TableHead>
               <TableHead className="text-right hidden lg:table-cell w-[85px]">
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  onClick={() => handleSort("aiScore")}
-                  className="px-1"
-                  data-testid="sort-ai-score"
-                >
-                  AI Score
-                  <SortIcon field="aiScore" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="lg"
+                      onClick={() => handleSort("aiScore")}
+                      className="px-1"
+                      data-testid="sort-ai-score"
+                    >
+                      Signal
+                      <SortIcon field="aiScore" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs text-xs">
+                    <div className="space-y-1">
+                      <p className="font-semibold">Opportunity Strength (0-100)</p>
+                      <p className="text-muted-foreground">
+                        <span className="text-success">BUY:</span> High score = strong company + insider buying
+                      </p>
+                      <p className="text-muted-foreground">
+                        <span className="text-destructive">SELL:</span> High score = weak company + insider selling
+                      </p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
               </TableHead>
               <TableHead className="min-w-[70px]">
                 <Button
@@ -361,7 +377,7 @@ export function StockTable({
                             microCompleted={stock.microAnalysisCompleted}
                             macroCompleted={stock.macroAnalysisCompleted}
                             combinedCompleted={stock.combinedAnalysisCompleted}
-                            currentPhase={(stock as any).analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "complete" | null | undefined}
+                            currentPhase={(stock as any).analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "complete" | null | undefined}
                             size="sm"
                           />
                         </div>

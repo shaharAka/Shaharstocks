@@ -10,7 +10,7 @@ interface AnalysisPhaseIndicatorProps {
   microCompleted: boolean;
   macroCompleted: boolean;
   combinedCompleted: boolean;
-  currentPhase?: "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "complete" | null;
+  currentPhase?: "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "complete" | null;
   stepDetails?: {
     phase?: string;
     substep?: string;

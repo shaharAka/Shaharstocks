@@ -300,21 +300,27 @@ Provide your analysis in this EXACT JSON format:
   "recommendation": "Clear 2-3 sentence recommendation: ${isBuy ? "BUY or PASS" : (isSell ? "SELL/AVOID or PASS" : "Action")} for 1-2 week window, and why"
 }
 
-MICRO SCORE RUBRIC (confidenceScore: 0-100 scale):
-This is your STOCK-SPECIFIC (MICRO) analysis score based on fundamentals, technicals, and insider signals.
+CRITICAL: OPPORTUNITY SCORE RUBRIC (confidenceScore: 0-100 scale)
+⚠️ THIS SCORE REPRESENTS "OPPORTUNITY STRENGTH" NOT "COMPANY QUALITY" ⚠️
+
 ${isBuy 
-  ? `- 90-100: STRONG BUY - All signals align, insider buy is highly validated, excellent 1-2 week setup
-- 70-89: BUY - Good fundamentals support insider signal, favorable near-term outlook
-- 50-69: WEAK BUY - Mixed signals, insider buy has some merit but concerns exist
-- 30-49: PASS - Fundamentals don't support insider buy, or significant risks
-- 0-29: STRONG PASS - Red flags contradict insider signal, avoid`
+  ? `For INSIDER BUYING (BUY signal):
+HIGH SCORE = STRONG BUY OPPORTUNITY (good company + insiders buying = strong opportunity)
+- 90-100: EXCEPTIONAL BUY - Company fundamentals excellent, insider buy highly validated, all signals bullish
+- 70-89: STRONG BUY - Solid fundamentals support insider confidence, favorable 1-2 week outlook  
+- 50-69: MODERATE BUY - Mixed signals, insider buy has merit but some concerns exist
+- 30-49: WEAK/PASS - Fundamentals don't strongly support insider buy, or significant risks present
+- 0-29: AVOID - Red flags contradict insider buy signal, company has serious issues`
   : (isSell 
-    ? `- 90-100: STRONG SELL/AVOID - All signals align, insider sell is highly validated by weak fundamentals, avoid this stock
-- 70-89: SELL/AVOID - Weak fundamentals justify insider sell, bearish near-term outlook
-- 50-69: WEAK SELL - Mixed signals, insider sell has some merit but not conclusive
-- 30-49: PASS - Fundamentals remain strong despite sell, likely routine portfolio management
-- 0-29: IGNORE SELL - Strong fundamentals contradict sell signal, false alarm`
-    : `- 90-100: STRONG SIGNAL - All signals align
+    ? `For INSIDER SELLING (SELL signal):  
+HIGH SCORE = STRONG SELL OPPORTUNITY (weak company + insiders selling = strong bearish signal)
+- 90-100: EXCEPTIONAL SELL - Company fundamentals very weak, insider sell highly validated by deteriorating metrics, avoid this stock
+- 70-89: STRONG SELL - Weak fundamentals justify insider sell, significant bearish indicators present
+- 50-69: MODERATE SELL - Some weakness validates sell but not conclusive, proceed with caution
+- 30-49: WEAK/PASS - Fundamentals remain relatively strong, likely routine portfolio rebalancing
+- 0-29: IGNORE SELL - Strong fundamentals contradict sell signal, company remains healthy`
+    : `For MIXED SIGNALS:
+- 90-100: STRONG SIGNAL - All signals align
 - 70-89: VALIDATED - Fundamentals support insider signal
 - 50-69: MIXED - Some merit but concerns exist
 - 30-49: PASS - Fundamentals don't support signal

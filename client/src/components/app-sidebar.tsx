@@ -247,7 +247,7 @@ export function AppSidebar() {
                               <Badge 
                                 className={cn(
                                   "h-4 px-1 text-[10px] font-bold flex-shrink-0 border-0",
-                                  stock.integratedScore >= 90 && "bg-amber-500 text-white dark:bg-amber-600",
+                                  stock.integratedScore >= 90 && "bg-gradient-to-br from-amber-400 to-amber-600 text-white dark:from-amber-500 dark:to-amber-700",
                                   stock.integratedScore >= 70 && stock.integratedScore < 90 && "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
                                   stock.integratedScore >= 50 && stock.integratedScore < 70 && "bg-secondary text-secondary-foreground",
                                   stock.integratedScore < 50 && "bg-secondary text-muted-foreground opacity-60"

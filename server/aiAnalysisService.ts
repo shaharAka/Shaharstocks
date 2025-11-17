@@ -442,18 +442,19 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     
     // Build technical trend context from initial AI analysis if available
     let trendContext = "";
+    let signalScore = 50; // Default if no analysis available
     if (previousAnalysis?.technicalAnalysis) {
       const tech = previousAnalysis.technicalAnalysis;
       const trend = tech.trend || "neutral"; // bullish, bearish, neutral
       const momentum = tech.momentum || "weak"; // strong, moderate, weak
-      const score = typeof tech.score === "number" ? tech.score : 50; // 0-100, preserve 0 as valid bearish score
+      signalScore = typeof tech.score === "number" ? tech.score : 50; // 0-100, preserve 0 as valid bearish score
       const signals = Array.isArray(tech.signals) ? tech.signals.slice(0, 3) : [];
       
       trendContext = `
 INITIAL AI TECHNICAL ANALYSIS (baseline trend from insider opportunity):
 - Trend: ${trend}
 - Momentum: ${momentum}
-- Technical Score: ${score}/100
+- Signal Score: ${signalScore}/100 ${signalScore >= 90 ? '🔥 VERY HIGH' : signalScore >= 70 ? '⚡ HIGH' : signalScore >= 50 ? '➡️  MODERATE' : '⚠️  LOW'}
 ${signals.length > 0 ? `- Signals: ${signals.join(', ')}` : ''}`;
     }
     
@@ -496,38 +497,105 @@ HOLD SHORT (keep short position open):
 Decision: COVER when you've profited enough OR trend reversing against you. HOLD when bearish trend continues. For shorts, price FALLING = your gain.`
     } else {
       // User doesn't own - focus on entry evaluation with ENTER/WAIT logic
+      const scoreGuidance = isBuyOpportunity
+        ? signalScore >= 90
+          ? "🔥 VERY HIGH SIGNAL (90-100): Be HIGHLY LENIENT on entry. Even minor dips or mixed signals should trigger entry. This is a premium opportunity."
+          : signalScore >= 70
+          ? "⚡ HIGH SIGNAL (70-89): Be MODERATELY LENIENT on entry. Accept small pullbacks and minor concerns as buying opportunities."
+          : signalScore >= 50
+          ? "➡️  MODERATE SIGNAL (50-69): Be BALANCED. Require confirmatory signals before entry. Don't rush but don't be overly cautious."
+          : "⚠️  LOW SIGNAL (<50): Be CAUTIOUS. Require strong technical confirmation and favorable price action. Consider avoiding entry unless setup is perfect."
+        : signalScore <= 30
+        ? "🔥 VERY HIGH SHORT SIGNAL (<30): Be HIGHLY LENIENT on short entry. Fundamental weakness confirmed. Even minor bearish signals should trigger short."
+        : signalScore <= 50
+        ? "⚡ HIGH SHORT SIGNAL (30-50): Be MODERATELY LENIENT on short entry. Weakness evident, accept minor setups."
+        : signalScore <= 70
+        ? "➡️  MODERATE SHORT SIGNAL (50-70): Be BALANCED. Require confirmatory bearish signals before shorting."
+        : "⚠️  LOW SHORT SIGNAL (>70): Be CAUTIOUS. Company looks strong, avoid shorting unless very strong bearish breakdown occurs.";
+      
       stanceRules = isBuyOpportunity
         ? `STANCE RULES for ENTRY DECISION (Buy Opportunity):
-Use initial trend to validate insider signal for entry.
+${scoreGuidance}
 
 ⚠️ CRITICAL: You must choose "enter" or "wait" - NO OTHER VALUES.
 
+SIGNAL SCORE-BASED ENTRY THRESHOLDS:
+${signalScore >= 90 ? `
+VERY HIGH SIGNAL (90-100) - AGGRESSIVE ENTRY:
 ENTER (ACT):
-- "enter" if initial trend bullish/strong + price stable or up
-- "enter" if initial trend bullish/moderate + price -2% to -4% (dip entry)
-
+- "enter" if ANY bullish signal present (very lenient threshold)
+- "enter" even if price down -2% to -5% (premium dip buying opportunity)
+- "enter" if trend neutral but score this high (trust the signal)
 WAIT:
-- "wait" if initial trend neutral, price sideways (wait for clarity)
-- "wait" if initial trend bullish but price action mixed
-- "wait" if initial trend bearish/weak + price falling (avoid entry)
+- "wait" ONLY if catastrophic news or price -8%+ breakdown invalidates thesis` 
+: signalScore >= 70 ? `
+HIGH SIGNAL (70-89) - LENIENT ENTRY:
+ENTER (ACT):
+- "enter" if trend bullish/moderate + price stable or up
+- "enter" if trend bullish + price -2% to -5% (good dip entry on high-quality signal)
+- "enter" if trend neutral but price showing support (score gives benefit of doubt)
+WAIT:
+- "wait" if trend bearish/weak despite high score (conflicting signals)
+- "wait" if price -5%+ breakdown (too much risk even with good score)`
+: signalScore >= 50 ? `
+MODERATE SIGNAL (50-69) - BALANCED ENTRY:
+ENTER (ACT):
+- "enter" if trend bullish/strong + price stable or up
+- "enter" if trend bullish/moderate + price -2% to -3% (small dip only)
+WAIT:
+- "wait" if trend neutral (need stronger confirmation for moderate score)
+- "wait" if price -4%+ (too much weakness for moderate signal)
+- "wait" if conflicting signals or mixed price action`
+: `
+LOW SIGNAL (<50) - CAUTIOUS ENTRY:
+ENTER (ACT):
+- "enter" ONLY if trend bullish/strong + price +2%+ breakout (perfect setup required)
+WAIT:
+- "wait" if ANY uncertainty, neutral trend, or negative price action
+- "wait" if score this low indicates fundamental concerns (be very selective)`}
 
-Decision: ENTER when initial trend confirms insider buy signal. WAIT if trend weak or unclear.`
+Decision: Weight the SIGNAL SCORE heavily. High scores deserve aggressive entry, low scores demand caution.`
         : `STANCE RULES for SHORT ENTRY DECISION (Sell/Short Opportunity):
-Insiders sold. Low AI score indicates company weakness. Evaluate SHORT ENTRY.
+${scoreGuidance}
 
 ⚠️ CRITICAL: You must choose "short" or "wait" - NO OTHER VALUES.
 
-SHORT (ACT - open short position):
-- "short" if initial trend bearish/weak + price breaking down (trend confirms weakness)
-- "short" if initial trend bearish/moderate + price rallying +2% to +4% (rally into resistance, short the bounce)
-- "short" if low AI score (<30) confirms fundamental weakness + any bearish technical signal
+SIGNAL SCORE-BASED SHORT ENTRY THRESHOLDS:
+${signalScore <= 30 ? `
+VERY HIGH SHORT SIGNAL (<30) - AGGRESSIVE SHORT ENTRY:
+SHORT (ACT):
+- "short" if ANY bearish signal present (very lenient threshold for weak companies)
+- "short" even if price up +2% to +5% (rally into resistance, premium shorting opportunity)
+- "short" if trend neutral but score this low (fundamental weakness overrides technical neutrality)
+WAIT:
+- "wait" ONLY if surprise positive news or price +8%+ breakout invalidates bearish thesis`
+: signalScore <= 50 ? `
+HIGH SHORT SIGNAL (30-50) - LENIENT SHORT ENTRY:
+SHORT (ACT):
+- "short" if trend bearish/weak + price breaking down
+- "short" if trend bearish/moderate + price rallying +2% to +4% (short the bounce on weak stock)
+- "short" if trend neutral but price showing resistance (score supports short bias)
+WAIT:
+- "wait" if trend bullish despite low score (conflicting signals, wait for breakdown)
+- "wait" if price +5%+ breakout (too much momentum even for weak stock)`
+: signalScore <= 70 ? `
+MODERATE SHORT SIGNAL (50-70) - BALANCED SHORT ENTRY:
+SHORT (ACT):
+- "short" if trend bearish/strong + price breaking down
+- "short" if trend bearish/moderate + price +2% to +3% rally (small bounce only)
+WAIT:
+- "wait" if trend neutral (need stronger bearish confirmation for moderate score)
+- "wait" if price +4%+ (too much strength for moderate short signal)
+- "wait" if conflicting signals or mixed price action`
+: `
+LOW SHORT SIGNAL (>70) - VERY CAUTIOUS SHORT ENTRY:
+SHORT (ACT):
+- "short" ONLY if trend bearish/strong + price -5%+ breakdown (perfect breakdown required on strong company)
+WAIT:
+- "wait" if ANY bullish signals, neutral trend, or positive price action
+- "wait" if score this high indicates strong fundamentals (avoid shorting unless exceptional setup)`}
 
-WAIT (don't open short):
-- "wait" if initial trend bullish/strong + price rising (don't fight the trend)
-- "wait" if initial trend neutral, price sideways (no clear short setup)
-- "wait" if positive news contradicts bearish thesis (wait for clarity)
-
-Decision: SHORT when bearish trend + weak fundamentals align. WAIT if trend unclear or bullish.`
+Decision: Weight the SIGNAL SCORE heavily for shorts. Very low scores (<30) deserve aggressive short entry, high scores (>70) demand extreme caution before shorting.`
     }
     
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.

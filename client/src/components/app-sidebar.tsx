@@ -244,8 +244,13 @@ export function AppSidebar() {
                             {/* AI Integrated Score Badge (next to B/S badge) - shows comprehensive 0-100 score */}
                             {stock.integratedScore != null && !isProcessing && (
                               <Badge 
-                                variant={stock.integratedScore >= 75 ? "default" : stock.integratedScore >= 50 ? "secondary" : "outline"}
-                                className="h-4 px-1 text-[10px] font-bold flex-shrink-0"
+                                className={cn(
+                                  "h-4 px-1 text-[10px] font-bold flex-shrink-0 border-0",
+                                  stock.integratedScore >= 90 && "bg-amber-500 text-white dark:bg-amber-600",
+                                  stock.integratedScore >= 70 && stock.integratedScore < 90 && "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+                                  stock.integratedScore >= 50 && stock.integratedScore < 70 && "bg-secondary text-secondary-foreground",
+                                  stock.integratedScore < 50 && "bg-secondary text-muted-foreground opacity-60"
+                                )}
                                 data-testid={`badge-ai-score-${stock.ticker}`}
                               >
                                 {stock.integratedScore}

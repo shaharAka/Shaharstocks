@@ -517,85 +517,89 @@ Decision: COVER when you've profited enough OR trend reversing against you. HOLD
         ? `STANCE RULES for ENTRY DECISION (Buy Opportunity):
 ${scoreGuidance}
 
-⚠️ CRITICAL: You must choose "enter" or "wait" - NO OTHER VALUES.
+⚠️ CRITICAL: You can ONLY choose "buy" or "hold" - NO OTHER VALUES.
+- "buy" = Enter position / Take the opportunity NOW
+- "hold" = Wait for better setup / Don't enter yet
 
 SIGNAL SCORE-BASED ENTRY THRESHOLDS:
 ${signalScore >= 90 ? `
 VERY HIGH SIGNAL (90-100) - AGGRESSIVE ENTRY:
-ENTER (ACT):
-- "enter" if ANY bullish signal present (very lenient threshold)
-- "enter" even if price down -2% to -5% (premium dip buying opportunity)
-- "enter" if trend neutral but score this high (trust the signal)
-WAIT:
-- "wait" ONLY if catastrophic news or price -8%+ breakdown invalidates thesis` 
+BUY (ACT):
+- "buy" if ANY bullish signal present (very lenient threshold)
+- "buy" even if price down -2% to -5% (premium dip buying opportunity)
+- "buy" if trend neutral but score this high (trust the signal)
+HOLD (WAIT):
+- "hold" ONLY if catastrophic news or price -8%+ breakdown invalidates thesis` 
 : signalScore >= 70 ? `
 HIGH SIGNAL (70-89) - LENIENT ENTRY:
-ENTER (ACT):
-- "enter" if trend bullish/moderate + price stable or up
-- "enter" if trend bullish + price -2% to -5% (good dip entry on high-quality signal)
-- "enter" if trend neutral but price showing support (score gives benefit of doubt)
-WAIT:
-- "wait" if trend bearish/weak despite high score (conflicting signals)
-- "wait" if price -5%+ breakdown (too much risk even with good score)`
+BUY (ACT):
+- "buy" if trend bullish/moderate + price stable or up
+- "buy" if trend bullish + price -2% to -5% (good dip entry on high-quality signal)
+- "buy" if trend neutral but price showing support (score gives benefit of doubt)
+HOLD (WAIT):
+- "hold" if trend bearish/weak despite high score (conflicting signals)
+- "hold" if price -5%+ breakdown (too much risk even with good score)`
 : signalScore >= 50 ? `
 MODERATE SIGNAL (50-69) - BALANCED ENTRY:
-ENTER (ACT):
-- "enter" if trend bullish/strong + price stable or up
-- "enter" if trend bullish/moderate + price -2% to -3% (small dip only)
-WAIT:
-- "wait" if trend neutral (need stronger confirmation for moderate score)
-- "wait" if price -4%+ (too much weakness for moderate signal)
-- "wait" if conflicting signals or mixed price action`
+BUY (ACT):
+- "buy" if trend bullish/strong + price stable or up
+- "buy" if trend bullish/moderate + price -2% to -3% (small dip only)
+HOLD (WAIT):
+- "hold" if trend neutral (need stronger confirmation for moderate score)
+- "hold" if price -4%+ (too much weakness for moderate signal)
+- "hold" if conflicting signals or mixed price action`
 : `
 LOW SIGNAL (<50) - CAUTIOUS ENTRY:
-ENTER (ACT):
-- "enter" ONLY if trend bullish/strong + price +2%+ breakout (perfect setup required)
-WAIT:
-- "wait" if ANY uncertainty, neutral trend, or negative price action
-- "wait" if score this low indicates fundamental concerns (be very selective)`}
+BUY (ACT):
+- "buy" ONLY if trend bullish/strong + price +2%+ breakout (perfect setup required)
+HOLD (WAIT):
+- "hold" if ANY uncertainty, neutral trend, or negative price action
+- "hold" if score this low indicates fundamental concerns (be very selective)`}
 
-Decision: Weight the SIGNAL SCORE heavily. High scores deserve aggressive entry, low scores demand caution.`
+Decision: Weight the SIGNAL SCORE heavily. High scores deserve aggressive "buy", low scores lean toward "hold".`
         : `STANCE RULES for SHORT ENTRY DECISION (Sell/Short Opportunity):
 ${scoreGuidance}
 
-⚠️ CRITICAL: You must choose "short" or "wait" - NO OTHER VALUES.
+⚠️ CRITICAL: You can ONLY choose "sell" or "hold" - NO OTHER VALUES.
+- "sell" = Enter short position / Short this stock NOW
+- "hold" = Wait for better short setup / Don't short yet
 
 SIGNAL SCORE-BASED SHORT ENTRY THRESHOLDS:
 ${signalScore <= 30 ? `
 VERY HIGH SHORT SIGNAL (<30) - AGGRESSIVE SHORT ENTRY:
-SHORT (ACT):
-- "short" if ANY bearish signal present (very lenient threshold for weak companies)
-- "short" even if price up +2% to +5% (rally into resistance, premium shorting opportunity)
-- "short" if trend neutral but score this low (fundamental weakness overrides technical neutrality)
-WAIT:
-- "wait" ONLY if surprise positive news or price +8%+ breakout invalidates bearish thesis`
+SELL (SHORT):
+- "sell" if ANY bearish signal present (very lenient threshold for weak companies)
+- "sell" even if price up +2% to +5% (rally into resistance, premium shorting opportunity)
+- "sell" if trend neutral but score this low (fundamental weakness overrides technical neutrality)
+HOLD (WAIT):
+- "hold" ONLY if surprise positive news or price +8%+ breakout invalidates bearish thesis`
 : signalScore <= 50 ? `
 HIGH SHORT SIGNAL (30-50) - LENIENT SHORT ENTRY:
-SHORT (ACT):
-- "short" if trend bearish/weak + price breaking down
-- "short" if trend bearish/moderate + price rallying +2% to +4% (short the bounce on weak stock)
-- "short" if trend neutral but price showing resistance (score supports short bias)
-WAIT:
-- "wait" if trend bullish despite low score (conflicting signals, wait for breakdown)
-- "wait" if price +5%+ breakout (too much momentum even for weak stock)`
+SELL (SHORT):
+- "sell" if trend bearish/weak + price breaking down
+- "sell" if trend bearish/moderate + price rallying +2% to +4% (short the bounce on weak stock)
+- "sell" if trend neutral but price showing resistance (score supports short bias)
+HOLD (WAIT):
+- "hold" if trend bullish despite low score (conflicting signals, wait for breakdown)
+- "hold" if price +5%+ breakout (too much momentum even for weak stock)`
 : signalScore <= 70 ? `
 MODERATE SHORT SIGNAL (50-70) - BALANCED SHORT ENTRY:
-SHORT (ACT):
-- "short" if trend bearish/strong + price breaking down
-- "short" if trend bearish/moderate + price +2% to +3% rally (small bounce only)
-WAIT:
-- "wait" if trend neutral (need stronger bearish confirmation for moderate score)
-- "wait" if price +4%+ (too much strength for moderate short signal)
-- "wait" if conflicting signals or mixed price action`
+SELL (SHORT):
+- "sell" if trend bearish/strong + price breaking down
+- "sell" if trend bearish/moderate + price +2% to +3% rally (small bounce only)
+HOLD (WAIT):
+- "hold" if trend neutral (need stronger bearish confirmation for moderate score)
+- "hold" if price +4%+ (too much strength for moderate short signal)
+- "hold" if conflicting signals or mixed price action`
 : `
 LOW SHORT SIGNAL (>70) - VERY CAUTIOUS SHORT ENTRY:
-SHORT (ACT):
-- "short" ONLY if trend bearish/strong + price -5%+ breakdown (perfect breakdown required on strong company)
-WAIT:
-- "wait" if ANY bullish signals, neutral trend, or positive price action
-- "wait" if score this high indicates strong fundamentals (avoid shorting unless exceptional setup)`}
+SELL (SHORT):
+- "sell" ONLY if trend bearish/strong + price -5%+ breakdown (perfect breakdown required on strong company)
+HOLD (WAIT):
+- "hold" if ANY bullish signals, neutral trend, or positive price action
+- "hold" if score this high indicates strong fundamentals (avoid shorting unless exceptional setup)`}
 
-Decision: Weight the SIGNAL SCORE heavily for shorts. Very low scores (<30) deserve aggressive short entry, high scores (>70) demand extreme caution before shorting.`
+Decision: Weight the SIGNAL SCORE heavily for shorts. Very low scores (<30) deserve aggressive "sell" (short), high scores (>70) lean toward "hold" (wait).`
     }
     
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.
@@ -638,25 +642,17 @@ BE DECISIVE. Near-term traders need action, not patience.
 
 Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
 {
-  "recommendedStance": ${
-    isSellOpportunity
-      ? (userOwnsPosition ? '"cover" | "hold"' : '"short" | "wait"')
-      : (userOwnsPosition ? '"sell" | "hold"' : '"enter" | "wait"')
-  },
+  "recommendedStance": "buy" | "hold" | "sell",
   "confidence": 1-10,
   "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on NEAR-TERM action.",
   "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
 }
 
-${
-  isSellOpportunity
-    ? (userOwnsPosition
-        ? '⚠️ CRITICAL: For short positions, you can ONLY use "cover" or "hold" - NEVER "sell", "enter", "wait", or "buy".'
-        : '⚠️ CRITICAL: For short entry evaluation, you can ONLY use "short" or "wait" - NEVER "enter", "buy", "hold", or "sell".')
-    : (userOwnsPosition
-        ? '⚠️ CRITICAL: For owned positions, you can ONLY use "sell" or "hold" - NEVER "enter" or "wait".'
-        : '⚠️ CRITICAL: For entry evaluation, you can ONLY use "enter" or "wait" - NEVER "buy", "hold", or "sell".')
-}`;
+⚠️ CRITICAL STANCE VALUES:
+- Watching a BUY opportunity: Use "buy" (enter now) or "hold" (wait for better setup)
+- Watching a SELL opportunity: Use "sell" (short now) or "hold" (wait for better short setup)
+- Owning a LONG position: Use "sell" (exit now) or "hold" (stay in position)
+- Owning a SHORT position: Use "buy" (cover short) or "hold" (stay short)`;
 
     try {
       const response = await openai.chat.completions.create({

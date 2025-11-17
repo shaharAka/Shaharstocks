@@ -115,6 +115,16 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     meta: { ignoreError: true },
   });
 
+  // Fetch candlestick data from shared table (one record per ticker, reused across users)
+  const { data: candlestickData, isLoading: candlesticksLoading } = useQuery<{
+    ticker: string;
+    candlestickData: { date: string; open: number; high: number; low: number; close: number; volume: number }[];
+  }>({
+    queryKey: [`/api/stocks/${ticker}/candlesticks`],
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
   // Check both real and simulated holdings
   const holding = realHoldings?.find(h => h.ticker === ticker) || 
                   simulatedHoldings?.find(h => h.ticker === ticker);
@@ -139,7 +149,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
 
   // Build chart data from candlesticks (convert to price points)
   const chartData = useMemo(() => {
-    const candlesticks = (stock as any).candlesticks;
+    const candlesticks = candlestickData?.candlestickData;
     if (!candlesticks || candlesticks.length === 0) return [];
     
     const data = candlesticks
@@ -156,7 +166,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
       .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     return data;
-  }, [(stock as any).candlesticks, purchaseDate]);
+  }, [candlestickData?.candlestickData, purchaseDate]);
 
   // Calculate sell rule boundaries
   const sellRuleLines = useMemo(() => {
@@ -273,8 +283,22 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     createRuleMutation.mutate(newRule);
   };
 
-  const candlesticks = (stock as any).candlesticks;
-  if (!candlesticks || candlesticks.length === 0) {
+  // Show loading state while fetching candlesticks
+  if (candlesticksLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Price Simulation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-64 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show empty state if no candlestick data available
+  if (!candlestickData?.candlestickData || candlestickData.candlestickData.length === 0) {
     return (
       <Card>
         <CardHeader>

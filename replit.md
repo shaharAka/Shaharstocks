@@ -8,6 +8,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Updates
 
+### AI Analysis Race Condition & Progress UI Fix (Nov 17, 2025 - COMPLETE)
+**Problem 1 - Race Condition**: Multiple users fetching the same stock simultaneously could create duplicate AI analysis jobs due to a "time-of-check to time-of-use" (TOCTOU) race condition.
+
+**Problem 2 - Missing Progress UI**: The `AnalysisPhaseIndicator` component on the opportunities table wasn't showing AI analysis progress.
+
+**Solution**:
+- ✅ **Database-Level Race Prevention**: Added partial unique index on `aiAnalysisJobs(ticker)` where status is 'pending' or 'processing'
+- ✅ **Graceful Constraint Handling**: Modified `enqueueAnalysisJob()` with try-catch to handle unique constraint violations, returning existing job instead of crashing
+- ✅ **Progress UI Data Join**: Modified `getStocks()` to LEFT JOIN with `aiAnalysisJobs` table, populating `stock.analysisJob` field with current job data
+- ✅ **Migration Applied**: Schema updated successfully with `npm run db:push --force`
+
+**Architecture**: The unique index prevents duplicate active jobs at the database level. If a race occurs, the unique constraint violation is caught and the existing job is returned seamlessly. The UI now receives analysis job data (currentStep, stepDetails) to properly display progress indicators with spinners, checkmarks, and phase labels.
+
+**Impact**: Eliminates duplicate AI analysis jobs, ensures data consistency, restores real-time progress visibility for users watching stock analysis.
+
 ### WebSocket Push Notification System (Nov 16, 2025 - COMPLETE)
 **Problem**: Aggressive 10-second polling intervals on 5+ pages caused constant re-renders, network spam, and poor UX.
 

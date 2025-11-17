@@ -253,15 +253,15 @@ function startCandlestickDataJob() {
     try {
       log("[CandlestickData] Starting candlestick data fetch job...");
       
-      // Get unique tickers that need candlestick data across all users (per-user isolation)
-      const tickers = await storage.getAllUniqueTickersNeedingData();
+      // Get unique tickers that need candlestick data (shared table - one record per ticker)
+      const tickers = await storage.getAllTickersNeedingCandlestickData();
 
       if (tickers.length === 0) {
         log("[CandlestickData] No stocks need candlestick data");
         return;
       }
 
-      log(`[CandlestickData] Fetching candlestick data for ${tickers.length} unique tickers across all users`);
+      log(`[CandlestickData] Fetching candlestick data for ${tickers.length} unique tickers (shared storage)`);
 
       // Import stockService here to avoid circular dependencies
       const { stockService } = await import('./stockService.js');
@@ -277,18 +277,16 @@ function startCandlestickDataJob() {
           const candlesticks = await stockService.getCandlestickData(ticker);
           
           if (candlesticks && candlesticks.length > 0) {
-            // Update all instances of this ticker (across all users) with the same candlestick data
-            const updatedCount = await storage.updateStocksByTickerGlobally(ticker, {
-              candlesticks: candlesticks.map(c => ({
-                date: c.date,
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                close: c.close,
-                volume: c.volume
-              })),
-            });
-            log(`[CandlestickData] ✓ ${ticker} - fetched ${candlesticks.length} days, updated ${updatedCount} instances`);
+            // Upsert into shared stockCandlesticks table (one record per ticker, reused across all users)
+            await storage.upsertCandlesticks(ticker, candlesticks.map(c => ({
+              date: c.date,
+              open: c.open,
+              high: c.high,
+              low: c.low,
+              close: c.close,
+              volume: c.volume
+            })));
+            log(`[CandlestickData] ✓ ${ticker} - fetched ${candlesticks.length} days, stored in shared table`);
             successCount++;
           } else {
             log(`[CandlestickData] ⚠️ ${ticker} - no candlestick data returned`);

@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Clock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Stock, User } from "@shared/schema";
-import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
+import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 import { AnalysisPhaseIndicator } from "@/components/analysis-phase-indicator";
 
 interface StockTableProps {
@@ -421,13 +421,7 @@ export function StockTable({
                   ${currentPrice.toFixed(2)}
                 </TableCell>
                 <TableCell className="hidden lg:table-cell w-32 py-2" data-testid={`cell-chart-${stock.ticker}`}>
-                  {stock.candlesticks && stock.candlesticks.length > 0 ? (
-                    <div className="h-12">
-                      <MiniCandlestickChart data={stock.candlesticks} height={48} />
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
+                  <CandlestickChartCell ticker={stock.ticker} height={48} />
                 </TableCell>
                 <TableCell className="text-right py-2">
                   <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-success" : "text-destructive"}`}>

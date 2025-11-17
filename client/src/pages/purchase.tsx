@@ -37,7 +37,7 @@ import { useUser } from "@/contexts/UserContext";
 import { StockTable } from "@/components/stock-table";
 import { StockExplorer } from "@/components/stock-explorer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
+import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Filter, Search, SortAsc } from "lucide-react";
@@ -871,11 +871,9 @@ export default function Purchase() {
                       </CardHeader>
                       <CardContent className="space-y-3">
                         {/* 2-Week Trend Chart */}
-                        {stock.candlesticks && stock.candlesticks.length > 0 && (
-                          <div className="h-16 -mx-2">
-                            <MiniCandlestickChart data={stock.candlesticks} height={64} />
-                          </div>
-                        )}
+                        <div className="h-16 -mx-2">
+                          <CandlestickChartCell ticker={stock.ticker} height={64} />
+                        </div>
 
                         {/* Price Info */}
                         <div className="flex justify-between items-center text-sm">

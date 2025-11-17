@@ -176,6 +176,22 @@ export function StockTable({
       <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
+  // Generate contextual signal tooltip based on score and recommendation type
+  const getSignalTooltip = (score: number, recommendation: string): string => {
+    const isBuy = recommendation.toLowerCase().includes("buy");
+    const action = isBuy ? "BUY" : "SELL";
+    
+    if (score >= 90) {
+      return `Very Strong ${action} Opportunity`;
+    } else if (score >= 70) {
+      return `Strong ${action} Opportunity`;
+    } else if (score >= 40) {
+      return `Neutral ${action} Signal`;
+    } else {
+      return `Weak ${action} Signal`;
+    }
+  };
+
   return (
     <div className="rounded-md border max-h-[calc(100vh-16rem)] overflow-hidden flex flex-col">
       <div className="overflow-x-auto overflow-y-auto flex-1">
@@ -403,18 +419,25 @@ export function StockTable({
                     const isModerate = score >= 50 && score < 70;
                     
                     return (
-                      <Badge 
-                        className={cn(
-                          "font-mono transition-all border-0",
-                          isExceptional && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
-                          isStrong && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
-                          isModerate && "bg-secondary text-secondary-foreground text-xs",
-                          !isModerate && !isStrong && !isExceptional && "bg-secondary text-muted-foreground text-xs opacity-60"
-                        )}
-                        data-testid={`badge-signal-${stock.ticker}`}
-                      >
-                        {score}/100
-                      </Badge>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge 
+                            className={cn(
+                              "font-mono transition-all border-0 cursor-help",
+                              isExceptional && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
+                              isStrong && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
+                              isModerate && "bg-secondary text-secondary-foreground text-xs",
+                              !isModerate && !isStrong && !isExceptional && "bg-secondary text-muted-foreground text-xs opacity-60"
+                            )}
+                            data-testid={`badge-signal-${stock.ticker}`}
+                          >
+                            {score}/100
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="text-xs">
+                          {getSignalTooltip(score, stock.recommendation || "")}
+                        </TooltipContent>
+                      </Tooltip>
                     );
                   })()}
                 </TableCell>

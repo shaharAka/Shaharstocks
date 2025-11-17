@@ -13,6 +13,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { AnnouncementBell } from "@/components/announcement-bell";
 import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { TutorialManager } from "@/components/TutorialManager";
+import { Onboarding } from "@/components/onboarding";
 import { HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Portfolio from "@/pages/portfolio";
@@ -27,7 +28,7 @@ import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Terms from "@/pages/terms";
 import NotFound from "@/pages/not-found";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 function Router() {
   return (
@@ -59,14 +60,26 @@ function Router() {
 }
 
 function AuthenticatedApp() {
-  const { user, isLoading } = useUser();
+  const { user, isLoading, experienceState } = useUser();
   const [location, setLocation] = useLocation();
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/terms") {
       setLocation("/login");
     }
   }, [user, isLoading, location, setLocation]);
+
+  useEffect(() => {
+    // Show onboarding dialog when state is pending
+    if (experienceState === "onboarding_pending") {
+      setShowOnboarding(true);
+    }
+    // Close onboarding dialog only when state changes away from pending
+    else if (showOnboarding && experienceState !== "onboarding_pending") {
+      setShowOnboarding(false);
+    }
+  }, [experienceState, showOnboarding]);
 
   if (isLoading) {
     return (
@@ -92,6 +105,11 @@ function AuthenticatedApp() {
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <TutorialManager />
+      <Onboarding 
+        open={showOnboarding} 
+        onOpenChange={() => {}} 
+        onComplete={() => {}}
+      />
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1">

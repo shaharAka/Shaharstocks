@@ -34,16 +34,14 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
   const handleGetStarted = async () => {
     await completeOnboarding();
-    onOpenChange(false);
     setLocation("/recommendations");
-    onComplete();
+    // Dialog will auto-close when experienceState updates in parent
   };
 
   const handleSkip = async () => {
     await completeOnboarding();
-    onOpenChange(false);
     setLocation("/recommendations");
-    onComplete();
+    // Dialog will auto-close when experienceState updates in parent
   };
 
   const totalSteps = 3;
@@ -51,7 +49,12 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-onboarding">
+      <DialogContent 
+        className="max-w-2xl max-h-[90vh] overflow-y-auto [&>button]:hidden" 
+        data-testid="dialog-onboarding"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <div className="flex items-center justify-between mb-2">
             <DialogTitle className="text-2xl">Welcome to signal2!</DialogTitle>
@@ -90,7 +93,8 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Dual-agent AI analyzes fundamentals and market conditions, scoring each opportunity
+                      Dual-agent AI analyzes fundamentals and market conditions, scoring opportunity strength (0-100). 
+                      Exceptional signals (90-100) appear in bold amber, strong signals (70-89) in light amber.
                     </CardDescription>
                   </CardContent>
                 </Card>
@@ -163,8 +167,9 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Get alerts for high-score buy/sell signals (AI score &gt;70 or &lt;30), 
-                      popular stocks (&gt;10 followers), and stance changes on your positions.
+                      Get alerts for exceptional opportunities (signal strength 90-100 in bold amber), 
+                      popular stocks (&gt;10 followers), and stance changes on your positions. 
+                      Strong signals (70-89) appear in light amber. Scores represent opportunity strength regardless of BUY/SELL direction.
                     </CardDescription>
                   </CardContent>
                 </Card>
@@ -197,8 +202,10 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                     <div>
                       <p className="font-medium">Browse Opportunities</p>
                       <p className="text-sm text-muted-foreground">
-                        Review AI-scored opportunities from insider trading. High-value alerts appear for 
-                        BUY (&gt;70 score) and SELL (&lt;30 score) recommendations.
+                        Review AI-scored opportunities from insider trading. Each stock shows a 
+                        Signal badge (0-100) indicating opportunity strength. Exceptional signals (90-100) 
+                        appear in bold amber, strong signals (70-89) in light amber - representing high-quality 
+                        opportunities regardless of BUY or SELL direction.
                       </p>
                     </div>
                   </div>

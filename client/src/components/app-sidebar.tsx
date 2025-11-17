@@ -85,6 +85,7 @@ export function AppSidebar() {
     insiderAction?: 'BUY' | 'SELL' | null;
     aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
     aiScore?: number | null;
+    integratedScore?: number | null;
     stanceAlignment?: 'act' | 'hold' | null;
   }>>({
     queryKey: ["/api/followed-stocks-with-status"],
@@ -240,10 +241,10 @@ export function AppSidebar() {
                                 </Badge>
                               )
                             )}
-                            {/* AI Score (next to B/S badge) */}
-                            {stock.aiScore != null && !isProcessing && (
+                            {/* AI Integrated Score (next to B/S badge) - shows comprehensive 0-100 score */}
+                            {stock.integratedScore != null && !isProcessing && (
                               <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
-                                {stock.aiScore}
+                                {stock.integratedScore}
                               </span>
                             )}
                             <span className="font-mono font-medium">

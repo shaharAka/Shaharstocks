@@ -264,6 +264,7 @@ export interface IStorage {
     insiderAction?: 'BUY' | 'SELL' | null;
     aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
     aiScore?: number | null;
+    integratedScore?: number | null;
     stanceAlignment?: 'act' | 'hold' | null;
   }>>;
   // Cross-user aggregation for "popular stock" notifications
@@ -2043,6 +2044,7 @@ export class DatabaseStorage implements IStorage {
     insiderAction?: 'BUY' | 'SELL' | null;
     aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
     aiScore?: number | null;
+    integratedScore?: number | null;
     stanceAlignment?: 'act' | 'hold' | null;
   }>> {
     const followedWithPrices = await this.getFollowedStocksWithPrices(userId);
@@ -2055,6 +2057,7 @@ export class DatabaseStorage implements IStorage {
       insiderAction?: 'BUY' | 'SELL' | null;
       aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
       aiScore?: number | null;
+      integratedScore?: number | null;
       stanceAlignment?: 'act' | 'hold' | null;
     }> = [];
     
@@ -2094,6 +2097,16 @@ export class DatabaseStorage implements IStorage {
       const owningStance = latestBrief?.owningStance?.toLowerCase() || null;
       const aiScore = latestBrief?.watchingConfidence ?? null;
       
+      // Get integrated score from stock analysis (comprehensive micro + macro score)
+      const analyses = await db
+        .select()
+        .from(stockAnalyses)
+        .where(eq(stockAnalyses.ticker, followed.ticker))
+        .limit(1);
+      
+      const analysis = analyses[0];
+      const integratedScore = analysis?.integratedScore ?? null;
+      
       // Calculate stance alignment using NEW dual-scenario logic
       // "act" = Either scenario recommends action (ENTER for entry, SELL for owned)
       // "hold" = Both scenarios recommend wait/hold
@@ -2128,6 +2141,7 @@ export class DatabaseStorage implements IStorage {
         insiderAction,
         aiStance,
         aiScore,
+        integratedScore,
         stanceAlignment,
       });
     }

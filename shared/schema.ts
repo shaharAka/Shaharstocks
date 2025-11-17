@@ -268,6 +268,25 @@ export const insertMacroAnalysisSchema = createInsertSchema(macroAnalyses).omit(
 export type InsertMacroAnalysis = z.infer<typeof insertMacroAnalysisSchema>;
 export type MacroAnalysis = typeof macroAnalyses.$inferSelect;
 
+// Stock Candlesticks - shared OHLCV data (one record per ticker, reused across users)
+export const stockCandlesticks = pgTable("stock_candlesticks", {
+  ticker: text("ticker").primaryKey(), // Ticker symbol (e.g., "AAPL")
+  candlestickData: jsonb("candlestick_data").$type<{
+    date: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }[]>().notNull().default([]), // Last 14 trading days of OHLCV data
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertStockCandlesticksSchema = createInsertSchema(stockCandlesticks).omit({ createdAt: true });
+export type InsertStockCandlesticks = z.infer<typeof insertStockCandlesticksSchema>;
+export type StockCandlesticks = typeof stockCandlesticks.$inferSelect;
+
 // AI Analysis Job Queue - manages asynchronous stock analysis tasks
 export const aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

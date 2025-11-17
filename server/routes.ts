@@ -1171,7 +1171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Diagnostic endpoint: Check candlestick data status
+  // Diagnostic endpoint: Check candlestick data status (now in separate table)
   app.get("/api/stocks/diagnostics/candlesticks", async (req, res) => {
     try {
       if (!req.session.userId) {
@@ -1180,17 +1180,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stocks = await storage.getStocks(req.session.userId);
       const pendingStocks = stocks.filter(s => s.recommendationStatus === "pending");
       
+      // Note: Candlesticks are now in a separate shared table (stockCandlesticks)
+      // This endpoint now shows stock counts only
       const diagnostics = {
         totalStocks: stocks.length,
         pendingStocks: pendingStocks.length,
-        withCandlesticks: stocks.filter(s => s.candlesticks && s.candlesticks.length > 0).length,
-        withoutCandlesticks: stocks.filter(s => !s.candlesticks || s.candlesticks.length === 0).length,
-        pendingWithCandlesticks: pendingStocks.filter(s => s.candlesticks && s.candlesticks.length > 0).length,
-        pendingWithoutCandlesticks: pendingStocks.filter(s => !s.candlesticks || s.candlesticks.length === 0).length,
-        sampleStocksWithoutData: stocks
-          .filter(s => !s.candlesticks || s.candlesticks.length === 0)
-          .slice(0, 10)
-          .map(s => ({ ticker: s.ticker, status: s.recommendationStatus, recommendation: s.recommendation })),
+        note: "Candlesticks are now stored in shared stockCandlesticks table, accessible via /api/stocks/:ticker/candlesticks",
       };
       
       res.json(diagnostics);
@@ -1451,20 +1446,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : new Date();
       const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
       
-      // Ensure price history is available - convert from candlesticks if needed
+      // Ensure price history is available - fetch if needed
       let priceHistory = stock.priceHistory || [];
       
-      if (priceHistory.length === 0 && stock.candlesticks && stock.candlesticks.length > 0) {
-        // Convert candlesticks to price history format
-        console.log(`[Simulation] Converting ${stock.candlesticks.length} candlesticks to price history for ${stock.ticker}`);
-        priceHistory = stock.candlesticks.map(candle => ({
-          date: candle.date,
-          price: candle.close
-        }));
-        
-        // Update stock with converted price history
-        await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
-      } else if (priceHistory.length === 0 && stock.insiderTradeDate) {
+      if (priceHistory.length === 0 && stock.insiderTradeDate) {
         // Fall back to fetching if no candlesticks available
         console.log(`[Simulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
         try {
@@ -2896,20 +2881,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             : new Date();
           const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
           
-          // Ensure price history is available - convert from candlesticks if needed
+          // Ensure price history is available - fetch if needed
           let priceHistory = stock.priceHistory || [];
           
-          if (priceHistory.length === 0 && stock.candlesticks && stock.candlesticks.length > 0) {
-            // Convert candlesticks to price history format
-            console.log(`[BulkSimulation] Converting ${stock.candlesticks.length} candlesticks to price history for ${stock.ticker}`);
-            priceHistory = stock.candlesticks.map(candle => ({
-              date: candle.date,
-              price: candle.close
-            }));
-            
-            // Update stock with converted price history
-            await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
-          } else if (priceHistory.length === 0 && stock.insiderTradeDate) {
+          if (priceHistory.length === 0 && stock.insiderTradeDate) {
             // Fall back to fetching if no candlesticks available
             console.log(`[BulkSimulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
             try {

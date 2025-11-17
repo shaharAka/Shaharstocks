@@ -90,8 +90,8 @@ export function AppSidebar() {
     queryKey: ["/api/followed-stocks-with-status"],
     enabled: !!user,
     // Poll every 5 seconds if there are active analysis jobs to update spinner
-    refetchInterval: (data) => {
-      const hasActiveJobs = data?.some(stock => 
+    refetchInterval: (query) => {
+      const hasActiveJobs = query.state.data?.some((stock: any) => 
         stock.jobStatus === 'pending' || stock.jobStatus === 'processing'
       );
       return hasActiveJobs ? 5000 : false; // 5 seconds if active jobs, otherwise no polling
@@ -239,6 +239,12 @@ export function AppSidebar() {
                                   {insiderTag.text}
                                 </Badge>
                               )
+                            )}
+                            {/* AI Score (next to B/S badge) */}
+                            {stock.aiScore != null && !isProcessing && (
+                              <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
+                                {stock.aiScore}
+                              </span>
                             )}
                             <span className="font-mono font-medium">
                               {stock.ticker}

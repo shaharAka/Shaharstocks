@@ -194,11 +194,11 @@ export function StockTable({
 
   return (
     <div className="rounded-md border max-h-[calc(100vh-16rem)] overflow-hidden flex flex-col">
-      <div className="overflow-x-auto overflow-y-auto flex-1">
-        <Table className="text-sm">
+      <div className="overflow-y-auto flex-1">
+        <Table className="text-xs">
           <TableHeader className="sticky top-0 bg-background z-[1]">
             <TableRow>
-              <TableHead className="w-12">
+              <TableHead className="w-8 px-1">
                 {onSelectAll && (
                   <Checkbox
                     checked={allSelected}
@@ -208,27 +208,27 @@ export function StockTable({
                   />
                 )}
               </TableHead>
-              <TableHead className="min-w-[80px]">
+              <TableHead className="min-w-[60px] px-1">
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={() => handleSort("ticker")}
-                  className="px-2"
+                  className="px-1 h-7"
                   data-testid="sort-ticker"
                 >
                   Ticker
                   <SortIcon field="ticker" />
                 </Button>
               </TableHead>
-              <TableHead className="hidden md:table-cell min-w-[120px]">Company</TableHead>
-              <TableHead className="text-right hidden lg:table-cell w-[85px]">
+              <TableHead className="hidden md:table-cell min-w-[100px] px-1">Company</TableHead>
+              <TableHead className="text-right hidden lg:table-cell w-[70px] px-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
-                      size="lg"
+                      size="sm"
                       onClick={() => handleSort("aiScore")}
-                      className="px-1"
+                      className="px-1 h-7"
                       data-testid="sort-ai-score"
                     >
                       Signal
@@ -248,73 +248,73 @@ export function StockTable({
                   </TooltipContent>
                 </Tooltip>
               </TableHead>
-              <TableHead className="min-w-[70px]">
+              <TableHead className="min-w-[55px] px-1">
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={() => handleSort("recommendation")}
-                  className="px-2"
+                  className="px-1 h-7"
                   data-testid="sort-recommendation"
                 >
                   Type
                   <SortIcon field="recommendation" />
                 </Button>
               </TableHead>
-              <TableHead className="text-right min-w-[80px]">
+              <TableHead className="text-right min-w-[65px] px-1">
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={() => handleSort("price")}
-                  className="px-2"
+                  className="px-1 h-7"
                   data-testid="sort-price"
                 >
                   Price
                   <SortIcon field="price" />
                 </Button>
               </TableHead>
-              <TableHead className="hidden lg:table-cell min-w-[120px]">Trend (2wk)</TableHead>
-              <TableHead className="text-right min-w-[90px]">
+              <TableHead className="hidden lg:table-cell min-w-[100px] px-1">Trend</TableHead>
+              <TableHead className="text-right min-w-[70px] px-1">
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={() => handleSort("change")}
-                  className="px-2"
+                  className="px-1 h-7"
                   data-testid="sort-change"
                 >
-                  Change
+                  Chg %
                   <SortIcon field="change" />
                 </Button>
               </TableHead>
-              <TableHead className="text-right hidden xl:table-cell w-[75px]">
+              <TableHead className="text-right hidden xl:table-cell w-[60px] px-1">
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={() => handleSort("insiderPrice")}
-                  className="px-1"
+                  className="px-1 h-7"
                   data-testid="sort-insider-price"
                 >
-                  Insider $
+                  Ins $
                   <SortIcon field="insiderPrice" />
                 </Button>
               </TableHead>
-              <TableHead className="hidden xl:table-cell w-[80px]">
+              <TableHead className="hidden xl:table-cell w-[65px] px-1">
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={() => handleSort("marketCap")}
-                  className="px-1"
+                  className="px-1 h-7"
                   data-testid="sort-market-cap"
                 >
                   Mkt Cap
                   <SortIcon field="marketCap" />
                 </Button>
               </TableHead>
-              <TableHead className="hidden lg:table-cell min-w-[70px]">
+              <TableHead className="hidden lg:table-cell min-w-[55px] px-1">
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={() => handleSort("daysFromBuy")}
-                  className="px-2"
+                  className="px-1 h-7"
                   data-testid="sort-days-from-buy"
                 >
                   Days
@@ -335,12 +335,12 @@ export function StockTable({
             return (
               <TableRow
                 key={stock.id}
-                className="cursor-pointer hover-elevate h-12"
+                className="cursor-pointer hover-elevate h-10"
                 onClick={() => onStockClick(stock)}
                 data-testid={`row-stock-${stock.ticker}`}
               >
                 <TableCell 
-                  className="w-12 py-2" 
+                  className="w-8 py-1 px-1" 
                   onClick={(e) => e.stopPropagation()}
                 >
                   {onToggleSelection && (
@@ -352,33 +352,33 @@ export function StockTable({
                     />
                   )}
                 </TableCell>
-                <TableCell className="font-medium font-mono py-2" data-testid={`cell-ticker-${stock.ticker}`}>
-                  <div className="flex items-center gap-2">
+                <TableCell className="font-medium font-mono py-1 px-1" data-testid={`cell-ticker-${stock.ticker}`}>
+                  <div className="flex items-center gap-1.5">
                     {(stock as any).isFollowing && (
-                      <Star className="h-3.5 w-3.5 text-primary fill-current" data-testid={`icon-following-${stock.ticker}`} />
+                      <Star className="h-3 w-3 text-primary fill-current" data-testid={`icon-following-${stock.ticker}`} />
                     )}
                     <span>{stock.ticker}</span>
                     {isNewStock(stock.ticker, stock.insiderTradeDate) && (
-                      <Badge variant="default" className="text-xs px-1.5 py-0" data-testid={`badge-new-${stock.ticker}`}>
+                      <Badge variant="default" className="text-[10px] px-1 py-0" data-testid={`badge-new-${stock.ticker}`}>
                         NEW
                       </Badge>
                     )}
                     {simulatedTickers.has(stock.ticker) && (
-                      <Badge variant="outline" className="text-xs px-1.5 py-0 bg-accent/50" data-testid={`badge-simulated-${stock.ticker}`}>
-                        SIMULATION
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 bg-accent/50" data-testid={`badge-simulated-${stock.ticker}`}>
+                        SIM
                       </Badge>
                     )}
                     {(stock as any).isStale && (
-                      <Badge variant="secondary" className="text-xs px-1.5 py-0" data-testid={`badge-stale-${stock.ticker}`}>
-                        {(stock as any).ageDays}d old
+                      <Badge variant="secondary" className="text-[10px] px-1 py-0" data-testid={`badge-stale-${stock.ticker}`}>
+                        {(stock as any).ageDays}d
                       </Badge>
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="hidden md:table-cell max-w-xs truncate text-xs text-muted-foreground py-2" data-testid={`cell-company-${stock.ticker}`}>
+                <TableCell className="hidden md:table-cell max-w-xs truncate text-muted-foreground py-1 px-1" data-testid={`cell-company-${stock.ticker}`}>
                   {stock.companyName}
                 </TableCell>
-                <TableCell className="text-right hidden lg:table-cell py-2" data-testid={`cell-ai-score-${stock.ticker}`}>
+                <TableCell className="text-right hidden lg:table-cell py-1 px-1" data-testid={`cell-ai-score-${stock.ticker}`}>
                   {(() => {
                     const analysis = getAIAnalysis(stock.ticker);
                     if (!analysis) return <span className="text-xs text-muted-foreground">-</span>;
@@ -441,46 +441,46 @@ export function StockTable({
                     );
                   })()}
                 </TableCell>
-                <TableCell className="py-2">
+                <TableCell className="py-1 px-1">
                   {stock.recommendation && (
                     <Badge
                       variant={stock.recommendation.toLowerCase().includes("buy") ? "default" : "destructive"}
-                      className="text-xs"
+                      className="text-[10px] px-1"
                       data-testid={`badge-rec-${stock.ticker}`}
                     >
                       {stock.recommendation.toLowerCase().includes("buy") ? (
-                        <ArrowUpRight className="h-3 w-3 mr-1" />
+                        <ArrowUpRight className="h-2.5 w-2.5 mr-0.5" />
                       ) : (
-                        <ArrowDownRight className="h-3 w-3 mr-1" />
+                        <ArrowDownRight className="h-2.5 w-2.5 mr-0.5" />
                       )}
                       {stock.recommendation.replace("_", " ").toUpperCase()}
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell className="text-right font-mono text-sm py-2" data-testid={`cell-price-${stock.ticker}`}>
+                <TableCell className="text-right font-mono py-1 px-1" data-testid={`cell-price-${stock.ticker}`}>
                   ${currentPrice.toFixed(2)}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell w-32 py-2" data-testid={`cell-chart-${stock.ticker}`}>
-                  <CandlestickChartCell ticker={stock.ticker} height={48} />
+                <TableCell className="hidden lg:table-cell w-24 py-1 px-1" data-testid={`cell-chart-${stock.ticker}`}>
+                  <CandlestickChartCell ticker={stock.ticker} height={40} />
                 </TableCell>
-                <TableCell className="text-right py-2">
-                  <div className={`flex items-center justify-end gap-1 ${isPositive ? "text-success" : "text-destructive"}`}>
-                    {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    <span className="text-xs font-mono font-medium">
-                      {isPositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
+                <TableCell className="text-right py-1 px-1">
+                  <div className={`flex items-center justify-end gap-0.5 ${isPositive ? "text-success" : "text-destructive"}`}>
+                    {isPositive ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+                    <span className="font-mono font-medium">
+                      {isPositive ? "+" : ""}{priceChangePercent.toFixed(1)}%
                     </span>
                   </div>
                 </TableCell>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground hidden xl:table-cell py-2">
+                <TableCell className="text-right font-mono text-muted-foreground hidden xl:table-cell py-1 px-1">
                   {insiderPrice ? `$${insiderPrice.toFixed(2)}` : "-"}
                 </TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground hidden xl:table-cell py-2">
+                <TableCell className="text-right text-muted-foreground hidden xl:table-cell py-1 px-1">
                   {stock.marketCap || "-"}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell py-2">
+                <TableCell className="hidden lg:table-cell py-1 px-1">
                   {stock.insiderTradeDate && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`text-days-from-buy-${stock.ticker}`}>
-                      <Clock className="h-3 w-3" />
+                    <div className="flex items-center gap-1 text-muted-foreground" data-testid={`text-days-from-buy-${stock.ticker}`}>
+                      <Clock className="h-2.5 w-2.5" />
                       <span>{getDaysFromBuy(stock.insiderTradeDate)}d</span>
                     </div>
                   )}

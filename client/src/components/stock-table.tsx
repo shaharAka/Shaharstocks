@@ -403,26 +403,18 @@ export function StockTable({
                     const isModerate = score >= 50 && score < 70;
                     
                     return (
-                      <div className="flex flex-col items-end gap-0.5">
-                        <Badge 
-                          className={cn(
-                            "font-mono transition-all border-0",
-                            isExceptional && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
-                            isStrong && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
-                            isModerate && "bg-secondary text-secondary-foreground text-xs",
-                            !isModerate && !isStrong && !isExceptional && "bg-secondary text-muted-foreground text-xs opacity-60"
-                          )}
-                          data-testid={`badge-signal-${stock.ticker}`}
-                        >
-                          {score}/100
-                        </Badge>
-                        {analysis.integratedScore && 
-                         analysis.confidenceScore !== analysis.integratedScore && (
-                          <span className="text-[10px] text-muted-foreground">
-                            (micro: {analysis.confidenceScore})
-                          </span>
+                      <Badge 
+                        className={cn(
+                          "font-mono transition-all border-0",
+                          isExceptional && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
+                          isStrong && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
+                          isModerate && "bg-secondary text-secondary-foreground text-xs",
+                          !isModerate && !isStrong && !isExceptional && "bg-secondary text-muted-foreground text-xs opacity-60"
                         )}
-                      </div>
+                        data-testid={`badge-signal-${stock.ticker}`}
+                      >
+                        {score}/100
+                      </Badge>
                     );
                   })()}
                 </TableCell>

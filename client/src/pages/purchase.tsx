@@ -183,6 +183,7 @@ export default function Purchase() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
       toast({
         title: "Stock Followed",

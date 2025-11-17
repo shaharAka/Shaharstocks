@@ -34,7 +34,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Admin Backoffice**: Comprehensive dashboard for user, subscription, and payment management with audit trails, soft/hard deletion, password resets, and a two-tier admin system. Includes an Announcement System for platform-wide notifications.
 - **Daily Stock Briefs**: Lightweight daily trading reports for followed stocks with position-aware single-scenario display. Users can toggle between "Watching" (considering entry) and "In Position" (currently holding) modes via a switch control. Each mode shows the appropriate scenario analysis generated using Alpha Vantage and GPT-4.1. The position status is tracked per-user, per-stock in the followed_stocks table via hasEnteredPosition field.
 - **Intelligent Notification System**: Real-time, deduplicated alerts for high-value trading opportunities (High Score Buy/Sell, Popular Stock, Stance Change) with distinct UI badging.
-- **Candlestick Data Refactoring**: Candlestick data is stored once per ticker in a shared table, fetched on-demand by the frontend via API, and populated daily by a background job, eliminating duplication and simplifying synchronization.
+- **Candlestick Data Architecture**: Candlestick data is stored once per ticker in a shared `stockCandlesticks` table. Data is populated via three mechanisms: (1) Daily background job for all followed stocks, (2) Immediate fire-and-forget fetch when users follow new stocks (both single and bulk operations), (3) On-demand frontend API requests. This ensures charts appear immediately without waiting up to 24 hours for the daily job.
 
 ## External Dependencies
 

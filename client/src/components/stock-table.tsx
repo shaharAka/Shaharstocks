@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { Stock, User } from "@shared/schema";
 import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 import { AnalysisPhaseIndicator } from "@/components/analysis-phase-indicator";
+import { cn } from "@/lib/utils";
 
 interface StockTableProps {
   stocks: Stock[];
@@ -396,10 +397,24 @@ export function StockTable({
                     // Use integrated score if available (micro × macro), otherwise use confidence score, fallback to financial health score
                     const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
                     
-                    // Use single neutral color for signal strength (not tied to BUY/SELL direction)
+                    // Celebrate high signals with brand color (primary = teal/cyan from logo)
+                    const isExceptional = score >= 90;
+                    const isStrong = score >= 70 && score < 90;
+                    const isModerate = score >= 50 && score < 70;
+                    
                     return (
                       <div className="flex flex-col items-end gap-0.5">
-                        <Badge variant="secondary" className="text-xs font-mono">
+                        <Badge 
+                          className={cn(
+                            "font-mono transition-all border-0",
+                            isExceptional && "bg-primary text-primary-foreground text-sm font-bold shadow-md",
+                            isStrong && "bg-primary/20 text-primary text-xs font-semibold",
+                            isModerate && "bg-secondary text-secondary-foreground text-xs",
+                            !isModerate && !isStrong && !isExceptional && "bg-secondary text-secondary-foreground text-xs opacity-60"
+                          )}
+                          data-testid={`badge-signal-${stock.ticker}`}
+                        >
+                          {isExceptional && "⚡ "}
                           {score}/100
                         </Badge>
                         {analysis.integratedScore && 

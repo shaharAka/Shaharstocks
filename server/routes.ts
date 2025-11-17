@@ -3489,18 +3489,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Queue ONE AI analysis job per unique ticker (not per transaction)
+      // BUT ONLY if the ticker doesn't already have a completed analysis
       if (createdTickers.length > 0) {
         const uniqueTickers = Array.from(new Set(createdTickers));
-        console.log(`[OpeninsiderFetch] Queuing AI analysis for ${uniqueTickers.length} unique tickers (from ${createdTickers.length} transactions)...`);
+        console.log(`[OpeninsiderFetch] Checking ${uniqueTickers.length} unique tickers for AI analysis (from ${createdTickers.length} transactions)...`);
+        
+        let queuedCount = 0;
+        let skippedCount = 0;
         
         for (const ticker of uniqueTickers) {
           try {
-            await storage.enqueueAnalysisJob(ticker, "openinsider_fetch", "normal");
-            console.log(`[OpeninsiderFetch] ✓ Queued AI analysis for ${ticker}`);
+            // Check if analysis already completed
+            const existingAnalysis = await storage.getStockAnalysis(ticker);
+            const needsAnalysis = !existingAnalysis || existingAnalysis.status !== 'completed';
+            
+            if (needsAnalysis) {
+              await storage.enqueueAnalysisJob(ticker, "openinsider_fetch", "normal");
+              console.log(`[OpeninsiderFetch] ✓ Queued AI analysis for ${ticker} (status: ${existingAnalysis?.status || 'none'})`);
+              queuedCount++;
+            } else {
+              console.log(`[OpeninsiderFetch] ⊘ Skipped ${ticker} - already completed`);
+              skippedCount++;
+            }
           } catch (error) {
             console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${ticker}:`, error);
           }
         }
+        
+        console.log(`[OpeninsiderFetch] Analysis jobs: ${queuedCount} queued, ${skippedCount} skipped (already completed)`);
       }
 
       await storage.updateOpeninsiderSyncStatus();

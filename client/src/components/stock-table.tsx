@@ -406,7 +406,7 @@ export function StockTable({
                       <Badge 
                         className={cn(
                           "font-mono transition-all border-0",
-                          isExceptional && "bg-gradient-to-br from-amber-400 to-amber-600 text-white text-sm font-bold shadow-md dark:from-amber-500 dark:to-amber-700",
+                          isExceptional && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
                           isStrong && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
                           isModerate && "bg-secondary text-secondary-foreground text-xs",
                           !isModerate && !isStrong && !isExceptional && "bg-secondary text-muted-foreground text-xs opacity-60"

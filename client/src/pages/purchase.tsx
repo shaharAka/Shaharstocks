@@ -266,12 +266,45 @@ export default function Purchase() {
       }
       
       // Runtime filter: Exclude BUY opportunities that are likely options deals
-      // (insider price < 15% of current market price)
+      // Use per-user threshold (default 15%)
       if (rec.includes("buy")) {
         const insiderPrice = stock.insiderPrice ? parseFloat(stock.insiderPrice) : 0;
         const currentPrice = stock.currentPrice ? parseFloat(stock.currentPrice) : 0;
-        if (currentPrice > 0 && insiderPrice < currentPrice * 0.15) {
-          return false; // Filter out options deals
+        const thresholdPercent = (currentUser?.optionsDealThresholdPercent || 15) / 100;
+        if (currentPrice > 0 && insiderPrice < currentPrice * thresholdPercent) {
+          return false; // Filter out likely options deals based on user's threshold
+        }
+      }
+      
+      // Market cap filter: Apply per-user minimum market cap threshold
+      if (currentUser?.minMarketCapFilter) {
+        const marketCap = stock.marketCap;
+        if (marketCap) {
+          // Parse market cap string (supports formats like "$1.5B", "500M", etc.)
+          const parseMarketCap = (cap: string): number | null => {
+            const normalized = cap.replace(/^(USD|US\$|\$|EUR|€|GBP|£)\s*/i, "").trim().toLowerCase();
+            const match = normalized.match(/([\d,]+(?:\.\d+)?)\s*([tbmk])?/i);
+            if (!match) return null;
+            
+            const value = parseFloat(match[1].replace(/,/g, ""));
+            if (isNaN(value) || value === 0) return null;
+            
+            const suffix = match[2];
+            // Convert to millions
+            if (suffix === "t") return value * 1_000_000;
+            if (suffix === "b") return value * 1000;
+            if (suffix === "m") return value;
+            if (suffix === "k") return value * 0.001;
+            // If no suffix and value > 100000, assume it's in dollars
+            if (!suffix && value > 100000) return value / 1_000_000;
+            // Otherwise assume millions
+            return value;
+          };
+          
+          const marketCapValue = parseMarketCap(marketCap);
+          if (marketCapValue && marketCapValue < currentUser.minMarketCapFilter) {
+            return false; // Filter out stocks below user's minimum market cap
+          }
         }
       }
       

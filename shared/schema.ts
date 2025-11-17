@@ -558,6 +558,9 @@ export const users = pgTable("users", {
   tutorialCompletions: jsonb("tutorial_completions").$type<Record<string, boolean>>().default({}), // Track which tutorials have been completed
   stockLimit: integer("stock_limit").notNull().default(100), // Maximum number of stocks to fetch (500 during onboarding, 100 default)
   riskPreference: text("risk_preference").notNull().default("balanced"), // "low", "balanced", "high" - determines default filter presets
+  // Per-user display filters (client-side filtering of opportunities)
+  optionsDealThresholdPercent: integer("options_deal_threshold_percent").notNull().default(15), // Filter out stocks where insider price < this % of market price (user-specific)
+  minMarketCapFilter: integer("min_market_cap_filter").notNull().default(500), // Minimum market cap in millions for displaying opportunities (user-specific)
   archived: boolean("archived").notNull().default(false), // Soft delete for hiding users from admin list
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by"), // Which admin archived this user

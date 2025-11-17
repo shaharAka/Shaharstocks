@@ -241,11 +241,15 @@ export function AppSidebar() {
                                 </Badge>
                               )
                             )}
-                            {/* AI Integrated Score (next to B/S badge) - shows comprehensive 0-100 score */}
+                            {/* AI Integrated Score Badge (next to B/S badge) - shows comprehensive 0-100 score */}
                             {stock.integratedScore != null && !isProcessing && (
-                              <span className="text-[10px] text-muted-foreground font-medium flex-shrink-0">
+                              <Badge 
+                                variant={stock.integratedScore >= 75 ? "default" : stock.integratedScore >= 50 ? "secondary" : "outline"}
+                                className="h-4 px-1 text-[10px] font-bold flex-shrink-0"
+                                data-testid={`badge-ai-score-${stock.ticker}`}
+                              >
                                 {stock.integratedScore}
-                              </span>
+                              </Badge>
                             )}
                             <span className="font-mono font-medium">
                               {stock.ticker}

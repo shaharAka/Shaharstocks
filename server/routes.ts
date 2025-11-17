@@ -2201,10 +2201,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Don't fail the follow request
       }
       
-      // Trigger immediate "day 0" analysis for this stock
+      // Trigger immediate "day 0" analysis for this stock ONLY if not already completed
       try {
-        console.log(`[Follow] Triggering day 0 analysis for ${ticker}`);
-        await storage.enqueueAnalysisJob(ticker, "follow_day_0", "high");
+        const existingAnalysis = await storage.getStockAnalysis(ticker);
+        const needsAnalysis = !existingAnalysis || existingAnalysis.status !== 'completed';
+        
+        if (needsAnalysis) {
+          console.log(`[Follow] Triggering day 0 analysis for ${ticker} (status: ${existingAnalysis?.status || 'none'})`);
+          await storage.enqueueAnalysisJob(ticker, "follow_day_0", "high");
+        } else {
+          console.log(`[Follow] Skipping analysis for ${ticker} - already completed`);
+        }
       } catch (analysisError) {
         console.error(`[Follow] Failed to enqueue analysis for ${ticker}:`, analysisError);
         // Don't fail the follow request if analysis enqueue fails
@@ -2352,10 +2359,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           followedCount++;
           
-          // Trigger immediate "day 0" analysis for each followed stock
+          // Trigger immediate "day 0" analysis for each followed stock ONLY if not already completed
           try {
-            console.log(`[BulkFollow] Triggering day 0 analysis for ${upperTicker}`);
-            await storage.enqueueAnalysisJob(upperTicker, "follow_day_0", "high");
+            const existingAnalysis = await storage.getStockAnalysis(upperTicker);
+            const needsAnalysis = !existingAnalysis || existingAnalysis.status !== 'completed';
+            
+            if (needsAnalysis) {
+              console.log(`[BulkFollow] Triggering day 0 analysis for ${upperTicker} (status: ${existingAnalysis?.status || 'none'})`);
+              await storage.enqueueAnalysisJob(upperTicker, "follow_day_0", "high");
+            } else {
+              console.log(`[BulkFollow] Skipping analysis for ${upperTicker} - already completed`);
+            }
           } catch (analysisError) {
             console.error(`[BulkFollow] Failed to enqueue analysis for ${upperTicker}:`, analysisError);
             // Don't fail the bulk follow if analysis enqueue fails

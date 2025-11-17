@@ -2132,7 +2132,13 @@ export class DatabaseStorage implements IStorage {
       }
       
       // For backward compatibility, derive aiStance from watching scenario (uppercase for display)
-      const aiStance = latestBrief?.watchingStance?.toUpperCase() as 'ENTER' | 'WAIT' | null || null;
+      // Map watching stance (enter/wait) to traditional stance (BUY/HOLD) for display compatibility
+      let aiStance: 'BUY' | 'SELL' | 'HOLD' | null = null;
+      if (watchingStance === 'enter') {
+        aiStance = 'BUY';
+      } else if (watchingStance === 'wait') {
+        aiStance = 'HOLD';
+      }
       
       // Push result with computed stanceAlignment
       results.push({

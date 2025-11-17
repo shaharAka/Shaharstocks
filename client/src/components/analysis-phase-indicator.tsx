@@ -35,11 +35,13 @@ export function AnalysisPhaseIndicator({
 }: AnalysisPhaseIndicatorProps) {
   const iconSize = size === "sm" ? "h-3 w-3" : "h-4 w-4";
   
+  // IMPORTANT: Order matches actual execution order in queueWorker:
+  // Phase 2: Macro (industry/sector) -> Phase 3: Micro (fundamentals) -> Phase 4: Integration
   const phases = [
     {
       id: "macro",
       label: "Macro context",
-      description: "Industry/sector analysis",
+      description: "Industry/sector analysis (runs first)",
       completed: macroCompleted,
       active: currentPhase === "macro_analysis",
       testId: "status-macro",
@@ -47,7 +49,7 @@ export function AnalysisPhaseIndicator({
     {
       id: "micro",
       label: "Micro fundamentals",
-      description: "Company fundamentals analysis",
+      description: "Company fundamentals analysis (runs second)",
       completed: microCompleted,
       active: currentPhase === "micro_analysis",
       testId: "status-micro",
@@ -55,9 +57,9 @@ export function AnalysisPhaseIndicator({
     {
       id: "combined",
       label: "Combined score",
-      description: "Integrated analysis score",
+      description: "Integrated analysis score (final)",
       completed: combinedCompleted,
-      active: currentPhase === "integration",
+      active: currentPhase === "integration" || currentPhase === "calculating_score",
       testId: "status-combined",
     },
   ];
@@ -110,7 +112,7 @@ export function AnalysisPhaseIndicator({
                   />
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
+              <TooltipContent side="top" className="text-xs z-50">
                 <div className="flex flex-col gap-0.5">
                   <span className="font-medium">{phase.label}</span>
                   <span className="text-muted-foreground">{phase.description}</span>

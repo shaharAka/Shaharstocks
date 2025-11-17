@@ -1864,6 +1864,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get candlestick data for a ticker (shared OHLCV data - one record per ticker, reused across users)
+  app.get("/api/stocks/:ticker/candlesticks", async (req, res) => {
+    try {
+      const ticker = req.params.ticker.toUpperCase();
+      const candlesticks = await storage.getCandlesticksByTicker(ticker);
+      
+      if (!candlesticks) {
+        return res.status(404).json({ error: "No candlestick data found for this stock" });
+      }
+      
+      res.json(candlesticks);
+    } catch (error) {
+      console.error("[Candlesticks] Error fetching candlestick data:", error);
+      res.status(500).json({ error: "Failed to fetch candlestick data" });
+    }
+  });
+
   // Get all stock analyses (returns null scores for stocks with active jobs to show them as "processing")
   app.get("/api/stock-analyses", async (req, res) => {
     try {

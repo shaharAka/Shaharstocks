@@ -194,7 +194,7 @@ export function StockTable({
 
   return (
     <div className="rounded-md border max-h-[calc(100vh-16rem)] overflow-hidden flex flex-col">
-      <div className="overflow-y-auto flex-1">
+      <div className="overflow-x-auto overflow-y-auto flex-1">
         <Table className="text-xs">
           <TableHeader className="sticky top-0 bg-background z-[1]">
             <TableRow>

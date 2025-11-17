@@ -397,7 +397,7 @@ export function StockTable({
                     // Use integrated score if available (micro × macro), otherwise use confidence score, fallback to financial health score
                     const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
                     
-                    // Celebrate high signals with brand color (primary = teal/cyan from logo)
+                    // Signal strength gradient in amber/orange (distinct from green BUY / red SELL)
                     const isExceptional = score >= 90;
                     const isStrong = score >= 70 && score < 90;
                     const isModerate = score >= 50 && score < 70;
@@ -407,14 +407,13 @@ export function StockTable({
                         <Badge 
                           className={cn(
                             "font-mono transition-all border-0",
-                            isExceptional && "bg-primary text-primary-foreground text-sm font-bold shadow-md",
-                            isStrong && "bg-primary/20 text-primary text-xs font-semibold",
+                            isExceptional && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
+                            isStrong && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
                             isModerate && "bg-secondary text-secondary-foreground text-xs",
-                            !isModerate && !isStrong && !isExceptional && "bg-secondary text-secondary-foreground text-xs opacity-60"
+                            !isModerate && !isStrong && !isExceptional && "bg-secondary text-muted-foreground text-xs opacity-60"
                           )}
                           data-testid={`badge-signal-${stock.ticker}`}
                         >
-                          {isExceptional && "⚡ "}
                           {score}/100
                         </Badge>
                         {analysis.integratedScore && 

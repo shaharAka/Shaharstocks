@@ -26,7 +26,7 @@ export const stocks = pgTable("stocks", {
   source: text("source"), // "telegram" or "openinsider" - data source
   confidenceScore: integer("confidence_score"), // 0-100 data quality score - measures reliability of the data source
   priceHistory: jsonb("price_history").$type<{ date: string; price: number }[]>().default([]), // Last 7 days of prices
-  candlesticks: jsonb("candlesticks").$type<{ date: string; open: number; high: number; low: number; close: number; volume: number }[]>().default([]), // Last 2 weeks of OHLCV data for charts
+  // NOTE: Candlestick data moved to shared stockCandlesticks table (one record per ticker, reused across users)
   // Company information from Finnhub
   description: text("description"), // Company description/overview
   industry: text("industry"), // Company's industry sector

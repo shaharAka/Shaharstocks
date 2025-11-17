@@ -220,12 +220,12 @@ export function StockTable({
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs text-xs">
                     <div className="space-y-1">
-                      <p className="font-semibold">Opportunity Strength (0-100)</p>
+                      <p className="font-semibold">Signal Strength (0-100)</p>
                       <p className="text-muted-foreground">
-                        <span className="text-success">BUY:</span> High score = strong company + insider buying
+                        How strongly the fundamentals and analysis support the insider action
                       </p>
-                      <p className="text-muted-foreground">
-                        <span className="text-destructive">SELL:</span> High score = weak company + insider selling
+                      <p className="text-muted-foreground text-[10px] mt-1">
+                        100 = very strong signal | 0 = weak/contradictory signal
                       </p>
                     </div>
                   </TooltipContent>
@@ -395,20 +395,15 @@ export function StockTable({
                     
                     // Use integrated score if available (micro × macro), otherwise use confidence score, fallback to financial health score
                     const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
-                    const rating = analysis.overallRating;
-                    let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "secondary";
                     
-                    if (rating === "buy" || rating === "strong_buy") badgeVariant = "default";
-                    else if (rating === "avoid" || rating === "sell" || rating === "strong_avoid") badgeVariant = "destructive";
-                    
+                    // Use single neutral color for signal strength (not tied to BUY/SELL direction)
                     return (
                       <div className="flex flex-col items-end gap-0.5">
-                        <Badge variant={badgeVariant} className="text-xs font-mono">
+                        <Badge variant="secondary" className="text-xs font-mono">
                           {score}/100
                         </Badge>
                         {analysis.integratedScore && 
-                         analysis.confidenceScore !== analysis.integratedScore && 
-                         stock.recommendation !== "sell" && (
+                         analysis.confidenceScore !== analysis.integratedScore && (
                           <span className="text-[10px] text-muted-foreground">
                             (micro: {analysis.confidenceScore})
                           </span>

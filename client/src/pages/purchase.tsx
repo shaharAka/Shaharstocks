@@ -53,7 +53,7 @@ type StockWithUserStatus = Stock & {
   ageDays?: number;
 };
 
-type SortOption = "aiScore" | "daysFromTrade" | "marketCap";
+type SortOption = "signal" | "daysFromTrade" | "marketCap";
 type RecommendationFilter = "all" | "buy" | "sell";
 type FunnelSection = "worthExploring" | "recents" | "processing" | "communityPicks" | "rejected";
 type ViewMode = "cards" | "table";
@@ -75,7 +75,7 @@ export default function Purchase() {
   const { user: currentUser } = useUser();
   
   // State management
-  const [sortBy, setSortBy] = useState<SortOption>("aiScore");
+  const [sortBy, setSortBy] = useState<SortOption>("signal");
   const [tickerSearch, setTickerSearch] = useState("");
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("all");
   const [funnelSection, setFunnelSection] = useState<FunnelSection>("worthExploring");
@@ -451,7 +451,7 @@ export default function Purchase() {
     // Sort each section
     const sortGroupedStocks = (groups: GroupedStock[]) => {
       return [...groups].sort((a, b) => {
-        if (sortBy === "aiScore") {
+        if (sortBy === "signal") {
           return (b.highestScore ?? 0) - (a.highestScore ?? 0);
         } else if (sortBy === "daysFromTrade") {
           return a.daysSinceLatest - b.daysSinceLatest;
@@ -591,7 +591,7 @@ export default function Purchase() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="aiScore">AI Score</SelectItem>
+              <SelectItem value="signal">Signal Strength</SelectItem>
               <SelectItem value="daysFromTrade">Most Recent</SelectItem>
               <SelectItem value="marketCap">Market Cap</SelectItem>
             </SelectContent>

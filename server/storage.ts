@@ -72,6 +72,8 @@ import {
   type InsertFollowedStock,
   type DailyBrief,
   type InsertDailyBrief,
+  type StockCandlesticks,
+  type InsertStockCandlesticks,
   stocks,
   portfolioHoldings,
   trades,
@@ -91,6 +93,7 @@ import {
   stockComments,
   stockViews,
   stockAnalyses,
+  stockCandlesticks,
   macroAnalyses,
   aiAnalysisJobs,
   userStockStatuses,
@@ -293,6 +296,11 @@ export interface IStorage {
   saveStockAnalysis(analysis: InsertStockAnalysis): Promise<StockAnalysis>;
   updateStockAnalysis(ticker: string, updates: Partial<StockAnalysis>): Promise<void>;
   updateStockAnalysisStatus(ticker: string, status: string, errorMessage?: string): Promise<void>;
+
+  // Stock Candlesticks (shared OHLCV data - one record per ticker, reused across users)
+  getCandlesticksByTicker(ticker: string): Promise<StockCandlesticks | undefined>;
+  upsertCandlesticks(ticker: string, candlestickData: { date: string; open: number; high: number; low: number; close: number; volume: number }[]): Promise<StockCandlesticks>;
+  getAllTickersNeedingCandlestickData(): Promise<string[]>;
 
   // AI Analysis Job Queue
   enqueueAnalysisJob(ticker: string, source: string, priority?: string): Promise<AiAnalysisJob>;
@@ -2516,6 +2524,72 @@ export class DatabaseStorage implements IStorage {
       .update(stockAnalyses)
       .set(updates)
       .where(eq(stockAnalyses.ticker, ticker));
+  }
+
+  // Stock Candlesticks Methods (shared OHLCV data - one record per ticker, reused across users)
+  async getCandlesticksByTicker(ticker: string): Promise<StockCandlesticks | undefined> {
+    const [candlesticks] = await db
+      .select()
+      .from(stockCandlesticks)
+      .where(eq(stockCandlesticks.ticker, ticker));
+    return candlesticks;
+  }
+
+  async upsertCandlesticks(
+    ticker: string,
+    candlestickData: { date: string; open: number; high: number; low: number; close: number; volume: number }[]
+  ): Promise<StockCandlesticks> {
+    // Check if candlestick data already exists for this ticker
+    const existing = await this.getCandlesticksByTicker(ticker);
+    
+    if (existing) {
+      // Update existing record
+      const [updated] = await db
+        .update(stockCandlesticks)
+        .set({ 
+          candlestickData, 
+          lastUpdated: new Date() 
+        })
+        .where(eq(stockCandlesticks.ticker, ticker))
+        .returning();
+      return updated;
+    } else {
+      // Insert new record
+      const [inserted] = await db
+        .insert(stockCandlesticks)
+        .values({ 
+          ticker, 
+          candlestickData, 
+          lastUpdated: new Date() 
+        })
+        .returning();
+      return inserted;
+    }
+  }
+
+  async getAllTickersNeedingCandlestickData(): Promise<string[]> {
+    // Get all unique tickers from stocks table that don't have candlestick data yet
+    // or have stale data (older than 1 day)
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
+    // Get all unique tickers from stocks
+    const allTickers = await db
+      .selectDistinct({ ticker: stocks.ticker })
+      .from(stocks);
+
+    // Get tickers that have recent candlestick data
+    const tickersWithRecentData = await db
+      .select({ ticker: stockCandlesticks.ticker })
+      .from(stockCandlesticks)
+      .where(sql`${stockCandlesticks.lastUpdated} >= ${oneDayAgo}`);
+
+    const recentTickerSet = new Set(tickersWithRecentData.map(t => t.ticker));
+    
+    // Return tickers that don't have recent data
+    return allTickers
+      .map(t => t.ticker)
+      .filter(ticker => !recentTickerSet.has(ticker));
   }
 
   // AI Analysis Job Queue Methods

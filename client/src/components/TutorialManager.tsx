@@ -1,15 +1,32 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Tutorial } from "./tutorial";
 import { getTutorialIdFromRoute, TutorialId } from "@/config/tutorials";
 import { useUser } from "@/contexts/UserContext";
+import type { Stock } from "@shared/schema";
 
 export function TutorialManager() {
   const [location] = useLocation();
   const [forceTutorialId, setForceTutorialId] = useState<TutorialId | null>(null);
   const [manualTrigger, setManualTrigger] = useState(false);
   const prevTutorialIdRef = useRef<TutorialId | null>(null);
-  const { experienceState, isTutorialCompleted, completeTutorial, progressLoading, progressFetched } = useUser();
+  const { user, experienceState, isTutorialCompleted, completeTutorial, progressLoading, progressFetched } = useUser();
+
+  // Fetch stocks with user status to check for high signals
+  const { data: stocks = [] } = useQuery<any[]>({
+    queryKey: ["/api/stocks/with-user-status"],
+    enabled: !!user && experienceState === "complete" && location === "/recommendations",
+  });
+
+  // Fetch analyses to get signal scores  
+  const { data: analyses = [] } = useQuery<any[]>({
+    queryKey: ["/api/stock-analyses"],
+    enabled: !!user && experienceState === "complete" && location === "/recommendations",
+  });
+
+  // Note: We don't need to fetch followed stocks here since the event is dispatched
+  // from the follow mutation itself when followedStocks.length === 0
 
   // Get tutorial ID from current route
   const currentTutorialId = getTutorialIdFromRoute(location);
@@ -17,7 +34,7 @@ export function TutorialManager() {
   // The active tutorial is either the forced one (from event) or the one for current route
   const activeTutorialId = forceTutorialId || currentTutorialId;
 
-  // Listen for replay-tutorial events
+  // Listen for tutorial events (replay and first-follow trigger)
   useEffect(() => {
     const handleReplayTutorial = (event: Event) => {
       const customEvent = event as CustomEvent<{ tutorialId?: TutorialId }>;
@@ -34,32 +51,72 @@ export function TutorialManager() {
       }
     };
 
-    window.addEventListener('replay-tutorial', handleReplayTutorial);
-    return () => window.removeEventListener('replay-tutorial', handleReplayTutorial);
-  }, [currentTutorialId]);
+    const handleFirstFollow = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      // Trigger first-follow tutorial only if not completed
+      if (!isTutorialCompleted("first-follow")) {
+        setForceTutorialId("first-follow");
+        setManualTrigger(true);
+      }
+    };
 
-  // Auto-start tutorial for first-time visitors (only recommendations page, only once)
+    window.addEventListener('replay-tutorial', handleReplayTutorial);
+    window.addEventListener('first-follow-tutorial', handleFirstFollow);
+    return () => {
+      window.removeEventListener('replay-tutorial', handleReplayTutorial);
+      window.removeEventListener('first-follow-tutorial', handleFirstFollow);
+    };
+  }, [currentTutorialId, isTutorialCompleted]);
+
+  // Contextual tutorial triggering based on user state and conditions
   useEffect(() => {
     // Don't auto-start while data is loading or hasn't been fetched yet
-    if (progressLoading || experienceState === "loading" || !progressFetched) return;
+    if (progressLoading || experienceState === "loading" || !progressFetched || !user) return;
+    if (experienceState !== "complete") return;
+    if (forceTutorialId) return; // Don't interfere with forced tutorials
     
-    // Only auto-start on recommendations page and only if not completed
-    // This provides gentle onboarding without being too aggressive
-    const shouldAutoStart = 
-      experienceState === "complete" &&
-      currentTutorialId === "recommendations" &&
-      !isTutorialCompleted("recommendations") &&
-      !forceTutorialId;
-
-    if (shouldAutoStart && currentTutorialId !== prevTutorialIdRef.current) {
+    // Tutorial 1: Opportunities intro - triggers after onboarding on recommendations page
+    if (
+      location === "/recommendations" &&
+      !isTutorialCompleted("opportunities-intro")
+    ) {
+      setForceTutorialId("opportunities-intro");
       setManualTrigger(true);
-      prevTutorialIdRef.current = currentTutorialId;
-    } else if (currentTutorialId !== prevTutorialIdRef.current && !forceTutorialId) {
-      // Route's tutorial ID changed and we're not in forced mode, reset state
-      setManualTrigger(false);
-      prevTutorialIdRef.current = currentTutorialId;
+      return;
     }
-  }, [currentTutorialId, forceTutorialId, experienceState, isTutorialCompleted, progressLoading, progressFetched]);
+
+    // Tutorial 2: High signal follow prompt - triggers when high signal stock exists
+    const hasHighSignalStock = stocks.some(stock => {
+      const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
+      const score = analysis?.integratedScore ?? analysis?.aiScore;
+      return score && score >= 90;
+    });
+    
+    if (
+      hasHighSignalStock &&
+      location === "/recommendations" &&
+      isTutorialCompleted("opportunities-intro") &&
+      !isTutorialCompleted("high-signal-follow")
+    ) {
+      setForceTutorialId("high-signal-follow");
+      setManualTrigger(true);
+      return;
+    }
+
+    // Tutorial 3: First follow - triggers when user follows their first stock
+    // This is event-driven from the follow action
+    
+  }, [
+    location,
+    user,
+    experienceState,
+    progressLoading,
+    progressFetched,
+    forceTutorialId,
+    isTutorialCompleted,
+    stocks,
+    analyses,
+  ]);
 
   // Don't render if no tutorial is available or if onboarding isn't complete (and not manual trigger)
   if (!activeTutorialId) {

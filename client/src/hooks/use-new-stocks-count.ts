@@ -4,7 +4,8 @@ import type { Stock } from "@shared/schema";
 const LAST_VIEWED_KEY = "purchase-last-viewed";
 
 /**
- * Hook to track and count new high-score opportunities that haven't been seen yet
+ * Hook to track and count new HIGH SIGNAL opportunities that haven't been seen yet
+ * High signal = stocks with very strong AI scores (>= 80) indicating AI strongly agrees with insider action
  */
 export function useNewStocksCount() {
   const { data: stocks = [] } = useQuery<Stock[]>({
@@ -19,7 +20,8 @@ export function useNewStocksCount() {
   const lastViewed = localStorage.getItem(LAST_VIEWED_KEY);
   const lastViewedDate = lastViewed ? new Date(lastViewed) : null;
 
-  // Count NEW high-score stocks (BUY or SELL with score >= 70) since last view
+  // Count NEW high signal stocks (BUY or SELL with score >= 80) since last view
+  // Score >= 80 indicates AI strongly agrees with insider action (high confidence)
   const newCount = stocks.filter((stock) => {
     const rec = stock.recommendation?.toLowerCase();
     if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
@@ -28,8 +30,9 @@ export function useNewStocksCount() {
     const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
     const score = analysis?.integratedScore ?? analysis?.aiScore;
     
-    // Only count high-score opportunities (>= 70)
-    if (!score || score < 70) return false;
+    // Only count HIGH SIGNAL opportunities (>= 80)
+    // This represents stocks where AI strongly agrees with insider action
+    if (!score || score < 80) return false;
     
     if (!lastViewedDate) return true; // First time viewing - all are new
     

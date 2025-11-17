@@ -274,7 +274,7 @@ export const aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   ticker: text("ticker").notNull(),
   source: text("source").notNull(), // "user_manual", "background_job", "bulk_import", etc.
   priority: text("priority").notNull().default("normal"), // "high", "normal", "low"
-  status: text("status").notNull().default("pending"), // "pending", "processing", "completed", "failed"
+  status: text("status").notNull().default("pending"), // "pending", "processing", "completed", "failed", "cancelled"
   retryCount: integer("retry_count").notNull().default(0),
   maxRetries: integer("max_retries").notNull().default(3),
   scheduledAt: timestamp("scheduled_at").defaultNow(), // When job should be processed (for delayed retries)
@@ -290,7 +290,12 @@ export const aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   }>(),
   lastError: text("last_error"), // Detailed error message for the current/last failed step
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  // Prevent duplicate active jobs for same ticker (race condition prevention)
+  // Only one pending OR processing job allowed per ticker at a time
+  activeJobUnique: uniqueIndex("active_job_unique_idx").on(table.ticker)
+    .where(sql`status IN ('pending', 'processing')`),
+}));
 
 export const insertAiAnalysisJobSchema = createInsertSchema(aiAnalysisJobs).omit({ 
   id: true, 

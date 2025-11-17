@@ -403,7 +403,27 @@ export class DatabaseStorage implements IStorage {
 
   // Stocks (Per-user tenant isolation)
   async getStocks(userId: string): Promise<Stock[]> {
-    return await db.select().from(stocks).where(eq(stocks.userId, userId));
+    // Include active analysis job data for progress UI
+    const results = await db
+      .select({
+        stock: stocks,
+        analysisJob: aiAnalysisJobs,
+      })
+      .from(stocks)
+      .leftJoin(
+        aiAnalysisJobs,
+        and(
+          eq(stocks.ticker, aiAnalysisJobs.ticker),
+          sql`${aiAnalysisJobs.status} IN ('pending', 'processing')`
+        )
+      )
+      .where(eq(stocks.userId, userId));
+    
+    // Map results to include analysisJob data
+    return results.map((row) => ({
+      ...row.stock,
+      analysisJob: row.analysisJob || undefined,
+    } as any));
   }
 
   async getStock(userId: string, ticker: string): Promise<Stock | undefined> {
@@ -2531,34 +2551,57 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Create new job
-    const [job] = await db
-      .insert(aiAnalysisJobs)
-      .values({
-        ticker,
-        source,
-        priority,
-        status: "pending",
-        retryCount: 0,
-        maxRetries: 3,
-        scheduledAt: new Date(),
-      })
-      .returning();
+    // Create new job (race condition protected by unique index)
+    try {
+      const [job] = await db
+        .insert(aiAnalysisJobs)
+        .values({
+          ticker,
+          source,
+          priority,
+          status: "pending",
+          retryCount: 0,
+          maxRetries: 3,
+          scheduledAt: new Date(),
+        })
+        .returning();
 
-    // Create or update analysis record with "analyzing" status
-    // This ensures the frontend can show the analyzing state immediately
-    const existingAnalysis = await this.getStockAnalysis(ticker);
-    if (existingAnalysis) {
-      await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
-    } else {
-      await db.insert(stockAnalyses).values({
-        ticker,
-        status: "analyzing",
-      });
+      // Create or update analysis record with "analyzing" status
+      // This ensures the frontend can show the analyzing state immediately
+      const existingAnalysis = await this.getStockAnalysis(ticker);
+      if (existingAnalysis) {
+        await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
+      } else {
+        await db.insert(stockAnalyses).values({
+          ticker,
+          status: "analyzing",
+        });
+      }
+
+      console.log(`[Queue] Enqueued analysis job for ${ticker} (priority: ${priority}, source: ${source})`);
+      return job;
+    } catch (error: any) {
+      // Handle race condition: unique constraint violation means another job was created simultaneously
+      if (error.code === '23505' || error.message?.includes('unique')) {
+        console.log(`[Queue] Race condition detected for ${ticker}, fetching existing job`);
+        const [existingJob] = await db
+          .select()
+          .from(aiAnalysisJobs)
+          .where(
+            and(
+              eq(aiAnalysisJobs.ticker, ticker),
+              sql`${aiAnalysisJobs.status} IN ('pending', 'processing')`
+            )
+          )
+          .limit(1);
+        
+        if (existingJob) {
+          return existingJob;
+        }
+      }
+      // Re-throw unexpected errors
+      throw error;
     }
-
-    console.log(`[Queue] Enqueued analysis job for ${ticker} (priority: ${priority}, source: ${source})`);
-    return job;
   }
 
   async cancelAnalysisJobsForTicker(ticker: string): Promise<void> {

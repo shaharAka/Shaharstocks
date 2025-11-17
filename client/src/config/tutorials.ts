@@ -1,11 +1,20 @@
 import { Step } from "react-joyride";
 
-export type TutorialId = "recommendations" | "analysis" | "settings" | "community" | "portfolio";
+export type TutorialId = 
+  | "opportunities-intro" 
+  | "high-signal-follow" 
+  | "first-follow"
+  | "recommendations" 
+  | "analysis" 
+  | "settings" 
+  | "community" 
+  | "portfolio";
 
 export interface TutorialConfig {
   id: TutorialId;
   title: string;
   steps: Step[];
+  triggerCondition?: "after-onboarding" | "high-signal-exists" | "first-follow" | "route-based";
 }
 
 // Route-to-Tutorial mapping
@@ -48,9 +57,76 @@ export function getTutorialIdFromRoute(pathname: string): TutorialId | null {
 }
 
 export const tutorials: Record<TutorialId, TutorialConfig> = {
+  "opportunities-intro": {
+    id: "opportunities-intro",
+    title: "Opportunities Dashboard",
+    triggerCondition: "after-onboarding",
+    steps: [
+      {
+        target: "body",
+        content: "Welcome to your Opportunities dashboard! This is where you'll find stocks with insider trading activity from SEC filings, each analyzed and scored by our AI system.",
+        placement: "center",
+      },
+      {
+        target: "[data-testid='stock-table']",
+        content: "Each stock shows a Signal badge (0-100) indicating opportunity strength. Exceptional signals (90-100) appear in bold amber, strong signals (70-89) in light amber - representing high-quality opportunities regardless of BUY or SELL direction.",
+        placement: "top",
+      },
+      {
+        target: "body",
+        content: "Use the filters at the top to narrow down stocks by insider action (BUY/SELL), signal strength, or sort by different metrics. Click any stock row to see detailed analysis!",
+        placement: "center",
+      },
+    ],
+  },
+  "high-signal-follow": {
+    id: "high-signal-follow",
+    title: "High Signal Detected!",
+    triggerCondition: "high-signal-exists",
+    steps: [
+      {
+        target: "body",
+        content: "Great! We've found a stock with an exceptional signal (90-100). These represent the highest-quality opportunities identified by our AI analysis.",
+        placement: "center",
+      },
+      {
+        target: "[data-testid^='button-follow-']",
+        content: "Click the star button to follow this stock. Following a stock adds it to your watchlist and enables daily briefs, AI analysis updates, and personalized notifications.",
+        placement: "bottom",
+      },
+      {
+        target: "body",
+        content: "You'll receive alerts when followed stocks hit important milestones: stance changes, high scores, or when they become popular with other users. Let's follow a stock to see how it works!",
+        placement: "center",
+      },
+    ],
+  },
+  "first-follow": {
+    id: "first-follow",
+    title: "Stock Followed!",
+    triggerCondition: "first-follow",
+    steps: [
+      {
+        target: "body",
+        content: "Excellent! You've followed your first stock. This stock is now in your watchlist and you'll receive personalized updates about it.",
+        placement: "center",
+      },
+      {
+        target: "[data-testid='nav-portfolio']",
+        content: "Visit the Portfolio page to see all your followed stocks, track their performance, and view daily AI-generated briefs with trading insights.",
+        placement: "right",
+      },
+      {
+        target: "[data-testid='button-notifications']",
+        content: "Check the notification bell for important alerts about your followed stocks: signal strength changes, stance shifts, and popularity trends. You're all set to start tracking opportunities!",
+        placement: "bottom",
+      },
+    ],
+  },
   recommendations: {
     id: "recommendations",
     title: "Opportunities Dashboard",
+    triggerCondition: "route-based",
     steps: [
       {
         target: "body",
@@ -72,6 +148,7 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
   analysis: {
     id: "analysis",
     title: "Simulation & What-If Analysis",
+    triggerCondition: "route-based",
     steps: [
       {
         target: "body",
@@ -93,6 +170,7 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
   settings: {
     id: "settings",
     title: "Settings & Configuration",
+    triggerCondition: "route-based",
     steps: [
       {
         target: "body",
@@ -114,6 +192,7 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
   portfolio: {
     id: "portfolio",
     title: "Portfolio & Watchlist",
+    triggerCondition: "route-based",
     steps: [
       {
         target: "body",
@@ -135,6 +214,7 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
   community: {
     id: "community",
     title: "Community & Feature Voting",
+    triggerCondition: "route-based",
     steps: [
       {
         target: "body",

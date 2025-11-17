@@ -297,8 +297,8 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     );
   }
 
-  // Show empty state if no candlestick data available
-  if (!candlestickData?.candlestickData || candlestickData.candlestickData.length === 0) {
+  // Show empty state only if data has loaded but is empty (not while still loading)
+  if (!candlesticksLoading && (!candlestickData?.candlestickData || candlestickData.candlestickData.length === 0)) {
     return (
       <Card>
         <CardHeader>

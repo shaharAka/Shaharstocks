@@ -122,6 +122,10 @@ class QueueWorker {
     console.log(`[QueueWorker] Processing job ${job.id} for ${job.ticker} (priority: ${job.priority}, attempt: ${job.retryCount + 1}/${job.maxRetries + 1})`);
 
     try {
+      // Reset phase completion flags for fresh analysis
+      console.log(`[QueueWorker] Resetting phase completion flags for ${job.ticker}...`);
+      await storage.resetStockAnalysisPhaseFlags(job.ticker);
+      
       // PHASE 1: Fetch all required data for analysis
       await this.updateProgress(job.id, job.ticker, "fetching_data", {
         phase: "data_fetch",

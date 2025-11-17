@@ -311,6 +311,7 @@ export interface IStorage {
   getJobsByTicker(ticker: string): Promise<AiAnalysisJob[]>;
   updateJobStatus(jobId: string, status: string, updates?: Partial<AiAnalysisJob>): Promise<void>;
   updateJobProgress(jobId: string, currentStep: string, stepDetails: any): Promise<void>;
+  resetStockAnalysisPhaseFlags(ticker: string): Promise<void>;
   markStockAnalysisPhaseComplete(ticker: string, phase: 'micro' | 'macro' | 'combined'): Promise<void>;
   getStocksWithIncompleteAnalysis(): Promise<Stock[]>;
   getQueueStats(): Promise<{ pending: number; processing: number; completed: number; failed: number }>;
@@ -2791,6 +2792,22 @@ export class DatabaseStorage implements IStorage {
         lastError: null, // Clear error on successful progress update
       })
       .where(eq(aiAnalysisJobs.id, jobId));
+  }
+
+  async resetStockAnalysisPhaseFlags(ticker: string): Promise<void> {
+    // Reset ALL phase completion flags for ALL stocks with this ticker
+    // This ensures fresh progress tracking when a new analysis starts
+    const result = await db.execute(sql`
+      WITH lock AS (SELECT pg_advisory_xact_lock(hashtext(${ticker})))
+      UPDATE ${stocks}
+      SET 
+        micro_analysis_completed = false,
+        macro_analysis_completed = false,
+        combined_analysis_completed = false
+      WHERE ticker = ${ticker}
+    `);
+
+    console.log(`[Storage] Reset phase flags for ${ticker} (updated ${result.rowCount || 0} rows)`);
   }
 
   async markStockAnalysisPhaseComplete(ticker: string, phase: 'micro' | 'macro' | 'combined'): Promise<void> {

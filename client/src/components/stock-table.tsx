@@ -351,7 +351,7 @@ export function StockTable({
                     if (!analysis) return <span className="text-xs text-muted-foreground">-</span>;
                     
                     // Check if analysis is in progress
-                    if (analysis.status === "pending" || analysis.status === "analyzing") {
+                    if (analysis.status === "pending" || analysis.status === "analyzing" || analysis.status === "processing") {
                       return (
                         <div className="flex items-center gap-2 justify-end">
                           <Badge variant="outline" className="text-xs">

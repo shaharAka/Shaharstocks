@@ -2338,6 +2338,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/stocks/:ticker/position", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const ticker = req.params.ticker.toUpperCase();
+      const { hasEnteredPosition } = req.body;
+      
+      if (typeof hasEnteredPosition !== 'boolean') {
+        return res.status(400).json({ error: "hasEnteredPosition must be a boolean" });
+      }
+      
+      await storage.toggleStockPosition(ticker, req.session.userId, hasEnteredPosition);
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Toggle position error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      if (errorMessage.includes("not being followed")) {
+        return res.status(404).json({ error: "Stock is not being followed" });
+      }
+      
+      res.status(500).json({ error: "Failed to toggle position status" });
+    }
+  });
+
   app.post("/api/stocks/bulk-follow", async (req, res) => {
     try {
       if (!req.session.userId) {

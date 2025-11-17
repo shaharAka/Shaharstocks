@@ -255,6 +255,7 @@ export interface IStorage {
   getUserFollowedStocks(userId: string): Promise<FollowedStock[]>;
   followStock(follow: InsertFollowedStock): Promise<FollowedStock>;
   unfollowStock(ticker: string, userId: string): Promise<boolean>;
+  toggleStockPosition(ticker: string, userId: string, hasEnteredPosition: boolean): Promise<boolean>;
   getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>>;
   getFollowedStocksWithStatus(userId: string): Promise<Array<FollowedStock & { 
     currentPrice: string; 
@@ -1975,6 +1976,33 @@ export class DatabaseStorage implements IStorage {
       userId,
       ticker,
       data: { action: "unfollow" }
+    });
+    
+    return true;
+  }
+
+  async toggleStockPosition(ticker: string, userId: string, hasEnteredPosition: boolean): Promise<boolean> {
+    const result = await db
+      .update(followedStocks)
+      .set({ hasEnteredPosition })
+      .where(
+        and(
+          eq(followedStocks.ticker, ticker),
+          eq(followedStocks.userId, userId)
+        )
+      )
+      .returning();
+    
+    if (result.length === 0) {
+      throw new Error("Stock is not being followed");
+    }
+    
+    // Emit event for WebSocket cache invalidation
+    eventDispatcher.emit("FOLLOWED_STOCK_UPDATED", {
+      type: "FOLLOWED_STOCK_UPDATED",
+      userId,
+      ticker,
+      data: { action: "position_toggle", hasEnteredPosition }
     });
     
     return true;

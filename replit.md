@@ -32,7 +32,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Adaptive Stock Fetching**: Stock fetch limits adjust based on user onboarding and configuration, with customizable OpenInsider filters for personalized opportunity feeds.
 - **Follow Stock System**: Comprehensive follow/unfollow functionality with duplicate prevention, visual indicators, and automatic Day-0 AI analysis.
 - **Admin Backoffice**: Comprehensive dashboard for user, subscription, and payment management with audit trails, soft/hard deletion, password resets, and a two-tier admin system. Includes an Announcement System for platform-wide notifications.
-- **Daily Stock Briefs**: Lightweight daily trading reports for followed stocks with dual-scenario analysis, generated using Alpha Vantage and GPT-4.1.
+- **Daily Stock Briefs**: Lightweight daily trading reports for followed stocks with position-aware single-scenario display. Users can toggle between "Watching" (considering entry) and "In Position" (currently holding) modes via a switch control. Each mode shows the appropriate scenario analysis generated using Alpha Vantage and GPT-4.1. The position status is tracked per-user, per-stock in the followed_stocks table via hasEnteredPosition field.
 - **Intelligent Notification System**: Real-time, deduplicated alerts for high-value trading opportunities (High Score Buy/Sell, Popular Stock, Stance Change) with distinct UI badging.
 - **Candlestick Data Refactoring**: Candlestick data is stored once per ticker in a shared table, fetched on-demand by the frontend via API, and populated daily by a background job, eliminating duplication and simplifying synchronization.
 

@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { 
   ArrowLeft, 
   Star, 
@@ -51,14 +53,16 @@ export default function TickerDetail() {
   });
 
   // Check if user is following this stock (needed for daily briefs query)
-  const { data: followedStocks = [] } = useQuery<any[]>({
+  const { data: followedStocks = [], isFetching: isFollowedStocksFetching } = useQuery<any[]>({
     queryKey: ["/api/users/me/followed"],
     enabled: !!currentUser,
     retry: false,
     meta: { ignoreError: true },
   });
 
-  const isFollowing = followedStocks.some(f => f.ticker === ticker);
+  const currentFollowedStock = followedStocks.find(f => f.ticker === ticker);
+  const isFollowing = !!currentFollowedStock;
+  const hasEnteredPosition = currentFollowedStock?.hasEnteredPosition ?? false;
 
   // Fetch daily briefs (lightweight daily reports for followed stocks)
   const { data: dailyBriefs = [], isLoading: briefsLoading } = useQuery<any[]>({
@@ -170,6 +174,37 @@ export default function TickerDetail() {
       toast({
         title: "Error",
         description: "Failed to unfollow stock",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle position mutation
+  const togglePositionMutation = useMutation({
+    mutationFn: async (hasEnteredPosition: boolean) => {
+      if (!ticker) {
+        throw new Error("Ticker is not defined");
+      }
+      return await apiRequest("PATCH", `/api/stocks/${ticker}/position`, { hasEnteredPosition });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "daily-briefs"] });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.message || "Failed to update position status";
+      const isNotFollowing = errorMessage.includes("not being followed");
+      
+      // Refetch to ensure UI is in sync with backend state
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
+      
+      toast({
+        title: "Error",
+        description: isNotFollowing 
+          ? "You must follow this stock to track your position"
+          : "Failed to update position status",
         variant: "destructive",
       });
     },
@@ -329,21 +364,37 @@ export default function TickerDetail() {
       </Card>
 
       {/* Daily Briefs - Show above simulation for followed stocks */}
-      {isFollowing && (
+      {isFollowing && currentFollowedStock && (
         <LoadingStrikeBorder isLoading={hasActiveAnalysisJob}>
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                Daily Stock Briefs
-                {hasActiveAnalysisJob && (
-                  <Badge variant="secondary" className="ml-2">
-                    Analyzing...
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Lightweight daily reports with quick buy/sell/hold guidance for followed stocks
-              </CardDescription>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    Daily Stock Briefs
+                    {hasActiveAnalysisJob && (
+                      <Badge variant="secondary" className="ml-2">
+                        Analyzing...
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    Lightweight daily reports with quick buy/sell/hold guidance for followed stocks
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="position-toggle" className="text-sm text-muted-foreground whitespace-nowrap">
+                    {hasEnteredPosition ? "In Position" : "Watching"}
+                  </Label>
+                  <Switch
+                    id="position-toggle"
+                    checked={hasEnteredPosition}
+                    onCheckedChange={(checked) => togglePositionMutation.mutate(checked)}
+                    disabled={togglePositionMutation.isPending || isFollowedStocksFetching}
+                    data-testid="switch-position"
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
             {briefsLoading ? (
@@ -362,12 +413,16 @@ export default function TickerDetail() {
                   const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
                   const isPositive = priceChange >= 0;
                   
-                  // Check if either scenario recommends ACT
-                  // Watching scenario: ACT = "enter" (buy opportunity) or "short" (sell opportunity)
-                  // Owning scenario: ACT = "sell" (exit long) or "cover" (exit short)
-                  const watchingIsAct = brief.watchingStance === "enter" || brief.watchingStance === "short";
-                  const owningIsAct = brief.owningStance === "sell" || brief.owningStance === "cover";
-                  const hasActRecommendation = watchingIsAct || owningIsAct;
+                  // Determine which scenario to show based on position status
+                  const activeStance = hasEnteredPosition ? brief.owningStance : brief.watchingStance;
+                  const activeConfidence = hasEnteredPosition ? brief.owningConfidence : brief.watchingConfidence;
+                  const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
+                  const activeHighlights = hasEnteredPosition ? brief.owningHighlights : brief.watchingHighlights;
+                  
+                  // Check if active scenario recommends ACT
+                  const isAct = hasEnteredPosition 
+                    ? (activeStance === "sell" || activeStance === "cover")
+                    : (activeStance === "enter" || activeStance === "short");
                   
                   const getStanceConfig = (stance: string) => {
                     if (stance === "enter") {
@@ -422,8 +477,7 @@ export default function TickerDetail() {
                     }
                   };
                   
-                  const watchingConfig = getStanceConfig(brief.watchingStance);
-                  const owningConfig = getStanceConfig(brief.owningStance);
+                  const stanceConfig = getStanceConfig(activeStance);
                   
                   return (
                     <div key={brief.id} className="border rounded-lg overflow-hidden">
@@ -434,7 +488,7 @@ export default function TickerDetail() {
                             <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
                               {new Date(brief.briefDate).toLocaleDateString()}
                             </Badge>
-                            {hasActRecommendation && (
+                            {isAct && (
                               <Badge variant="default" className="bg-primary font-bold" data-testid={`badge-act-${brief.id}`}>
                                 ACT
                               </Badge>
@@ -451,67 +505,36 @@ export default function TickerDetail() {
                         </div>
                       </div>
                       
-                      {/* Dual Scenario Display - Side by Side */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
-                        {/* WATCHING Scenario */}
-                        <div className={`p-4 ${watchingConfig.bgColor} border-l-4 ${watchingConfig.borderColor}`}>
-                          <div className="flex items-center gap-2 mb-3">
-                            <watchingConfig.icon className={`h-5 w-5 ${watchingConfig.color}`} />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <h4 className="text-sm font-bold text-muted-foreground">IF I CONSIDER ENTERING</h4>
-                                <Badge variant={watchingIsAct ? "default" : "outline"} className={watchingIsAct ? "bg-primary" : ""}>
-                                  {watchingConfig.text}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                Confidence: {brief.watchingConfidence}/10
-                              </p>
+                      {/* Single Scenario Display - Based on Position Status */}
+                      <div className={`p-4 ${stanceConfig.bgColor} border-l-4 ${stanceConfig.borderColor}`}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <stanceConfig.icon className={`h-5 w-5 ${stanceConfig.color}`} />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-muted-foreground">
+                                {hasEnteredPosition ? "CURRENTLY IN POSITION" : "CONSIDERING ENTRY"}
+                              </h4>
+                              <Badge variant={isAct ? "default" : "outline"} className={isAct ? "bg-primary" : ""}>
+                                {stanceConfig.text}
+                              </Badge>
                             </div>
+                            <p className="text-xs text-muted-foreground">
+                              Confidence: {activeConfidence}/10
+                            </p>
                           </div>
-                          <p className="text-sm text-muted-foreground mb-2" data-testid={`text-watching-${brief.id}`}>
-                            {brief.watchingText}
-                          </p>
-                          {brief.watchingHighlights && brief.watchingHighlights.length > 0 && (
-                            <ul className="list-disc list-inside space-y-1 mt-2">
-                              {brief.watchingHighlights.map((highlight: string, idx: number) => (
-                                <li key={idx} className="text-xs text-muted-foreground">
-                                  {highlight}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
                         </div>
-                        
-                        {/* OWNING Scenario */}
-                        <div className={`p-4 ${owningConfig.bgColor} border-l-4 ${owningConfig.borderColor}`}>
-                          <div className="flex items-center gap-2 mb-3">
-                            <owningConfig.icon className={`h-5 w-5 ${owningConfig.color}`} />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <h4 className="text-sm font-bold text-muted-foreground">IF I ALREADY OWN</h4>
-                                <Badge variant={owningIsAct ? "default" : "outline"} className={owningIsAct ? "bg-primary" : ""}>
-                                  {owningConfig.text}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                Confidence: {brief.owningConfidence}/10
-                              </p>
-                            </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-2" data-testid={`text-owning-${brief.id}`}>
-                            {brief.owningText}
-                          </p>
-                          {brief.owningHighlights && brief.owningHighlights.length > 0 && (
-                            <ul className="list-disc list-inside space-y-1 mt-2">
-                              {brief.owningHighlights.map((highlight: string, idx: number) => (
-                                <li key={idx} className="text-xs text-muted-foreground">
-                                  {highlight}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
+                        <p className="text-sm text-muted-foreground mb-2" data-testid={`text-brief-${brief.id}`}>
+                          {activeText}
+                        </p>
+                        {activeHighlights && activeHighlights.length > 0 && (
+                          <ul className="list-disc list-inside space-y-1 mt-2">
+                            {activeHighlights.map((highlight: string, idx: number) => (
+                              <li key={idx} className="text-xs text-muted-foreground">
+                                {highlight}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     </div>
                   );

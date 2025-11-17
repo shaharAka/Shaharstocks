@@ -1035,11 +1035,12 @@ export const followedStocks = pgTable("followed_stocks", {
   userId: varchar("user_id").notNull(),
   ticker: text("ticker").notNull(),
   followedAt: timestamp("followed_at").notNull().defaultNow(),
+  hasEnteredPosition: boolean("has_entered_position").default(false).notNull(), // Track if user entered position
 }, (table) => ({
   userTickerFollowUnique: uniqueIndex("user_ticker_follow_unique_idx").on(table.userId, table.ticker),
 }));
 
-export const insertFollowedStockSchema = createInsertSchema(followedStocks).omit({ id: true, followedAt: true });
+export const insertFollowedStockSchema = createInsertSchema(followedStocks).omit({ id: true, followedAt: true, hasEnteredPosition: true });
 export type InsertFollowedStock = z.infer<typeof insertFollowedStockSchema>;
 export type FollowedStock = typeof followedStocks.$inferSelect;
 

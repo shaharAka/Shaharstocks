@@ -2164,6 +2164,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const follow = await storage.followStock(validatedData);
       
+      // Fetch candlestick data immediately if not present (async, fire-and-forget)
+      void (async () => {
+        try {
+          const existingCandlesticks = await storage.getCandlesticksByTicker(ticker);
+          if (!existingCandlesticks || !existingCandlesticks.candlestickData || existingCandlesticks.candlestickData.length === 0) {
+            console.log(`[Follow] Fetching candlestick data for newly followed stock ${ticker}...`);
+            const candlesticks = await stockService.getCandlestickData(ticker);
+            if (candlesticks && candlesticks.length > 0) {
+              await storage.upsertCandlesticks(ticker, candlesticks.map(c => ({
+                date: c.date,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close,
+                volume: c.volume
+              })));
+              console.log(`[Follow] ✓ Candlestick data fetched for ${ticker}`);
+            }
+          }
+        } catch (err: any) {
+          console.error(`[Follow] ✗ Failed to fetch candlesticks for ${ticker}:`, err.message);
+        }
+      })();
+      
       // Check if stock became popular (>10 followers) and notify all followers
       try {
         const followerCount = await storage.getFollowerCountForTicker(ticker);
@@ -2384,6 +2408,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId: req.session.userId,
           });
           followedCount++;
+          
+          // Fetch candlestick data immediately if not present (async, fire-and-forget)
+          void (async () => {
+            try {
+              const existingCandlesticks = await storage.getCandlesticksByTicker(upperTicker);
+              if (!existingCandlesticks || !existingCandlesticks.candlestickData || existingCandlesticks.candlestickData.length === 0) {
+                console.log(`[BulkFollow] Fetching candlestick data for ${upperTicker}...`);
+                const candlesticks = await stockService.getCandlestickData(upperTicker);
+                if (candlesticks && candlesticks.length > 0) {
+                  await storage.upsertCandlesticks(upperTicker, candlesticks.map(c => ({
+                    date: c.date,
+                    open: c.open,
+                    high: c.high,
+                    low: c.low,
+                    close: c.close,
+                    volume: c.volume
+                  })));
+                  console.log(`[BulkFollow] ✓ Candlestick data fetched for ${upperTicker}`);
+                }
+              }
+            } catch (err: any) {
+              console.error(`[BulkFollow] ✗ Failed to fetch candlesticks for ${upperTicker}:`, err.message);
+            }
+          })();
           
           // Trigger immediate "day 0" analysis for each followed stock ONLY if not already completed
           try {

@@ -34,7 +34,7 @@ import { StockAIAnalysis } from "@/components/stock-ai-analysis";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LoadingStrikeBorder } from "@/components/loading-strike-border";
 
 export default function TickerDetail() {
@@ -81,6 +81,26 @@ export default function TickerDetail() {
     (job: any) => job.status === "pending" || job.status === "processing"
   );
 
+  // Mark stock as viewed mutation
+  const markViewedMutation = useMutation({
+    mutationFn: async (tickerToMark: string) => {
+      return await apiRequest("POST", `/api/stocks/${tickerToMark}/view`, null);
+    },
+    onSuccess: () => {
+      // Invalidate queries that depend on viewed status
+      if (currentUser?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/stock-views", currentUser.id] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+    },
+  });
+
+  // Mark stock as viewed when page loads
+  useEffect(() => {
+    if (ticker && currentUser && !markViewedMutation.isPending) {
+      markViewedMutation.mutate(ticker);
+    }
+  }, [ticker, currentUser?.id]);
 
   // Fetch comments
   const { data: comments = [] } = useQuery<StockCommentWithUser[]>({

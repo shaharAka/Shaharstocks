@@ -77,7 +77,7 @@ export function AppSidebar() {
     staleTime: Infinity, // Version doesn't change during runtime
   });
 
-  // Fetch followed stocks with status - NO POLLING, updates come via WebSocket
+  // Fetch followed stocks with status - Poll when there are active jobs
   const { data: followedStocks = [], isLoading: isLoadingFollowed, error: followedError } = useQuery<Array<{ 
     ticker: string; 
     currentPrice: string;
@@ -89,7 +89,13 @@ export function AppSidebar() {
   }>>({
     queryKey: ["/api/followed-stocks-with-status"],
     enabled: !!user,
-    // Removed aggressive polling - updates now come via WebSocket events
+    // Poll every 5 seconds if there are active analysis jobs to update spinner
+    refetchInterval: (data) => {
+      const hasActiveJobs = data?.some(stock => 
+        stock.jobStatus === 'pending' || stock.jobStatus === 'processing'
+      );
+      return hasActiveJobs ? 5000 : false; // 5 seconds if active jobs, otherwise no polling
+    },
     retry: false,
     meta: { ignoreError: true },
   });

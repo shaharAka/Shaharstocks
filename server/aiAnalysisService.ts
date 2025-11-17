@@ -482,19 +482,21 @@ Decision: SELL when trend confirms exit. HOLD when trend supports staying in. NE
         : `STANCE RULES for OWNED SHORT POSITION (Sell/Short Opportunity):
 You have a SHORT position. Price DECLINE = your profit. Focus on COVERING strategy.
 
-⚠️ CRITICAL: You can ONLY recommend "cover" or "hold" - NEVER "buy" or "sell".
+⚠️ CRITICAL: You can ONLY recommend "buy" or "hold" - NO OTHER VALUES.
+- "buy" = Cover the short position / Close the short NOW
+- "hold" = Keep the short position open / Stay short
 
-COVER SHORT (ACT - close short position):
-- "cover" if price -5%+ (take short profit on significant decline)
-- "cover" if price +3%+ AND initial bearish trend reversing bullish (stop loss - trend against you)
-- "cover" if strong bullish news violates bearish thesis (cut losses early)
+BUY (COVER SHORT):
+- "buy" if price -5%+ (take short profit on significant decline)
+- "buy" if price +3%+ AND initial bearish trend reversing bullish (stop loss - trend against you)
+- "buy" if strong bullish news violates bearish thesis (cut losses early)
 
-HOLD SHORT (keep short position open):
-- Price declining -1% to -4% with initial bearish trend intact (let it run down)
-- Sideways action with initial trend still bearish/weak (wait for more decline)
-- Small gain +1% to +2% (price rising slightly) but initial trend still bearish (noise, not reversal)
+HOLD (STAY SHORT):
+- "hold" if price declining -1% to -4% with initial bearish trend intact (let it run down)
+- "hold" if sideways action with initial trend still bearish/weak (wait for more decline)
+- "hold" if price +1% to +2% (small rally) but initial trend still bearish (noise, not reversal)
 
-Decision: COVER when you've profited enough OR trend reversing against you. HOLD when bearish trend continues. For shorts, price FALLING = your gain.`
+Decision: "buy" (cover) when you've profited enough OR trend reversing against you. "hold" (stay short) when bearish trend continues. For shorts, price FALLING = your gain.`
     } else {
       // User doesn't own - focus on entry evaluation with ENTER/WAIT logic
       const scoreGuidance = isBuyOpportunity

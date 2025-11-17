@@ -119,7 +119,9 @@ export interface IStorage {
   getStocksByStatus(userId: string, status: string): Promise<Stock[]>;
   getStocksByUserStatus(userId: string, status: string): Promise<Stock[]>;
   getStock(userId: string, ticker: string): Promise<Stock | undefined>;
-  getAllStocksForTicker(userId: string, ticker: string): Promise<Stock[]>;
+  getAnyStockForTicker(ticker: string): Promise<Stock | undefined>; // Global: Get ANY stock record for ticker (for extracting shared metadata like industry)
+  getUserStocksForTicker(userId: string, ticker: string): Promise<Stock[]>; // Per-user: Get specific user's stocks for a ticker
+  getAllStocksForTickerGlobal(ticker: string): Promise<Stock[]>; // Global: Get ALL users' stocks for a ticker (AI analysis aggregation)
   getTransactionByCompositeKey(userId: string, ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Stock | undefined>;
   createStock(stock: InsertStock): Promise<Stock>;
   updateStock(userId: string, ticker: string, stock: Partial<Stock>): Promise<Stock | undefined>;
@@ -418,11 +420,23 @@ export class DatabaseStorage implements IStorage {
     return stock;
   }
 
-  async getAllStocksForTicker(userId: string, ticker: string): Promise<Stock[]> {
+  async getAnyStockForTicker(ticker: string): Promise<Stock | undefined> {
+    // Global: Returns ANY stock record for a ticker (for extracting shared metadata like industry)
+    const [stock] = await db.select().from(stocks).where(eq(stocks.ticker, ticker)).limit(1);
+    return stock;
+  }
+
+  async getUserStocksForTicker(userId: string, ticker: string): Promise<Stock[]> {
+    // Per-user: Returns only this user's stocks for a ticker
     return await db.select().from(stocks).where(and(
       eq(stocks.userId, userId),
       eq(stocks.ticker, ticker)
     ));
+  }
+
+  async getAllStocksForTickerGlobal(ticker: string): Promise<Stock[]> {
+    // Global: Returns ALL users' stocks for a ticker (used by AI worker for aggregation)
+    return await db.select().from(stocks).where(eq(stocks.ticker, ticker));
   }
 
   async getTransactionByCompositeKey(

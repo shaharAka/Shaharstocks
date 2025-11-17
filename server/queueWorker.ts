@@ -189,12 +189,12 @@ class QueueWorker {
       } : undefined;
       console.log(`[QueueWorker] ✅ SEC data prepared`);
 
-      // Check for insider trading data - get ALL transactions for this ticker
+      // Check for insider trading data - get ALL transactions for this ticker across ALL users
       console.log(`[QueueWorker] 🔍 Checking for insider trading data for ${job.ticker}...`);
       const insiderTradingStrength = await (async () => {
         try {
-          const allStocks = await storage.getAllStocksForTicker(job.ticker);
-          console.log(`[QueueWorker] Found ${allStocks.length} transaction(s) for ${job.ticker}`);
+          const allStocks = await storage.getAllStocksForTickerGlobal(job.ticker);
+          console.log(`[QueueWorker] Found ${allStocks.length} transaction(s) across all users for ${job.ticker}`);
           
           if (allStocks.length === 0) {
             return undefined;
@@ -302,8 +302,8 @@ class QueueWorker {
       });
 
       // Get or create industry-specific macro analysis
-      // Prefer: 1) Stock record from DB, 2) Alpha Vantage industry, 3) Alpha Vantage sector, 4) undefined
-      const stock = await storage.getStock(job.ticker);
+      // Prefer: 1) Stock record from DB (any user), 2) Alpha Vantage industry, 3) Alpha Vantage sector, 4) undefined
+      const stock = await storage.getAnyStockForTicker(job.ticker);
       const rawIndustry = stock?.industry || companyOverview?.industry || companyOverview?.sector || undefined;
       // Coerce "N/A" sentinel value to undefined to avoid creating useless industry buckets
       const stockIndustry = (rawIndustry && rawIndustry !== "N/A") ? rawIndustry : undefined;

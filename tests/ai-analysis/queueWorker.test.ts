@@ -27,9 +27,12 @@ import {
 vi.mock("../../server/storage", () => ({
   storage: {
     getStock: vi.fn(),
+    getAnyStockForTicker: vi.fn(), // Global: Get any stock for ticker (metadata extraction)
+    getAllStocksForTickerGlobal: vi.fn(), // Global: Get all users' stocks for ticker (AI aggregation)
     getLatestMacroAnalysis: vi.fn(),
     createMacroAnalysis: vi.fn(),
     saveStockAnalysis: vi.fn(),
+    markStockAnalysisPhaseComplete: vi.fn(), // Added for phase completion tracking
     updateJobStatus: vi.fn(),
     dequeueNextJob: vi.fn()
   }
@@ -87,6 +90,14 @@ describe("QueueWorker - AI Analysis Pipeline", () => {
       currentPrice: "185.50",
       recommendation: "buy"
     });
+    storage.getAnyStockForTicker.mockResolvedValue({
+      ticker: "AAPL",
+      industry: "Computer Hardware",
+      currentPrice: "185.50",
+      recommendation: "buy"
+    });
+    storage.getAllStocksForTickerGlobal.mockResolvedValue([]); // No insider trading data by default
+    storage.markStockAnalysisPhaseComplete.mockResolvedValue(undefined);
 
     stockService.getCompanyOverview.mockResolvedValue(mockCompanyOverview);
     stockService.getBalanceSheet.mockResolvedValue(mockBalanceSheet);

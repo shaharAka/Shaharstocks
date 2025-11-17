@@ -361,8 +361,8 @@ class BacktestService {
       // Create composite key: ticker + insider trade date to preserve multiple recommendations for same stock
       const compositeKey = `${ticker}_${insiderTradeDate || telegramMessageDate}`;
 
-      // Try to get stock from database first
-      let stock = await storage.getStock(ticker);
+      // Try to get stock from database first (any user's record for metadata)
+      let stock = await storage.getAnyStockForTicker(ticker);
       
       // If not in database, fetch from Finnhub
       if (!stock) {

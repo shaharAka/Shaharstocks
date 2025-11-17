@@ -71,8 +71,8 @@ async function regenerateDailyBriefs() {
         
         console.log(`   Price: $${quote.price.toFixed(2)} (${quote.changePercent > 0 ? '+' : ''}${quote.changePercent.toFixed(2)}%)`);
         
-        // Get stock data for context
-        const stockData = await storage.getStock(ticker);
+        // Get stock data for context (any user's record for metadata)
+        const stockData = await storage.getAnyStockForTicker(ticker);
         const previousAnalysis = (stockData as any)?.overallRating ? {
           overallRating: (stockData as any).overallRating,
           summary: (stockData as any).summary || "No previous analysis available",

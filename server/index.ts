@@ -1131,7 +1131,7 @@ function startAIAnalysisJob() {
           // Insider trading strength - fetch from all transactions for this ticker for this user
           const insiderTradingStrength = await (async () => {
             try {
-              const allStocks = await storage.getAllStocksForTicker(stock.userId, stock.ticker);
+              const allStocks = await storage.getUserStocksForTicker(stock.userId, stock.ticker);
               
               if (allStocks.length === 0) {
                 return undefined;

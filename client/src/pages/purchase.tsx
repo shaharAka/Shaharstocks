@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -42,6 +43,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Filter, Search, SortAsc } from "lucide-react";
 import Settings from "@/pages/settings";
+import { cn } from "@/lib/utils";
 
 type StockWithUserStatus = Stock & {
   userStatus: string;
@@ -68,6 +70,22 @@ type GroupedStock = {
   daysSinceLatest: number;
   communityScore: number; // follows count
   isFollowing: boolean;
+};
+
+// Generate contextual signal tooltip based on score and recommendation type
+const getSignalTooltip = (score: number, recommendation: string): string => {
+  const isBuy = recommendation.toLowerCase().includes("buy");
+  const action = isBuy ? "BUY" : "SELL";
+  
+  if (score >= 90) {
+    return `Very Strong ${action} Opportunity`;
+  } else if (score >= 70) {
+    return `Strong ${action} Opportunity`;
+  } else if (score >= 50) {
+    return `Moderate ${action} Signal`;
+  } else {
+    return `Weak ${action} Signal`;
+  }
 };
 
 export default function Purchase() {
@@ -924,17 +942,30 @@ export default function Purchase() {
                           </div>
                         )}
 
-                        {/* AI Score */}
+                        {/* AI Score with Tooltip */}
                         {aiScore !== null && (
                           <div className="space-y-1">
                             <div className="flex justify-between items-center text-sm">
-                              <span className="text-muted-foreground">AI Score:</span>
-                              <Badge 
-                                variant={aiScore >= 75 ? "default" : aiScore >= 50 ? "secondary" : "outline"}
-                                data-testid={`badge-score-${stock.ticker}`}
-                              >
-                                {aiScore}
-                              </Badge>
+                              <span className="text-muted-foreground">Signal Score:</span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge 
+                                    className={cn(
+                                      "font-mono transition-all border-0 cursor-help",
+                                      aiScore >= 90 && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
+                                      aiScore >= 70 && aiScore < 90 && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
+                                      aiScore >= 50 && aiScore < 70 && "bg-secondary text-secondary-foreground text-xs",
+                                      aiScore < 50 && "bg-secondary text-muted-foreground text-xs opacity-60"
+                                    )}
+                                    data-testid={`badge-score-${stock.ticker}`}
+                                  >
+                                    {aiScore}/100
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="text-xs">
+                                  {getSignalTooltip(aiScore, transaction.recommendation || "")}
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                             <p className="text-xs text-muted-foreground">
                               {transaction.recommendation?.toLowerCase().includes("buy") 

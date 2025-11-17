@@ -497,24 +497,8 @@ export default function TickerDetail() {
         </LoadingStrikeBorder>
       )}
 
-      {/* Simulation Plot for followed stocks, or Candlestick Chart for non-followed */}
-      {isFollowing ? (
-        <StockSimulationPlot ticker={ticker} stock={stock} />
-      ) : (
-        stock.candlesticks && stock.candlesticks.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Price Chart</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <MiniCandlestickChart
-                data={stock.candlesticks}
-                height={200}
-              />
-            </CardContent>
-          </Card>
-        )
-      )}
+      {/* Simulation Plot - shows price chart with trading rules overlay for followed stocks */}
+      <StockSimulationPlot ticker={ticker} stock={stock} />
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="summary" className="w-full">

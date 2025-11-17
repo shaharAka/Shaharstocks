@@ -409,33 +409,33 @@ export default function Purchase() {
         return;
       }
 
-      // SELL opportunity logic
+      // SELL opportunity logic (unified signal scale: higher = better opportunity)
       if (isSell) {
-        // High Signal: Score < 40 (low score = company is weak, good for shorting)
-        if (score < 40) {
+        // High Signal: Score >= 70 (high confidence SELL opportunity)
+        if (score >= 70) {
           sections.worthExploring.push(group);
         }
-        // Auto-reject: Score > 70 (high score = company is strong, bad for shorting)
-        else if (score > 70) {
+        // Auto-reject: Score < 40 (low confidence, weak signal)
+        else if (score < 40 && group.transactionCount === 1) {
           sections.rejected.push(group);
         }
-        // Recents: Score 40-70 (neutral zone)
-        else if (score >= 40 && score <= 70) {
+        // Recents: Score 40-69 and < 2 days old
+        else if (score >= 40 && score < 70 && group.daysSinceLatest < 2) {
           sections.recents.push(group);
         }
       }
-      // BUY opportunity logic (existing logic)
+      // BUY opportunity logic (unified signal scale: higher = better opportunity)
       else if (isBuy) {
         // Auto-reject: Score < 40 (unless multiple transactions)
         if (score < 40 && group.transactionCount === 1) {
           sections.rejected.push(group);
         }
-        // High Signal: Score > 70
-        else if (score > 70) {
+        // High Signal: Score >= 70 (includes both light amber 70-89 and bold amber 90-100)
+        else if (score >= 70) {
           sections.worthExploring.push(group);
         }
-        // Recents: Score 40-70 and < 2 days old
-        else if (score >= 40 && score <= 70 && group.daysSinceLatest < 2) {
+        // Recents: Score 40-69 and < 2 days old
+        else if (score >= 40 && score < 70 && group.daysSinceLatest < 2) {
           sections.recents.push(group);
         }
       }

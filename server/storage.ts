@@ -2122,8 +2122,28 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
       
       const latestBrief = briefs[0];
-      const watchingStance = latestBrief?.watchingStance?.toLowerCase() || null;
-      const owningStance = latestBrief?.owningStance?.toLowerCase() || null;
+      
+      // Helper to normalize stance values (handles legacy "enter"/"wait" and current "buy"/"sell"/"hold")
+      const normalizeStance = (rawStance: string | null | undefined): 'buy' | 'sell' | 'hold' | null => {
+        if (!rawStance) return null;
+        const stance = rawStance.toLowerCase().trim();
+        
+        // Legacy mapping: "enter" → "buy" (for BUY opportunities) or could be "sell" (for SELL opportunities)
+        // But since we don't know opportunity type here, treat "enter" as an action signal
+        // Legacy mapping: "wait" → "hold"
+        if (stance === 'enter') return 'buy'; // Legacy entry signal (assume BUY for simplicity)
+        if (stance === 'wait') return 'hold'; // Legacy wait signal
+        
+        // Current values
+        if (stance === 'buy' || stance === 'sell' || stance === 'hold') return stance;
+        
+        // Unknown value - default to hold for safety
+        console.warn(`[Storage] Unknown stance value: "${rawStance}", defaulting to "hold"`);
+        return 'hold';
+      };
+      
+      const watchingStance = normalizeStance(latestBrief?.watchingStance);
+      const owningStance = normalizeStance(latestBrief?.owningStance);
       const aiScore = latestBrief?.watchingConfidence ?? null;
       
       // Get integrated score from stock analysis (comprehensive micro + macro score)
@@ -2137,37 +2157,42 @@ export class DatabaseStorage implements IStorage {
       const integratedScore = analysis?.integratedScore ?? null;
       
       // Calculate stance alignment using NEW dual-scenario logic
-      // "act" = Either scenario recommends action (ENTER for entry, SELL for owned)
-      // "hold" = Both scenarios recommend wait/hold
+      // "act" = Either scenario recommends action (BUY/SELL for entry, BUY/SELL for exit)
+      // "hold" = Both scenarios recommend hold/wait
       // 
-      // New stance values:
-      // - Watching scenario: "enter" (act) or "wait" (hold)
-      // - Owning scenario: "sell" (act) or "hold" (hold)
+      // Stance values from daily brief (after normalization):
+      // - Watching BUY opportunity: "buy" (enter long) or "hold" (wait)
+      // - Watching SELL opportunity: "sell" (enter short) or "hold" (wait)
+      // - Owning long position: "sell" (exit) or "hold" (keep)
+      // - Owning short position: "buy" (cover) or "hold" (keep)
       //
       // Examples:
-      // - Watching ENTER + Owning HOLD = "act" (entry opportunity)
-      // - Watching WAIT + Owning SELL = "act" (exit signal)
-      // - Watching WAIT + Owning HOLD = "hold" (no action)
-      // - Watching ENTER + Owning SELL = "act" (both scenarios agree on action)
+      // - Watching "buy" + Owning "hold" = "act" (entry opportunity)
+      // - Watching "hold" + Owning "sell" = "act" (exit signal)
+      // - Watching "hold" + Owning "hold" = "hold" (no action)
+      // - Watching "sell" + Owning "hold" = "act" (short entry opportunity)
       let stanceAlignment: 'act' | 'hold' | null = null;
       if (watchingStance || owningStance) {
-        // ACT when either scenario recommends action (case-insensitive check)
-        if (watchingStance === 'enter' || owningStance === 'sell') {
+        // ACT when either scenario recommends buy OR sell action
+        if (watchingStance === 'buy' || watchingStance === 'sell' || owningStance === 'buy' || owningStance === 'sell') {
           stanceAlignment = 'act';
         } else {
-          // HOLD when both scenarios recommend wait/hold
+          // HOLD when both scenarios recommend hold (or one is null and other is hold)
           stanceAlignment = 'hold';
         }
       }
       
       // For backward compatibility, derive aiStance from watching scenario (uppercase for display)
-      // Map watching stance (enter/wait) to traditional stance (BUY/HOLD) for display compatibility
-      let aiStance: 'BUY' | 'SELL' | 'HOLD' | null = null;
-      if (watchingStance === 'enter') {
+      // Map watching stance to traditional stance for display compatibility
+      let aiStance: 'BUY' | 'SELL' | 'HOLD' = 'HOLD'; // Default to HOLD for safety
+      if (watchingStance === 'buy') {
         aiStance = 'BUY';
-      } else if (watchingStance === 'wait') {
+      } else if (watchingStance === 'sell') {
+        aiStance = 'SELL';
+      } else if (watchingStance === 'hold') {
         aiStance = 'HOLD';
       }
+      // Note: If watchingStance is null, aiStance defaults to 'HOLD' (safe fallback)
       
       // Push result with computed stanceAlignment
       results.push({

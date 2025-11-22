@@ -472,6 +472,8 @@ export default function Settings() {
 
       <OpenInsiderConfigSection addLog={addLog} />
 
+      <DisplayPreferencesSection />
+
       {/* Fetch Logs Viewer */}
       <Card data-testid="card-fetch-logs">
         <CardHeader>
@@ -581,6 +583,7 @@ interface User {
   subscriptionStartDate?: string | null;
   subscriptionEndDate?: string | null;
   paypalSubscriptionId?: string | null;
+  showAllOpportunities?: boolean;
 }
 
 interface TrialStatus {
@@ -863,6 +866,88 @@ function BillingManagementSection() {
               </Button>
             </div>
           )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DisplayPreferencesSection() {
+  const { toast } = useToast();
+  const [showAllOpportunities, setShowAllOpportunities] = useState(false);
+
+  const { data: currentUser } = useQuery<{ user: User | null }>({
+    queryKey: ["/api/auth/current-user"],
+  });
+
+  const user = currentUser?.user;
+
+  // Sync state with user preference
+  useEffect(() => {
+    if (user?.showAllOpportunities !== undefined) {
+      setShowAllOpportunities(user.showAllOpportunities);
+    }
+  }, [user?.showAllOpportunities]);
+
+  const updatePreferenceMutation = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("Not authenticated");
+      const res = await apiRequest("PATCH", `/api/users/${user.id}`, { showAllOpportunities: value });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      toast({
+        title: "Preference saved",
+        description: "Your display preference has been updated",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save preference",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleToggleChange = (checked: boolean) => {
+    setShowAllOpportunities(checked);
+    updatePreferenceMutation.mutate(checked);
+  };
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <Card data-testid="card-display-preferences">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <SettingsIcon className="h-5 w-5" />
+          Display Preferences
+        </CardTitle>
+        <CardDescription>
+          Configure how opportunities are displayed
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="show-all-opportunities" className="text-sm font-medium">
+              Show All Opportunities
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              When enabled, displays both BUY and SELL opportunities. When disabled (default), only BUY opportunities are shown.
+            </p>
+          </div>
+          <Switch
+            id="show-all-opportunities"
+            checked={showAllOpportunities}
+            onCheckedChange={handleToggleChange}
+            data-testid="switch-show-all-opportunities"
+          />
         </div>
       </CardContent>
     </Card>

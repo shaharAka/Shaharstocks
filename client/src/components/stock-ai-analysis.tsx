@@ -23,6 +23,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { TermTooltip } from "@/components/term-tooltip";
 
 interface StockAIAnalysisProps {
   ticker: string;
@@ -552,9 +553,9 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   )}
 
                   <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
-                    <strong>Note for Technical Traders:</strong> Technical indicators like RSI (overbought/oversold), 
-                    MACD (momentum), Bollinger Bands (volatility), and moving averages (trend) help identify entry and exit points. 
-                    Combined with volume trends and ATR (volatility measurement), these signals provide a quantitative view of market sentiment.
+                    <strong>Note for Technical Traders:</strong> Technical indicators like <TermTooltip term="RSI">RSI</TermTooltip> (overbought/oversold), 
+                    <TermTooltip term="MACD">MACD</TermTooltip> (momentum), <TermTooltip term="Bollinger Bands">Bollinger Bands</TermTooltip> (volatility), and moving averages (trend) help identify entry and exit points. 
+                    Combined with volume trends and <TermTooltip term="ATR">ATR</TermTooltip> (volatility measurement), these signals provide a quantitative view of market sentiment.
                   </div>
                 </CardContent>
               </Card>
@@ -621,7 +622,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   )}
 
                   <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
-                    <strong>For Advanced Investors:</strong> Sentiment scores aggregate tone, relevance, and volume of recent news coverage. 
+                    <strong>For Advanced Investors:</strong> Sentiment scores aggregate tone, relevance, and <TermTooltip term="volume">volume</TermTooltip> of recent news coverage. 
                     High positive sentiment with high volume often precedes price movements. Key themes reveal what's driving the narrative—watch for shifts 
                     in coverage that may signal changing market perception ahead of price action.
                   </div>
@@ -684,8 +685,8 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   )}
 
                   <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
-                    <strong>For Fundamental Analysts:</strong> Financial health combines profit margins, return on equity (ROE), 
-                    current ratio (liquidity), debt-to-equity ratio (leverage), and revenue/earnings growth trends. 
+                    <strong>For Fundamental Analysts:</strong> Financial health combines <TermTooltip term="profit margin">profit margins</TermTooltip>, <TermTooltip term="ROE">return on equity (ROE)</TermTooltip>, 
+                    <TermTooltip term="current ratio">current ratio</TermTooltip> (liquidity), <TermTooltip term="debt-to-equity ratio">debt-to-equity ratio</TermTooltip> (leverage), and revenue/earnings growth trends. 
                     Companies with high financial health scores are better positioned to execute their strategy, pay dividends, 
                     and maintain competitive advantages during market downturns.
                   </div>

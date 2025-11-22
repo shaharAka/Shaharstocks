@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { AIAnalysis } from "@shared/schema";
+import type { StockAnalysis } from "@shared/schema";
 
 interface CompactSignalBadgeProps {
   ticker: string;
 }
 
 export function CompactSignalBadge({ ticker }: CompactSignalBadgeProps) {
-  const { data: analysis, isLoading } = useQuery<AIAnalysis | null>({
+  const { data: analysis, isLoading } = useQuery<StockAnalysis | null>({
     queryKey: ["/api/ai-analysis", ticker],
     queryFn: async () => {
       const response = await fetch(`/api/ai-analysis/${ticker}`);

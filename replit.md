@@ -8,6 +8,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 22, 2025 - AI Analysis UX Improvements
+- **Compact Signal Badge**: Added minimal signal indicator to Overview tab showing score + stance (BUY/SELL/HOLD)
+- **Tab Structure Refinement**: 
+  - Overview tab (default) shows company information with compact signal badge in header
+  - Analysis tab contains detailed SignalSummary component + full AI Playbook
+  - Preserves original Overview design with small signal value addition as requested
+- **Proper Nullish Checks**: All score/ID checks use `!= null` / `== null` to properly handle 0 values
+- **Amber Gradient System**: Strong signals (≥70) use amber colors, moderate (40-69) neutral, weak (<40) muted red
+- **Plain Language**: Replaced technical jargon (Micro Agent → Company Analysis, Macro Agent → Market Context)
+- **2-Week Horizon**: Explicit messaging throughout signal displays and AI analysis
+- **No Emojis**: All icons use lucide-react components (AlertTriangle, TrendingUp, etc.)
+
 ### November 22, 2025 - Fetch Configuration UX Redesign
 - **Simplified Fetch Configuration Dialog**: Removed master enable/disable toggle in favor of always-enabled scanning with user-configurable settings
 - **Default to Daily Refresh**: Changed default fetch interval from hourly to daily for better resource usage

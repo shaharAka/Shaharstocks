@@ -201,16 +201,27 @@ export function AppSidebar() {
                     insiderTag = { text: 'S', isBuy: false };
                   }
                   
-                  // Determine act/hold status based on STANCE ALIGNMENT (right of price)
-                  // Only show this when we have complete AI analysis data
-                  // "act" = AI agrees with insider action (strong signal)
-                  // "hold" = AI conflicts with insider action (weak signal)
+                  // Determine action recommendation based on STANCE ALIGNMENT and position status (right of price)
+                  // Shows actual action: BUY/SELL for entry signals, SELL for exit signals, HOLD for maintenance
                   let actionTag: { text: string; variant: 'default' | 'secondary' } | null = null;
                   if (stock.stanceAlignment != null) {
                     if (stock.stanceAlignment === 'act') {
-                      actionTag = { text: 'act', variant: 'default' };
+                      if (stock.hasEnteredPosition) {
+                        // Already in position - show SELL (exit signal)
+                        actionTag = { text: 'SELL', variant: 'default' };
+                      } else {
+                        // Watching - show BUY or SELL based on insider action
+                        if (stock.insiderAction === 'BUY') {
+                          actionTag = { text: 'BUY', variant: 'default' };
+                        } else if (stock.insiderAction === 'SELL') {
+                          actionTag = { text: 'SELL', variant: 'default' };
+                        } else {
+                          // Fallback to AI stance if no insider action
+                          actionTag = { text: stock.aiStance || 'ACT', variant: 'default' };
+                        }
+                      }
                     } else if (stock.stanceAlignment === 'hold') {
-                      actionTag = { text: 'hold', variant: 'secondary' };
+                      actionTag = { text: 'HOLD', variant: 'secondary' };
                     }
                   }
                   

@@ -29,6 +29,68 @@ interface StockAIAnalysisProps {
   ticker: string;
 }
 
+// Helper to safely parse number (returns null for missing/invalid data)
+const safeNumber = (value: any): number | null => {
+  if (value == null) return null;
+  const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+  return isNaN(num) ? null : num;
+};
+
+// Helper function to assess profitability from fundamental data
+const assessProfitability = (data: any): string => {
+  const profitMargin = safeNumber(data?.profitMargin);
+  const roe = safeNumber(data?.returnOnEquity);
+  
+  // No data available
+  if (profitMargin == null && roe == null) return "Unknown";
+  
+  // Data is stored as decimals (e.g., 0.162 = 16.2%)
+  // Strong: >15% margin OR >15% ROE
+  if ((profitMargin != null && profitMargin >= 0.15) || (roe != null && roe >= 0.15)) return "Strong";
+  // Moderate: >8% margin OR >10% ROE
+  if ((profitMargin != null && profitMargin >= 0.08) || (roe != null && roe >= 0.10)) return "Moderate";
+  // Weak: positive but below thresholds OR negative (losses)
+  return "Weak";
+};
+
+// Helper function to assess liquidity
+const assessLiquidity = (data: any): string => {
+  const currentRatio = safeNumber(data?.currentRatio);
+  
+  if (currentRatio == null) return "Unknown";
+  if (currentRatio >= 2.0) return "Strong";
+  if (currentRatio >= 1.0) return "Moderate";
+  return "Weak";
+};
+
+// Helper function to assess debt level (leverage)
+const assessDebtLevel = (data: any): string => {
+  const debtToEquity = safeNumber(data?.debtToEquity);
+  
+  if (debtToEquity == null) return "Unknown";
+  // Zero debt is excellent (net-cash businesses)
+  if (debtToEquity === 0) return "Minimal";
+  if (debtToEquity < 0.5) return "Conservative";
+  if (debtToEquity < 1.5) return "Moderate";
+  return "High";
+};
+
+// Helper function to assess growth
+const assessGrowth = (data: any): string => {
+  const peRatio = safeNumber(data?.peRatio);
+  const eps = safeNumber(data?.eps);
+  
+  // No data available
+  if (peRatio == null && eps == null) return "Unknown";
+  
+  // Strong growth: attractive P/E (15-30) OR high EPS (>$3)
+  if ((peRatio != null && peRatio >= 15 && peRatio <= 30) || (eps != null && eps >= 3)) return "Strong";
+  // Moderate: reasonable P/E (10-15) OR decent EPS (>$1)
+  if ((peRatio != null && peRatio >= 10 && peRatio < 15) || (eps != null && eps >= 1)) return "Moderate";
+  // Has data but doesn't meet thresholds (or negative EPS)
+  return "Weak";
+};
+
 export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const { toast } = useToast();
 
@@ -655,12 +717,12 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   </div>
 
                   {/* Key Metrics with Evidence from Fundamental Data */}
-                  {(analysis.keyMetrics || analysis.fundamentalData) && (
+                  {analysis.fundamentalData && (
                     <div className="grid grid-cols-2 gap-3">
                       {/* Profitability Evidence */}
                       <div className="p-3 bg-muted/30 rounded-lg space-y-2">
                         <div className="text-xs text-muted-foreground font-medium">Profitability</div>
-                        <div className="text-sm font-medium">{analysis.keyMetrics?.profitability || 'Assessing...'}</div>
+                        <div className="text-sm font-medium">{assessProfitability(analysis.fundamentalData)}</div>
                         <div className="text-xs text-muted-foreground space-y-1">
                           {analysis.fundamentalData?.profitMargin != null && (
                             <div>Profit Margin: <span className="font-mono">{(analysis.fundamentalData.profitMargin * 100).toFixed(1)}%</span></div>
@@ -677,7 +739,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                       {/* Liquidity Evidence */}
                       <div className="p-3 bg-muted/30 rounded-lg space-y-2">
                         <div className="text-xs text-muted-foreground font-medium">Liquidity</div>
-                        <div className="text-sm font-medium">{analysis.keyMetrics?.liquidity || 'Assessing...'}</div>
+                        <div className="text-sm font-medium">{assessLiquidity(analysis.fundamentalData)}</div>
                         <div className="text-xs text-muted-foreground space-y-1">
                           {analysis.fundamentalData?.currentRatio != null && (
                             <div>Current Ratio: <span className="font-mono">{analysis.fundamentalData.currentRatio.toFixed(2)}</span></div>
@@ -691,7 +753,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                       {/* Leverage Evidence */}
                       <div className="p-3 bg-muted/30 rounded-lg space-y-2">
                         <div className="text-xs text-muted-foreground font-medium">Debt Level</div>
-                        <div className="text-sm font-medium">{analysis.keyMetrics?.leverage || 'Assessing...'}</div>
+                        <div className="text-sm font-medium">{assessDebtLevel(analysis.fundamentalData)}</div>
                         <div className="text-xs text-muted-foreground space-y-1">
                           {analysis.fundamentalData?.debtToEquity != null && (
                             <div>Debt-to-Equity: <span className="font-mono">{analysis.fundamentalData.debtToEquity.toFixed(2)}</span></div>
@@ -705,7 +767,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                       {/* Growth Evidence */}
                       <div className="p-3 bg-muted/30 rounded-lg space-y-2">
                         <div className="text-xs text-muted-foreground font-medium">Growth</div>
-                        <div className="text-sm font-medium">{analysis.keyMetrics?.growth || 'Assessing...'}</div>
+                        <div className="text-sm font-medium">{assessGrowth(analysis.fundamentalData)}</div>
                         <div className="text-xs text-muted-foreground space-y-1">
                           {analysis.fundamentalData?.eps != null && (
                             <div>EPS: <span className="font-mono">${analysis.fundamentalData.eps.toFixed(2)}</span></div>

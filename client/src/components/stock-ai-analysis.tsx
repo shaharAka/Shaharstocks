@@ -654,33 +654,70 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                     </p>
                   </div>
 
-                  {/* Key Metrics Grid */}
-                  {analysis.keyMetrics && Object.keys(analysis.keyMetrics).length > 0 && (
+                  {/* Key Metrics with Evidence from Fundamental Data */}
+                  {(analysis.keyMetrics || analysis.fundamentalData) && (
                     <div className="grid grid-cols-2 gap-3">
-                      {analysis.keyMetrics.profitability && (
-                        <div className="p-3 bg-muted/30 rounded-lg space-y-1">
-                          <div className="text-xs text-muted-foreground">Profitability</div>
-                          <div className="text-sm font-medium">{analysis.keyMetrics.profitability}</div>
+                      {/* Profitability Evidence */}
+                      <div className="p-3 bg-muted/30 rounded-lg space-y-2">
+                        <div className="text-xs text-muted-foreground font-medium">Profitability</div>
+                        <div className="text-sm font-medium">{analysis.keyMetrics?.profitability || 'Assessing...'}</div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          {analysis.fundamentalData?.profitMargin != null && (
+                            <div>Profit Margin: <span className="font-mono">{(analysis.fundamentalData.profitMargin * 100).toFixed(1)}%</span></div>
+                          )}
+                          {analysis.fundamentalData?.returnOnEquity != null && (
+                            <div>ROE: <span className="font-mono">{(analysis.fundamentalData.returnOnEquity * 100).toFixed(1)}%</span></div>
+                          )}
+                          {analysis.fundamentalData?.returnOnAssets != null && (
+                            <div>ROA: <span className="font-mono">{(analysis.fundamentalData.returnOnAssets * 100).toFixed(1)}%</span></div>
+                          )}
                         </div>
-                      )}
-                      {analysis.keyMetrics.liquidity && (
-                        <div className="p-3 bg-muted/30 rounded-lg space-y-1">
-                          <div className="text-xs text-muted-foreground">Liquidity</div>
-                          <div className="text-sm font-medium">{analysis.keyMetrics.liquidity}</div>
+                      </div>
+
+                      {/* Liquidity Evidence */}
+                      <div className="p-3 bg-muted/30 rounded-lg space-y-2">
+                        <div className="text-xs text-muted-foreground font-medium">Liquidity</div>
+                        <div className="text-sm font-medium">{analysis.keyMetrics?.liquidity || 'Assessing...'}</div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          {analysis.fundamentalData?.currentRatio != null && (
+                            <div>Current Ratio: <span className="font-mono">{analysis.fundamentalData.currentRatio.toFixed(2)}</span></div>
+                          )}
+                          {analysis.fundamentalData?.quickRatio != null && (
+                            <div>Quick Ratio: <span className="font-mono">{analysis.fundamentalData.quickRatio.toFixed(2)}</span></div>
+                          )}
                         </div>
-                      )}
-                      {analysis.keyMetrics.leverage && (
-                        <div className="p-3 bg-muted/30 rounded-lg space-y-1">
-                          <div className="text-xs text-muted-foreground">Debt Level</div>
-                          <div className="text-sm font-medium">{analysis.keyMetrics.leverage}</div>
+                      </div>
+
+                      {/* Leverage Evidence */}
+                      <div className="p-3 bg-muted/30 rounded-lg space-y-2">
+                        <div className="text-xs text-muted-foreground font-medium">Debt Level</div>
+                        <div className="text-sm font-medium">{analysis.keyMetrics?.leverage || 'Assessing...'}</div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          {analysis.fundamentalData?.debtToEquity != null && (
+                            <div>Debt-to-Equity: <span className="font-mono">{analysis.fundamentalData.debtToEquity.toFixed(2)}</span></div>
+                          )}
+                          {analysis.fundamentalData?.operatingMargin != null && (
+                            <div>Op. Margin: <span className="font-mono">{(analysis.fundamentalData.operatingMargin * 100).toFixed(1)}%</span></div>
+                          )}
                         </div>
-                      )}
-                      {analysis.keyMetrics.growth && (
-                        <div className="p-3 bg-muted/30 rounded-lg space-y-1">
-                          <div className="text-xs text-muted-foreground">Growth</div>
-                          <div className="text-sm font-medium">{analysis.keyMetrics.growth}</div>
+                      </div>
+
+                      {/* Growth Evidence */}
+                      <div className="p-3 bg-muted/30 rounded-lg space-y-2">
+                        <div className="text-xs text-muted-foreground font-medium">Growth</div>
+                        <div className="text-sm font-medium">{analysis.keyMetrics?.growth || 'Assessing...'}</div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          {analysis.fundamentalData?.eps != null && (
+                            <div>EPS: <span className="font-mono">${analysis.fundamentalData.eps.toFixed(2)}</span></div>
+                          )}
+                          {analysis.fundamentalData?.peRatio != null && (
+                            <div>P/E Ratio: <span className="font-mono">{analysis.fundamentalData.peRatio.toFixed(1)}</span></div>
+                          )}
+                          {analysis.fundamentalData?.dividendYield != null && (
+                            <div>Dividend Yield: <span className="font-mono">{(analysis.fundamentalData.dividendYield * 100).toFixed(2)}%</span></div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
 

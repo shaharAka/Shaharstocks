@@ -28,6 +28,7 @@ import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Terms from "@/pages/terms";
 import NotFound from "@/pages/not-found";
+import FollowedDashboard from "@/pages/followed-dashboard";
 import { useEffect, useState } from "react";
 
 function Router() {
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/" component={Purchase} />
       <Route path="/recommendations" component={Purchase} />
+      <Route path="/dashboard" component={FollowedDashboard} />
       <Route path="/watchlist" component={Portfolio} />
       <Route path="/trading" component={Trading} />
       <Route path="/ticker/:ticker" component={TickerDetail} />
@@ -50,7 +52,6 @@ function Router() {
       <Route path="/portfolio" component={Portfolio} />
       <Route path="/management" component={Portfolio} />
       <Route path="/history" component={Portfolio} />
-      <Route path="/dashboard" component={Portfolio} />
       <Route path="/rules" component={Trading} />
       <Route path="/simulation" component={Trading} />
       <Route path="/settings" component={Settings} />

@@ -11,6 +11,7 @@ import {
   Loader2,
   Minus,
   ChevronRight,
+  LayoutDashboard,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,12 @@ import { useUser } from "@/contexts/UserContext";
 import { useWebSocket } from "@/hooks/use-websocket";
 
 const mainMenuItems = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: LayoutDashboard,
+    testId: "link-dashboard",
+  },
   {
     title: "Opportunities",
     url: "/recommendations",

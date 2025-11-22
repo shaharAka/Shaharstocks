@@ -23,8 +23,10 @@ import {
   TrendingUpIcon,
   ArrowUpCircle,
   ArrowDownCircle,
-  MinusCircle
+  MinusCircle,
+  ChevronDown
 } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Link } from "wouter";
 import type { Stock, StockCommentWithUser } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -408,122 +410,123 @@ export default function TickerDetail() {
               </p>
             ) : (
               <div className="space-y-6">
-                {dailyBriefs.map((brief: any) => {
-                  const priceChange = parseFloat(brief.priceChange || 0);
-                  const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
-                  const isPositive = priceChange >= 0;
-                  
-                  // Determine which scenario to show based on position status
-                  const activeStance = hasEnteredPosition ? brief.owningStance : brief.watchingStance;
-                  const activeConfidence = hasEnteredPosition ? brief.owningConfidence : brief.watchingConfidence;
-                  const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
-                  const activeHighlights = hasEnteredPosition ? brief.owningHighlights : brief.watchingHighlights;
-                  
-                  // Check if active scenario recommends ACT (buy/sell = action, hold/wait = no action)
-                  const isAct = activeStance === "buy" || activeStance === "sell" || activeStance === "enter" || activeStance === "short" || activeStance === "cover";
-                  
-                  const getStanceConfig = (stance: string) => {
-                    // Handle both current values (buy/sell/hold) and legacy values (enter/wait/short/sell/cover)
-                    const normalizedStance = stance?.toLowerCase() || "hold";
+                {/* Helper function to render a brief */}
+                {(() => {
+                  const renderBrief = (brief: any, isLatest: boolean = false) => {
+                    const priceChange = parseFloat(brief.priceChange || 0);
+                    const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
+                    const isPositive = priceChange >= 0;
                     
-                    if (normalizedStance === "buy" || normalizedStance === "enter") {
-                      return {
-                        icon: ArrowUpCircle,
-                        text: "BUY",
-                        color: "text-green-600 dark:text-green-400",
-                        bgColor: "bg-green-50 dark:bg-green-950/30",
-                        borderColor: "border-green-500",
-                      };
-                    } else if (normalizedStance === "sell" || normalizedStance === "short") {
-                      return {
-                        icon: ArrowDownCircle,
-                        text: "SELL",
-                        color: "text-red-600 dark:text-red-400",
-                        bgColor: "bg-red-50 dark:bg-red-950/30",
-                        borderColor: "border-red-500",
-                      };
-                    } else if (normalizedStance === "cover") {
-                      return {
-                        icon: ArrowUpCircle,
-                        text: "COVER",
-                        color: "text-blue-600 dark:text-blue-400",
-                        bgColor: "bg-blue-50 dark:bg-blue-950/30",
-                        borderColor: "border-blue-500",
-                      };
-                    } else {
-                      // Default to "hold" for any other stance (wait, hold, etc)
-                      return {
-                        icon: MinusCircle,
-                        text: "HOLD",
-                        color: "text-muted-foreground",
-                        bgColor: "bg-muted/20",
-                        borderColor: "border-gray-400 dark:border-gray-600",
-                      };
-                    }
-                  };
-                  
-                  const stanceConfig = getStanceConfig(activeStance);
-                  
-                  return (
-                    <div key={brief.id} className="border rounded-lg overflow-hidden">
-                      {/* Header with price and ACT badge */}
-                      <div className="bg-muted/30 px-4 py-3 border-b">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
-                              {new Date(brief.briefDate).toLocaleDateString()}
-                            </Badge>
-                            {isAct && (
-                              <Badge variant="default" className="bg-primary font-bold" data-testid={`badge-act-${brief.id}`}>
-                                ACT
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-mono font-bold">
-                              ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
-                            </p>
-                            <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                              {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Single Scenario Display - Based on Position Status */}
-                      <div className={`p-4 ${stanceConfig.bgColor} border-l-4 ${stanceConfig.borderColor}`}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <stanceConfig.icon className={`h-5 w-5 ${stanceConfig.color}`} />
-                          <div className="flex-1">
+                    const activeStance = hasEnteredPosition ? brief.owningStance : brief.watchingStance;
+                    const activeConfidence = hasEnteredPosition ? brief.owningConfidence : brief.watchingConfidence;
+                    const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
+                    const activeHighlights = hasEnteredPosition ? brief.owningHighlights : brief.watchingHighlights;
+                    
+                    const isAct = activeStance === "buy" || activeStance === "sell" || activeStance === "enter" || activeStance === "short" || activeStance === "cover";
+                    
+                    const getStanceConfig = (stance: string) => {
+                      const normalizedStance = stance?.toLowerCase() || "hold";
+                      if (normalizedStance === "buy" || normalizedStance === "enter") {
+                        return { icon: ArrowUpCircle, text: "BUY", color: "text-green-600 dark:text-green-400", bgColor: "bg-green-50 dark:bg-green-950/30", borderColor: "border-green-500" };
+                      } else if (normalizedStance === "sell" || normalizedStance === "short") {
+                        return { icon: ArrowDownCircle, text: "SELL", color: "text-red-600 dark:text-red-400", bgColor: "bg-red-50 dark:bg-red-950/30", borderColor: "border-red-500" };
+                      } else if (normalizedStance === "cover") {
+                        return { icon: ArrowUpCircle, text: "COVER", color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-50 dark:bg-blue-950/30", borderColor: "border-blue-500" };
+                      } else {
+                        return { icon: MinusCircle, text: "HOLD", color: "text-muted-foreground", bgColor: "bg-muted/20", borderColor: "border-gray-400 dark:border-gray-600" };
+                      }
+                    };
+                    
+                    const stanceConfig = getStanceConfig(activeStance);
+                    
+                    return (
+                      <div key={brief.id} className={`border rounded-lg overflow-hidden ${isLatest ? "ring-2 ring-primary" : ""}`}>
+                        <div className="bg-muted/30 px-4 py-3 border-b">
+                          <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-bold text-muted-foreground">
-                                {hasEnteredPosition ? "CURRENTLY IN POSITION" : "CONSIDERING ENTRY"}
-                              </h4>
-                              <Badge variant={isAct ? "default" : "outline"} className={isAct ? "bg-primary" : ""}>
-                                {stanceConfig.text}
+                              <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
+                                {isLatest ? "Latest" : new Date(brief.briefDate).toLocaleDateString()}
                               </Badge>
+                              {isAct && (
+                                <Badge variant="default" className="bg-primary font-bold" data-testid={`badge-act-${brief.id}`}>
+                                  ACT
+                                </Badge>
+                              )}
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                              Confidence: {activeConfidence}/10
-                            </p>
+                            <div className="text-right">
+                              <p className="text-lg font-mono font-bold">
+                                ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
+                              </p>
+                              <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+                              </p>
+                            </div>
                           </div>
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2" data-testid={`text-brief-${brief.id}`}>
-                          {activeText}
-                        </p>
-                        {activeHighlights && activeHighlights.length > 0 && (
-                          <ul className="list-disc list-inside space-y-1 mt-2">
-                            {activeHighlights.map((highlight: string, idx: number) => (
-                              <li key={idx} className="text-xs text-muted-foreground">
-                                {highlight}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                        
+                        <div className={`p-4 ${stanceConfig.bgColor} border-l-4 ${stanceConfig.borderColor}`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <stanceConfig.icon className={`h-5 w-5 ${stanceConfig.color}`} />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-muted-foreground">
+                                  {hasEnteredPosition ? "CURRENTLY IN POSITION" : "CONSIDERING ENTRY"}
+                                </h4>
+                                <Badge variant={isAct ? "default" : "outline"} className={isAct ? "bg-primary" : ""}>
+                                  {stanceConfig.text}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Confidence: {activeConfidence}/10
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2" data-testid={`text-brief-${brief.id}`}>
+                            {activeText}
+                          </p>
+                          {activeHighlights && activeHighlights.length > 0 && (
+                            <ul className="list-disc list-inside space-y-1 mt-2">
+                              {activeHighlights.map((highlight: string, idx: number) => (
+                                <li key={idx} className="text-xs text-muted-foreground">
+                                  {highlight}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    );
+                  };
+
+                  const latestBrief = dailyBriefs[0];
+                  const previousBriefs = dailyBriefs.slice(1);
+
+                  return (
+                    <>
+                      {/* Latest Brief - Main Visual */}
+                      {latestBrief && renderBrief(latestBrief, true)}
+                      
+                      {/* Previous Reports - Collapsible */}
+                      {previousBriefs.length > 0 && (
+                        <Collapsible className="group">
+                          <div className="border rounded-lg overflow-hidden">
+                            <CollapsibleTrigger asChild>
+                              <button className="w-full px-4 py-3 bg-muted/50 hover:bg-muted text-left flex items-center justify-between gap-2 cursor-pointer" data-testid="button-toggle-previous-reports">
+                                <span className="font-medium text-sm">
+                                  Previous Reports ({previousBriefs.length})
+                                </span>
+                                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                              </button>
+                            </CollapsibleTrigger>
+                          </div>
+                          <CollapsibleContent className="space-y-3 mt-3">
+                            {previousBriefs.map((brief: any) => renderBrief(brief, false))}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
+                    </>
                   );
-                })}
+                })()}
               </div>
             )}
             </CardContent>

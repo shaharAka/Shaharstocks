@@ -271,7 +271,7 @@ export interface IStorage {
   // Cross-user aggregation for "popular stock" notifications
   getFollowerCountForTicker(ticker: string): Promise<number>;
   getFollowerUserIdsForTicker(ticker: string): Promise<string[]>;
-  getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]>;
+  getDailyBriefsForTicker(ticker: string, userId: string): Promise<DailyBrief[]>;
   getDailyBriefForUser(userId: string, ticker: string, briefDate: string): Promise<DailyBrief | undefined>;
   createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief>;
 
@@ -2229,12 +2229,18 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async getDailyBriefsForTicker(ticker: string): Promise<DailyBrief[]> {
+  async getDailyBriefsForTicker(ticker: string, userId: string): Promise<DailyBrief[]> {
     // Limit to last 7 days to keep response lightweight
+    // CRITICAL: Filter by userId to prevent cross-user data leakage
     return await db
       .select()
       .from(dailyBriefs)
-      .where(eq(dailyBriefs.ticker, ticker))
+      .where(
+        and(
+          eq(dailyBriefs.ticker, ticker),
+          eq(dailyBriefs.userId, userId)
+        )
+      )
       .orderBy(desc(dailyBriefs.briefDate))
       .limit(7);
   }

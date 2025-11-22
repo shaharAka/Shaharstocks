@@ -2518,7 +2518,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "You must follow this stock to view daily briefs" });
       }
       
-      const briefs = await storage.getDailyBriefsForTicker(tickerParam);
+      // Pass userId to ensure only user-specific briefs are returned
+      const briefs = await storage.getDailyBriefsForTicker(tickerParam, req.session.userId);
       res.json(briefs);
     } catch (error) {
       console.error("Get daily briefs error:", error);

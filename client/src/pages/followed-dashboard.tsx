@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Star, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { TrendingUp, Star, ArrowUpRight, ArrowDownRight, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import type { Stock } from "@shared/schema";
 
 interface FollowedStock {
   ticker: string;
@@ -21,6 +22,12 @@ interface FollowedStock {
   hasEnteredPosition?: boolean;
 }
 
+type StockWithAnalysis = Stock & {
+  integratedScore?: number | null;
+  aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+  isFollowing?: boolean;
+};
+
 export default function FollowedDashboard() {
 
   const { data: followedStocks = [], isLoading } = useQuery<FollowedStock[]>({
@@ -31,6 +38,13 @@ export default function FollowedDashboard() {
       );
       return hasActiveJobs ? 5000 : false;
     },
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  // Fetch top high-signal opportunities (already filtered by backend)
+  const { data: topOpportunities = [], isLoading: isLoadingOpportunities } = useQuery<StockWithAnalysis[]>({
+    queryKey: ["/api/stocks/top-signals"],
     retry: false,
     meta: { ignoreError: true },
   });
@@ -67,25 +81,17 @@ export default function FollowedDashboard() {
   return (
     <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold" data-testid="text-page-title">
-            My Watchlist
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {followedStocks.length} {followedStocks.length === 1 ? 'stock' : 'stocks'} you're following
-          </p>
-        </div>
-        <Button asChild data-testid="button-discover">
-          <Link href="/recommendations">
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Discover Stocks
-          </Link>
-        </Button>
+      <div>
+        <h1 className="text-3xl font-bold" data-testid="text-page-title">
+          My Watchlist
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {followedStocks.length} {followedStocks.length === 1 ? 'stock' : 'stocks'} you're following
+        </p>
       </div>
 
       {/* Followed Stocks */}
-      {sortedFollowedStocks.length > 0 ? (
+      {sortedFollowedStocks.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {sortedFollowedStocks.map((stock) => {
             const priceChange = parseFloat(stock.priceChange || "0");
@@ -165,16 +171,127 @@ export default function FollowedDashboard() {
             );
           })}
         </div>
-      ) : (
+      )}
+
+      {/* Top Opportunities Section */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-500" />
+              <CardTitle className="text-lg">High-Signal Opportunities</CardTitle>
+            </div>
+            <Link href="/recommendations">
+              <Button variant="ghost" size="sm" className="text-xs" data-testid="link-view-all-opportunities">
+                View All
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoadingOpportunities ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3 flex-1">
+                    <Skeleton className="h-10 w-10 rounded" />
+                    <div className="space-y-1 flex-1">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-6 w-12" />
+                </div>
+              ))}
+            </div>
+          ) : topOpportunities.length > 0 ? (
+            <div className="space-y-1">
+              {topOpportunities.map((stock) => {
+                const currentPrice = parseFloat(stock.currentPrice);
+                const previousPrice = parseFloat(stock.previousClose || stock.currentPrice);
+                const priceChange = currentPrice - previousPrice;
+                const priceChangePercent = (priceChange / previousPrice) * 100;
+                const isPricePositive = priceChange >= 0;
+
+                return (
+                  <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
+                    <div 
+                      className="flex items-center justify-between py-3 px-2 rounded-md hover-elevate active-elevate-2 cursor-pointer"
+                      data-testid={`opportunity-${stock.ticker}`}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="flex flex-col items-center justify-center">
+                          <Badge 
+                            variant="outline"
+                            className={cn(
+                              "h-8 w-12 flex items-center justify-center font-mono font-semibold text-sm",
+                              stock.integratedScore! >= 90 && "border-amber-500 text-amber-600 dark:text-amber-400",
+                              stock.integratedScore! >= 70 && stock.integratedScore! < 90 && "border-amber-300 text-amber-600 dark:text-amber-400"
+                            )}
+                          >
+                            {stock.integratedScore}
+                          </Badge>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-mono font-semibold">{stock.ticker}</p>
+                            {stock.aiStance && (
+                              <Badge variant="default" className="h-4 text-[9px] px-1">
+                                {stock.aiStance}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {stock.companyName}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-sm font-mono font-medium">
+                            ${currentPrice.toFixed(2)}
+                          </p>
+                          <p className={cn(
+                            "text-xs font-mono",
+                            isPricePositive ? "text-success" : "text-destructive"
+                          )}>
+                            {isPricePositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground">
+                No high-signal opportunities available right now
+              </p>
+              <Link href="/recommendations">
+                <Button variant="outline" size="sm" className="mt-3">
+                  Browse All Opportunities
+                </Button>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Empty state for new users - only show if no followed stocks */}
+      {sortedFollowedStocks.length === 0 && (
         <Card className="p-8">
           <div className="text-center">
             <Star className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
             <p className="text-sm text-muted-foreground mb-3">
               Start following stocks to track them here
             </p>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/recommendations">Discover Stocks</Link>
-            </Button>
+            <Link href="/recommendations">
+              <Button variant="outline" size="sm">
+                Discover Stocks
+              </Button>
+            </Link>
           </div>
         </Card>
       )}

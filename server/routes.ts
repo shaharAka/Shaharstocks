@@ -2368,13 +2368,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker.toUpperCase();
-      const { hasEnteredPosition } = req.body;
+      const { hasEnteredPosition, entryPrice } = req.body;
       
       if (typeof hasEnteredPosition !== 'boolean') {
         return res.status(400).json({ error: "hasEnteredPosition must be a boolean" });
       }
       
-      await storage.toggleStockPosition(ticker, req.session.userId, hasEnteredPosition);
+      // Validate entryPrice if provided
+      if (entryPrice !== undefined && (typeof entryPrice !== 'number' || entryPrice <= 0)) {
+        return res.status(400).json({ error: "entryPrice must be a positive number" });
+      }
+      
+      await storage.toggleStockPosition(ticker, req.session.userId, hasEnteredPosition, entryPrice);
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Toggle position error:", error);

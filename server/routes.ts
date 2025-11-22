@@ -2,9 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema, aiAnalysisJobs } from "@shared/schema";
+import { insertStockSchema, insertTradeSchema, insertTradingRuleSchema, insertCompoundRuleSchema, insertBacktestSchema, insertTelegramConfigSchema, insertIbkrConfigSchema, insertOpeninsiderConfigSchema, insertStockCommentSchema, insertFeatureSuggestionSchema, insertAnnouncementSchema, insertFollowedStockSchema, aiAnalysisJobs, glossaryTerms } from "@shared/schema";
 import { z } from "zod";
-import { eq, or } from "drizzle-orm";
+import { eq, or, inArray, ilike } from "drizzle-orm";
 import { telegramService } from "./telegram";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
@@ -4597,6 +4597,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to regenerate briefs:", error);
       res.status(500).json({ error: "Failed to regenerate briefs" });
+    }
+  });
+
+  // ===== Glossary Terms API =====
+  
+  // Get all glossary terms (public endpoint, no auth required)
+  app.get("/api/glossary", async (req, res) => {
+    try {
+      const terms = await db.select().from(glossaryTerms).orderBy(glossaryTerms.term);
+      res.json(terms);
+    } catch (error) {
+      console.error("Failed to fetch glossary terms:", error);
+      res.status(500).json({ error: "Failed to fetch glossary terms" });
     }
   });
 

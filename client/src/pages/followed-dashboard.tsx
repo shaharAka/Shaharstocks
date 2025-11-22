@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Star, ArrowUpRight, ArrowDownRight, Sparkles } from "lucide-react";
+import { TrendingUp, Star, ArrowUpRight, ArrowDownRight, Sparkles, Activity, Target, Zap } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import type { Stock } from "@shared/schema";
@@ -78,79 +78,254 @@ export default function FollowedDashboard() {
 
   const isNewUser = followedStocks.length === 0;
 
+  // Calculate summary stats
+  const highSignalCount = followedStocks.filter(s => (s.integratedScore ?? 0) >= 70).length;
+  const avgScore = followedStocks.length > 0
+    ? Math.round(followedStocks.reduce((sum, s) => sum + (s.integratedScore ?? 0), 0) / followedStocks.length)
+    : 0;
+  const buySignals = followedStocks.filter(s => s.aiStance === 'BUY').length;
+
   return (
-    <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+    <div className="p-6 space-y-8 max-w-screen-2xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold" data-testid="text-page-title">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
           My Watchlist
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {followedStocks.length} {followedStocks.length === 1 ? 'stock' : 'stocks'} you're following
+        <p className="text-muted-foreground">
+          Track your followed stocks and discover new opportunities
         </p>
       </div>
 
+      {/* Stats Overview - Only show if user has stocks */}
+      {followedStocks.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total Stocks
+              </CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{followedStocks.length}</div>
+              <p className="text-xs text-muted-foreground">
+                Actively tracking
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                High Signals
+              </CardTitle>
+              <Zap className="h-4 w-4 text-amber-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{highSignalCount}</div>
+              <p className="text-xs text-muted-foreground">
+                Score ≥ 70
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Buy Signals
+              </CardTitle>
+              <Target className="h-4 w-4 text-success" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{buySignals}</div>
+              <p className="text-xs text-muted-foreground">
+                AI recommends BUY
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Followed Stocks */}
       {sortedFollowedStocks.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {sortedFollowedStocks.map((stock) => {
-            const priceChange = parseFloat(stock.priceChange || "0");
-            const priceChangePercent = parseFloat(stock.priceChangePercent || "0");
-            const isPricePositive = priceChange >= 0;
-            const isAnalyzing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight">Your Stocks</h2>
+            <span className="text-sm text-muted-foreground">
+              {sortedFollowedStocks.length} {sortedFollowedStocks.length === 1 ? 'stock' : 'stocks'}
+            </span>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {sortedFollowedStocks.map((stock) => {
+              const priceChange = parseFloat(stock.priceChange || "0");
+              const priceChangePercent = parseFloat(stock.priceChangePercent || "0");
+              const isPricePositive = priceChange >= 0;
+              const isAnalyzing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
+              const isHighSignal = (stock.integratedScore ?? 0) >= 70;
 
-            return (
-              <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
-                <Card 
-                  className="hover-elevate active-elevate-2 cursor-pointer h-full"
-                  data-testid={`card-watchlist-${stock.ticker}`}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <CardTitle className="text-xl font-mono font-semibold">
-                          {stock.ticker}
-                        </CardTitle>
-                        {isAnalyzing ? (
-                          <Badge variant="outline" className="h-5 text-[10px]">
-                            Analyzing...
-                          </Badge>
-                        ) : stock.aiStance && (
+              return (
+                <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
+                  <Card 
+                    className={cn(
+                      "hover-elevate active-elevate-2 cursor-pointer h-full transition-all",
+                      isHighSignal && "border-amber-500/20"
+                    )}
+                    data-testid={`card-watchlist-${stock.ticker}`}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-xl font-mono font-semibold">
+                              {stock.ticker}
+                            </CardTitle>
+                            {isAnalyzing && (
+                              <Badge variant="outline" className="h-5 text-[10px]">
+                                Analyzing...
+                              </Badge>
+                            )}
+                          </div>
+                          {stock.aiStance && !isAnalyzing && (
+                            <Badge 
+                              variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'secondary'}
+                              className="h-5 text-[10px] w-fit"
+                            >
+                              {stock.aiStance}
+                            </Badge>
+                          )}
+                        </div>
+                        {stock.integratedScore != null && (
                           <Badge 
-                            variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'secondary'}
-                            className="h-5 text-[10px]"
+                            variant="outline"
+                            className={cn(
+                              "h-7 px-2.5 text-sm font-bold",
+                              stock.integratedScore >= 90 && "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                              stock.integratedScore >= 70 && stock.integratedScore < 90 && "border-amber-300 bg-amber-300/10 text-amber-600 dark:text-amber-400"
+                            )}
                           >
-                            {stock.aiStance}
+                            {stock.integratedScore}
                           </Badge>
                         )}
                       </div>
-                      {stock.integratedScore != null && (
+                    </CardHeader>
+
+                    <CardContent>
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Current Price</p>
+                          <p className="text-3xl font-mono font-bold">
+                            ${parseFloat(stock.currentPrice).toFixed(2)}
+                          </p>
+                        </div>
+                        {stock.priceChange && (
+                          <div className="text-right">
+                            <div className={cn(
+                              "flex items-center gap-1 text-base font-semibold font-mono",
+                              isPricePositive ? "text-success" : "text-destructive"
+                            )}>
+                              {isPricePositive ? (
+                                <ArrowUpRight className="h-5 w-5" />
+                              ) : (
+                                <ArrowDownRight className="h-5 w-5" />
+                              )}
+                              <span>
+                                {isPricePositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Top Opportunities Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-500" />
+              <h2 className="text-xl font-semibold tracking-tight">High-Signal Opportunities</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Top-rated stocks you're not following yet
+            </p>
+          </div>
+          <Link href="/recommendations">
+            <Button variant="ghost" size="sm" data-testid="link-view-all-opportunities">
+              View All
+            </Button>
+          </Link>
+        </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            {isLoadingOpportunities ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-4 py-3">
+                    <Skeleton className="h-12 w-12 rounded" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                    <Skeleton className="h-10 w-24" />
+                  </div>
+                ))}
+              </div>
+            ) : topOpportunities.length > 0 ? (
+              <div className="divide-y">
+                {topOpportunities.map((stock) => {
+                  const currentPrice = parseFloat(stock.currentPrice);
+                  const previousPrice = parseFloat(stock.previousClose || stock.currentPrice);
+                  const priceChange = currentPrice - previousPrice;
+                  const priceChangePercent = (priceChange / previousPrice) * 100;
+                  const isPricePositive = priceChange >= 0;
+
+                  return (
+                    <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
+                      <div 
+                        className="flex items-center gap-4 py-4 hover-elevate active-elevate-2 cursor-pointer rounded-lg px-2 -mx-2"
+                        data-testid={`opportunity-${stock.ticker}`}
+                      >
                         <Badge 
                           variant="outline"
                           className={cn(
-                            "h-6 px-2 text-xs font-semibold",
-                            stock.integratedScore >= 90 && "border-amber-500 text-amber-600 dark:text-amber-400",
-                            stock.integratedScore >= 70 && stock.integratedScore < 90 && "border-amber-300 text-amber-600 dark:text-amber-400"
+                            "h-12 w-12 flex items-center justify-center font-mono font-bold text-base rounded-lg shrink-0",
+                            stock.integratedScore! >= 90 && "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                            stock.integratedScore! >= 70 && stock.integratedScore! < 90 && "border-amber-300 bg-amber-300/10 text-amber-600 dark:text-amber-400"
                           )}
                         >
                           {stock.integratedScore}
                         </Badge>
-                      )}
-                    </div>
-                  </CardHeader>
-
-                  <CardContent>
-                    <div className="flex items-baseline justify-between">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Current Price</p>
-                        <p className="text-2xl font-mono font-semibold">
-                          ${parseFloat(stock.currentPrice).toFixed(2)}
-                        </p>
-                      </div>
-                      {stock.priceChange && (
-                        <div className="text-right">
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-mono font-bold text-base">{stock.ticker}</span>
+                            {stock.aiStance && (
+                              <Badge variant="default" className="h-4 text-[9px] px-1.5">
+                                {stock.aiStance}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {stock.companyName}
+                          </p>
+                        </div>
+                        
+                        <div className="text-right shrink-0">
+                          <p className="text-lg font-mono font-bold mb-0.5">
+                            ${currentPrice.toFixed(2)}
+                          </p>
                           <div className={cn(
-                            "flex items-center gap-1 text-sm font-medium font-mono",
+                            "flex items-center justify-end gap-1 text-sm font-semibold font-mono",
                             isPricePositive ? "text-success" : "text-destructive"
                           )}>
                             {isPricePositive ? (
@@ -163,136 +338,51 @@ export default function FollowedDashboard() {
                             </span>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Top Opportunities Section */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-amber-500" />
-              <CardTitle className="text-lg">High-Signal Opportunities</CardTitle>
-            </div>
-            <Link href="/recommendations">
-              <Button variant="ghost" size="sm" className="text-xs" data-testid="link-view-all-opportunities">
-                View All
-              </Button>
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoadingOpportunities ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3 flex-1">
-                    <Skeleton className="h-10 w-10 rounded" />
-                    <div className="space-y-1 flex-1">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-3 w-32" />
-                    </div>
-                  </div>
-                  <Skeleton className="h-6 w-12" />
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
+                  <Sparkles className="h-8 w-8 text-muted-foreground" />
                 </div>
-              ))}
-            </div>
-          ) : topOpportunities.length > 0 ? (
-            <div className="space-y-1">
-              {topOpportunities.map((stock) => {
-                const currentPrice = parseFloat(stock.currentPrice);
-                const previousPrice = parseFloat(stock.previousClose || stock.currentPrice);
-                const priceChange = currentPrice - previousPrice;
-                const priceChangePercent = (priceChange / previousPrice) * 100;
-                const isPricePositive = priceChange >= 0;
-
-                return (
-                  <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
-                    <div 
-                      className="flex items-center justify-between py-3 px-2 rounded-md hover-elevate active-elevate-2 cursor-pointer"
-                      data-testid={`opportunity-${stock.ticker}`}
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="flex flex-col items-center justify-center">
-                          <Badge 
-                            variant="outline"
-                            className={cn(
-                              "h-8 w-12 flex items-center justify-center font-mono font-semibold text-sm",
-                              stock.integratedScore! >= 90 && "border-amber-500 text-amber-600 dark:text-amber-400",
-                              stock.integratedScore! >= 70 && stock.integratedScore! < 90 && "border-amber-300 text-amber-600 dark:text-amber-400"
-                            )}
-                          >
-                            {stock.integratedScore}
-                          </Badge>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-mono font-semibold">{stock.ticker}</p>
-                            {stock.aiStance && (
-                              <Badge variant="default" className="h-4 text-[9px] px-1">
-                                {stock.aiStance}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {stock.companyName}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-sm font-mono font-medium">
-                            ${currentPrice.toFixed(2)}
-                          </p>
-                          <p className={cn(
-                            "text-xs font-mono",
-                            isPricePositive ? "text-success" : "text-destructive"
-                          )}>
-                            {isPricePositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-sm text-muted-foreground">
-                No high-signal opportunities available right now
-              </p>
-              <Link href="/recommendations">
-                <Button variant="outline" size="sm" className="mt-3">
-                  Browse All Opportunities
-                </Button>
-              </Link>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <h3 className="font-semibold mb-2">No opportunities available</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  All high-signal stocks are already in your watchlist
+                </p>
+                <Link href="/recommendations">
+                  <Button variant="outline" size="sm">
+                    Browse All Opportunities
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Empty state for new users - only show if no followed stocks */}
       {sortedFollowedStocks.length === 0 && (
-        <Card className="p-8">
-          <div className="text-center">
-            <Star className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-            <p className="text-sm text-muted-foreground mb-3">
-              Start following stocks to track them here
-            </p>
-            <Link href="/recommendations">
-              <Button variant="outline" size="sm">
-                Discover Stocks
-              </Button>
-            </Link>
-          </div>
+        <Card>
+          <CardContent className="pt-16 pb-16">
+            <div className="text-center max-w-md mx-auto">
+              <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 mb-6">
+                <Star className="h-10 w-10 text-primary" />
+              </div>
+              <h3 className="text-2xl font-semibold mb-2">Your watchlist is empty</h3>
+              <p className="text-muted-foreground mb-6">
+                Discover high-signal stocks and start building your portfolio
+              </p>
+              <Link href="/recommendations">
+                <Button size="lg">
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Explore Opportunities
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
         </Card>
       )}
     </div>

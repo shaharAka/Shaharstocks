@@ -8,6 +8,20 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 22, 2025 - Onboarding Flow Enhanced with Automatic Data Fetch
+- **4-Step Onboarding Process**: Expanded onboarding from 3 to 4 steps to include automatic data fetching
+- **Step 4 Auto-Fetch**: Step 4 automatically triggers OpenInsider data fetch upon mounting
+- **Enforced Execution**: Both "Get Started" and "Skip" buttons disabled during fetch to ensure data loads before completion
+- **Visual Feedback**: 
+  - Loading state: "Fetching..." with animated Zap icon
+  - Success state: Green checkmark with "Fetch Complete!" message and green border
+  - Error state: "Fetch Failed" with retry button, allows skip after failure
+- **Educational Content**: 
+  - Automatic Data Collection card explains daily refresh and quality filters
+  - Customizable Settings card directs users to Settings for configuration
+- **User Flow**: Users must wait for fetch to complete or explicitly skip after error, ensuring every user either has initial data or makes conscious choice to explore first
+- **Dependencies**: Proper useEffect dependencies prevent stale state and infinite loops
+
 ### November 22, 2025 - Tutorial System Overhaul
 - **Manual-Only Tutorials**: Removed all auto-triggering logic from TutorialManager - tutorials only show when user clicks the help button
 - **Contextual Tutorials Removed**: Eliminated `opportunities-intro`, `high-signal-follow`, and `first-follow` auto-triggered tutorials

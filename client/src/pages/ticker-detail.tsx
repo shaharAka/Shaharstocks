@@ -441,34 +441,40 @@ export default function TickerDetail() {
                     
                     return (
                       <div key={brief.id} className={`border rounded-lg overflow-hidden ${stanceConfig.bgColor}`}>
-                        {/* Header: Latest | BUY | Price | Confidence */}
-                        <div className="px-4 py-3 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
-                              {isLatest ? "Latest" : new Date(brief.briefDate).toLocaleDateString()}
-                            </Badge>
-                            <Badge variant={isAct ? "default" : "outline"} className={isAct ? "bg-primary" : ""}>
-                              {stanceConfig.text}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-6 ml-auto">
-                            <div className="text-right">
-                              <p className="text-lg font-mono font-bold">
-                                ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
-                              </p>
-                              <p className={`text-xs font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
-                              </p>
-                            </div>
-                            <div className="text-right min-w-fit">
-                              <p className="text-xs text-muted-foreground">Confidence</p>
-                              <p className="font-bold">{activeConfidence}/10</p>
-                            </div>
+                        {/* Top row: Price and change info */}
+                        <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-4">
+                          <div />
+                          <div className="text-right">
+                            <p className="text-lg font-mono font-bold">
+                              ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
+                            </p>
+                            <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+                            </p>
                           </div>
                         </div>
                         
-                        {/* Body: Analysis and key points */}
+                        {/* Main content row: Icon | Status + Badges | Confidence */}
                         <div className="px-4 pb-4 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <stanceConfig.icon className={`h-5 w-5 ${stanceConfig.color}`} />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
+                                  {isLatest ? "Latest" : new Date(brief.briefDate).toLocaleDateString()}
+                                </Badge>
+                                <h4 className="text-sm font-bold text-muted-foreground">
+                                  {hasEnteredPosition ? "CURRENTLY IN POSITION" : "CONSIDERING ENTRY"}
+                                </h4>
+                                <Badge variant={isAct ? "default" : "outline"} className={isAct ? "bg-primary" : ""}>
+                                  {stanceConfig.text}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Confidence: {activeConfidence}/10
+                              </p>
+                            </div>
+                          </div>
                           <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
                             {activeText}
                           </p>

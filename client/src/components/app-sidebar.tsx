@@ -201,25 +201,15 @@ export function AppSidebar() {
                     insiderTag = { text: 'S', isBuy: false };
                   }
                   
-                  // Determine action recommendation based on STANCE ALIGNMENT and position status (right of price)
-                  // Shows actual action: BUY/SELL for entry signals, SELL for exit signals, HOLD for maintenance
+                  // Determine action recommendation based on AI STANCE and position status (right of price)
+                  // Shows the actual AI recommendation: BUY (entry), SELL (exit/short entry), or HOLD (maintain)
+                  // The aiStance already reflects the appropriate action for current position status
                   let actionTag: { text: string; variant: 'default' | 'secondary' } | null = null;
                   if (stock.stanceAlignment != null) {
                     if (stock.stanceAlignment === 'act') {
-                      if (stock.hasEnteredPosition) {
-                        // Already in position - show SELL (exit signal)
-                        actionTag = { text: 'SELL', variant: 'default' };
-                      } else {
-                        // Watching - show BUY or SELL based on insider action
-                        if (stock.insiderAction === 'BUY') {
-                          actionTag = { text: 'BUY', variant: 'default' };
-                        } else if (stock.insiderAction === 'SELL') {
-                          actionTag = { text: 'SELL', variant: 'default' };
-                        } else {
-                          // Fallback to AI stance if no insider action
-                          actionTag = { text: stock.aiStance || 'ACT', variant: 'default' };
-                        }
-                      }
+                      // Show the AI's recommended stance (BUY for entry, SELL for exit/short entry)
+                      const actionText = stock.aiStance || 'ACT';
+                      actionTag = { text: actionText, variant: 'default' };
                     } else if (stock.stanceAlignment === 'hold') {
                       actionTag = { text: 'HOLD', variant: 'secondary' };
                     }

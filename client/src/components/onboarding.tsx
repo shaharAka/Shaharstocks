@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Database, TrendingUp, Bell, Star, Calendar, Sparkles } from "lucide-react";
+import { Database, TrendingUp, Bell, Star, Calendar, Sparkles, Settings, Zap, CheckCircle2 } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface OnboardingProps {
   open: boolean;
@@ -25,9 +28,32 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
   const [step, setStep] = useState(1);
   const [, setLocation] = useLocation();
   const { completeOnboarding } = useUser();
+  const { toast } = useToast();
+  const [fetchComplete, setFetchComplete] = useState(false);
+
+  const fetchMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/openinsider/fetch", {});
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      setFetchComplete(true);
+      toast({
+        title: "Fetch Complete!",
+        description: `Fetched ${data.count || 0} new opportunities from insider trading filings`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Fetch failed",
+        description: "Unable to fetch opportunities. You can try again from Settings.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleNext = () => {
-    if (step < 3) {
+    if (step < 4) {
       setStep(step + 1);
     }
   };
@@ -44,7 +70,18 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
     // Dialog will auto-close when experienceState updates in parent
   };
 
-  const totalSteps = 3;
+  const handleFetchNow = () => {
+    fetchMutation.mutate();
+  };
+
+  // Auto-trigger fetch when reaching step 4
+  useEffect(() => {
+    if (step === 4 && !fetchComplete && !fetchMutation.isPending && !fetchMutation.isError) {
+      fetchMutation.mutate();
+    }
+  }, [step, fetchComplete, fetchMutation.isPending, fetchMutation.isError]);
+
+  const totalSteps = 4;
   const progress = (step / totalSteps) * 100;
 
   return (
@@ -263,19 +300,125 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
               </div>
             </div>
           )}
+
+          {step === 4 && (
+            <div className="space-y-4">
+              <DialogDescription className="text-base mb-4">
+                Let's fetch your first batch of opportunities from insider trading filings!
+              </DialogDescription>
+
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+                <Card data-testid="card-fetching">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-base">Automatic Data Collection</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      signal2 automatically fetches insider trading transactions from SEC filings. 
+                      By default, data refreshes daily with quality filters applied (minimum transaction value, 
+                      company market cap $500M+).
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-settings">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-base">Customizable Settings</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Visit Settings anytime to customize fetch intervals (hourly/daily), 
+                      adjust quality filters (transaction value, community rating), 
+                      and set fetch limits (1-500 transactions).
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className={fetchComplete ? "border-success" : ""} data-testid="card-fetch-action">
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    {fetchComplete ? "Fetch Complete!" : fetchMutation.isError ? "Fetch Failed" : "Fetching Your First Opportunities"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {fetchComplete ? (
+                    <div className="flex items-center gap-2 text-success">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <p className="text-sm">
+                        Successfully fetched opportunities! You can now browse them on the Opportunities page.
+                      </p>
+                    </div>
+                  ) : fetchMutation.isError ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Failed to fetch opportunities. You can retry now or skip to explore the app first.
+                      </p>
+                      <Button 
+                        onClick={handleFetchNow}
+                        disabled={fetchMutation.isPending}
+                        className="w-full"
+                        data-testid="button-retry-fetch"
+                      >
+                        <Zap className="h-4 w-4 mr-2" />
+                        Retry Fetch
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        {fetchMutation.isPending ? (
+                          "Fetching insider trading opportunities from SEC filings. This will scan the latest transactions and run AI analysis..."
+                        ) : (
+                          "Preparing to fetch opportunities from SEC filings..."
+                        )}
+                      </p>
+                      <div className="w-full h-9 flex items-center justify-center">
+                        {fetchMutation.isPending ? (
+                          <div className="flex items-center gap-2 text-primary">
+                            <Zap className="h-5 w-5 animate-pulse" />
+                            <span className="text-sm font-medium">Fetching Opportunities...</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Zap className="h-5 w-5" />
+                            <span className="text-sm">Starting fetch...</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <p className="text-xs text-muted-foreground">
+                  <strong>Note:</strong> After onboarding, data will refresh automatically based on your settings. 
+                  You can always trigger a manual fetch from the Settings page or Opportunities page.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
           <Button
             variant="ghost"
             onClick={handleSkip}
+            disabled={step === 4 && !fetchComplete && !fetchMutation.isError}
             className="w-full sm:w-auto"
             data-testid="button-skip-onboarding"
           >
-            {step === 3 ? "Skip" : "Skip Tutorial"}
+            {step === 4 ? (fetchComplete || fetchMutation.isError ? "Skip" : "Wait...") : "Skip Tutorial"}
           </Button>
           
-          {step < 3 ? (
+          {step < 4 ? (
             <Button
               onClick={handleNext}
               className="w-full sm:w-auto"
@@ -286,10 +429,11 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
           ) : (
             <Button
               onClick={handleGetStarted}
+              disabled={step === 4 && !fetchComplete}
               className="w-full sm:w-auto"
               data-testid="button-get-started"
             >
-              Get Started
+              {step === 4 && !fetchComplete ? "Fetching..." : "Get Started"}
             </Button>
           )}
         </DialogFooter>

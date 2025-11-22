@@ -1137,6 +1137,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get top signal opportunities (high integrated score stocks)
+  app.get("/api/stocks/top-signals", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      // Get user's followed stocks to filter them out
+      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
+      const followedTickers = new Set(followedStocks.map(fs => fs.ticker.toUpperCase()));
+      
+      // Get stocks with user status (includes analysis data)
+      const stocksWithStatus = await storage.getStocksWithUserStatus(req.session.userId, 100);
+      
+      // Filter for high signals (score >= 70) and not already followed
+      const highSignals = stocksWithStatus
+        .filter(stock => {
+          const hasHighScore = (stock.integratedScore ?? 0) >= 70;
+          const notFollowed = !followedTickers.has(stock.ticker.toUpperCase());
+          const hasCompletedAnalysis = stock.jobStatus === 'completed';
+          return hasHighScore && notFollowed && hasCompletedAnalysis;
+        })
+        .slice(0, 12) // Limit to top 12
+        .map(stock => ({
+          ticker: stock.ticker,
+          companyName: stock.companyName,
+          currentPrice: stock.currentPrice,
+          priceChange: stock.priceChange,
+          priceChangePercent: stock.priceChangePercent,
+          insiderAction: stock.recommendation, // BUY or SELL
+          aiStance: stock.aiStance,
+          integratedScore: stock.integratedScore,
+          isFollowing: false,
+        }));
+      
+      res.json(highSignals);
+    } catch (error) {
+      console.error("Get top signals error:", error);
+      res.status(500).json({ error: "Failed to fetch top signals" });
+    }
+  });
+
   app.get("/api/stocks/:ticker", async (req, res) => {
     try {
       if (!req.session.userId) {
@@ -2267,7 +2309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         
         // Check if brief already exists for today
-        const existingBriefs = await storage.getDailyBriefsForTicker(ticker);
+        const existingBriefs = await storage.getDailyBriefsForTicker(ticker, req.session.userId);
         const briefExistsToday = existingBriefs.some((b: any) => b.briefDate === today);
         
         if (!briefExistsToday) {

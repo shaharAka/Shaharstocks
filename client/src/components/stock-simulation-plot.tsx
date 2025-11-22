@@ -125,6 +125,17 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     meta: { ignoreError: true },
   });
 
+  // Fetch followed stock data to get entry price
+  const { data: followedStocks = [] } = useQuery<any[]>({
+    queryKey: ["/api/users/me/followed"],
+    enabled: !!user,
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  const currentFollowedStock = followedStocks.find(f => f.ticker === ticker);
+  const entryPrice = currentFollowedStock?.entryPrice ? parseFloat(currentFollowedStock.entryPrice) : null;
+
   // Check both real and simulated holdings
   const holding = realHoldings?.find(h => h.ticker === ticker) || 
                   simulatedHoldings?.find(h => h.ticker === ticker);
@@ -221,6 +232,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     const allValues = [
       ...prices,
       ...(purchasePrice ? [purchasePrice] : []),
+      ...(entryPrice ? [entryPrice] : []),
       ...sellRuleLines.map(l => l.price)
     ];
 
@@ -233,7 +245,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
       Math.floor((minValue - padding) * 100) / 100,
       Math.ceil((maxValue + padding) * 100) / 100
     ];
-  }, [chartData, purchasePrice, sellRuleLines, ticker]);
+  }, [chartData, purchasePrice, entryPrice, sellRuleLines, ticker]);
 
   const handleCreateRule = () => {
     const value = parseFloat(conditionValue);
@@ -399,6 +411,21 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
                   value: `Entry: $${purchasePrice.toFixed(2)}`,
                   position: "insideTopRight",
                   fill: "oklch(var(--primary))",
+                  fontSize: 12,
+                }}
+              />
+            )}
+
+            {/* Entry price line for followed stocks (position tracking) */}
+            {entryPrice && !purchasePrice && (
+              <ReferenceLine
+                y={entryPrice}
+                stroke="hsl(142.1 76.2% 36.3%)"
+                strokeDasharray="5 5"
+                label={{
+                  value: `Entry: $${entryPrice.toFixed(2)}`,
+                  position: "insideTopRight",
+                  fill: "hsl(142.1 76.2% 36.3%)",
                   fontSize: 12,
                 }}
               />

@@ -484,77 +484,210 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         </CardContent>
       </Card>
 
-      {/* Advanced Metrics (Collapsible) */}
+      {/* Advanced Section - For Technical Investors */}
       <Accordion type="single" collapsible className="w-full">
         <AccordionItem value="advanced">
           <AccordionTrigger className="text-sm" data-testid="button-toggle-advanced">
-            Advanced Technical Metrics
+            Advanced - For Technical Investors
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pt-2">
-            {/* Technical Analysis */}
-            {analysis.technicalAnalysisScore !== undefined && analysis.technicalAnalysisScore !== null && (
+            
+            {/* Technical Analysis - Detailed Breakdown */}
+            {analysis.technicalAnalysisScore != null && (
               <Card>
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Technical Analysis Score</span>
-                    <span className="text-sm font-mono font-semibold">{analysis.technicalAnalysisScore}/100</span>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>Technical Indicators</span>
+                    <Badge variant={
+                      analysis.technicalAnalysisScore >= 70 ? 'default' :
+                      analysis.technicalAnalysisScore >= 40 ? 'secondary' : 'destructive'
+                    }>
+                      {analysis.technicalAnalysisScore}/100
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p className="font-medium text-foreground">What This Means:</p>
+                    <p>
+                      Technical analysis uses price charts and mathematical indicators to predict future price movements. 
+                      {analysis.technicalAnalysisTrend === 'bullish' && " The current trend is bullish, suggesting upward momentum."}
+                      {analysis.technicalAnalysisTrend === 'bearish' && " The current trend is bearish, suggesting downward pressure."}
+                      {analysis.technicalAnalysisTrend === 'neutral' && " The current trend is neutral, suggesting consolidation or sideways movement."}
+                    </p>
                   </div>
-                  {analysis.technicalAnalysisTrend && (
-                    <div className="text-xs text-muted-foreground">
-                      Trend: <span className="capitalize">{analysis.technicalAnalysisTrend}</span>
-                    </div>
-                  )}
-                  {analysis.technicalAnalysisSignals && analysis.technicalAnalysisSignals.length > 0 && (
-                    <ul className="space-y-0.5 text-xs">
-                      {analysis.technicalAnalysisSignals.map((signal: string, index: number) => (
-                        <li key={index} className="text-muted-foreground flex items-start gap-1">
-                          <span>•</span>
-                          <span>{signal}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
-            {/* Sentiment Analysis */}
-            {analysis.sentimentAnalysisScore !== undefined && analysis.sentimentAnalysisScore !== null && (
-              <Card>
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Sentiment Analysis Score</span>
-                    <span className="text-sm font-mono font-semibold">{analysis.sentimentAnalysisScore}/100</span>
-                  </div>
-                  {analysis.sentimentAnalysisTrend && (
-                    <div className="text-xs text-muted-foreground">
-                      Trend: <span className="capitalize">{analysis.sentimentAnalysisTrend}</span>
+                  {analysis.technicalAnalysisTrend && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Overall Trend:</span>
+                      <Badge variant={
+                        analysis.technicalAnalysisTrend === 'bullish' ? 'default' :
+                        analysis.technicalAnalysisTrend === 'bearish' ? 'destructive' : 'secondary'
+                      } className="capitalize">
+                        {analysis.technicalAnalysisTrend}
+                      </Badge>
+                      {analysis.technicalAnalysisMomentum && (
+                        <>
+                          <span className="text-sm text-muted-foreground">Momentum:</span>
+                          <Badge variant="outline" className="capitalize">
+                            {analysis.technicalAnalysisMomentum}
+                          </Badge>
+                        </>
+                      )}
                     </div>
                   )}
-                  {analysis.sentimentAnalysisKeyThemes && analysis.sentimentAnalysisKeyThemes.length > 0 && (
-                    <div className="text-xs">
-                      <div className="text-muted-foreground mb-1">Key Themes:</div>
-                      <ul className="space-y-0.5">
-                        {analysis.sentimentAnalysisKeyThemes.map((theme: string, index: number) => (
-                          <li key={index} className="text-muted-foreground flex items-start gap-1">
-                            <span>•</span>
-                            <span>{theme}</span>
+
+                  {analysis.technicalAnalysisSignals && analysis.technicalAnalysisSignals.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">Key Signals:</div>
+                      <ul className="space-y-1.5">
+                        {analysis.technicalAnalysisSignals.map((signal: string, index: number) => (
+                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2 pl-2">
+                            <span className="shrink-0 mt-1.5">•</span>
+                            <span className="flex-1">{signal}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   )}
+
+                  <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
+                    <strong>Note for Technical Traders:</strong> Technical indicators like RSI (overbought/oversold), 
+                    MACD (momentum), Bollinger Bands (volatility), and moving averages (trend) help identify entry and exit points. 
+                    Combined with volume trends and ATR (volatility measurement), these signals provide a quantitative view of market sentiment.
+                  </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Financial Health */}
-            {analysis.financialHealthScore !== undefined && analysis.financialHealthScore !== null && (
+            {/* Sentiment Analysis - Detailed Breakdown */}
+            {analysis.sentimentAnalysisScore != null && (
               <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Financial Health Score</span>
-                    <span className="text-sm font-mono font-semibold">{analysis.financialHealthScore}/100</span>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>News Sentiment Analysis</span>
+                    <Badge variant={
+                      analysis.sentimentAnalysisScore >= 70 ? 'default' :
+                      analysis.sentimentAnalysisScore >= 40 ? 'secondary' : 'destructive'
+                    }>
+                      {analysis.sentimentAnalysisScore}/100
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p className="font-medium text-foreground">What This Means:</p>
+                    <p>
+                      Sentiment analysis evaluates recent news articles to gauge market perception. 
+                      {analysis.sentimentAnalysisTrend === 'positive' && " Current coverage is predominantly positive, which may support price appreciation."}
+                      {analysis.sentimentAnalysisTrend === 'negative' && " Current coverage is predominantly negative, which may create headwinds."}
+                      {analysis.sentimentAnalysisTrend === 'neutral' && " Current coverage is balanced, with mixed positive and negative themes."}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {analysis.sentimentAnalysisTrend && (
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Sentiment Trend</div>
+                        <Badge variant={
+                          analysis.sentimentAnalysisTrend === 'positive' ? 'default' :
+                          analysis.sentimentAnalysisTrend === 'negative' ? 'destructive' : 'secondary'
+                        } className="capitalize">
+                          {analysis.sentimentAnalysisTrend}
+                        </Badge>
+                      </div>
+                    )}
+                    {analysis.sentimentAnalysisNewsVolume && (
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">News Volume</div>
+                        <Badge variant="outline" className="capitalize">
+                          {analysis.sentimentAnalysisNewsVolume}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  {analysis.sentimentAnalysisKeyThemes && analysis.sentimentAnalysisKeyThemes.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium">Key Themes in Coverage:</div>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.sentimentAnalysisKeyThemes.map((theme: string, index: number) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {theme}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
+                    <strong>For Advanced Investors:</strong> Sentiment scores aggregate tone, relevance, and volume of recent news coverage. 
+                    High positive sentiment with high volume often precedes price movements. Key themes reveal what's driving the narrative—watch for shifts 
+                    in coverage that may signal changing market perception ahead of price action.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Financial Health - Detailed Breakdown */}
+            {analysis.financialHealthScore != null && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>Financial Health Analysis</span>
+                    <Badge variant={
+                      analysis.financialHealthScore >= 70 ? 'default' :
+                      analysis.financialHealthScore >= 40 ? 'secondary' : 'destructive'
+                    }>
+                      {analysis.financialHealthScore}/100
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p className="font-medium text-foreground">What This Means:</p>
+                    <p>
+                      Financial health evaluates the company's balance sheet, income statement, and cash flow. 
+                      A strong score indicates solid profitability, healthy liquidity, manageable debt, and sustainable growth. 
+                      This provides confidence that the company can weather economic headwinds and fund future operations.
+                    </p>
+                  </div>
+
+                  {/* Key Metrics Grid */}
+                  {analysis.keyMetrics && Object.keys(analysis.keyMetrics).length > 0 && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {analysis.keyMetrics.profitability && (
+                        <div className="p-3 bg-muted/30 rounded-lg space-y-1">
+                          <div className="text-xs text-muted-foreground">Profitability</div>
+                          <div className="text-sm font-medium">{analysis.keyMetrics.profitability}</div>
+                        </div>
+                      )}
+                      {analysis.keyMetrics.liquidity && (
+                        <div className="p-3 bg-muted/30 rounded-lg space-y-1">
+                          <div className="text-xs text-muted-foreground">Liquidity</div>
+                          <div className="text-sm font-medium">{analysis.keyMetrics.liquidity}</div>
+                        </div>
+                      )}
+                      {analysis.keyMetrics.leverage && (
+                        <div className="p-3 bg-muted/30 rounded-lg space-y-1">
+                          <div className="text-xs text-muted-foreground">Debt Level</div>
+                          <div className="text-sm font-medium">{analysis.keyMetrics.leverage}</div>
+                        </div>
+                      )}
+                      {analysis.keyMetrics.growth && (
+                        <div className="p-3 bg-muted/30 rounded-lg space-y-1">
+                          <div className="text-xs text-muted-foreground">Growth</div>
+                          <div className="text-sm font-medium">{analysis.keyMetrics.growth}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
+                    <strong>For Fundamental Analysts:</strong> Financial health combines profit margins, return on equity (ROE), 
+                    current ratio (liquidity), debt-to-equity ratio (leverage), and revenue/earnings growth trends. 
+                    Companies with high financial health scores are better positioned to execute their strategy, pay dividends, 
+                    and maintain competitive advantages during market downturns.
                   </div>
                 </CardContent>
               </Card>

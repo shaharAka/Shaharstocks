@@ -94,85 +94,74 @@ export default function FollowedDashboard() {
             const isAnalyzing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
 
             return (
-              <Card 
-                key={stock.ticker}
-                className="hover-elevate"
-                data-testid={`card-watchlist-${stock.ticker}`}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <CardTitle className="text-xl font-mono font-semibold">
-                        {stock.ticker}
-                      </CardTitle>
-                      {isAnalyzing ? (
-                        <Badge variant="outline" className="h-5 text-[10px]">
-                          Analyzing...
-                        </Badge>
-                      ) : stock.aiStance && (
+              <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
+                <Card 
+                  className="hover-elevate active-elevate-2 cursor-pointer h-full"
+                  data-testid={`card-watchlist-${stock.ticker}`}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <CardTitle className="text-xl font-mono font-semibold">
+                          {stock.ticker}
+                        </CardTitle>
+                        {isAnalyzing ? (
+                          <Badge variant="outline" className="h-5 text-[10px]">
+                            Analyzing...
+                          </Badge>
+                        ) : stock.aiStance && (
+                          <Badge 
+                            variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'secondary'}
+                            className="h-5 text-[10px]"
+                          >
+                            {stock.aiStance}
+                          </Badge>
+                        )}
+                      </div>
+                      {stock.integratedScore != null && (
                         <Badge 
-                          variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'secondary'}
-                          className="h-5 text-[10px]"
+                          variant="outline"
+                          className={cn(
+                            "h-6 px-2 text-xs font-semibold",
+                            stock.integratedScore >= 90 && "border-amber-500 text-amber-600 dark:text-amber-400",
+                            stock.integratedScore >= 70 && stock.integratedScore < 90 && "border-amber-300 text-amber-600 dark:text-amber-400"
+                          )}
                         >
-                          {stock.aiStance}
+                          {stock.integratedScore}
                         </Badge>
                       )}
                     </div>
-                    {stock.integratedScore != null && (
-                      <Badge 
-                        variant="outline"
-                        className={cn(
-                          "h-6 px-2 text-xs font-semibold",
-                          stock.integratedScore >= 90 && "border-amber-500 text-amber-600 dark:text-amber-400",
-                          stock.integratedScore >= 70 && stock.integratedScore < 90 && "border-amber-300 text-amber-600 dark:text-amber-400"
-                        )}
-                      >
-                        {stock.integratedScore}
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
+                  </CardHeader>
 
-                <CardContent className="space-y-3">
-                  <div className="flex items-baseline justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Current Price</p>
-                      <p className="text-2xl font-mono font-semibold">
-                        ${parseFloat(stock.currentPrice).toFixed(2)}
-                      </p>
-                    </div>
-                    {stock.priceChange && (
-                      <div className="text-right">
-                        <div className={cn(
-                          "flex items-center gap-1 text-sm font-medium font-mono",
-                          isPricePositive ? "text-success" : "text-destructive"
-                        )}>
-                          {isPricePositive ? (
-                            <ArrowUpRight className="h-4 w-4" />
-                          ) : (
-                            <ArrowDownRight className="h-4 w-4" />
-                          )}
-                          <span>
-                            {isPricePositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
-                          </span>
-                        </div>
+                  <CardContent>
+                    <div className="flex items-baseline justify-between">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Current Price</p>
+                        <p className="text-2xl font-mono font-semibold">
+                          ${parseFloat(stock.currentPrice).toFixed(2)}
+                        </p>
                       </div>
-                    )}
-                  </div>
-
-                  <Button 
-                    variant="default"
-                    size="sm" 
-                    className="w-full" 
-                    asChild
-                    data-testid={`button-view-${stock.ticker}`}
-                  >
-                    <Link href={`/ticker/${stock.ticker}`}>
-                      View Details
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
+                      {stock.priceChange && (
+                        <div className="text-right">
+                          <div className={cn(
+                            "flex items-center gap-1 text-sm font-medium font-mono",
+                            isPricePositive ? "text-success" : "text-destructive"
+                          )}>
+                            {isPricePositive ? (
+                              <ArrowUpRight className="h-4 w-4" />
+                            ) : (
+                              <ArrowDownRight className="h-4 w-4" />
+                            )}
+                            <span>
+                              {isPricePositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
         </div>

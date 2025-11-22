@@ -35,6 +35,7 @@ import { useUser } from "@/contexts/UserContext";
 import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { StockSimulationPlot } from "@/components/stock-simulation-plot";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
+import { SignalSummary } from "@/components/signal-summary";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
@@ -536,10 +537,10 @@ export default function TickerDetail() {
       <StockSimulationPlot ticker={ticker} stock={stock} />
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="summary" className="w-full">
+      <Tabs defaultValue="signal" className="w-full">
         <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
+          <TabsTrigger value="signal">Signal Overview</TabsTrigger>
+          <TabsTrigger value="analysis">AI Playbook</TabsTrigger>
           <TabsTrigger value="news">News</TabsTrigger>
           <TabsTrigger value="insider">Insider</TabsTrigger>
           <TabsTrigger value="discussion">
@@ -552,8 +553,10 @@ export default function TickerDetail() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Summary Tab */}
-        <TabsContent value="summary" className="space-y-4">
+        {/* Signal Overview Tab */}
+        <TabsContent value="signal" className="space-y-4">
+          {/* AI Signal Summary */}
+          <SignalSummary ticker={ticker} />
 
           {/* Company Information */}
           {(stock.description || stock.industry || stock.country || stock.webUrl) && (

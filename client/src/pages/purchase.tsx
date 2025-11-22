@@ -592,16 +592,22 @@ export default function Purchase() {
               <p>Fetch Configuration</p>
             </TooltipContent>
           </Tooltip>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isPending}
-            data-testid="button-refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
-            <span className="ml-2">{getTerm("refresh")}</span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => refreshMutation.mutate()}
+                disabled={refreshMutation.isPending}
+                data-testid="button-refresh"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Rerun Fetch</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

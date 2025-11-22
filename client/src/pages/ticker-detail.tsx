@@ -183,11 +183,11 @@ export default function TickerDetail() {
 
   // Toggle position mutation
   const togglePositionMutation = useMutation({
-    mutationFn: async (hasEnteredPosition: boolean) => {
+    mutationFn: async ({ hasEnteredPosition, entryPrice }: { hasEnteredPosition: boolean; entryPrice?: number }) => {
       if (!ticker) {
         throw new Error("Ticker is not defined");
       }
-      return await apiRequest("PATCH", `/api/stocks/${ticker}/position`, { hasEnteredPosition });
+      return await apiRequest("PATCH", `/api/stocks/${ticker}/position`, { hasEnteredPosition, entryPrice });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
@@ -391,7 +391,10 @@ export default function TickerDetail() {
                   <Switch
                     id="position-toggle"
                     checked={hasEnteredPosition}
-                    onCheckedChange={(checked) => togglePositionMutation.mutate(checked)}
+                    onCheckedChange={(checked) => togglePositionMutation.mutate({ 
+                      hasEnteredPosition: checked,
+                      entryPrice: checked ? currentPrice : undefined 
+                    })}
                     disabled={togglePositionMutation.isPending || isFollowedStocksFetching}
                     data-testid="switch-position"
                   />

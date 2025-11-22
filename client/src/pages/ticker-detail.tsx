@@ -134,11 +134,6 @@ export default function TickerDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "daily-briefs"] }); // Fetch daily briefs after following
       
-      // Trigger first-follow tutorial if this was user's first follow
-      if (followedStocks.length === 0) {
-        window.dispatchEvent(new CustomEvent("first-follow-tutorial"));
-      }
-      
       toast({
         title: "Stock Followed",
         description: "Day-0 AI analysis has been queued for this stock",

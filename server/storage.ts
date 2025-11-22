@@ -2124,11 +2124,16 @@ export class DatabaseStorage implements IStorage {
       const latestJob = jobs[0];
       const jobStatus = latestJob?.status as 'pending' | 'processing' | 'completed' | 'failed' | null || null;
       
-      // Get latest daily brief for AI stance and score
+      // Get latest daily brief for AI stance and score (user-specific)
       const briefs = await db
         .select()
         .from(dailyBriefs)
-        .where(eq(dailyBriefs.ticker, followed.ticker))
+        .where(
+          and(
+            eq(dailyBriefs.ticker, followed.ticker),
+            eq(dailyBriefs.userId, userId)
+          )
+        )
         .orderBy(desc(dailyBriefs.briefDate))
         .limit(1);
       

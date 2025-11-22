@@ -612,8 +612,8 @@ export default function Purchase() {
       </div>
 
       {/* Search, Filters, and Controls - Consolidated Row */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-        <div className="flex-1 relative">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search ticker or company..."
@@ -624,8 +624,8 @@ export default function Purchase() {
           />
         </div>
         
-        <div className="flex items-center gap-2 border rounded-md px-3 h-9 min-w-[140px]">
-          <Label htmlFor="show-all-toggle" className="text-sm font-medium cursor-pointer whitespace-nowrap flex-1">
+        <div className="flex items-center justify-between gap-2 border rounded-md px-3 h-9 w-full sm:w-40">
+          <Label htmlFor="show-all-toggle" className="text-sm font-medium cursor-pointer whitespace-nowrap">
             {showAllOpportunities ? "All" : "Buy Only"}
           </Label>
           <Switch

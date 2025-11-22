@@ -114,6 +114,124 @@ interface FinancialData {
 
 class AIAnalysisService {
   /**
+   * Calculate financial health score based on actual company financial metrics
+   * Score is derived from balance sheet strength, profitability, and cash flow
+   */
+  private calculateFinancialHealthScore(fundamentals: any): {
+    score: number;
+    metrics: {
+      liquidityScore: number;
+      profitabilityScore: number;
+      leverageScore: number;
+      cashFlowScore: number;
+    };
+    evidence: string[];
+  } {
+    let score = 50; // baseline score
+    const evidence: string[] = [];
+    const metrics = {
+      liquidityScore: 50,
+      profitabilityScore: 50,
+      leverageScore: 50,
+      cashFlowScore: 50
+    };
+
+    // Liquidity Analysis (Current Ratio)
+    if (fundamentals?.currentRatio) {
+      const cr = parseFloat(fundamentals.currentRatio);
+      if (cr >= 1.5) {
+        metrics.liquidityScore = 90;
+        evidence.push(`Strong liquidity with current ratio of ${cr.toFixed(2)} (>1.5)`);
+      } else if (cr >= 1.0) {
+        metrics.liquidityScore = 70;
+        evidence.push(`Adequate liquidity with current ratio of ${cr.toFixed(2)}`);
+      } else {
+        metrics.liquidityScore = 30;
+        evidence.push(`Weak liquidity with current ratio of ${cr.toFixed(2)} (<1.0)`);
+      }
+    }
+
+    // Profitability Analysis (Profit Margin & ROE)
+    if (fundamentals?.profitMargin !== undefined) {
+      const pm = fundamentals.profitMargin * 100;
+      if (pm >= 15) {
+        metrics.profitabilityScore = 85;
+        evidence.push(`Excellent profitability with ${pm.toFixed(1)}% net margin`);
+      } else if (pm >= 5) {
+        metrics.profitabilityScore = 65;
+        evidence.push(`Moderate profitability with ${pm.toFixed(1)}% net margin`);
+      } else if (pm > 0) {
+        metrics.profitabilityScore = 45;
+        evidence.push(`Low profitability with ${pm.toFixed(1)}% net margin`);
+      } else {
+        metrics.profitabilityScore = 20;
+        evidence.push(`Company operating at a loss (${pm.toFixed(1)}% margin)`);
+      }
+    }
+
+    if (fundamentals?.returnOnEquity) {
+      const roe = fundamentals.returnOnEquity * 100;
+      if (roe >= 15) {
+        evidence.push(`Strong ROE of ${roe.toFixed(1)}% shows efficient equity usage`);
+      } else if (roe >= 5) {
+        evidence.push(`Moderate ROE of ${roe.toFixed(1)}%`);
+      } else {
+        evidence.push(`Weak ROE of ${roe.toFixed(1)}%`);
+      }
+    }
+
+    // Leverage Analysis (Debt-to-Equity Ratio)
+    if (fundamentals?.debtToEquity !== undefined) {
+      const dte = parseFloat(fundamentals.debtToEquity);
+      if (dte <= 0.5) {
+        metrics.leverageScore = 85;
+        evidence.push(`Conservative leverage with debt-to-equity of ${dte.toFixed(2)}`);
+      } else if (dte <= 1.0) {
+        metrics.leverageScore = 65;
+        evidence.push(`Moderate leverage with debt-to-equity of ${dte.toFixed(2)}`);
+      } else if (dte <= 2.0) {
+        metrics.leverageScore = 40;
+        evidence.push(`High leverage with debt-to-equity of ${dte.toFixed(2)}`);
+      } else {
+        metrics.leverageScore = 20;
+        evidence.push(`Very high leverage with debt-to-equity of ${dte.toFixed(2)}`);
+      }
+    }
+
+    // Cash Flow Analysis
+    if (fundamentals?.operatingCashflow) {
+      const ocf = parseFloat(fundamentals.operatingCashflow.toString().replace(/[^0-9.-]/g, ''));
+      if (!isNaN(ocf) && ocf > 0) {
+        metrics.cashFlowScore = 80;
+        evidence.push(`Strong operating cash flow indicates solid business operations`);
+      } else if (ocf < 0) {
+        metrics.cashFlowScore = 25;
+        evidence.push(`Negative operating cash flow raises concerns about sustainability`);
+      }
+    }
+
+    if (fundamentals?.freeCashFlow) {
+      const fcf = parseFloat(fundamentals.freeCashFlow.toString().replace(/[^0-9.-]/g, ''));
+      if (!isNaN(fcf) && fcf > 0) {
+        evidence.push(`Positive free cash flow available for dividends or growth`);
+      }
+    }
+
+    // Calculate weighted final score
+    score = 
+      (metrics.liquidityScore * 0.25) +
+      (metrics.profitabilityScore * 0.35) +
+      (metrics.leverageScore * 0.25) +
+      (metrics.cashFlowScore * 0.15);
+
+    return {
+      score: Math.round(score),
+      metrics,
+      evidence
+    };
+  }
+
+  /**
    * Analyze a stock using AI with multi-signal approach
    * Combines fundamental data, technical indicators, news sentiment, and insider trading
    */
@@ -131,6 +249,9 @@ class AIAnalysisService {
       secFilings,
       comprehensiveFundamentals
     } = financialData;
+
+    // Calculate financial health score from actual metrics
+    const financialHealthAnalysis = this.calculateFinancialHealthScore(comprehensiveFundamentals || {});
 
     // Prepare the financial data summary for AI (with null checks for graceful degradation)
     const latestBalanceSheet = balanceSheet?.annualReports?.[0] || balanceSheet?.quarterlyReports?.[0];
@@ -183,6 +304,20 @@ ${isBuy
     ? "- JUSTIFY the insider sell (e.g., major risks, declining markets, litigation, operational challenges)\n- CONTRADICT the insider sell (e.g., strong guidance, new opportunities, improving fundamentals)"
     : "- Support or contradict the insider transaction")}
 ` : "SEC filings not available - rely on fundamentals only"}
+
+=== FINANCIAL HEALTH EVIDENCE FROM COMPANY STATUS ===
+Based on quantified financial metrics, here's the calculated financial health assessment:
+
+CALCULATED FINANCIAL HEALTH SCORE: ${financialHealthAnalysis.score}/100
+
+COMPONENT SCORES:
+- Liquidity Score: ${financialHealthAnalysis.metrics.liquidityScore}/100
+- Profitability Score: ${financialHealthAnalysis.metrics.profitabilityScore}/100
+- Leverage Score: ${financialHealthAnalysis.metrics.leverageScore}/100
+- Cash Flow Score: ${financialHealthAnalysis.metrics.cashFlowScore}/100
+
+SUPPORTING EVIDENCE:
+${financialHealthAnalysis.evidence.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 
 === COMPREHENSIVE FUNDAMENTALS ANALYSIS ===
 Read these numbers like a professional analyst. Look for patterns, trends, and signals:
@@ -341,10 +476,31 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       const content = response.choices[0]?.message?.content || "{}";
       const analysis = JSON.parse(content);
 
+      // Use calculated financial health score as baseline, with AI refinement
+      const aiScore = analysis.financialHealth?.score || financialHealthAnalysis.score;
+      const finalScore = Math.round((financialHealthAnalysis.score + aiScore) / 2);
+      
+      // Merge calculated evidence with AI analysis
+      const mergedStrengths = Array.from(new Set([
+        ...financialHealthAnalysis.evidence.filter(e => e.includes('Strong') || e.includes('Excellent') || e.includes('Positive') || e.includes('Conservative')),
+        ...(analysis.financialHealth?.strengths || [])
+      ])).slice(0, 4);
+      
+      const mergedWeaknesses = Array.from(new Set([
+        ...financialHealthAnalysis.evidence.filter(e => e.includes('Weak') || e.includes('Low') || e.includes('Negative') || e.includes('High leverage')),
+        ...(analysis.financialHealth?.weaknesses || [])
+      ])).slice(0, 4);
+
       // Add metadata
       return {
         ticker,
         ...analysis,
+        financialHealth: {
+          score: finalScore,
+          strengths: mergedStrengths.length > 0 ? mergedStrengths : analysis.financialHealth?.strengths || [],
+          weaknesses: mergedWeaknesses.length > 0 ? mergedWeaknesses : analysis.financialHealth?.weaknesses || [],
+          redFlags: analysis.financialHealth?.redFlags || []
+        },
         analyzedAt: new Date().toISOString(),
       };
     } catch (error) {

@@ -207,7 +207,7 @@ export default function Purchase() {
       return await apiRequest("PATCH", `/api/users/${currentUser.id}`, { showAllOpportunities: showAll });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
     },
   });
 

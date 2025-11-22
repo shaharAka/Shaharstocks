@@ -65,8 +65,8 @@ const communityMenuItems = [
 
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
-  const newStocksCount = useNewStocksCount();
   const { user } = useUser();
+  const newStocksCount = useNewStocksCount(user?.showAllOpportunities ?? false);
   const { setOpenMobile, isMobile, state } = useSidebar();
   
   // Initialize WebSocket for real-time updates (replaces aggressive polling)

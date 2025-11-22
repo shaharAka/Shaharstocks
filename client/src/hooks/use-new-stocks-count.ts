@@ -6,8 +6,9 @@ const LAST_VIEWED_KEY = "purchase-last-viewed";
 /**
  * Hook to track and count new HIGH SIGNAL opportunities that haven't been seen yet
  * High signal = stocks with very strong AI scores (>= 80) indicating AI strongly agrees with insider action
+ * Respects user's "Buy Only / All Opportunities" preference
  */
-export function useNewStocksCount() {
+export function useNewStocksCount(showAllOpportunities: boolean = false) {
   const { data: stocks = [] } = useQuery<Stock[]>({
     queryKey: ["/api/stocks"],
   });
@@ -24,7 +25,14 @@ export function useNewStocksCount() {
   // Score >= 80 indicates AI strongly agrees with insider action (high confidence)
   const newCount = stocks.filter((stock) => {
     const rec = stock.recommendation?.toLowerCase();
-    if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
+    if (!rec) return false;
+    
+    // Respect user's preference: if showAllOpportunities is false, only count BUY recommendations
+    if (showAllOpportunities) {
+      if (!rec.includes("buy") && !rec.includes("sell")) return false;
+    } else {
+      if (!rec.includes("buy")) return false;
+    }
     
     // Get AI analysis for this stock
     const analysis = analyses.find((a: any) => a.ticker === stock.ticker);

@@ -285,6 +285,7 @@ export interface IStorage {
 
   // Stock Views
   markStockAsViewed(ticker: string, userId: string): Promise<StockView>;
+  markStocksAsViewed(tickers: string[], userId: string): Promise<void>; // Bulk mark stocks as viewed
   getUserStockViews(userId: string): Promise<string[]>; // Returns list of viewed tickers for user
 
   // Tutorials
@@ -2542,6 +2543,33 @@ export class DatabaseStorage implements IStorage {
       .values({ ticker, userId })
       .returning();
     return view;
+  }
+
+  async markStocksAsViewed(tickers: string[], userId: string): Promise<void> {
+    if (tickers.length === 0) return;
+
+    // Get existing viewed tickers for this user
+    const existingViews = await db
+      .select({ ticker: stockViews.ticker })
+      .from(stockViews)
+      .where(
+        and(
+          eq(stockViews.userId, userId),
+          inArray(stockViews.ticker, tickers)
+        )
+      );
+
+    const existingTickers = new Set(existingViews.map(v => v.ticker));
+
+    // Only insert tickers that haven't been viewed yet
+    const newTickers = tickers.filter(ticker => !existingTickers.has(ticker));
+    
+    if (newTickers.length > 0) {
+      await db
+        .insert(stockViews)
+        .values(newTickers.map(ticker => ({ ticker, userId })))
+        .onConflictDoNothing(); // In case of race conditions
+    }
   }
 
   async getUserStockViews(userId: string): Promise<string[]> {

@@ -541,6 +541,26 @@ export default function Purchase() {
     isFollowing: group.isFollowing,
   }));
 
+  // Auto-mark stocks as viewed when they appear in the list
+  // This ensures the "new" badge count stays accurate
+  useEffect(() => {
+    if (opportunities.length > 0 && currentUser?.id && !isLoading) {
+      const tickers = opportunities.map(opp => opp.ticker);
+      // Only mark non-viewed tickers
+      const newTickers = tickers.filter(ticker => !viewedTickers.includes(ticker));
+      
+      if (newTickers.length > 0) {
+        // Call bulk-view endpoint
+        apiRequest("POST", "/api/stocks/bulk-view", { tickers: newTickers })
+          .then(() => {
+            // Invalidate viewed tickers cache to update badge
+            queryClient.invalidateQueries({ queryKey: ["/api/stock-views", currentUser.id] });
+          })
+          .catch(err => console.error("Failed to mark stocks as viewed:", err));
+      }
+    }
+  }, [opportunities.length, currentUser?.id, isLoading, viewedTickers, opportunities]);
+
 
   if (isLoading) {
     return (

@@ -2562,6 +2562,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/stocks/bulk-view", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const { tickers } = req.body;
+      if (!Array.isArray(tickers)) {
+        return res.status(400).json({ error: "tickers must be an array" });
+      }
+      await storage.markStocksAsViewed(tickers, req.session.userId);
+      res.status(201).json({ success: true, count: tickers.length });
+    } catch (error) {
+      console.error("Bulk mark stocks as viewed error:", error);
+      res.status(500).json({ error: "Failed to bulk mark stocks as viewed" });
+    }
+  });
+
   app.get("/api/stock-views/:userId", async (req, res) => {
     try {
       const viewedTickers = await storage.getUserStockViews(req.params.userId);

@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Stock } from "@shared/schema";
-
-const LAST_VIEWED_KEY = "purchase-last-viewed";
+import { useUser } from "@/contexts/UserContext";
 
 /**
- * Hook to track and count new HIGH SIGNAL opportunities that haven't been seen yet
- * High signal = stocks with very strong AI scores (>= 80) indicating AI strongly agrees with insider action
+ * Hook to track and count new HIGH SIGNAL opportunities that haven't been viewed yet
+ * High signal = stocks with score >= 70 in the "worthExploring" funnel section
  * Respects user's "Buy Only / All Opportunities" preference
+ * Uses database viewedTickers for per-user, per-stock tracking
  */
 export function useNewStocksCount(showAllOpportunities: boolean = false) {
+  const { user } = useUser();
+  
   const { data: stocks = [] } = useQuery<Stock[]>({
     queryKey: ["/api/stocks"],
   });
@@ -17,12 +19,13 @@ export function useNewStocksCount(showAllOpportunities: boolean = false) {
     queryKey: ["/api/stock-analyses"],
   });
 
-  // Get the last time user viewed the Purchase page
-  const lastViewed = localStorage.getItem(LAST_VIEWED_KEY);
-  const lastViewedDate = lastViewed ? new Date(lastViewed) : null;
+  const { data: viewedTickers = [] } = useQuery<string[]>({
+    queryKey: ["/api/stock-views", user?.id],
+    enabled: !!user,
+  });
 
-  // Count NEW high signal stocks (BUY or SELL with score >= 80) since last view
-  // Score >= 80 indicates AI strongly agrees with insider action (high confidence)
+  // Count NEW high signal stocks (BUY or SELL with score >= 70) that haven't been viewed
+  // This matches the "High Signal" (worthExploring) filter criteria on the purchase page
   const newCount = stocks.filter((stock) => {
     const rec = stock.recommendation?.toLowerCase();
     if (!rec) return false;
@@ -38,24 +41,15 @@ export function useNewStocksCount(showAllOpportunities: boolean = false) {
     const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
     const score = analysis?.integratedScore ?? analysis?.aiScore;
     
-    // Only count HIGH SIGNAL opportunities (>= 80)
-    // This represents stocks where AI strongly agrees with insider action
-    if (!score || score < 80) return false;
+    // Only count HIGH SIGNAL opportunities (>= 70)
+    // This matches the worthExploring funnel section criteria
+    if (!score || score < 70) return false;
     
-    if (!lastViewedDate) return true; // First time viewing - all are new
+    // Exclude already viewed stocks
+    if (viewedTickers.includes(stock.ticker)) return false;
     
-    // Use analysis completion time to determine if it's "new"
-    if (!analysis?.updatedAt) return false;
-    const analysisCompletedAt = new Date(analysis.updatedAt);
-    return analysisCompletedAt > lastViewedDate;
+    return true;
   }).length;
 
   return newCount;
-}
-
-/**
- * Mark the Purchase page as viewed (call this when user visits the page)
- */
-export function markPurchaseAsViewed() {
-  localStorage.setItem(LAST_VIEWED_KEY, new Date().toISOString());
 }

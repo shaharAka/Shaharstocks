@@ -43,7 +43,7 @@ import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Filter, Search, SortAsc } from "lucide-react";
-import Settings from "@/pages/settings";
+import { FetchConfigDialog } from "@/components/fetch-config-dialog";
 import { cn } from "@/lib/utils";
 
 type StockWithUserStatus = Stock & {
@@ -1028,14 +1028,14 @@ export default function Purchase() {
       />
 
       <Dialog open={fetchConfigOpen} onOpenChange={setFetchConfigOpen}>
-        <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-auto">
-          <DialogHeader className="sr-only">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
+          <DialogHeader>
             <DialogTitle>Fetch Configuration</DialogTitle>
             <DialogDescription>
-              Configure data sources for insider trading opportunities
+              Configure how insider trading opportunities are discovered
             </DialogDescription>
           </DialogHeader>
-          <Settings />
+          <FetchConfigDialog />
         </DialogContent>
       </Dialog>
     </div>

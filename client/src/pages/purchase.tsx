@@ -577,15 +577,21 @@ export default function Purchase() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => setFetchConfigOpen(true)}
-            data-testid="button-fetch-config"
-          >
-            <SettingsIcon className="h-4 w-4" />
-            <span className="ml-2">Fetch Configuration</span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setFetchConfigOpen(true)}
+                data-testid="button-fetch-config"
+              >
+                <SettingsIcon className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Fetch Configuration</p>
+            </TooltipContent>
+          </Tooltip>
           <Button
             variant="outline"
             size="lg"

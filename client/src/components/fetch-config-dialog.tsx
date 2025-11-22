@@ -14,10 +14,12 @@ import { Separator } from "@/components/ui/separator";
 import { RefreshCw, Info, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type OpeninsiderConfig } from "@shared/schema";
+import { type OpeninsiderConfig, type User } from "@shared/schema";
+import { useUser } from "@/contexts/UserContext";
 
 export function FetchConfigDialog() {
   const { toast } = useToast();
+  const { user } = useUser();
 
   // Fetch current configuration
   const { data: config, isLoading } = useQuery<OpeninsiderConfig>({
@@ -26,9 +28,8 @@ export function FetchConfigDialog() {
   });
 
   // Local state for form
-  const [enabled, setEnabled] = useState(config?.enabled ?? true);
   const [fetchInterval, setFetchInterval] = useState<"hourly" | "daily">(
-    (config?.fetchInterval as "hourly" | "daily") || "hourly"
+    (config?.fetchInterval as "hourly" | "daily") || "daily"
   );
   const [minMarketCap, setMinMarketCap] = useState(config?.minMarketCap ?? 500);
   const [optionsDealThreshold, setOptionsDealThreshold] = useState(
@@ -38,12 +39,14 @@ export function FetchConfigDialog() {
   const [minCommunityEngagement, setMinCommunityEngagement] = useState(
     config?.minCommunityEngagement ?? 10
   );
+  const [showAllOpportunities, setShowAllOpportunities] = useState(
+    user?.showAllOpportunities ?? false
+  );
 
   // Sync with fetched config
   useEffect(() => {
     if (config) {
-      setEnabled(config.enabled ?? true);
-      setFetchInterval((config.fetchInterval as "hourly" | "daily") || "hourly");
+      setFetchInterval((config.fetchInterval as "hourly" | "daily") || "daily");
       setMinMarketCap(config.minMarketCap ?? 500);
       setOptionsDealThreshold(config.optionsDealThresholdPercent ?? 15);
       setFetchLimit(config.fetchLimit || 50);
@@ -51,11 +54,19 @@ export function FetchConfigDialog() {
     }
   }, [config]);
 
+  // Sync with user preference
+  useEffect(() => {
+    if (user) {
+      setShowAllOpportunities(user.showAllOpportunities ?? false);
+    }
+  }, [user]);
+
   // Save configuration
   const saveConfigMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/openinsider/config", {
-        enabled,
+      // Save OpenInsider config
+      const configRes = await apiRequest("POST", "/api/openinsider/config", {
+        enabled: true,
         fetchInterval,
         minMarketCap,
         optionsDealThresholdPercent: optionsDealThreshold,
@@ -65,11 +76,20 @@ export function FetchConfigDialog() {
         minTransactionValue: config?.minTransactionValue || null,
         fetchPreviousDayOnly: config?.fetchPreviousDayOnly || false,
       });
-      return await res.json();
+      
+      // Save user display preference
+      if (user) {
+        await apiRequest("PATCH", `/api/users/${user.id}`, {
+          showAllOpportunities,
+        });
+      }
+      
+      return await configRes.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/openinsider-config"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
       toast({
         title: "Settings saved",
         description: "Your fetch configuration has been updated",
@@ -137,7 +157,7 @@ export function FetchConfigDialog() {
               size="sm"
               variant="outline"
               onClick={() => fetchNowMutation.mutate()}
-              disabled={fetchNowMutation.isPending || !enabled}
+              disabled={fetchNowMutation.isPending}
             >
               <RefreshCw className={`h-3 w-3 mr-2 ${fetchNowMutation.isPending ? "animate-spin" : ""}`} />
               Fetch Now
@@ -149,18 +169,11 @@ export function FetchConfigDialog() {
       {/* Core Settings */}
       <div className="space-y-6">
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold">Opportunity Scanning</h3>
-              <p className="text-sm text-muted-foreground">
-                Control how often new insider trading opportunities are discovered
-              </p>
-            </div>
-            <Switch
-              checked={enabled}
-              onCheckedChange={setEnabled}
-              data-testid="switch-enabled"
-            />
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold">Opportunity Scanning</h3>
+            <p className="text-sm text-muted-foreground">
+              Control how new insider trading opportunities are discovered
+            </p>
           </div>
 
           <Separator className="my-4" />
@@ -197,7 +210,6 @@ export function FetchConfigDialog() {
                   variant={fetchInterval === "hourly" ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFetchInterval("hourly")}
-                  disabled={!enabled}
                 >
                   <Clock className="h-3 w-3 mr-1" />
                   Hourly
@@ -207,7 +219,6 @@ export function FetchConfigDialog() {
                   variant={fetchInterval === "daily" ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFetchInterval("daily")}
-                  disabled={!enabled}
                 >
                   <Clock className="h-3 w-3 mr-1" />
                   Daily
@@ -243,7 +254,6 @@ export function FetchConfigDialog() {
                   max={5000}
                   step={100}
                   className="flex-1"
-                  disabled={!enabled}
                 />
                 <div className="w-32">
                   <Input
@@ -251,7 +261,6 @@ export function FetchConfigDialog() {
                     value={minMarketCap}
                     onChange={(e) => setMinMarketCap(parseInt(e.target.value) || 0)}
                     className="text-right"
-                    disabled={!enabled}
                   />
                 </div>
                 <span className="text-sm text-muted-foreground w-8">M</span>
@@ -288,7 +297,6 @@ export function FetchConfigDialog() {
                   max={50}
                   step={5}
                   className="flex-1"
-                  disabled={!enabled}
                 />
                 <div className="w-32">
                   <Input
@@ -296,7 +304,6 @@ export function FetchConfigDialog() {
                     value={optionsDealThreshold}
                     onChange={(e) => setOptionsDealThreshold(parseInt(e.target.value) || 0)}
                     className="text-right"
-                    disabled={!enabled}
                   />
                 </div>
                 <span className="text-sm text-muted-foreground w-8">%</span>
@@ -304,6 +311,46 @@ export function FetchConfigDialog() {
               <p className="text-xs text-muted-foreground">
                 Hide buys where insider paid {optionsDealThreshold}% or more below market price
               </p>
+            </div>
+
+            {/* Display Preference */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-base font-medium">Opportunity Display</Label>
+                <HoverCard>
+                  <HoverCardTrigger>
+                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-80">
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-sm">What you'll see</h4>
+                      <p className="text-xs text-muted-foreground">
+                        <strong className="text-foreground">Buy Only:</strong> Shows only insider purchase opportunities (recommended for most traders).
+                        <br /><br />
+                        <strong className="text-foreground">All Opportunities:</strong> Shows both insider buys and sells, useful for short positions or comprehensive market analysis.
+                      </p>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
+              </div>
+              <div className="flex items-center justify-between bg-muted/50 rounded-md px-4 py-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="show-all-switch" className="text-sm font-medium cursor-pointer">
+                    {showAllOpportunities ? "All Opportunities" : "Buy Only"}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {showAllOpportunities 
+                      ? "Showing both insider buys and sells"
+                      : "Only showing insider purchase opportunities"}
+                  </p>
+                </div>
+                <Switch
+                  id="show-all-switch"
+                  checked={showAllOpportunities}
+                  onCheckedChange={setShowAllOpportunities}
+                  data-testid="switch-show-all"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -324,7 +371,6 @@ export function FetchConfigDialog() {
                   max="500"
                   value={fetchLimit}
                   onChange={(e) => setFetchLimit(parseInt(e.target.value) || 50)}
-                  disabled={!enabled}
                 />
                 <p className="text-xs text-muted-foreground">
                   Number of recent insider trades to scan (1-500)
@@ -339,7 +385,6 @@ export function FetchConfigDialog() {
                   min="1"
                   value={minCommunityEngagement}
                   onChange={(e) => setMinCommunityEngagement(parseInt(e.target.value) || 10)}
-                  disabled={!enabled}
                 />
                 <p className="text-xs text-muted-foreground">
                   Minimum number of follows for a stock to appear in "Community" section
@@ -352,7 +397,7 @@ export function FetchConfigDialog() {
 
       {/* Action Buttons */}
       <div className="flex gap-3 pt-4">
-        <Button type="submit" disabled={saveConfigMutation.isPending || !enabled} className="flex-1">
+        <Button type="submit" disabled={saveConfigMutation.isPending} className="flex-1">
           {saveConfigMutation.isPending ? "Saving..." : "Save Changes"}
         </Button>
       </div>

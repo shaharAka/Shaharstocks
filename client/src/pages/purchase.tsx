@@ -624,27 +624,17 @@ export default function Purchase() {
           />
         </div>
         
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex items-center gap-2 bg-card border rounded-md px-3 h-9 cursor-help">
-              <Label htmlFor="show-all-toggle" className="text-sm font-medium cursor-pointer whitespace-nowrap">
-                {showAllOpportunities ? "All" : "Buy Only"}
-              </Label>
-              <Switch
-                id="show-all-toggle"
-                checked={showAllOpportunities}
-                onCheckedChange={setShowAllOpportunities}
-                data-testid="toggle-show-all"
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs">
-            <p className="text-xs">
-              <strong>Quick view filter</strong> - Changes here are temporary for this session.
-              To set a permanent default, go to Settings → Display Preferences.
-            </p>
-          </TooltipContent>
-        </Tooltip>
+        <div className="flex items-center gap-2 border rounded-md px-3 h-9 min-w-[140px]">
+          <Label htmlFor="show-all-toggle" className="text-sm font-medium cursor-pointer whitespace-nowrap flex-1">
+            {showAllOpportunities ? "All" : "Buy Only"}
+          </Label>
+          <Switch
+            id="show-all-toggle"
+            checked={showAllOpportunities}
+            onCheckedChange={handleShowAllOpportunitiesChange}
+            data-testid="toggle-show-all"
+          />
+        </div>
         
         <div className="w-full sm:w-48">
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>

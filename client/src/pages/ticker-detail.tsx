@@ -541,7 +541,7 @@ export default function TickerDetail() {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="analysis">Analysis</TabsTrigger>
+          <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
           <TabsTrigger value="news">News</TabsTrigger>
           <TabsTrigger value="insider">Insider</TabsTrigger>
           <TabsTrigger value="discussion">

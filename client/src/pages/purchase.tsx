@@ -121,12 +121,11 @@ export default function Purchase() {
   };
 
   // Sync showAllOpportunities state with user preference from database
-  // Only sync if the value actually changed (prevents overwriting user's active toggle)
   useEffect(() => {
-    if (currentUser?.showAllOpportunities !== undefined && currentUser.showAllOpportunities !== showAllOpportunities) {
+    if (currentUser?.showAllOpportunities !== undefined) {
       setShowAllOpportunities(currentUser.showAllOpportunities);
     }
-  }, [currentUser?.showAllOpportunities, showAllOpportunities]);
+  }, [currentUser?.showAllOpportunities]);
 
   // Fetch opportunities - auto-refresh every 10 seconds to show real-time updates
   const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
@@ -545,11 +544,6 @@ export default function Purchase() {
   // Auto-mark stocks as viewed when they appear in the list
   // This ensures the "new" badge count stays accurate
   const markedTickersRef = useRef<Set<string>>(new Set());
-  
-  // Reset marked tickers when stocks data changes (e.g., after refetch)
-  useEffect(() => {
-    markedTickersRef.current = new Set();
-  }, [stocks]);
   
   useEffect(() => {
     if (opportunities.length > 0 && currentUser?.id && !isLoading) {

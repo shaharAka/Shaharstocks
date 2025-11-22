@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   TrendingUp,
   TrendingDown,
@@ -56,7 +57,6 @@ type StockWithUserStatus = Stock & {
 };
 
 type SortOption = "signal" | "daysFromTrade" | "marketCap";
-type RecommendationFilter = "all" | "buy" | "sell";
 type FunnelSection = "worthExploring" | "recents" | "processing" | "communityPicks" | "rejected";
 type ViewMode = "cards" | "table";
 
@@ -95,7 +95,7 @@ export default function Purchase() {
   // State management
   const [sortBy, setSortBy] = useState<SortOption>("signal");
   const [tickerSearch, setTickerSearch] = useState("");
-  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("all");
+  const [showAllOpportunities, setShowAllOpportunities] = useState(currentUser?.showAllOpportunities ?? false);
   const [funnelSection, setFunnelSection] = useState<FunnelSection>("worthExploring");
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
@@ -119,6 +119,13 @@ export default function Purchase() {
   const selectAll = (tickers: string[]) => {
     setSelectedTickers(new Set(tickers));
   };
+
+  // Sync showAllOpportunities state with user preference from database
+  useEffect(() => {
+    if (currentUser?.showAllOpportunities !== undefined) {
+      setShowAllOpportunities(currentUser.showAllOpportunities);
+    }
+  }, [currentUser?.showAllOpportunities]);
 
   // Fetch opportunities - auto-refresh every 10 seconds to show real-time updates
   const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
@@ -284,10 +291,9 @@ export default function Purchase() {
       const rec = stock.recommendation?.toLowerCase();
       if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
       
-      // Apply recommendation filter
-      if (recommendationFilter !== "all") {
-        if (recommendationFilter === "buy" && !rec.includes("buy")) return false;
-        if (recommendationFilter === "sell" && !rec.includes("sell")) return false;
+      // Apply recommendation filter: Buy Only (default) or All (Buy + Sell)
+      if (!showAllOpportunities && !rec.includes("buy")) {
+        return false; // Filter out SELL when "Buy Only" mode is active
       }
       
       // Runtime filter: Exclude BUY opportunities that are likely options deals
@@ -498,7 +504,7 @@ export default function Purchase() {
     sections.communityPicks = sortGroupedStocks(sections.communityPicks);
 
     return { groupedStocks: groupedArray, funnelSections: sections };
-  }, [stocks, analyses, sortBy, tickerSearch, recommendationFilter, followedStocks, users, commentCounts, openinsiderConfig]);
+  }, [stocks, analyses, sortBy, tickerSearch, showAllOpportunities, followedStocks, users, commentCounts, openinsiderConfig]);
 
   // Get current section's stocks and flatten for rendering
   const groupedOpportunities = funnelSections[funnelSection] || [];
@@ -589,17 +595,16 @@ export default function Purchase() {
           />
         </div>
         
-        <div className="w-full sm:w-40">
-          <Select value={recommendationFilter} onValueChange={(value) => setRecommendationFilter(value as RecommendationFilter)}>
-            <SelectTrigger data-testid="select-type">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="buy">Buy Only</SelectItem>
-              <SelectItem value="sell">Sell Only</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2 bg-card border rounded-md px-3 h-9">
+          <Label htmlFor="show-all-toggle" className="text-sm font-medium cursor-pointer whitespace-nowrap">
+            {showAllOpportunities ? "All" : "Buy Only"}
+          </Label>
+          <Switch
+            id="show-all-toggle"
+            checked={showAllOpportunities}
+            onCheckedChange={setShowAllOpportunities}
+            data-testid="toggle-show-all"
+          />
         </div>
         
         <div className="w-full sm:w-48">

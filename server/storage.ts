@@ -255,7 +255,7 @@ export interface IStorage {
   getUserFollowedStocks(userId: string): Promise<FollowedStock[]>;
   followStock(follow: InsertFollowedStock): Promise<FollowedStock>;
   unfollowStock(ticker: string, userId: string): Promise<boolean>;
-  toggleStockPosition(ticker: string, userId: string, hasEnteredPosition: boolean): Promise<boolean>;
+  toggleStockPosition(ticker: string, userId: string, hasEnteredPosition: boolean, entryPrice?: number): Promise<boolean>;
   getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>>;
   getFollowedStocksWithStatus(userId: string): Promise<Array<FollowedStock & { 
     currentPrice: string; 
@@ -1981,10 +1981,21 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  async toggleStockPosition(ticker: string, userId: string, hasEnteredPosition: boolean): Promise<boolean> {
+  async toggleStockPosition(ticker: string, userId: string, hasEnteredPosition: boolean, entryPrice?: number): Promise<boolean> {
+    // When entering position, save the entry price; when exiting, clear it
+    const updateData: { hasEnteredPosition: boolean; entryPrice?: string | null } = {
+      hasEnteredPosition,
+    };
+    
+    if (hasEnteredPosition && entryPrice !== undefined) {
+      updateData.entryPrice = entryPrice.toString();
+    } else if (!hasEnteredPosition) {
+      updateData.entryPrice = null; // Clear entry price when exiting position
+    }
+    
     const result = await db
       .update(followedStocks)
-      .set({ hasEnteredPosition })
+      .set(updateData)
       .where(
         and(
           eq(followedStocks.ticker, ticker),
@@ -2002,7 +2013,7 @@ export class DatabaseStorage implements IStorage {
       type: "FOLLOWED_STOCK_UPDATED",
       userId,
       ticker,
-      data: { action: "position_toggle", hasEnteredPosition }
+      data: { action: "position_toggle", hasEnteredPosition, entryPrice: updateData.entryPrice }
     });
     
     return true;

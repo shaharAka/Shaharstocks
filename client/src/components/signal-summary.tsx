@@ -117,23 +117,6 @@ export function SignalSummary({ ticker }: SignalSummaryProps) {
   return (
     <Card>
       <CardContent className="p-6 space-y-6">
-        {/* Primary Signal Score */}
-        <div className="text-center space-y-3">
-          <div className="flex items-center justify-center gap-2">
-            <Brain className="h-5 w-5 text-muted-foreground" />
-            <h3 className="text-sm font-medium text-muted-foreground">AI Signal Strength (2-Week Horizon)</h3>
-          </div>
-          
-          <div className={`text-6xl font-bold font-mono ${signalStrength.color}`} data-testid="text-primary-signal-score">
-            {primaryScore}
-            <span className="text-2xl text-muted-foreground">/100</span>
-          </div>
-          
-          <Badge variant={signalStrength.variant} className="text-sm px-3 py-1" data-testid="badge-signal-strength">
-            {signalStrength.label}
-          </Badge>
-        </div>
-
         {/* Position Stance */}
         <div className="flex items-center justify-center gap-3 py-4 border-y">
           <Badge variant={stance.variant} className="text-lg px-4 py-2 flex items-center gap-2" data-testid="badge-position-stance">

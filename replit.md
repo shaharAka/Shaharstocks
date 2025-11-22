@@ -8,6 +8,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 22, 2025 - Watchlist UX Improvements & Landing Page Update
+- **Removed Repetitive CTAs**: Eliminated individual "View Details" buttons from watchlist cards that created visual clutter
+- **Clickable Cards**: Made entire stock cards on watchlist page interactive - clicking anywhere on card navigates to detail view
+- **Improved Interaction Feedback**: Cards now show hover elevation and press-down effects for better tactile feedback
+- **Landing Page Refresh**: Updated home/login page with accurate signal2 branding and feature descriptions:
+  - Changed title to "AI-Powered Trading Signals From Insider Activity"
+  - Added 4 feature highlight cards (AI Analysis, Auto Data Collection, Smart Watchlist, Real-Time Alerts)
+  - Replaced generic "StockDash" branding with "signal2"
+- **Opportunities View**: Confirmed default view is table/list format (not cards) for better data density
+
 ### November 22, 2025 - Onboarding Flow Enhanced with Automatic Data Fetch
 - **4-Step Onboarding Process**: Expanded onboarding from 3 to 4 steps to include automatic data fetching
 - **Step 4 Auto-Fetch**: Step 4 automatically triggers OpenInsider data fetch upon mounting

@@ -8,14 +8,23 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### November 22, 2025 - Fetch Configuration UX Redesign
+### November 22, 2025 - Fetch Configuration UX Redesign & Badge Count Accuracy
 - **Simplified Fetch Configuration Dialog**: Removed master enable/disable toggle in favor of always-enabled scanning with user-configurable settings
 - **Default to Daily Refresh**: Changed default fetch interval from hourly to daily for better resource usage
 - **Single-Location Display Preference**: 
   - "Buy Only / All Opportunities" toggle lives exclusively on Opportunities page
   - Auto-persists user's choice for future sessions (no separate Settings entry)
-  - Fixed-width toggle component prevents layout shift when switching states
+  - Fixed toggle state sync to prevent unwanted overwrites during user interaction
+  - Fixed-width toggle component (w-40 on desktop) prevents layout shift when switching states
   - Removed from Settings page to simplify UX - one place to control the view
+- **CSS Grid-Based Filter Row**: Converted from flexbox to CSS Grid layout to eliminate layout jumps when toggling
+- **Accurate Badge Count System**:
+  - Badge shows EXACT count of NEW opportunities in High Signal filter
+  - Uses database-backed per-user view tracking (replaced localStorage)
+  - Respects user's Buy Only/All preference
+  - Applies same filtering logic as Purchase page (options threshold, market cap, score >= 70)
+  - Auto-marks stocks as viewed when displayed (with loop prevention using ref)
+  - Groups by ticker before counting to match Purchase page behavior
 - **Progressive Disclosure Pattern**: Core settings visible by default, advanced options (batch size, community threshold) in collapsible accordion
 - **Contextual Help System**: HoverCard info icons for each setting explaining impact and best practices
 - **Focused Fetch Configuration**: Dialog now exclusively handles data ingestion settings (cadence, filters), keeping clear separation from display preferences

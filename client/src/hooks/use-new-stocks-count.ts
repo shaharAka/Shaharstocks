@@ -1,27 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { useUser } from "@/contexts/UserContext";
 
-// Match the Purchase page's type definition
-type StockWithUserStatus = {
-  ticker: string;
-  recommendation?: string;
-  userStatus?: string;
-  [key: string]: any;
-};
-
 /**
- * Hook to track and count new HIGH SIGNAL opportunities that haven't been viewed yet
- * High signal = stocks with score >= 70 in the "worthExploring" funnel section
- * Respects user's "Buy Only / All Opportunities" preference
- * Uses database viewedTickers for per-user, per-stock tracking
+ * Hook to count NEW opportunities in the HIGH SIGNAL filter
+ * Returns EXACTLY the count of unviewed, high-signal opportunities the user sees
+ * based on their Buy Only/All toggle selection
  * 
- * CRITICAL: Uses same data source as Purchase page (/api/stocks/with-user-status)
- * to ensure rejected stocks and user filters are properly applied
+ * Uses same data source and filtering as Purchase page to ensure perfect alignment
  */
 export function useNewStocksCount(showAllOpportunities: boolean = false) {
   const { user } = useUser();
   
-  const { data: stocks = [] } = useQuery<StockWithUserStatus[]>({
+  const { data: stocks = [] } = useQuery<any[]>({
     queryKey: ["/api/stocks/with-user-status"],
   });
 
@@ -34,47 +24,85 @@ export function useNewStocksCount(showAllOpportunities: boolean = false) {
     enabled: !!user,
   });
 
-  // Group stocks by ticker (same as Purchase page does)
-  // Multiple insider transactions for same ticker = 1 opportunity
-  const tickerMap = new Map<string, typeof stocks[0]>();
-  
-  for (const stock of stocks) {
-    const existing = tickerMap.get(stock.ticker);
-    if (!existing) {
-      tickerMap.set(stock.ticker, stock);
-    }
-  }
-  
-  // Count NEW high signal TICKERS (grouped, not individual transactions)
-  // This matches the "High Signal" (worthExploring) filter criteria on the purchase page
-  const newCount = Array.from(tickerMap.values()).filter((stock) => {
+  const { data: openinsiderConfig } = useQuery<any>({
+    queryKey: ["/api/openinsider-config"],
+  });
+
+  // Apply EXACT same filtering as Purchase page (lines 307-350)
+  const filtered = stocks.filter(stock => {
     // Exclude rejected stocks (user has explicitly dismissed these)
     if (stock.userStatus === "rejected") return false;
     
     const rec = stock.recommendation?.toLowerCase();
-    if (!rec) return false;
+    if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
     
-    // Respect user's preference: if showAllOpportunities is false, only count BUY recommendations
-    if (showAllOpportunities) {
-      if (!rec.includes("buy") && !rec.includes("sell")) return false;
-    } else {
-      if (!rec.includes("buy")) return false;
+    // Apply recommendation filter: Buy Only (default) or All (Buy + Sell)
+    if (!showAllOpportunities && !rec.includes("buy")) {
+      return false; // Filter out SELL when "Buy Only" mode is active
     }
     
-    // Get AI analysis for this stock - must have analysis to be in High Signal filter
-    const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
-    if (!analysis) return false; // No analysis = can't be High Signal yet
+    // Runtime filter: Exclude BUY opportunities that are likely options deals
+    const insiderOptionsPercentThreshold = openinsiderConfig?.insiderOptionsPercentThreshold ?? 0.15;
+    if (rec.includes("buy") && stock.insiderPrice && stock.currentPrice) {
+      const priceChangePercent = Math.abs((parseFloat(stock.currentPrice) - parseFloat(stock.insiderPrice)) / parseFloat(stock.insiderPrice));
+      if (priceChangePercent > insiderOptionsPercentThreshold) {
+        return false;
+      }
+    }
     
-    // Check integrated score (preferred) or fall back to aiScore
-    // NOTE: Must match Purchase page funnel logic - do not use confidenceScore
-    const score = analysis.integratedScore ?? analysis.aiScore;
+    // Apply market cap filter from user config
+    const marketCapFilterEnabled = openinsiderConfig?.marketCapFilterEnabled ?? false;
+    const minMarketCap = openinsiderConfig?.minMarketCap;
+    if (marketCapFilterEnabled && minMarketCap) {
+      const parseMarketCap = (cap: string) => {
+        if (!cap) return 0;
+        const match = cap.match(/([\d.]+)([BMK]?)/);
+        if (!match) return 0;
+        const value = parseFloat(match[1]);
+        const unit = match[2]?.toUpperCase();
+        if (unit === "B") return value * 1000;
+        if (unit === "M") return value;
+        if (unit === "K") return value / 1000;
+        return value;
+      };
+      if (parseMarketCap(stock.marketCap) < minMarketCap) {
+        return false;
+      }
+    }
     
-    // Only count HIGH SIGNAL opportunities (>= 70)
-    // This exactly matches the worthExploring funnel section criteria on purchase page
-    if (score == null || score < 70) return false;
+    return true;
+  });
+
+  // Group by ticker (Purchase page lines 354-393)
+  const grouped = new Map();
+  for (const stock of filtered) {
+    const existing = grouped.get(stock.ticker);
+    if (existing) {
+      existing.transactions.push(stock);
+      const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
+      const score = analysis?.integratedScore ?? analysis?.aiScore ?? 0;
+      if (score > existing.highestScore) {
+        existing.highestScore = score;
+      }
+    } else {
+      const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
+      grouped.set(stock.ticker, {
+        ticker: stock.ticker,
+        transactions: [stock],
+        highestScore: analysis?.integratedScore ?? analysis?.aiScore ?? 0,
+      });
+    }
+  }
+
+  // Filter for High Signal (score >= 70) and exclude viewed
+  const newCount = Array.from(grouped.values()).filter((group) => {
+    const hasAnalysis = analyses.find((a: any) => a.ticker === group.ticker);
+    if (!hasAnalysis) return false; // No analysis = not High Signal yet
     
-    // Exclude already viewed stocks
-    if (viewedTickers.includes(stock.ticker)) return false;
+    const score = group.highestScore;
+    if (score < 70) return false; // Only High Signal (>= 70)
+    
+    if (viewedTickers.includes(group.ticker)) return false; // Exclude viewed
     
     return true;
   }).length;

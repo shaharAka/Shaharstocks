@@ -8,16 +8,27 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### November 22, 2025 - Dashboard Opportunities Section Added
-- **High-Signal Opportunities Card**: Added new section to watchlist dashboard showing top 5 unfollowed stocks with integratedScore ≥ 70
-- **Data Source**: Uses `/api/stocks/top-signals` endpoint which filters for completed analyses, high scores, and excludes already-followed stocks
-- **Compact List Format**: Each opportunity shows score badge (amber-highlighted), ticker, company name, AI stance, current price, and price change %
-- **Interactive Rows**: Entire row is clickable with hover/active elevation effects, navigating to ticker detail page
-- **Loading States**: Displays 3 skeleton rows during data fetch to prevent layout shift
-- **Empty State Handling**: Shows "No high-signal opportunities available" message with "Browse All Opportunities" button when no qualifying stocks exist
-- **Minimalistic CTA**: Small "View All" ghost button in card header instead of prominent discover button
-- **Discovery Focus**: Section exclusively shows opportunities to discover (unfollowed stocks), helping users find new high-value trades
-- **Graceful Degradation**: When users have already followed all high-signal stocks, empty state provides clear path to browse all opportunities
+### November 22, 2025 - Dashboard Modernization & Design Overhaul
+- **Stats Summary Row**: Added three metric cards showing Total Stocks, High Signals (score ≥70), and Buy Signals with icons
+- **Modern Watchlist Cards**: Enhanced visual hierarchy with:
+  - Larger price display (text-3xl font-bold)
+  - Subtle amber borders for high-signal stocks (border-amber-500/20)
+  - Score badges with colored backgrounds (bg-amber-500/10) for better contrast
+  - Improved spacing and typography weight distribution
+- **Redesigned Opportunities Section**: 
+  - External header with description and "View All" button
+  - Larger score badges (h-12 w-12) with background colors
+  - Divided list items with better spacing
+  - Modern empty state with circular icon background, heading, description, and prominent CTA
+  - Data source: `/api/stocks/top-signals` endpoint (unfollowed stocks with score ≥70)
+- **Improved Empty State**: New user welcome screen with large circular icon, bigger heading, and "Explore Opportunities" CTA
+- **Overall Design Improvements**:
+  - Increased spacing from space-y-6 to space-y-8 for breathing room
+  - Better typography hierarchy with tracking-tight and consistent font weights
+  - Effective color accents (amber for signals, green/red for price changes)
+  - Generous whitespace following modern SaaS dashboard patterns (Stripe, Linear, Notion)
+  - Consistent rounded-lg for visual elements
+  - Section headers with descriptions for clarity
 
 ### November 22, 2025 - Watchlist UX Improvements & Landing Page Update
 - **Removed Repetitive CTAs**: Eliminated individual "View Details" buttons from watchlist cards that created visual clutter

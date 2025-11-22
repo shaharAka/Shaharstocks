@@ -419,37 +419,22 @@ export default function TickerDetail() {
                   const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
                   const activeHighlights = hasEnteredPosition ? brief.owningHighlights : brief.watchingHighlights;
                   
-                  // Check if active scenario recommends ACT
-                  const isAct = hasEnteredPosition 
-                    ? (activeStance === "sell" || activeStance === "cover")
-                    : (activeStance === "enter" || activeStance === "short");
+                  // Check if active scenario recommends ACT (buy/sell = action, hold/wait = no action)
+                  const isAct = activeStance === "buy" || activeStance === "sell" || activeStance === "enter" || activeStance === "short" || activeStance === "cover";
                   
                   const getStanceConfig = (stance: string) => {
-                    if (stance === "enter") {
+                    // Handle both current values (buy/sell/hold) and legacy values (enter/wait/short/sell/cover)
+                    const normalizedStance = stance?.toLowerCase() || "hold";
+                    
+                    if (normalizedStance === "buy" || normalizedStance === "enter") {
                       return {
                         icon: ArrowUpCircle,
-                        text: "ENTER",
+                        text: "BUY",
                         color: "text-green-600 dark:text-green-400",
                         bgColor: "bg-green-50 dark:bg-green-950/30",
                         borderColor: "border-green-500",
                       };
-                    } else if (stance === "short") {
-                      return {
-                        icon: ArrowDownCircle,
-                        text: "SHORT",
-                        color: "text-orange-600 dark:text-orange-400",
-                        bgColor: "bg-orange-50 dark:bg-orange-950/30",
-                        borderColor: "border-orange-500",
-                      };
-                    } else if (stance === "wait") {
-                      return {
-                        icon: MinusCircle,
-                        text: "WAIT",
-                        color: "text-muted-foreground",
-                        bgColor: "bg-muted/20",
-                        borderColor: "border-gray-400 dark:border-gray-600",
-                      };
-                    } else if (stance === "sell") {
+                    } else if (normalizedStance === "sell" || normalizedStance === "short") {
                       return {
                         icon: ArrowDownCircle,
                         text: "SELL",
@@ -457,7 +442,7 @@ export default function TickerDetail() {
                         bgColor: "bg-red-50 dark:bg-red-950/30",
                         borderColor: "border-red-500",
                       };
-                    } else if (stance === "cover") {
+                    } else if (normalizedStance === "cover") {
                       return {
                         icon: ArrowUpCircle,
                         text: "COVER",
@@ -466,7 +451,7 @@ export default function TickerDetail() {
                         borderColor: "border-blue-500",
                       };
                     } else {
-                      // Default to "hold" for owning scenario
+                      // Default to "hold" for any other stance (wait, hold, etc)
                       return {
                         icon: MinusCircle,
                         text: "HOLD",

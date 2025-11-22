@@ -1085,3 +1085,18 @@ export const dailyBriefs = pgTable("daily_briefs", {
 export const insertDailyBriefSchema = createInsertSchema(dailyBriefs).omit({ id: true, createdAt: true });
 export type InsertDailyBrief = z.infer<typeof insertDailyBriefSchema>;
 export type DailyBrief = typeof dailyBriefs.$inferSelect;
+
+// Glossary Terms - Financial terminology database for tooltip hints
+export const glossaryTerms = pgTable("glossary_terms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  term: text("term").notNull().unique(), // The financial term (e.g., "RSI", "P&L", "Profit Margin")
+  definition: text("definition").notNull(), // Plain language definition
+  category: text("category").notNull(), // "technical", "fundamental", "general"
+  synonyms: text("synonyms").array().default([]), // Alternative names (e.g., ["Profit and Loss", "P&L"])
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertGlossaryTermSchema = createInsertSchema(glossaryTerms).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertGlossaryTerm = z.infer<typeof insertGlossaryTermSchema>;
+export type GlossaryTerm = typeof glossaryTerms.$inferSelect;

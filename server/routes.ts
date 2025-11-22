@@ -983,22 +983,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/users/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, email } = req.body;
+      const { name, email, showAllOpportunities } = req.body;
 
       if (!req.session.userId || req.session.userId !== id) {
         return res.status(403).json({ error: "Unauthorized" });
       }
 
-      if (!name || !email) {
-        return res.status(400).json({ error: "Name and email are required" });
+      // Build update object - only include provided fields
+      const updateData: any = {};
+      
+      if (name !== undefined) {
+        if (!name) {
+          return res.status(400).json({ error: "Name cannot be empty" });
+        }
+        updateData.name = name;
+      }
+      
+      if (email !== undefined) {
+        if (!email) {
+          return res.status(400).json({ error: "Email cannot be empty" });
+        }
+        
+        const existingUser = await storage.getUserByEmail(email);
+        if (existingUser && existingUser.id !== id) {
+          return res.status(400).json({ error: "Email already in use" });
+        }
+        updateData.email = email;
+      }
+      
+      if (showAllOpportunities !== undefined) {
+        updateData.showAllOpportunities = Boolean(showAllOpportunities);
       }
 
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser && existingUser.id !== id) {
-        return res.status(400).json({ error: "Email already in use" });
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: "No fields to update" });
       }
 
-      const updatedUser = await storage.updateUser(id, { name, email });
+      const updatedUser = await storage.updateUser(id, updateData);
       if (!updatedUser) {
         return res.status(404).json({ error: "User not found" });
       }

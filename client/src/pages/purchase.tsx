@@ -200,6 +200,23 @@ export default function Purchase() {
   });
 
 
+  // Update user preference mutation
+  const updatePreferenceMutation = useMutation({
+    mutationFn: async (showAll: boolean) => {
+      if (!currentUser) throw new Error("Not authenticated");
+      return await apiRequest("PATCH", `/api/users/${currentUser.id}`, { showAllOpportunities: showAll });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    },
+  });
+
+  // Handle toggle change with persistence
+  const handleShowAllOpportunitiesChange = (checked: boolean) => {
+    setShowAllOpportunities(checked);
+    updatePreferenceMutation.mutate(checked);
+  };
+
   // Follow stock mutation
   const followMutation = useMutation({
     mutationFn: async (ticker: string) => {
@@ -602,7 +619,7 @@ export default function Purchase() {
           <Switch
             id="show-all-toggle"
             checked={showAllOpportunities}
-            onCheckedChange={setShowAllOpportunities}
+            onCheckedChange={handleShowAllOpportunitiesChange}
             data-testid="toggle-show-all"
           />
         </div>

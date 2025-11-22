@@ -2182,17 +2182,21 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
-      // For backward compatibility, derive aiStance from watching scenario (uppercase for display)
-      // Map watching stance to traditional stance for display compatibility
+      // Derive aiStance based on position status (use position-aware recommendation)
+      // - If in position: use OWNING scenario's recommendation (exit/hold strategy)
+      // - If watching: use WATCHING scenario's recommendation (entry/wait strategy)
+      // Map to uppercase stance for display compatibility
       let aiStance: 'BUY' | 'SELL' | 'HOLD' = 'HOLD'; // Default to HOLD for safety
-      if (watchingStance === 'buy') {
+      
+      const relevantStance = followed.hasEnteredPosition ? owningStance : watchingStance;
+      if (relevantStance === 'buy') {
         aiStance = 'BUY';
-      } else if (watchingStance === 'sell') {
+      } else if (relevantStance === 'sell') {
         aiStance = 'SELL';
-      } else if (watchingStance === 'hold') {
+      } else if (relevantStance === 'hold') {
         aiStance = 'HOLD';
       }
-      // Note: If watchingStance is null, aiStance defaults to 'HOLD' (safe fallback)
+      // Note: If relevantStance is null, aiStance defaults to 'HOLD' (safe fallback)
       
       // Push result with computed stanceAlignment
       results.push({

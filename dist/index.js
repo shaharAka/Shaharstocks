@@ -650,6 +650,7 @@ var require_package = __commonJS({
         clsx: "^2.1.1",
         cmdk: "^1.1.1",
         "connect-pg-simple": "^10.0.0",
+        cookie: "^1.0.2",
         "date-fns": "^3.6.0",
         "drizzle-orm": "^0.39.3",
         "drizzle-zod": "^0.7.1",
@@ -1304,6 +1305,7 @@ __export(schema_exports, {
   insertRuleConditionSchema: () => insertRuleConditionSchema,
   insertRuleExecutionSchema: () => insertRuleExecutionSchema,
   insertStockAnalysisSchema: () => insertStockAnalysisSchema,
+  insertStockCandlesticksSchema: () => insertStockCandlesticksSchema,
   insertStockCommentSchema: () => insertStockCommentSchema,
   insertStockSchema: () => insertStockSchema,
   insertStockViewSchema: () => insertStockViewSchema,
@@ -1326,6 +1328,7 @@ __export(schema_exports, {
   ruleConditions: () => ruleConditions,
   ruleExecutions: () => ruleExecutions,
   stockAnalyses: () => stockAnalyses,
+  stockCandlesticks: () => stockCandlesticks,
   stockComments: () => stockComments,
   stockSchema: () => stockSchema,
   stockViews: () => stockViews,
@@ -1338,11 +1341,13 @@ __export(schema_exports, {
   users: () => users
 });
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 var stocks = pgTable("stocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Per-tenant isolation with foreign key
   ticker: text("ticker").notNull(),
   // Removed .unique() to allow multiple transactions per company
   companyName: text("company_name").notNull(),
@@ -1373,8 +1378,7 @@ var stocks = pgTable("stocks", {
   // 0-100 data quality score - measures reliability of the data source
   priceHistory: jsonb("price_history").$type().default([]),
   // Last 7 days of prices
-  candlesticks: jsonb("candlesticks").$type().default([]),
-  // Last 2 weeks of OHLCV data for charts
+  // NOTE: Candlestick data moved to shared stockCandlesticks table (one record per ticker, reused across users)
   // Company information from Finnhub
   description: text("description"),
   // Company description/overview
@@ -1403,13 +1407,17 @@ var stocks = pgTable("stocks", {
   rejectedAt: timestamp("rejected_at")
   // When the recommendation was rejected
 }, (table) => ({
-  // Unique constraint: Each transaction is unique by ticker + trade date + insider + type
+  // Unique constraint: Each transaction is unique per user by ticker + trade date + insider + type
+  // This allows the same real-world transaction to exist in multiple users' isolated collections
   transactionUnique: uniqueIndex("stock_transaction_unique_idx").on(
+    table.userId,
     table.ticker,
     table.insiderTradeDate,
     table.insiderName,
     table.recommendation
-  )
+  ),
+  // Index on userId for efficient per-tenant queries
+  userIdIdx: index("stocks_user_id_idx").on(table.userId)
 }));
 var stockSchema = createSelectSchema(stocks);
 var insertStockSchema = createInsertSchema(stocks).omit({ id: true, lastUpdated: true, recommendationStatus: true, rejectedAt: true });
@@ -1559,6 +1567,15 @@ var macroAnalyses = pgTable("macro_analyses", {
   createdAt: timestamp("created_at").defaultNow()
 });
 var insertMacroAnalysisSchema = createInsertSchema(macroAnalyses).omit({ id: true, createdAt: true });
+var stockCandlesticks = pgTable("stock_candlesticks", {
+  ticker: text("ticker").primaryKey(),
+  // Ticker symbol (e.g., "AAPL")
+  candlestickData: jsonb("candlestick_data").$type().notNull().default([]),
+  // Last 14 trading days of OHLCV data
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var insertStockCandlesticksSchema = createInsertSchema(stockCandlesticks).omit({ createdAt: true });
 var aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticker: text("ticker").notNull(),
@@ -1567,7 +1584,7 @@ var aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   priority: text("priority").notNull().default("normal"),
   // "high", "normal", "low"
   status: text("status").notNull().default("pending"),
-  // "pending", "processing", "completed", "failed"
+  // "pending", "processing", "completed", "failed", "cancelled"
   retryCount: integer("retry_count").notNull().default(0),
   maxRetries: integer("max_retries").notNull().default(3),
   scheduledAt: timestamp("scheduled_at").defaultNow(),
@@ -1584,7 +1601,11 @@ var aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   lastError: text("last_error"),
   // Detailed error message for the current/last failed step
   createdAt: timestamp("created_at").defaultNow()
-});
+}, (table) => ({
+  // Prevent duplicate active jobs for same ticker (race condition prevention)
+  // Only one pending OR processing job allowed per ticker at a time
+  activeJobUnique: uniqueIndex("active_job_unique_idx").on(table.ticker).where(sql`status IN ('pending', 'processing')`)
+}));
 var insertAiAnalysisJobSchema = createInsertSchema(aiAnalysisJobs).omit({
   id: true,
   createdAt: true,
@@ -1806,6 +1827,11 @@ var users = pgTable("users", {
   // Maximum number of stocks to fetch (500 during onboarding, 100 default)
   riskPreference: text("risk_preference").notNull().default("balanced"),
   // "low", "balanced", "high" - determines default filter presets
+  // Per-user display filters (client-side filtering of opportunities)
+  optionsDealThresholdPercent: integer("options_deal_threshold_percent").notNull().default(15),
+  // Filter out stocks where insider price < this % of market price (user-specific)
+  minMarketCapFilter: integer("min_market_cap_filter").notNull().default(500),
+  // Minimum market cap in millions for displaying opportunities (user-specific)
   archived: boolean("archived").notNull().default(false),
   // Soft delete for hiding users from admin list
   archivedAt: timestamp("archived_at"),
@@ -2153,11 +2179,13 @@ var followedStocks = pgTable("followed_stocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
   ticker: text("ticker").notNull(),
-  followedAt: timestamp("followed_at").notNull().defaultNow()
+  followedAt: timestamp("followed_at").notNull().defaultNow(),
+  hasEnteredPosition: boolean("has_entered_position").default(false).notNull()
+  // Track if user entered position
 }, (table) => ({
   userTickerFollowUnique: uniqueIndex("user_ticker_follow_unique_idx").on(table.userId, table.ticker)
 }));
-var insertFollowedStockSchema = createInsertSchema(followedStocks).omit({ id: true, followedAt: true });
+var insertFollowedStockSchema = createInsertSchema(followedStocks).omit({ id: true, followedAt: true, hasEnteredPosition: true });
 var dailyBriefs = pgTable("daily_briefs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -2231,6 +2259,29 @@ function isStockStale(lastUpdated) {
   return ageDays > 5;
 }
 
+// server/eventDispatcher.ts
+import { EventEmitter } from "events";
+var EventDispatcher = class _EventDispatcher extends EventEmitter {
+  static instance;
+  constructor() {
+    super();
+    this.setMaxListeners(100);
+  }
+  static getInstance() {
+    if (!_EventDispatcher.instance) {
+      _EventDispatcher.instance = new _EventDispatcher();
+    }
+    return _EventDispatcher.instance;
+  }
+  emit(event, data) {
+    return super.emit(event, data);
+  }
+  on(event, listener) {
+    return super.on(event, listener);
+  }
+};
+var eventDispatcher = EventDispatcher.getInstance();
+
 // server/storage.ts
 var DatabaseStorage = class {
   async initializeDefaults() {
@@ -2256,7 +2307,10 @@ var DatabaseStorage = class {
     }
   }
   async updateHoldingValues(holding) {
-    const [stock] = await db.select().from(stocks).where(eq(stocks.ticker, holding.ticker));
+    const [stock] = await db.select().from(stocks).where(and(
+      eq(stocks.ticker, holding.ticker),
+      eq(stocks.userId, holding.userId)
+    ));
     if (!stock) return;
     const currentPrice = parseFloat(stock.currentPrice);
     const avgPrice = parseFloat(holding.averagePurchasePrice);
@@ -2271,20 +2325,47 @@ var DatabaseStorage = class {
       lastUpdated: sql2`now()`
     }).where(eq(portfolioHoldings.id, holding.id));
   }
-  // Stocks
-  async getStocks() {
-    return await db.select().from(stocks);
+  // Stocks (Per-user tenant isolation)
+  async getStocks(userId) {
+    const results = await db.select({
+      stock: stocks,
+      analysisJob: aiAnalysisJobs
+    }).from(stocks).leftJoin(
+      aiAnalysisJobs,
+      and(
+        eq(stocks.ticker, aiAnalysisJobs.ticker),
+        sql2`${aiAnalysisJobs.status} IN ('pending', 'processing')`
+      )
+    ).where(eq(stocks.userId, userId));
+    return results.map((row) => ({
+      ...row.stock,
+      analysisJob: row.analysisJob || void 0
+    }));
   }
-  async getStock(ticker) {
-    const [stock] = await db.select().from(stocks).where(eq(stocks.ticker, ticker)).orderBy(desc(stocks.lastUpdated)).limit(1);
+  async getStock(userId, ticker) {
+    const [stock] = await db.select().from(stocks).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.ticker, ticker)
+    )).orderBy(desc(stocks.lastUpdated)).limit(1);
     return stock;
   }
-  async getAllStocksForTicker(ticker) {
+  async getAnyStockForTicker(ticker) {
+    const [stock] = await db.select().from(stocks).where(eq(stocks.ticker, ticker)).limit(1);
+    return stock;
+  }
+  async getUserStocksForTicker(userId, ticker) {
+    return await db.select().from(stocks).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.ticker, ticker)
+    ));
+  }
+  async getAllStocksForTickerGlobal(ticker) {
     return await db.select().from(stocks).where(eq(stocks.ticker, ticker));
   }
-  async getTransactionByCompositeKey(ticker, insiderTradeDate, insiderName, recommendation) {
+  async getTransactionByCompositeKey(userId, ticker, insiderTradeDate, insiderName, recommendation) {
     const [stock] = await db.select().from(stocks).where(
       and(
+        eq(stocks.userId, userId),
         eq(stocks.ticker, ticker),
         eq(stocks.insiderTradeDate, insiderTradeDate),
         eq(stocks.insiderName, insiderName),
@@ -2297,18 +2378,27 @@ var DatabaseStorage = class {
     const [newStock] = await db.insert(stocks).values(stock).returning();
     return newStock;
   }
-  async updateStock(ticker, updates) {
-    const [updatedStock] = await db.update(stocks).set({ ...updates, lastUpdated: sql2`now()` }).where(eq(stocks.ticker, ticker)).returning();
+  async updateStock(userId, ticker, updates) {
+    const [updatedStock] = await db.update(stocks).set({ ...updates, lastUpdated: sql2`now()` }).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.ticker, ticker)
+    )).returning();
     if (updatedStock) {
-      const holdings = await db.select().from(portfolioHoldings).where(eq(portfolioHoldings.ticker, ticker));
+      const holdings = await db.select().from(portfolioHoldings).where(and(
+        eq(portfolioHoldings.userId, userId),
+        eq(portfolioHoldings.ticker, ticker)
+      ));
       for (const holding of holdings) {
         await this.updateHoldingValues(holding);
       }
     }
     return updatedStock;
   }
-  async deleteStock(ticker) {
-    const result = await db.delete(stocks).where(eq(stocks.ticker, ticker));
+  async deleteStock(userId, ticker) {
+    const result = await db.delete(stocks).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.ticker, ticker)
+    ));
     return result.rowCount ? result.rowCount > 0 : false;
   }
   async deleteExpiredPendingStocks(ageInDays) {
@@ -2416,8 +2506,11 @@ var DatabaseStorage = class {
     console.log(`[CLEANUP] Rejected stocks cleanup completed in ${elapsedMs}ms - Deleted ${result.count} stocks`);
     return result;
   }
-  async getStocksByStatus(status) {
-    return await db.select().from(stocks).where(eq(stocks.recommendationStatus, status));
+  async getStocksByStatus(userId, status) {
+    return await db.select().from(stocks).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.recommendationStatus, status)
+    ));
   }
   async getStocksByUserStatus(userId, status) {
     const results = await db.select({
@@ -2429,17 +2522,43 @@ var DatabaseStorage = class {
         eq(userStockStatuses.userId, userId)
       )
     ).where(
-      eq(userStockStatuses.status, status)
+      and(
+        eq(stocks.userId, userId),
+        // CRITICAL: Filter stocks by userId for tenant isolation
+        eq(userStockStatuses.status, status)
+      )
     );
     return results.map((row) => row.stock);
   }
-  async unrejectStock(ticker) {
+  async unrejectStock(userId, ticker) {
     const [updatedStock] = await db.update(stocks).set({
       recommendationStatus: "pending",
       rejectedAt: null,
       lastUpdated: sql2`now()`
-    }).where(eq(stocks.ticker, ticker)).returning();
+    }).where(and(
+      eq(stocks.userId, userId),
+      eq(stocks.ticker, ticker)
+    )).returning();
     return updatedStock;
+  }
+  // Global helpers for background jobs (efficiently update market data across all users)
+  async getAllUniquePendingTickers() {
+    const result = await db.selectDistinct({ ticker: stocks.ticker }).from(stocks).where(eq(stocks.recommendationStatus, "pending"));
+    return result.map((r) => r.ticker);
+  }
+  async getAllUniqueTickersNeedingData() {
+    const result = await db.selectDistinct({ ticker: stocks.ticker }).from(stocks).where(
+      or(
+        eq(stocks.recommendationStatus, "pending"),
+        sql2`${stocks.candlesticks} IS NULL`,
+        sql2`jsonb_array_length(${stocks.candlesticks}) = 0`
+      )
+    );
+    return result.map((r) => r.ticker);
+  }
+  async updateStocksByTickerGlobally(ticker, updates) {
+    const result = await db.update(stocks).set({ ...updates, lastUpdated: sql2`now()` }).where(eq(stocks.ticker, ticker));
+    return result.rowCount || 0;
   }
   async deleteStocksOlderThan(ageInDays) {
     const startTime = Date.now();
@@ -2507,11 +2626,12 @@ var DatabaseStorage = class {
     }
     return await db.select().from(portfolioHoldings).where(and(...whereConditions));
   }
-  async getPortfolioHolding(id) {
-    const [holding] = await db.select().from(portfolioHoldings).where(eq(portfolioHoldings.id, id));
+  async getPortfolioHolding(id, userId) {
+    const whereClause = userId ? and(eq(portfolioHoldings.id, id), eq(portfolioHoldings.userId, userId)) : eq(portfolioHoldings.id, id);
+    const [holding] = await db.select().from(portfolioHoldings).where(whereClause);
     if (holding) {
       await this.updateHoldingValues(holding);
-      const [updated] = await db.select().from(portfolioHoldings).where(eq(portfolioHoldings.id, id));
+      const [updated] = await db.select().from(portfolioHoldings).where(whereClause);
       return updated;
     }
     return void 0;
@@ -2564,8 +2684,9 @@ var DatabaseStorage = class {
     }
     return await db.select().from(trades).where(and(...whereConditions)).orderBy(desc(trades.executedAt));
   }
-  async getTrade(id) {
-    const [trade] = await db.select().from(trades).where(eq(trades.id, id));
+  async getTrade(id, userId) {
+    const whereClause = userId ? and(eq(trades.id, id), eq(trades.userId, userId)) : eq(trades.id, id);
+    const [trade] = await db.select().from(trades).where(whereClause);
     return trade;
   }
   async createTrade(trade) {
@@ -2992,6 +3113,10 @@ var DatabaseStorage = class {
     }
     return await db.select().from(users).where(eq(users.archived, false));
   }
+  async getAllUserIds() {
+    const result = await db.select({ id: users.id }).from(users).where(eq(users.archived, false));
+    return result.map((r) => r.id);
+  }
   async getUser(id) {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
@@ -3163,6 +3288,12 @@ var DatabaseStorage = class {
   }
   async followStock(follow) {
     const [newFollow] = await db.insert(followedStocks).values(follow).returning();
+    eventDispatcher.emit("FOLLOWED_STOCK_UPDATED", {
+      type: "FOLLOWED_STOCK_UPDATED",
+      userId: follow.userId,
+      ticker: follow.ticker,
+      data: { action: "follow" }
+    });
     return newFollow;
   }
   async unfollowStock(ticker, userId) {
@@ -3172,7 +3303,40 @@ var DatabaseStorage = class {
         eq(followedStocks.userId, userId)
       )
     );
+    eventDispatcher.emit("FOLLOWED_STOCK_UPDATED", {
+      type: "FOLLOWED_STOCK_UPDATED",
+      userId,
+      ticker,
+      data: { action: "unfollow" }
+    });
     return true;
+  }
+  async toggleStockPosition(ticker, userId, hasEnteredPosition) {
+    const result = await db.update(followedStocks).set({ hasEnteredPosition }).where(
+      and(
+        eq(followedStocks.ticker, ticker),
+        eq(followedStocks.userId, userId)
+      )
+    ).returning();
+    if (result.length === 0) {
+      throw new Error("Stock is not being followed");
+    }
+    eventDispatcher.emit("FOLLOWED_STOCK_UPDATED", {
+      type: "FOLLOWED_STOCK_UPDATED",
+      userId,
+      ticker,
+      data: { action: "position_toggle", hasEnteredPosition }
+    });
+    return true;
+  }
+  // Cross-user aggregation for "popular stock" notifications
+  async getFollowerCountForTicker(ticker) {
+    const result = await db.select({ count: sql2`count(*)::int` }).from(followedStocks).where(eq(followedStocks.ticker, ticker));
+    return result[0]?.count || 0;
+  }
+  async getFollowerUserIdsForTicker(ticker) {
+    const result = await db.select({ userId: followedStocks.userId }).from(followedStocks).where(eq(followedStocks.ticker, ticker));
+    return result.map((r) => r.userId);
   }
   async getFollowedStocksWithPrices(userId) {
     const followedStocksList = await this.getUserFollowedStocks(userId);
@@ -3214,24 +3378,45 @@ var DatabaseStorage = class {
       const jobStatus = latestJob?.status || null;
       const briefs = await db.select().from(dailyBriefs).where(eq(dailyBriefs.ticker, followed.ticker)).orderBy(desc(dailyBriefs.briefDate)).limit(1);
       const latestBrief = briefs[0];
-      const watchingStance = latestBrief?.watchingStance?.toLowerCase() || null;
-      const owningStance = latestBrief?.owningStance?.toLowerCase() || null;
+      const normalizeStance = (rawStance) => {
+        if (!rawStance) return null;
+        const stance = rawStance.toLowerCase().trim();
+        if (stance === "enter") return "buy";
+        if (stance === "wait") return "hold";
+        if (stance === "buy" || stance === "sell" || stance === "hold") return stance;
+        console.warn(`[Storage] Unknown stance value: "${rawStance}", defaulting to "hold"`);
+        return "hold";
+      };
+      const watchingStance = normalizeStance(latestBrief?.watchingStance);
+      const owningStance = normalizeStance(latestBrief?.owningStance);
       const aiScore = latestBrief?.watchingConfidence ?? null;
+      const analyses = await db.select().from(stockAnalyses).where(eq(stockAnalyses.ticker, followed.ticker)).limit(1);
+      const analysis = analyses[0];
+      const integratedScore = analysis?.integratedScore ?? null;
       let stanceAlignment = null;
       if (watchingStance || owningStance) {
-        if (watchingStance === "enter" || owningStance === "sell") {
+        if (watchingStance === "buy" || watchingStance === "sell" || owningStance === "buy" || owningStance === "sell") {
           stanceAlignment = "act";
         } else {
           stanceAlignment = "hold";
         }
       }
-      const aiStance = latestBrief?.watchingStance?.toUpperCase() || null;
+      let aiStance = "HOLD";
+      const relevantStance = followed.hasEnteredPosition ? owningStance : watchingStance;
+      if (relevantStance === "buy") {
+        aiStance = "BUY";
+      } else if (relevantStance === "sell") {
+        aiStance = "SELL";
+      } else if (relevantStance === "hold") {
+        aiStance = "HOLD";
+      }
       results.push({
         ...followed,
         jobStatus,
         insiderAction,
         aiStance,
         aiScore,
+        integratedScore,
         stanceAlignment
       });
     }
@@ -3311,7 +3496,12 @@ var DatabaseStorage = class {
           eq(followedStocks.userId, userId)
         )
       ).where(
-        sql2`(${stocks.insiderTradeDate} >= ${twoWeeksAgoString} OR ${followedStocks.ticker} IS NOT NULL)`
+        and(
+          eq(stocks.userId, userId),
+          // CRITICAL: Filter by user
+          eq(stocks.recommendationStatus, "pending"),
+          sql2`(${stocks.insiderTradeDate} >= ${twoWeeksAgoString} OR ${followedStocks.ticker} IS NOT NULL)`
+        )
       ).orderBy(desc(stocks.insiderTradeDate)).limit(limit);
       console.log(`[Storage] Query returned ${results.length} rows`);
       const allJobs = await db.select().from(aiAnalysisJobs).where(
@@ -3383,6 +3573,14 @@ var DatabaseStorage = class {
         eq(userStockStatuses.ticker, ticker)
       )
     ).returning();
+    if (updated && updates.status) {
+      eventDispatcher.emit("STOCK_STATUS_CHANGED", {
+        type: "STOCK_STATUS_CHANGED",
+        userId,
+        ticker,
+        status: updates.status
+      });
+    }
     return updated;
   }
   async ensureUserStockStatus(userId, ticker) {
@@ -3391,6 +3589,24 @@ var DatabaseStorage = class {
       return existing;
     }
     return await this.createUserStockStatus({ userId, ticker, status: "pending" });
+  }
+  async rejectTickerForUser(userId, ticker) {
+    await this.ensureUserStockStatus(userId, ticker);
+    const userStatus = await this.updateUserStockStatus(userId, ticker, {
+      status: "rejected",
+      rejectedAt: /* @__PURE__ */ new Date(),
+      approvedAt: null,
+      dismissedAt: null
+    });
+    const stockCount = await db.select().from(stocks).where(and(
+      eq(stocks.ticker, ticker),
+      eq(stocks.userId, userId)
+    ));
+    console.log(`[RejectTicker] User ${userId} rejected ticker ${ticker} (${stockCount.length} user transactions)`);
+    return {
+      userStatus,
+      stocksUpdated: stockCount.length
+    };
   }
   async markStockAsViewed(ticker, userId) {
     const existing = await db.select().from(stockViews).where(
@@ -3447,6 +3663,36 @@ var DatabaseStorage = class {
     };
     await db.update(stockAnalyses).set(updates).where(eq(stockAnalyses.ticker, ticker));
   }
+  // Stock Candlesticks Methods (shared OHLCV data - one record per ticker, reused across users)
+  async getCandlesticksByTicker(ticker) {
+    const [candlesticks] = await db.select().from(stockCandlesticks).where(eq(stockCandlesticks.ticker, ticker));
+    return candlesticks;
+  }
+  async upsertCandlesticks(ticker, candlestickData) {
+    const existing = await this.getCandlesticksByTicker(ticker);
+    if (existing) {
+      const [updated] = await db.update(stockCandlesticks).set({
+        candlestickData,
+        lastUpdated: /* @__PURE__ */ new Date()
+      }).where(eq(stockCandlesticks.ticker, ticker)).returning();
+      return updated;
+    } else {
+      const [inserted] = await db.insert(stockCandlesticks).values({
+        ticker,
+        candlestickData,
+        lastUpdated: /* @__PURE__ */ new Date()
+      }).returning();
+      return inserted;
+    }
+  }
+  async getAllTickersNeedingCandlestickData() {
+    const oneDayAgo = /* @__PURE__ */ new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    const allTickers = await db.selectDistinct({ ticker: stocks.ticker }).from(stocks);
+    const tickersWithRecentData = await db.select({ ticker: stockCandlesticks.ticker }).from(stockCandlesticks).where(sql2`${stockCandlesticks.lastUpdated} >= ${oneDayAgo}`);
+    const recentTickerSet = new Set(tickersWithRecentData.map((t) => t.ticker));
+    return allTickers.map((t) => t.ticker).filter((ticker) => !recentTickerSet.has(ticker));
+  }
   // AI Analysis Job Queue Methods
   async enqueueAnalysisJob(ticker, source, priority = "normal", force = false) {
     if (force) {
@@ -3469,26 +3715,44 @@ var DatabaseStorage = class {
         return existingJob;
       }
     }
-    const [job] = await db.insert(aiAnalysisJobs).values({
-      ticker,
-      source,
-      priority,
-      status: "pending",
-      retryCount: 0,
-      maxRetries: 3,
-      scheduledAt: /* @__PURE__ */ new Date()
-    }).returning();
-    const existingAnalysis = await this.getStockAnalysis(ticker);
-    if (existingAnalysis) {
-      await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
-    } else {
-      await db.insert(stockAnalyses).values({
+    try {
+      const [job] = await db.insert(aiAnalysisJobs).values({
         ticker,
-        status: "analyzing"
-      });
+        source,
+        priority,
+        status: "pending",
+        retryCount: 0,
+        maxRetries: 3,
+        scheduledAt: /* @__PURE__ */ new Date()
+      }).returning();
+      const existingAnalysis = await this.getStockAnalysis(ticker);
+      if (existingAnalysis) {
+        if (existingAnalysis.status !== "completed" || !existingAnalysis.integratedScore) {
+          await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
+        }
+      } else {
+        await db.insert(stockAnalyses).values({
+          ticker,
+          status: "analyzing"
+        });
+      }
+      console.log(`[Queue] Enqueued analysis job for ${ticker} (priority: ${priority}, source: ${source})`);
+      return job;
+    } catch (error) {
+      if (error.code === "23505" || error.message?.includes("unique")) {
+        console.log(`[Queue] Race condition detected for ${ticker}, fetching existing job`);
+        const [existingJob] = await db.select().from(aiAnalysisJobs).where(
+          and(
+            eq(aiAnalysisJobs.ticker, ticker),
+            sql2`${aiAnalysisJobs.status} IN ('pending', 'processing')`
+          )
+        ).limit(1);
+        if (existingJob) {
+          return existingJob;
+        }
+      }
+      throw error;
     }
-    console.log(`[Queue] Enqueued analysis job for ${ticker} (priority: ${priority}, source: ${source})`);
-    return job;
   }
   async cancelAnalysisJobsForTicker(ticker) {
     await db.update(aiAnalysisJobs).set({ status: "cancelled", completedAt: /* @__PURE__ */ new Date() }).where(
@@ -3550,6 +3814,18 @@ var DatabaseStorage = class {
       lastError: null
       // Clear error on successful progress update
     }).where(eq(aiAnalysisJobs.id, jobId));
+  }
+  async resetStockAnalysisPhaseFlags(ticker) {
+    const result = await db.execute(sql2`
+      WITH lock AS (SELECT pg_advisory_xact_lock(hashtext(${ticker})))
+      UPDATE ${stocks}
+      SET 
+        micro_analysis_completed = false,
+        macro_analysis_completed = false,
+        combined_analysis_completed = false
+      WHERE ticker = ${ticker}
+    `);
+    console.log(`[Storage] Reset phase flags for ${ticker} (updated ${result.rowCount || 0} rows)`);
   }
   async markStockAnalysisPhaseComplete(ticker, phase) {
     const fieldMap = {
@@ -3835,6 +4111,7 @@ var storage = new DatabaseStorage();
 
 // server/routes.ts
 import { z as z2 } from "zod";
+import { eq as eq2, or as or2 } from "drizzle-orm";
 
 // server/telegram.ts
 import { TelegramClient } from "telegram";
@@ -5368,7 +5645,7 @@ var BacktestService = class {
       const telegramMessageDate = new Date(msg.date * 1e3).toISOString().split("T")[0];
       const insiderTradeDate = this.extractInsiderTradeDate(msg.text);
       const compositeKey = `${ticker}_${insiderTradeDate || telegramMessageDate}`;
-      let stock = await storage.getStock(ticker);
+      let stock = await storage.getAnyStockForTicker(ticker);
       if (!stock) {
         try {
           const quote = await finnhubService.getQuote(ticker);
@@ -5592,7 +5869,7 @@ Generate 100 diverse scenarios exploring all ranges of risk/reward profiles.`;
       if (scenarios.length === 0) {
         throw new Error("No scenarios generated");
       }
-      scenarios = scenarios.filter((scenario, index) => {
+      scenarios = scenarios.filter((scenario, index2) => {
         const conditions = scenario.sellConditions || [];
         const hasTakeProfit = conditions.some(
           (c) => c.metric === "price_change_from_buy_percent" && c.value > 0
@@ -5602,7 +5879,7 @@ Generate 100 diverse scenarios exploring all ranges of risk/reward profiles.`;
         );
         const isValid = hasTakeProfit && hasStopLossOrTimeExit;
         if (!isValid) {
-          console.log(`[BacktestJob ${jobId}] Skipping invalid scenario ${index + 1}: ${scenario.name} (missing take-profit or stop-loss)`);
+          console.log(`[BacktestJob ${jobId}] Skipping invalid scenario ${index2 + 1}: ${scenario.name} (missing take-profit or stop-loss)`);
         }
         return isValid;
       });
@@ -6016,17 +6293,23 @@ Provide your analysis in this EXACT JSON format:
   "recommendation": "Clear 2-3 sentence recommendation: ${isBuy ? "BUY or PASS" : isSell ? "SELL/AVOID or PASS" : "Action"} for 1-2 week window, and why"
 }
 
-MICRO SCORE RUBRIC (confidenceScore: 0-100 scale):
-This is your STOCK-SPECIFIC (MICRO) analysis score based on fundamentals, technicals, and insider signals.
-${isBuy ? `- 90-100: STRONG BUY - All signals align, insider buy is highly validated, excellent 1-2 week setup
-- 70-89: BUY - Good fundamentals support insider signal, favorable near-term outlook
-- 50-69: WEAK BUY - Mixed signals, insider buy has some merit but concerns exist
-- 30-49: PASS - Fundamentals don't support insider buy, or significant risks
-- 0-29: STRONG PASS - Red flags contradict insider signal, avoid` : isSell ? `- 90-100: STRONG SELL/AVOID - All signals align, insider sell is highly validated by weak fundamentals, avoid this stock
-- 70-89: SELL/AVOID - Weak fundamentals justify insider sell, bearish near-term outlook
-- 50-69: WEAK SELL - Mixed signals, insider sell has some merit but not conclusive
-- 30-49: PASS - Fundamentals remain strong despite sell, likely routine portfolio management
-- 0-29: IGNORE SELL - Strong fundamentals contradict sell signal, false alarm` : `- 90-100: STRONG SIGNAL - All signals align
+CRITICAL: OPPORTUNITY SCORE RUBRIC (confidenceScore: 0-100 scale)
+\u26A0\uFE0F THIS SCORE REPRESENTS "OPPORTUNITY STRENGTH" NOT "COMPANY QUALITY" \u26A0\uFE0F
+
+${isBuy ? `For INSIDER BUYING (BUY signal):
+HIGH SCORE = STRONG BUY OPPORTUNITY (good company + insiders buying = strong opportunity)
+- 90-100: EXCEPTIONAL BUY - Company fundamentals excellent, insider buy highly validated, all signals bullish
+- 70-89: STRONG BUY - Solid fundamentals support insider confidence, favorable 1-2 week outlook  
+- 50-69: MODERATE BUY - Mixed signals, insider buy has merit but some concerns exist
+- 30-49: WEAK/PASS - Fundamentals don't strongly support insider buy, or significant risks present
+- 0-29: AVOID - Red flags contradict insider buy signal, company has serious issues` : isSell ? `For INSIDER SELLING (SELL signal):  
+HIGH SCORE = STRONG SELL OPPORTUNITY (weak company + insiders selling = strong bearish signal)
+- 90-100: EXCEPTIONAL SELL - Company fundamentals very weak, insider sell highly validated by deteriorating metrics, avoid this stock
+- 70-89: STRONG SELL - Weak fundamentals justify insider sell, significant bearish indicators present
+- 50-69: MODERATE SELL - Some weakness validates sell but not conclusive, proceed with caution
+- 30-49: WEAK/PASS - Fundamentals remain relatively strong, likely routine portfolio rebalancing
+- 0-29: IGNORE SELL - Strong fundamentals contradict sell signal, company remains healthy` : `For MIXED SIGNALS:
+- 90-100: STRONG SIGNAL - All signals align
 - 70-89: VALIDATED - Fundamentals support insider signal
 - 50-69: MIXED - Some merit but concerns exist
 - 30-49: PASS - Fundamentals don't support signal
@@ -6092,17 +6375,18 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     const positionContext = isSellOpportunity ? userOwnsPosition ? `USER HAS A SHORT POSITION - Focus on COVERING STRATEGY (when to cover the short or hold it). This is a SHORTING analysis.` : `USER CONSIDERING SHORTING - Focus on SHORT ENTRY EVALUATION (should they open a short position now or wait?)` : userOwnsPosition ? `USER OWNS THIS STOCK - Focus on EXIT STRATEGY ONLY (when to sell or hold). NEVER recommend adding to position.` : `USER CONSIDERING ENTRY - Focus on ENTRY EVALUATION (should they enter now, wait, or avoid?)`;
     const opportunityContext = isBuyOpportunity ? "This is a BUY OPPORTUNITY - insiders recently BOUGHT shares, signaling potential upside." : "This is a SELL/SHORT OPPORTUNITY - insiders recently SOLD shares, signaling potential downside or weakness. Low AI score indicates company weakness, making this a good shorting candidate.";
     let trendContext = "";
+    let signalScore = 50;
     if (previousAnalysis?.technicalAnalysis) {
       const tech = previousAnalysis.technicalAnalysis;
       const trend = tech.trend || "neutral";
       const momentum = tech.momentum || "weak";
-      const score = typeof tech.score === "number" ? tech.score : 50;
+      signalScore = typeof tech.score === "number" ? tech.score : 50;
       const signals = Array.isArray(tech.signals) ? tech.signals.slice(0, 3) : [];
       trendContext = `
 INITIAL AI TECHNICAL ANALYSIS (baseline trend from insider opportunity):
 - Trend: ${trend}
 - Momentum: ${momentum}
-- Technical Score: ${score}/100
+- Signal Score: ${signalScore}/100 ${signalScore >= 90 ? "\u{1F525} VERY HIGH" : signalScore >= 70 ? "\u26A1 HIGH" : signalScore >= 50 ? "\u27A1\uFE0F  MODERATE" : "\u26A0\uFE0F  LOW"}
 ${signals.length > 0 ? `- Signals: ${signals.join(", ")}` : ""}`;
     }
     let stanceRules;
@@ -6124,50 +6408,102 @@ HOLD:
 Decision: SELL when trend confirms exit. HOLD when trend supports staying in. NEVER recommend "buy".` : `STANCE RULES for OWNED SHORT POSITION (Sell/Short Opportunity):
 You have a SHORT position. Price DECLINE = your profit. Focus on COVERING strategy.
 
-\u26A0\uFE0F CRITICAL: You can ONLY recommend "cover" or "hold" - NEVER "buy" or "sell".
+\u26A0\uFE0F CRITICAL: You can ONLY recommend "buy" or "hold" - NO OTHER VALUES.
+- "buy" = Cover the short position / Close the short NOW
+- "hold" = Keep the short position open / Stay short
 
-COVER SHORT (ACT - close short position):
-- "cover" if price -5%+ (take short profit on significant decline)
-- "cover" if price +3%+ AND initial bearish trend reversing bullish (stop loss - trend against you)
-- "cover" if strong bullish news violates bearish thesis (cut losses early)
+BUY (COVER SHORT):
+- "buy" if price -5%+ (take short profit on significant decline)
+- "buy" if price +3%+ AND initial bearish trend reversing bullish (stop loss - trend against you)
+- "buy" if strong bullish news violates bearish thesis (cut losses early)
 
-HOLD SHORT (keep short position open):
-- Price declining -1% to -4% with initial bearish trend intact (let it run down)
-- Sideways action with initial trend still bearish/weak (wait for more decline)
-- Small gain +1% to +2% (price rising slightly) but initial trend still bearish (noise, not reversal)
+HOLD (STAY SHORT):
+- "hold" if price declining -1% to -4% with initial bearish trend intact (let it run down)
+- "hold" if sideways action with initial trend still bearish/weak (wait for more decline)
+- "hold" if price +1% to +2% (small rally) but initial trend still bearish (noise, not reversal)
 
-Decision: COVER when you've profited enough OR trend reversing against you. HOLD when bearish trend continues. For shorts, price FALLING = your gain.`;
+Decision: "buy" (cover) when you've profited enough OR trend reversing against you. "hold" (stay short) when bearish trend continues. For shorts, price FALLING = your gain.`;
     } else {
+      const scoreGuidance = isBuyOpportunity ? signalScore >= 90 ? "\u{1F525} VERY HIGH SIGNAL (90-100): Be HIGHLY LENIENT on entry. Even minor dips or mixed signals should trigger entry. This is a premium opportunity." : signalScore >= 70 ? "\u26A1 HIGH SIGNAL (70-89): Be MODERATELY LENIENT on entry. Accept small pullbacks and minor concerns as buying opportunities." : signalScore >= 50 ? "\u27A1\uFE0F  MODERATE SIGNAL (50-69): Be BALANCED. Require confirmatory signals before entry. Don't rush but don't be overly cautious." : "\u26A0\uFE0F  LOW SIGNAL (<50): Be CAUTIOUS. Require strong technical confirmation and favorable price action. Consider avoiding entry unless setup is perfect." : signalScore <= 30 ? "\u{1F525} VERY HIGH SHORT SIGNAL (<30): Be HIGHLY LENIENT on short entry. Fundamental weakness confirmed. Even minor bearish signals should trigger short." : signalScore <= 50 ? "\u26A1 HIGH SHORT SIGNAL (30-50): Be MODERATELY LENIENT on short entry. Weakness evident, accept minor setups." : signalScore <= 70 ? "\u27A1\uFE0F  MODERATE SHORT SIGNAL (50-70): Be BALANCED. Require confirmatory bearish signals before shorting." : "\u26A0\uFE0F  LOW SHORT SIGNAL (>70): Be CAUTIOUS. Company looks strong, avoid shorting unless very strong bearish breakdown occurs.";
       stanceRules = isBuyOpportunity ? `STANCE RULES for ENTRY DECISION (Buy Opportunity):
-Use initial trend to validate insider signal for entry.
+${scoreGuidance}
 
-\u26A0\uFE0F CRITICAL: You must choose "enter" or "wait" - NO OTHER VALUES.
+\u26A0\uFE0F CRITICAL: You can ONLY choose "buy" or "hold" - NO OTHER VALUES.
+- "buy" = Enter position / Take the opportunity NOW
+- "hold" = Wait for better setup / Don't enter yet
 
-ENTER (ACT):
-- "enter" if initial trend bullish/strong + price stable or up
-- "enter" if initial trend bullish/moderate + price -2% to -4% (dip entry)
+SIGNAL SCORE-BASED ENTRY THRESHOLDS:
+${signalScore >= 90 ? `
+VERY HIGH SIGNAL (90-100) - AGGRESSIVE ENTRY:
+BUY (ACT):
+- "buy" if ANY bullish signal present (very lenient threshold)
+- "buy" even if price down -2% to -5% (premium dip buying opportunity)
+- "buy" if trend neutral but score this high (trust the signal)
+HOLD (WAIT):
+- "hold" ONLY if catastrophic news or price -8%+ breakdown invalidates thesis` : signalScore >= 70 ? `
+HIGH SIGNAL (70-89) - LENIENT ENTRY:
+BUY (ACT):
+- "buy" if trend bullish/moderate + price stable or up
+- "buy" if trend bullish + price -2% to -5% (good dip entry on high-quality signal)
+- "buy" if trend neutral but price showing support (score gives benefit of doubt)
+HOLD (WAIT):
+- "hold" if trend bearish/weak despite high score (conflicting signals)
+- "hold" if price -5%+ breakdown (too much risk even with good score)` : signalScore >= 50 ? `
+MODERATE SIGNAL (50-69) - BALANCED ENTRY:
+BUY (ACT):
+- "buy" if trend bullish/strong + price stable or up
+- "buy" if trend bullish/moderate + price -2% to -3% (small dip only)
+HOLD (WAIT):
+- "hold" if trend neutral (need stronger confirmation for moderate score)
+- "hold" if price -4%+ (too much weakness for moderate signal)
+- "hold" if conflicting signals or mixed price action` : `
+LOW SIGNAL (<50) - CAUTIOUS ENTRY:
+BUY (ACT):
+- "buy" ONLY if trend bullish/strong + price +2%+ breakout (perfect setup required)
+HOLD (WAIT):
+- "hold" if ANY uncertainty, neutral trend, or negative price action
+- "hold" if score this low indicates fundamental concerns (be very selective)`}
 
-WAIT:
-- "wait" if initial trend neutral, price sideways (wait for clarity)
-- "wait" if initial trend bullish but price action mixed
-- "wait" if initial trend bearish/weak + price falling (avoid entry)
+Decision: Weight the SIGNAL SCORE heavily. High scores deserve aggressive "buy", low scores lean toward "hold".` : `STANCE RULES for SHORT ENTRY DECISION (Sell/Short Opportunity):
+${scoreGuidance}
 
-Decision: ENTER when initial trend confirms insider buy signal. WAIT if trend weak or unclear.` : `STANCE RULES for SHORT ENTRY DECISION (Sell/Short Opportunity):
-Insiders sold. Low AI score indicates company weakness. Evaluate SHORT ENTRY.
+\u26A0\uFE0F CRITICAL: You can ONLY choose "sell" or "hold" - NO OTHER VALUES.
+- "sell" = Enter short position / Short this stock NOW
+- "hold" = Wait for better short setup / Don't short yet
 
-\u26A0\uFE0F CRITICAL: You must choose "short" or "wait" - NO OTHER VALUES.
+SIGNAL SCORE-BASED SHORT ENTRY THRESHOLDS:
+${signalScore <= 30 ? `
+VERY HIGH SHORT SIGNAL (<30) - AGGRESSIVE SHORT ENTRY:
+SELL (SHORT):
+- "sell" if ANY bearish signal present (very lenient threshold for weak companies)
+- "sell" even if price up +2% to +5% (rally into resistance, premium shorting opportunity)
+- "sell" if trend neutral but score this low (fundamental weakness overrides technical neutrality)
+HOLD (WAIT):
+- "hold" ONLY if surprise positive news or price +8%+ breakout invalidates bearish thesis` : signalScore <= 50 ? `
+HIGH SHORT SIGNAL (30-50) - LENIENT SHORT ENTRY:
+SELL (SHORT):
+- "sell" if trend bearish/weak + price breaking down
+- "sell" if trend bearish/moderate + price rallying +2% to +4% (short the bounce on weak stock)
+- "sell" if trend neutral but price showing resistance (score supports short bias)
+HOLD (WAIT):
+- "hold" if trend bullish despite low score (conflicting signals, wait for breakdown)
+- "hold" if price +5%+ breakout (too much momentum even for weak stock)` : signalScore <= 70 ? `
+MODERATE SHORT SIGNAL (50-70) - BALANCED SHORT ENTRY:
+SELL (SHORT):
+- "sell" if trend bearish/strong + price breaking down
+- "sell" if trend bearish/moderate + price +2% to +3% rally (small bounce only)
+HOLD (WAIT):
+- "hold" if trend neutral (need stronger bearish confirmation for moderate score)
+- "hold" if price +4%+ (too much strength for moderate short signal)
+- "hold" if conflicting signals or mixed price action` : `
+LOW SHORT SIGNAL (>70) - VERY CAUTIOUS SHORT ENTRY:
+SELL (SHORT):
+- "sell" ONLY if trend bearish/strong + price -5%+ breakdown (perfect breakdown required on strong company)
+HOLD (WAIT):
+- "hold" if ANY bullish signals, neutral trend, or positive price action
+- "hold" if score this high indicates strong fundamentals (avoid shorting unless exceptional setup)`}
 
-SHORT (ACT - open short position):
-- "short" if initial trend bearish/weak + price breaking down (trend confirms weakness)
-- "short" if initial trend bearish/moderate + price rallying +2% to +4% (rally into resistance, short the bounce)
-- "short" if low AI score (<30) confirms fundamental weakness + any bearish technical signal
-
-WAIT (don't open short):
-- "wait" if initial trend bullish/strong + price rising (don't fight the trend)
-- "wait" if initial trend neutral, price sideways (no clear short setup)
-- "wait" if positive news contradicts bearish thesis (wait for clarity)
-
-Decision: SHORT when bearish trend + weak fundamentals align. WAIT if trend unclear or bullish.`;
+Decision: Weight the SIGNAL SCORE heavily for shorts. Very low scores (<30) deserve aggressive "sell" (short), high scores (>70) lean toward "hold" (wait).`;
     }
     const prompt = `You are a NEAR-TERM TRADER (1-2 week horizon) providing actionable daily guidance for ${ticker}.
 
@@ -6209,13 +6545,17 @@ BE DECISIVE. Near-term traders need action, not patience.
 
 Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
 {
-  "recommendedStance": ${isSellOpportunity ? userOwnsPosition ? '"cover" | "hold"' : '"short" | "wait"' : userOwnsPosition ? '"sell" | "hold"' : '"enter" | "wait"'},
+  "recommendedStance": "buy" | "hold" | "sell",
   "confidence": 1-10,
   "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on NEAR-TERM action.",
   "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
 }
 
-${isSellOpportunity ? userOwnsPosition ? '\u26A0\uFE0F CRITICAL: For short positions, you can ONLY use "cover" or "hold" - NEVER "sell", "enter", "wait", or "buy".' : '\u26A0\uFE0F CRITICAL: For short entry evaluation, you can ONLY use "short" or "wait" - NEVER "enter", "buy", "hold", or "sell".' : userOwnsPosition ? '\u26A0\uFE0F CRITICAL: For owned positions, you can ONLY use "sell" or "hold" - NEVER "enter" or "wait".' : '\u26A0\uFE0F CRITICAL: For entry evaluation, you can ONLY use "enter" or "wait" - NEVER "buy", "hold", or "sell".'}`;
+\u26A0\uFE0F CRITICAL STANCE VALUES:
+- Watching a BUY opportunity: Use "buy" (enter now) or "hold" (wait for better setup)
+- Watching a SELL opportunity: Use "sell" (short now) or "hold" (wait for better short setup)
+- Owning a LONG position: Use "sell" (exit now) or "hold" (stay in position)
+- Owning a SHORT position: Use "buy" (cover short) or "hold" (stay short)`;
     try {
       const response = await openai2.chat.completions.create({
         model: "gpt-4.1",
@@ -6300,6 +6640,8 @@ async function fetchInitialDataForUser(userId) {
     for (const transaction of transactions) {
       try {
         const existingTransaction = await storage.getTransactionByCompositeKey(
+          userId,
+          // Per-user tenant isolation
           transaction.ticker,
           transaction.filingDate,
           transaction.insiderName,
@@ -6333,6 +6675,8 @@ async function fetchInitialDataForUser(userId) {
           }
         }
         await storage.createStock({
+          userId,
+          // Per-user tenant isolation - this stock belongs to this user only
           ticker: transaction.ticker,
           companyName: transaction.companyName || transaction.ticker,
           currentPrice: quote.currentPrice.toString(),
@@ -7076,15 +7420,15 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/stocks", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const { status } = req.query;
       if (status === "rejected") {
-        if (!req.session.userId) {
-          return res.status(401).json({ error: "Not authenticated" });
-        }
         const stocks3 = await storage.getStocksByUserStatus(req.session.userId, status);
         return res.json(stocks3);
       }
-      const stocks2 = status ? await storage.getStocksByStatus(status) : await storage.getStocks();
+      const stocks2 = await storage.getStocks(req.session.userId);
       res.json(stocks2);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stocks" });
@@ -7121,7 +7465,10 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/stocks/:ticker", async (req, res) => {
     try {
-      const stock = await storage.getStock(req.params.ticker);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const stock = await storage.getStock(req.session.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -7141,7 +7488,10 @@ async function registerRoutes(app2) {
   });
   app2.patch("/api/stocks/:ticker", async (req, res) => {
     try {
-      const stock = await storage.updateStock(req.params.ticker, req.body);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const stock = await storage.updateStock(req.session.userId, req.params.ticker, req.body);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -7152,7 +7502,10 @@ async function registerRoutes(app2) {
   });
   app2.delete("/api/stocks/:ticker", async (req, res) => {
     try {
-      const deleted = await storage.deleteStock(req.params.ticker);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const deleted = await storage.deleteStock(req.session.userId, req.params.ticker);
       if (!deleted) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -7163,16 +7516,15 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/stocks/diagnostics/candlesticks", async (req, res) => {
     try {
-      const stocks2 = await storage.getStocks();
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const stocks2 = await storage.getStocks(req.session.userId);
       const pendingStocks = stocks2.filter((s) => s.recommendationStatus === "pending");
       const diagnostics = {
         totalStocks: stocks2.length,
         pendingStocks: pendingStocks.length,
-        withCandlesticks: stocks2.filter((s) => s.candlesticks && s.candlesticks.length > 0).length,
-        withoutCandlesticks: stocks2.filter((s) => !s.candlesticks || s.candlesticks.length === 0).length,
-        pendingWithCandlesticks: pendingStocks.filter((s) => s.candlesticks && s.candlesticks.length > 0).length,
-        pendingWithoutCandlesticks: pendingStocks.filter((s) => !s.candlesticks || s.candlesticks.length === 0).length,
-        sampleStocksWithoutData: stocks2.filter((s) => !s.candlesticks || s.candlesticks.length === 0).slice(0, 10).map((s) => ({ ticker: s.ticker, status: s.recommendationStatus, recommendation: s.recommendation }))
+        note: "Candlesticks are now stored in shared stockCandlesticks table, accessible via /api/stocks/:ticker/candlesticks"
       };
       res.json(diagnostics);
     } catch (error) {
@@ -7181,14 +7533,17 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/stocks/:ticker/refresh", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const ticker = req.params.ticker;
-      const stock = await storage.getStock(ticker);
+      const stock = await storage.getStock(req.session.userId, ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
       console.log(`[StockAPI] Refreshing market data for ${ticker}...`);
       const marketData = await stockService.getComprehensiveData(ticker);
-      const updatedStock = await storage.updateStock(ticker, {
+      const updatedStock = await storage.updateStock(req.session.userId, ticker, {
         currentPrice: marketData.currentPrice,
         previousClose: marketData.previousClose,
         marketCap: marketData.marketCap,
@@ -7205,7 +7560,10 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/stocks/refresh-all", async (req, res) => {
     try {
-      const stocks2 = await storage.getStocks();
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const stocks2 = await storage.getStocks(req.session.userId);
       const pendingStocks = stocks2.filter((s) => s.recommendationStatus === "pending");
       console.log(`[StockAPI] Refreshing ${pendingStocks.length} pending stocks...`);
       console.log(`[StockAPI] Note: Each stock takes ~36 seconds (3 API calls with 12-second delays)`);
@@ -7217,7 +7575,7 @@ async function registerRoutes(app2) {
       for (const stock of pendingStocks) {
         try {
           const marketData = await stockService.getComprehensiveData(stock.ticker);
-          await storage.updateStock(stock.ticker, {
+          await storage.updateStock(req.session.userId, stock.ticker, {
             currentPrice: marketData.currentPrice,
             previousClose: marketData.previousClose,
             marketCap: marketData.marketCap,
@@ -7247,7 +7605,7 @@ async function registerRoutes(app2) {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.getStock(req.params.ticker);
+      const stock = await storage.getStock(req.session.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -7290,7 +7648,7 @@ async function registerRoutes(app2) {
       const dateExists = priceHistory.some((p) => p.date === initialPricePoint.date);
       if (!dateExists) {
         priceHistory.push(initialPricePoint);
-        await storage.updateStock(stock.ticker, {
+        await storage.updateStock(req.session.userId, stock.ticker, {
           priceHistory
         });
       }
@@ -7324,18 +7682,16 @@ async function registerRoutes(app2) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker.toUpperCase();
-      const stock = await storage.getStock(ticker);
-      if (!stock) {
-        return res.status(404).json({ error: "Stock not found" });
-      }
       await storage.cancelAnalysisJobsForTicker(ticker);
       console.log(`[Reject] Cancelled any active analysis jobs for ${ticker}`);
-      await storage.ensureUserStockStatus(req.session.userId, ticker);
-      await storage.updateUserStockStatus(req.session.userId, ticker, {
+      const result = await storage.rejectTickerForUser(req.session.userId, ticker);
+      console.log(`[Reject] Rejected ticker ${ticker} - updated ${result.stocksUpdated} stock entries`);
+      res.json({
         status: "rejected",
-        rejectedAt: /* @__PURE__ */ new Date()
+        ticker,
+        stocksUpdated: result.stocksUpdated,
+        message: `Rejected ${result.stocksUpdated} transaction(s) for ${ticker}`
       });
-      res.json({ status: "rejected", stock });
     } catch (error) {
       console.error(`[Reject] Error rejecting ${req.params.ticker}:`, error);
       res.status(500).json({ error: "Failed to reject recommendation" });
@@ -7347,19 +7703,13 @@ async function registerRoutes(app2) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       console.log(`[Unreject] Starting unreject for ${req.params.ticker} by user ${req.session.userId}`);
-      const stock = await storage.unrejectStock(req.params.ticker);
-      if (!stock) {
-        console.log(`[Unreject] Stock ${req.params.ticker} not found in stocks table`);
-        return res.status(404).json({ error: "Stock not found" });
-      }
       await storage.ensureUserStockStatus(req.session.userId, req.params.ticker);
       const updatedUserStatus = await storage.updateUserStockStatus(req.session.userId, req.params.ticker, {
         status: "pending",
         rejectedAt: null
       });
-      console.log(`[Unreject] Successfully restored ${req.params.ticker} to pending status`);
-      console.log(`[Unreject] Updated user stock status:`, updatedUserStatus);
-      res.json({ status: "pending", stock });
+      console.log(`[Unreject] Successfully restored ${req.params.ticker} to pending status for user ${req.session.userId}`);
+      res.json({ status: "pending", userStatus: updatedUserStatus });
     } catch (error) {
       console.error("Unreject stock error:", error);
       res.status(500).json({ error: "Failed to unreject stock" });
@@ -7370,7 +7720,7 @@ async function registerRoutes(app2) {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.getStock(req.params.ticker);
+      const stock = await storage.getStock(req.session.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -7378,14 +7728,7 @@ async function registerRoutes(app2) {
       const purchaseDate = stock.insiderTradeDate ? new Date(stock.insiderTradeDate) : /* @__PURE__ */ new Date();
       const purchaseDateStr = purchaseDate.toISOString().split("T")[0];
       let priceHistory = stock.priceHistory || [];
-      if (priceHistory.length === 0 && stock.candlesticks && stock.candlesticks.length > 0) {
-        console.log(`[Simulation] Converting ${stock.candlesticks.length} candlesticks to price history for ${stock.ticker}`);
-        priceHistory = stock.candlesticks.map((candle) => ({
-          date: candle.date,
-          price: candle.close
-        }));
-        await storage.updateStock(stock.ticker, { priceHistory });
-      } else if (priceHistory.length === 0 && stock.insiderTradeDate) {
+      if (priceHistory.length === 0 && stock.insiderTradeDate) {
         console.log(`[Simulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
         try {
           const fetchedPrices = await backtestService.fetchHistoricalPrices(
@@ -7398,7 +7741,7 @@ async function registerRoutes(app2) {
               date: p.date,
               price: p.close
             }));
-            await storage.updateStock(stock.ticker, { priceHistory });
+            await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
             console.log(`[Simulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
           }
         } catch (error) {
@@ -7418,7 +7761,7 @@ async function registerRoutes(app2) {
           date: purchaseDateStr,
           price: purchasePrice
         });
-        await storage.updateStock(stock.ticker, {
+        await storage.updateStock(req.session.userId, stock.ticker, {
           priceHistory
         });
       }
@@ -7493,14 +7836,14 @@ async function registerRoutes(app2) {
       const errors = [];
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           if (!stock) {
             errors.push(`${ticker}: not found`);
             continue;
           }
           const purchasePrice = parseFloat(stock.currentPrice);
           const purchaseQuantity = 10;
-          await storage.updateStock(ticker, {
+          await storage.updateStock(req.session.userId, ticker, {
             recommendationStatus: "approved"
           });
           const existingHolding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
@@ -7565,20 +7908,9 @@ async function registerRoutes(app2) {
       for (const ticker of tickers) {
         try {
           console.log(`[BULK REJECT] Processing ticker: ${ticker}`);
-          const stock = await storage.getStock(ticker);
-          if (!stock) {
-            console.log(`[BULK REJECT] Stock ${ticker} not found`);
-            errors.push(`${ticker}: not found`);
-            continue;
-          }
-          console.log(`[BULK REJECT] Ensuring user stock status for user ${req.session.userId}, ticker ${ticker}`);
-          await storage.ensureUserStockStatus(req.session.userId, ticker);
-          console.log(`[BULK REJECT] Updating user stock status to rejected`);
-          const updated = await storage.updateUserStockStatus(req.session.userId, ticker, {
-            status: "rejected",
-            rejectedAt: /* @__PURE__ */ new Date()
-          });
-          console.log(`[BULK REJECT] Update result for ${ticker}:`, updated);
+          await storage.cancelAnalysisJobsForTicker(ticker);
+          const result = await storage.rejectTickerForUser(req.session.userId, ticker);
+          console.log(`[BULK REJECT] Rejected ${ticker} - updated ${result.stocksUpdated} stock entries`);
           success++;
         } catch (err) {
           console.log(`[BULK REJECT] Error processing ${ticker}:`, err);
@@ -7599,6 +7931,9 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/stocks/bulk-refresh", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const validationResult = bulkTickersSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({ error: "Invalid request", details: validationResult.error.errors });
@@ -7608,7 +7943,7 @@ async function registerRoutes(app2) {
       const errors = [];
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           if (!stock) {
             errors.push(`${ticker}: not found`);
             continue;
@@ -7616,7 +7951,7 @@ async function registerRoutes(app2) {
           await new Promise((resolve) => setTimeout(resolve, 1e3));
           const quote = await finnhubService.getQuote(ticker);
           if (quote && quote.currentPrice) {
-            await storage.updateStock(ticker, {
+            await storage.updateStock(req.session.userId, ticker, {
               currentPrice: quote.currentPrice.toFixed(2),
               previousClose: quote.previousClose?.toFixed(2) || stock.previousClose
             });
@@ -7641,6 +7976,9 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/stocks/bulk-analyze", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const validationResult = bulkTickersSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({ error: "Invalid request", details: validationResult.error.errors });
@@ -7649,7 +7987,7 @@ async function registerRoutes(app2) {
       let queuedCount = 0;
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           if (stock && stock.recommendationStatus === "pending") {
             await storage.enqueueAnalysisJob(ticker, "manual", "high", true);
             queuedCount++;
@@ -7713,9 +8051,49 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Failed to fetch analysis" });
     }
   });
+  app2.get("/api/stocks/:ticker/candlesticks", async (req, res) => {
+    try {
+      const ticker = req.params.ticker.toUpperCase();
+      const candlesticks = await storage.getCandlesticksByTicker(ticker);
+      if (!candlesticks) {
+        return res.status(404).json({ error: "No candlestick data found for this stock" });
+      }
+      res.json(candlesticks);
+    } catch (error) {
+      console.error("[Candlesticks] Error fetching candlestick data:", error);
+      res.status(500).json({ error: "Failed to fetch candlestick data" });
+    }
+  });
   app2.get("/api/stock-analyses", async (req, res) => {
     try {
-      const analyses = await storage.getAllStockAnalyses();
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const userStocks = await storage.getStocks(req.session.userId);
+      const userTickers = new Set(userStocks.map((s) => s.ticker));
+      const allAnalyses = await storage.getAllStockAnalyses();
+      const userAnalyses = allAnalyses.filter((a) => userTickers.has(a.ticker));
+      const activeJobs = await db.selectDistinct({ ticker: aiAnalysisJobs.ticker }).from(aiAnalysisJobs).where(or2(
+        eq2(aiAnalysisJobs.status, "pending"),
+        eq2(aiAnalysisJobs.status, "processing")
+      ));
+      const activeJobTickers = new Set(activeJobs.map((j) => j.ticker));
+      const analyses = userAnalyses.map((a) => {
+        if (activeJobTickers.has(a.ticker)) {
+          return {
+            ticker: a.ticker,
+            status: "processing",
+            integratedScore: null,
+            aiScore: null,
+            confidenceScore: null,
+            overallRating: null,
+            summary: null,
+            recommendation: null,
+            analyzedAt: null
+          };
+        }
+        return a;
+      });
       res.json(analyses);
     } catch (error) {
       console.error("[AI Analysis] Error fetching analyses:", error);
@@ -7819,8 +8197,11 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/stocks/analyze-all", async (req, res) => {
     try {
-      console.log("[Bulk AI Analysis] Starting bulk analysis of all pending stocks...");
-      const stocks2 = await storage.getStocks();
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      console.log(`[Bulk AI Analysis] Starting bulk analysis for user ${req.session.userId}...`);
+      const stocks2 = await storage.getStocks(req.session.userId);
       const pendingStocks = stocks2.filter(
         (stock) => stock.recommendation?.toLowerCase() === "buy" && stock.recommendationStatus === "pending"
       );
@@ -7831,7 +8212,7 @@ async function registerRoutes(app2) {
           total: 0
         });
       }
-      console.log(`[Bulk AI Analysis] Found ${pendingStocks.length} pending stocks`);
+      console.log(`[Bulk AI Analysis] Found ${pendingStocks.length} pending stocks for user ${req.session.userId}`);
       let queuedCount = 0;
       for (const stock of pendingStocks) {
         try {
@@ -7912,17 +8293,39 @@ async function registerRoutes(app2) {
         userId: req.session.userId
       });
       const follow = await storage.followStock(validatedData);
+      void (async () => {
+        try {
+          const existingCandlesticks = await storage.getCandlesticksByTicker(ticker);
+          if (!existingCandlesticks || !existingCandlesticks.candlestickData || existingCandlesticks.candlestickData.length === 0) {
+            console.log(`[Follow] Fetching candlestick data for newly followed stock ${ticker}...`);
+            const candlesticks = await stockService.getCandlestickData(ticker);
+            if (candlesticks && candlesticks.length > 0) {
+              await storage.upsertCandlesticks(ticker, candlesticks.map((c) => ({
+                date: c.date,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close,
+                volume: c.volume
+              })));
+              console.log(`[Follow] \u2713 Candlestick data fetched for ${ticker}`);
+            }
+          }
+        } catch (err) {
+          console.error(`[Follow] \u2717 Failed to fetch candlesticks for ${ticker}:`, err.message);
+        }
+      })();
       try {
-        const allFollowedStocks = await storage.getUserFollowedStocks("");
-        const followerCount = allFollowedStocks.filter((f) => f.ticker === ticker).length;
+        const followerCount = await storage.getFollowerCountForTicker(ticker);
         if (followerCount > 10) {
           console.log(`[Follow] Stock ${ticker} is popular with ${followerCount} followers, creating notifications...`);
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           const stockData = stock;
-          for (const follower of allFollowedStocks.filter((f) => f.ticker === ticker)) {
+          const followerUserIds = await storage.getFollowerUserIdsForTicker(ticker);
+          for (const followerUserId of followerUserIds) {
             try {
               await storage.createNotification({
-                userId: follower.userId,
+                userId: followerUserId,
                 ticker,
                 type: "popular_stock",
                 message: `${ticker} is trending! ${followerCount} traders are now following this stock`,
@@ -7931,18 +8334,24 @@ async function registerRoutes(app2) {
               });
             } catch (notifError) {
               if (notifError instanceof Error && !notifError.message.includes("unique constraint")) {
-                console.error(`[Follow] Failed to create popular stock notification for user ${follower.userId}:`, notifError);
+                console.error(`[Follow] Failed to create popular stock notification for user ${followerUserId}:`, notifError);
               }
             }
           }
-          console.log(`[Follow] Created ${followerCount} popular_stock notifications for ${ticker}`);
+          console.log(`[Follow] Created ${followerUserIds.length} popular_stock notifications for ${ticker}`);
         }
       } catch (popularError) {
         console.error(`[Follow] Failed to check/create popular stock notifications:`, popularError);
       }
       try {
-        console.log(`[Follow] Triggering day 0 analysis for ${ticker}`);
-        await storage.enqueueAnalysisJob(ticker, "follow_day_0", "high");
+        const existingAnalysis = await storage.getStockAnalysis(ticker);
+        const needsAnalysis = !existingAnalysis || existingAnalysis.status !== "completed";
+        if (needsAnalysis) {
+          console.log(`[Follow] Triggering day 0 analysis for ${ticker} (status: ${existingAnalysis?.status || "none"})`);
+          await storage.enqueueAnalysisJob(ticker, "follow_day_0", "high");
+        } else {
+          console.log(`[Follow] Skipping analysis for ${ticker} - already completed`);
+        }
       } catch (analysisError) {
         console.error(`[Follow] Failed to enqueue analysis for ${ticker}:`, analysisError);
       }
@@ -7956,7 +8365,7 @@ async function registerRoutes(app2) {
           if (!quote || quote.price === 0 || quote.previousClose === 0) {
             throw new Error("Unable to fetch valid price data");
           }
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           const stockData = stock;
           const previousAnalysis = stockData?.overallRating ? {
             overallRating: stockData.overallRating,
@@ -8037,6 +8446,27 @@ ${briefError.stack}` : JSON.stringify(briefError);
       res.status(500).json({ error: "Failed to unfollow stock" });
     }
   });
+  app2.patch("/api/stocks/:ticker/position", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const ticker = req.params.ticker.toUpperCase();
+      const { hasEnteredPosition } = req.body;
+      if (typeof hasEnteredPosition !== "boolean") {
+        return res.status(400).json({ error: "hasEnteredPosition must be a boolean" });
+      }
+      await storage.toggleStockPosition(ticker, req.session.userId, hasEnteredPosition);
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Toggle position error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      if (errorMessage.includes("not being followed")) {
+        return res.status(404).json({ error: "Stock is not being followed" });
+      }
+      res.status(500).json({ error: "Failed to toggle position status" });
+    }
+  });
   app2.post("/api/stocks/bulk-follow", async (req, res) => {
     try {
       if (!req.session.userId) {
@@ -8056,9 +8486,37 @@ ${briefError.stack}` : JSON.stringify(briefError);
             userId: req.session.userId
           });
           followedCount++;
+          void (async () => {
+            try {
+              const existingCandlesticks = await storage.getCandlesticksByTicker(upperTicker);
+              if (!existingCandlesticks || !existingCandlesticks.candlestickData || existingCandlesticks.candlestickData.length === 0) {
+                console.log(`[BulkFollow] Fetching candlestick data for ${upperTicker}...`);
+                const candlesticks = await stockService.getCandlestickData(upperTicker);
+                if (candlesticks && candlesticks.length > 0) {
+                  await storage.upsertCandlesticks(upperTicker, candlesticks.map((c) => ({
+                    date: c.date,
+                    open: c.open,
+                    high: c.high,
+                    low: c.low,
+                    close: c.close,
+                    volume: c.volume
+                  })));
+                  console.log(`[BulkFollow] \u2713 Candlestick data fetched for ${upperTicker}`);
+                }
+              }
+            } catch (err) {
+              console.error(`[BulkFollow] \u2717 Failed to fetch candlesticks for ${upperTicker}:`, err.message);
+            }
+          })();
           try {
-            console.log(`[BulkFollow] Triggering day 0 analysis for ${upperTicker}`);
-            await storage.enqueueAnalysisJob(upperTicker, "follow_day_0", "high");
+            const existingAnalysis = await storage.getStockAnalysis(upperTicker);
+            const needsAnalysis = !existingAnalysis || existingAnalysis.status !== "completed";
+            if (needsAnalysis) {
+              console.log(`[BulkFollow] Triggering day 0 analysis for ${upperTicker} (status: ${existingAnalysis?.status || "none"})`);
+              await storage.enqueueAnalysisJob(upperTicker, "follow_day_0", "high");
+            } else {
+              console.log(`[BulkFollow] Skipping analysis for ${upperTicker} - already completed`);
+            }
           } catch (analysisError) {
             console.error(`[BulkFollow] Failed to enqueue analysis for ${upperTicker}:`, analysisError);
           }
@@ -8192,7 +8650,10 @@ ${briefError.stack}` : JSON.stringify(briefError);
   });
   app2.get("/api/portfolio/holdings/:id", async (req, res) => {
     try {
-      const holding = await storage.getPortfolioHolding(req.params.id);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const holding = await storage.getPortfolioHolding(req.params.id, req.session.userId);
       if (!holding) {
         return res.status(404).json({ error: "Holding not found" });
       }
@@ -8203,9 +8664,16 @@ ${briefError.stack}` : JSON.stringify(briefError);
   });
   app2.delete("/api/portfolio/holdings/:id", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const holding = await storage.getPortfolioHolding(req.params.id, req.session.userId);
+      if (!holding) {
+        return res.status(404).json({ error: "Holding not found" });
+      }
       const success = await storage.deletePortfolioHolding(req.params.id);
       if (!success) {
-        return res.status(404).json({ error: "Holding not found" });
+        return res.status(500).json({ error: "Failed to delete holding" });
       }
       res.json({ message: "Holding deleted successfully" });
     } catch (error) {
@@ -8227,7 +8695,10 @@ ${briefError.stack}` : JSON.stringify(briefError);
   });
   app2.get("/api/trades/:id", async (req, res) => {
     try {
-      const trade = await storage.getTrade(req.params.id);
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const trade = await storage.getTrade(req.params.id, req.session.userId);
       if (!trade) {
         return res.status(404).json({ error: "Trade not found" });
       }
@@ -8475,7 +8946,7 @@ ${briefError.stack}` : JSON.stringify(briefError);
       const errors = [];
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           if (!stock) {
             errors.push({ ticker, error: "Stock not found" });
             continue;
@@ -8489,14 +8960,7 @@ ${briefError.stack}` : JSON.stringify(briefError);
           const purchaseDate = stock.insiderTradeDate ? new Date(stock.insiderTradeDate) : /* @__PURE__ */ new Date();
           const purchaseDateStr = purchaseDate.toISOString().split("T")[0];
           let priceHistory = stock.priceHistory || [];
-          if (priceHistory.length === 0 && stock.candlesticks && stock.candlesticks.length > 0) {
-            console.log(`[BulkSimulation] Converting ${stock.candlesticks.length} candlesticks to price history for ${stock.ticker}`);
-            priceHistory = stock.candlesticks.map((candle) => ({
-              date: candle.date,
-              price: candle.close
-            }));
-            await storage.updateStock(stock.ticker, { priceHistory });
-          } else if (priceHistory.length === 0 && stock.insiderTradeDate) {
+          if (priceHistory.length === 0 && stock.insiderTradeDate) {
             console.log(`[BulkSimulation] Fetching price history for ${stock.ticker} from ${stock.insiderTradeDate} to today`);
             try {
               const fetchedPrices = await backtestService.fetchHistoricalPrices(
@@ -8509,7 +8973,7 @@ ${briefError.stack}` : JSON.stringify(briefError);
                   date: p.date,
                   price: p.close
                 }));
-                await storage.updateStock(stock.ticker, { priceHistory });
+                await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
                 console.log(`[BulkSimulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
               }
             } catch (error) {
@@ -8759,6 +9223,9 @@ ${briefError.stack}` : JSON.stringify(briefError);
   });
   app2.post("/api/openinsider/fetch", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const config = await storage.getOpeninsiderConfig();
       if (!config || !config.enabled) {
         return res.status(400).json({ error: "OpenInsider is not configured or disabled" });
@@ -8784,7 +9251,7 @@ ${briefError.stack}` : JSON.stringify(briefError);
       console.log(`[OpeninsiderFetch] Min market cap: $${minMarketCap}M`);
       console.log(`[OpeninsiderFetch] Options deal threshold: ${optionsDealThreshold}% (insider price >= market price)`);
       console.log(`[OpeninsiderFetch] ==============================================`);
-      console.log(`[OpeninsiderFetch] Fetching both purchases AND sales...`);
+      console.log(`[OpeninsiderFetch] User ${req.session.userId}: Fetching both purchases AND sales...`);
       const [purchasesResponse, salesResponse] = await Promise.all([
         openinsiderService.fetchInsiderPurchases(
           config.fetchLimit || 50,
@@ -8806,9 +9273,9 @@ ${briefError.stack}` : JSON.stringify(briefError);
         filtered_by_transaction_value: purchasesResponse.stats.filtered_by_transaction_value + salesResponse.stats.filtered_by_transaction_value,
         filtered_by_insider_name: purchasesResponse.stats.filtered_by_insider_name + salesResponse.stats.filtered_by_insider_name
       };
-      console.log(`[OpeninsiderFetch] Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
-      console.log(`[OpeninsiderFetch] BUY transactions: ${transactions.filter((t) => t.recommendation === "buy").length}`);
-      console.log(`[OpeninsiderFetch] SELL transactions: ${transactions.filter((t) => t.recommendation === "sell").length}`);
+      console.log(`[OpeninsiderFetch] User ${req.session.userId}: Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
+      console.log(`[OpeninsiderFetch] User ${req.session.userId}: BUY transactions: ${transactions.filter((t) => t.recommendation === "buy").length}`);
+      console.log(`[OpeninsiderFetch] User ${req.session.userId}: SELL transactions: ${transactions.filter((t) => t.recommendation === "sell").length}`);
       const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + stage1Stats.filtered_invalid_data;
       console.log(`
 [OpeninsiderFetch] ======= STAGE 1: Python Scraper Filters =======`);
@@ -8828,10 +9295,12 @@ ${briefError.stack}` : JSON.stringify(briefError);
       let createdCount = 0;
       let filteredCount = 0;
       const createdTickers = [];
-      console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions...`);
+      console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions for admin user ${req.session.userId}...`);
       const newTransactions = [];
       for (const transaction of transactions) {
         const existingTransaction = await storage.getTransactionByCompositeKey(
+          req.session.userId,
+          // Admin user's stocks
           transaction.ticker,
           transaction.filingDate,
           transaction.insiderName,
@@ -8895,8 +9364,10 @@ ${briefError.stack}` : JSON.stringify(briefError);
               continue;
             }
           }
-          console.log(`[OpeninsiderFetch] Creating stock for ${transaction.ticker}...`);
+          console.log(`[OpeninsiderFetch] Creating stock for admin user ${req.session.userId}: ${transaction.ticker}...`);
           const newStock = await storage.createStock({
+            userId: req.session.userId,
+            // Admin user only
             ticker: transaction.ticker,
             companyName: transaction.companyName || transaction.ticker,
             currentPrice: quote.currentPrice.toString(),
@@ -8958,15 +9429,26 @@ ${briefError.stack}` : JSON.stringify(briefError);
       }
       if (createdTickers.length > 0) {
         const uniqueTickers = Array.from(new Set(createdTickers));
-        console.log(`[OpeninsiderFetch] Queuing AI analysis for ${uniqueTickers.length} unique tickers (from ${createdTickers.length} transactions)...`);
+        console.log(`[OpeninsiderFetch] Checking ${uniqueTickers.length} unique tickers for AI analysis (from ${createdTickers.length} transactions)...`);
+        let queuedCount = 0;
+        let skippedCount = 0;
         for (const ticker of uniqueTickers) {
           try {
-            await storage.enqueueAnalysisJob(ticker, "openinsider_fetch", "normal");
-            console.log(`[OpeninsiderFetch] \u2713 Queued AI analysis for ${ticker}`);
+            const existingAnalysis = await storage.getStockAnalysis(ticker);
+            const needsAnalysis = !existingAnalysis || existingAnalysis.status !== "completed";
+            if (needsAnalysis) {
+              await storage.enqueueAnalysisJob(ticker, "openinsider_fetch", "normal");
+              console.log(`[OpeninsiderFetch] \u2713 Queued AI analysis for ${ticker} (status: ${existingAnalysis?.status || "none"})`);
+              queuedCount++;
+            } else {
+              console.log(`[OpeninsiderFetch] \u2298 Skipped ${ticker} - already completed`);
+              skippedCount++;
+            }
           } catch (error) {
             console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${ticker}:`, error);
           }
         }
+        console.log(`[OpeninsiderFetch] Analysis jobs: ${queuedCount} queued, ${skippedCount} skipped (already completed)`);
       }
       await storage.updateOpeninsiderSyncStatus();
       if (req.session.userId) {
@@ -9132,11 +9614,11 @@ ${briefError.stack}` : JSON.stringify(briefError);
       } else {
         return res.status(400).json({ error: "Invalid action. Must be 'buy' or 'sell'" });
       }
-      const stock = await storage.getStock(ticker);
-      const price = stock ? parseFloat(stock.currentPrice) : 0;
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
+      const stock = await storage.getStock(req.session.userId, ticker);
+      const price = stock ? parseFloat(stock.currentPrice) : 0;
       await storage.createTrade({
         userId: req.session.userId,
         ticker,
@@ -9691,7 +10173,7 @@ ${briefError.stack}` : JSON.stringify(briefError);
             skippedCount++;
             continue;
           }
-          const stock = await storage.getStock(ticker);
+          const stock = await storage.getStock(req.session.userId, ticker);
           const stockData = stock;
           const opportunityType = stockData?.recommendation?.toLowerCase().includes("sell") ? "sell" : "buy";
           const previousAnalysis = stockData?.overallRating ? {
@@ -10168,6 +10650,8 @@ var QueueWorker = class {
     const startTime = Date.now();
     console.log(`[QueueWorker] Processing job ${job.id} for ${job.ticker} (priority: ${job.priority}, attempt: ${job.retryCount + 1}/${job.maxRetries + 1})`);
     try {
+      console.log(`[QueueWorker] Resetting phase completion flags for ${job.ticker}...`);
+      await storage.resetStockAnalysisPhaseFlags(job.ticker);
       await this.updateProgress(job.id, job.ticker, "fetching_data", {
         phase: "data_fetch",
         substep: "Fetching fundamentals and price data",
@@ -10226,8 +10710,8 @@ var QueueWorker = class {
       console.log(`[QueueWorker] \u{1F50D} Checking for insider trading data for ${job.ticker}...`);
       const insiderTradingStrength = await (async () => {
         try {
-          const allStocks = await storage.getAllStocksForTicker(job.ticker);
-          console.log(`[QueueWorker] Found ${allStocks.length} transaction(s) for ${job.ticker}`);
+          const allStocks = await storage.getAllStocksForTickerGlobal(job.ticker);
+          console.log(`[QueueWorker] Found ${allStocks.length} transaction(s) across all users for ${job.ticker}`);
           if (allStocks.length === 0) {
             return void 0;
           }
@@ -10310,7 +10794,7 @@ var QueueWorker = class {
         phase: "macro",
         substep: "Analyzing industry/sector conditions"
       });
-      const stock = await storage.getStock(job.ticker);
+      const stock = await storage.getAnyStockForTicker(job.ticker);
       const rawIndustry = stock?.industry || companyOverview?.industry || companyOverview?.sector || void 0;
       const stockIndustry = rawIndustry && rawIndustry !== "N/A" ? rawIndustry : void 0;
       console.log(`[QueueWorker] Getting macro economic analysis for industry: ${stockIndustry || "General Market"}...`);
@@ -10508,6 +10992,188 @@ var QueueWorker = class {
 };
 var queueWorker = new QueueWorker();
 
+// server/websocketServer.ts
+import { WebSocketServer, WebSocket } from "ws";
+import { parse as parseCookie } from "cookie";
+var WebSocketManager = class {
+  wss = null;
+  userConnections = /* @__PURE__ */ new Map();
+  initialize(server) {
+    this.wss = new WebSocketServer({ noServer: true });
+    server.on("upgrade", (request, socket, head) => {
+      if (request.url !== "/ws") {
+        socket.destroy();
+        return;
+      }
+      this.authenticateConnection(request, (err, userId) => {
+        if (err || !userId) {
+          socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+        this.wss.handleUpgrade(request, socket, head, (ws2) => {
+          const authWs = ws2;
+          authWs.userId = userId;
+          authWs.isAlive = true;
+          this.wss.emit("connection", authWs, request);
+        });
+      });
+    });
+    this.wss.on("connection", (ws2) => {
+      const userId = ws2.userId;
+      console.log(`[WebSocket] User ${userId} connected`);
+      if (!this.userConnections.has(userId)) {
+        this.userConnections.set(userId, /* @__PURE__ */ new Set());
+      }
+      this.userConnections.get(userId).add(ws2);
+      ws2.isAlive = true;
+      ws2.on("pong", () => {
+        ws2.isAlive = true;
+      });
+      ws2.on("message", (message) => {
+        try {
+          const data = JSON.parse(message.toString());
+          console.log(`[WebSocket] Received from user ${userId}:`, data);
+          if (data.type === "ping") {
+            ws2.send(JSON.stringify({ type: "pong" }));
+          }
+        } catch (error) {
+          console.error("[WebSocket] Error parsing message:", error);
+        }
+      });
+      ws2.on("close", () => {
+        console.log(`[WebSocket] User ${userId} disconnected`);
+        this.userConnections.get(userId)?.delete(ws2);
+        if (this.userConnections.get(userId)?.size === 0) {
+          this.userConnections.delete(userId);
+        }
+      });
+      ws2.send(JSON.stringify({ type: "connected", userId }));
+    });
+    const heartbeatInterval = setInterval(() => {
+      this.wss?.clients.forEach((ws2) => {
+        const authWs = ws2;
+        if (!authWs.isAlive) {
+          console.log(`[WebSocket] Terminating dead connection for user ${authWs.userId}`);
+          return authWs.terminate();
+        }
+        authWs.isAlive = false;
+        authWs.ping();
+      });
+    }, 3e4);
+    this.wss.on("close", () => {
+      clearInterval(heartbeatInterval);
+    });
+    this.subscribeToEvents();
+    console.log("[WebSocket] Server initialized");
+  }
+  authenticateConnection(request, callback) {
+    const cookies = request.headers.cookie ? parseCookie(request.headers.cookie) : {};
+    const sessionId = cookies["connect.sid"];
+    if (!sessionId) {
+      return callback(new Error("No session cookie"));
+    }
+    const fakeReq = {
+      headers: { cookie: request.headers.cookie },
+      session: void 0
+    };
+    const fakeRes = {
+      getHeader: () => null,
+      setHeader: () => {
+      }
+    };
+    sessionMiddleware(fakeReq, fakeRes, (err) => {
+      if (err) {
+        return callback(new Error("Session authentication failed"));
+      }
+      const userId = fakeReq.session?.userId;
+      if (!userId) {
+        return callback(new Error("Not authenticated"));
+      }
+      callback(null, userId);
+    });
+  }
+  subscribeToEvents() {
+    eventDispatcher.on("STOCK_STATUS_CHANGED", (event) => {
+      if (event.type === "STOCK_STATUS_CHANGED") {
+        this.broadcastToUser(event.userId, {
+          type: "STOCK_STATUS_CHANGED",
+          ticker: event.ticker,
+          status: event.status
+        });
+      }
+    });
+    eventDispatcher.on("STOCK_POPULAR", (event) => {
+      if (event.type === "STOCK_POPULAR") {
+        this.broadcastToAll({
+          type: "STOCK_POPULAR",
+          ticker: event.ticker,
+          followerCount: event.followerCount
+        });
+      }
+    });
+    eventDispatcher.on("PRICE_UPDATED", (event) => {
+      if (event.type === "PRICE_UPDATED") {
+        this.broadcastToUser(event.userId, {
+          type: "PRICE_UPDATED",
+          ticker: event.ticker,
+          price: event.price,
+          change: event.change
+        });
+      }
+    });
+    eventDispatcher.on("FOLLOWED_STOCK_UPDATED", (event) => {
+      if (event.type === "FOLLOWED_STOCK_UPDATED") {
+        this.broadcastToUser(event.userId, {
+          type: "FOLLOWED_STOCK_UPDATED",
+          ticker: event.ticker,
+          data: event.data
+        });
+      }
+    });
+    eventDispatcher.on("NEW_STOCK_ADDED", (event) => {
+      if (event.type === "NEW_STOCK_ADDED") {
+        this.broadcastToUser(event.userId, {
+          type: "NEW_STOCK_ADDED",
+          ticker: event.ticker,
+          recommendation: event.recommendation
+        });
+      }
+    });
+    eventDispatcher.on("STANCE_CHANGED", (event) => {
+      if (event.type === "STANCE_CHANGED") {
+        this.broadcastToUser(event.userId, {
+          type: "STANCE_CHANGED",
+          ticker: event.ticker,
+          oldStance: event.oldStance,
+          newStance: event.newStance
+        });
+      }
+    });
+  }
+  broadcastToUser(userId, message) {
+    const connections = this.userConnections.get(userId);
+    if (!connections || connections.size === 0) {
+      return;
+    }
+    const payload = JSON.stringify(message);
+    connections.forEach((ws2) => {
+      if (ws2.readyState === WebSocket.OPEN) {
+        ws2.send(payload);
+      }
+    });
+  }
+  broadcastToAll(message) {
+    const payload = JSON.stringify(message);
+    this.wss?.clients.forEach((ws2) => {
+      if (ws2.readyState === WebSocket.OPEN) {
+        ws2.send(payload);
+      }
+    });
+  }
+};
+var websocketManager = new WebSocketManager();
+
 // server/index.ts
 var ENABLE_TELEGRAM = process.env.ENABLE_TELEGRAM === "true";
 var app = express2();
@@ -10556,6 +11222,8 @@ app.use((req, res, next) => {
     log("Telegram integration disabled via feature flag");
   }
   const server = await registerRoutes(app);
+  websocketManager.initialize(server);
+  log("[WebSocket] Real-time update server initialized");
   app.use((err, _req, res, _next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -10607,36 +11275,21 @@ function startPriceUpdateJob() {
         return;
       }
       log("[PriceUpdate] Starting stock price update job...");
-      const stocks2 = await storage.getStocks();
-      const pendingStocks = stocks2.filter(
-        (stock) => stock.recommendationStatus === "pending"
-      );
-      if (pendingStocks.length === 0) {
+      const tickers = await storage.getAllUniquePendingTickers();
+      if (tickers.length === 0) {
         log("[PriceUpdate] No pending stocks to update");
         return;
       }
-      log(`[PriceUpdate] Updating prices for ${pendingStocks.length} stocks (${pendingStocks.filter((s) => s.recommendation === "buy").length} buys, ${pendingStocks.filter((s) => s.recommendation === "sell").length} sells)`);
-      const tickers = pendingStocks.map((s) => s.ticker);
+      log(`[PriceUpdate] Updating prices for ${tickers.length} unique pending tickers across all users`);
       const stockData = await finnhubService.getBatchStockData(tickers);
       let successCount = 0;
-      for (const stock of pendingStocks) {
-        const data = stockData.get(stock.ticker);
+      for (const ticker of tickers) {
+        const data = stockData.get(ticker);
         if (data) {
-          let marketPriceAtInsiderDate = stock.marketPriceAtInsiderDate ? parseFloat(stock.marketPriceAtInsiderDate) : null;
-          if (stock.insiderTradeDate && !marketPriceAtInsiderDate) {
-            log(`[PriceUpdate] Fetching historical price for ${stock.ticker} on ${stock.insiderTradeDate}`);
-            await new Promise((resolve) => setTimeout(resolve, 1e3));
-            const historicalPrice = await finnhubService.getHistoricalPrice(stock.ticker, stock.insiderTradeDate);
-            if (historicalPrice) {
-              marketPriceAtInsiderDate = historicalPrice;
-              log(`[PriceUpdate] Got historical price for ${stock.ticker}: $${historicalPrice.toFixed(2)}`);
-            }
-          }
-          await storage.updateStock(stock.ticker, {
+          const updatedCount = await storage.updateStocksByTickerGlobally(ticker, {
             currentPrice: data.quote.currentPrice.toString(),
             previousClose: data.quote.previousClose.toString(),
             marketCap: data.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-            marketPriceAtInsiderDate: marketPriceAtInsiderDate ? marketPriceAtInsiderDate.toString() : null,
             description: data.companyInfo?.description || null,
             industry: data.companyInfo?.industry || null,
             country: data.companyInfo?.country || null,
@@ -10644,13 +11297,15 @@ function startPriceUpdateJob() {
             ipo: data.companyInfo?.ipo || null,
             news: data.news || [],
             insiderSentimentMspr: data.insiderSentiment?.mspr.toString() || null,
-            insiderSentimentChange: data.insiderSentiment?.change.toString() || null,
-            lastUpdated: /* @__PURE__ */ new Date()
+            insiderSentimentChange: data.insiderSentiment?.change.toString() || null
           });
-          successCount++;
+          if (updatedCount > 0) {
+            successCount++;
+            log(`[PriceUpdate] Updated ${ticker}: ${updatedCount} instances across users`);
+          }
         }
       }
-      log(`[PriceUpdate] Successfully updated ${successCount}/${pendingStocks.length} stocks`);
+      log(`[PriceUpdate] Successfully updated ${successCount}/${tickers.length} tickers`);
     } catch (error) {
       console.error("[PriceUpdate] Error updating stock prices:", error);
     }
@@ -10666,50 +11321,44 @@ function startCandlestickDataJob() {
   async function fetchCandlestickData() {
     try {
       log("[CandlestickData] Starting candlestick data fetch job...");
-      const stocks2 = await storage.getStocks();
-      const stocksNeedingData = stocks2.filter(
-        (stock) => stock.recommendationStatus === "pending" || !stock.candlesticks || stock.candlesticks.length === 0
-      );
-      if (stocksNeedingData.length === 0) {
+      const tickers = await storage.getAllTickersNeedingCandlestickData();
+      if (tickers.length === 0) {
         log("[CandlestickData] No stocks need candlestick data");
         return;
       }
-      log(`[CandlestickData] Fetching candlestick data for ${stocksNeedingData.length} stocks (${stocksNeedingData.filter((s) => s.recommendation === "buy").length} buys, ${stocksNeedingData.filter((s) => s.recommendation === "sell").length} sells)`);
+      log(`[CandlestickData] Fetching candlestick data for ${tickers.length} unique tickers (shared storage)`);
       const { stockService: stockService2 } = await Promise.resolve().then(() => (init_stockService(), stockService_exports));
       let successCount = 0;
       let errorCount = 0;
       const errors = [];
-      for (const stock of stocksNeedingData) {
+      for (const ticker of tickers) {
         try {
-          log(`[CandlestickData] Fetching data for ${stock.ticker}...`);
-          const candlesticks = await stockService2.getCandlestickData(stock.ticker);
+          log(`[CandlestickData] Fetching data for ${ticker}...`);
+          const candlesticks = await stockService2.getCandlestickData(ticker);
           if (candlesticks && candlesticks.length > 0) {
-            await storage.updateStock(stock.ticker, {
-              candlesticks: candlesticks.map((c) => ({
-                date: c.date,
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                close: c.close,
-                volume: c.volume
-              })),
-              lastUpdated: /* @__PURE__ */ new Date()
-            });
-            log(`[CandlestickData] \u2713 ${stock.ticker} - fetched ${candlesticks.length} days`);
+            await storage.upsertCandlesticks(ticker, candlesticks.map((c) => ({
+              date: c.date,
+              open: c.open,
+              high: c.high,
+              low: c.low,
+              close: c.close,
+              volume: c.volume
+            })));
+            log(`[CandlestickData] \u2713 ${ticker} - fetched ${candlesticks.length} days, stored in shared table`);
             successCount++;
           } else {
-            log(`[CandlestickData] \u26A0\uFE0F ${stock.ticker} - no candlestick data returned`);
+            log(`[CandlestickData] \u26A0\uFE0F ${ticker} - no candlestick data returned`);
             errorCount++;
-            errors.push({ ticker: stock.ticker, error: "No data returned from API" });
+            errors.push({ ticker, error: "No data returned from API" });
           }
         } catch (error) {
           errorCount++;
           const errorMsg = error.message || String(error);
-          errors.push({ ticker: stock.ticker, error: errorMsg });
-          console.error(`[CandlestickData] \u2717 ${stock.ticker} - Error: ${errorMsg}`);
+          errors.push({ ticker, error: errorMsg });
+          console.error(`[CandlestickData] \u2717 ${ticker} - Error: ${errorMsg}`);
         }
       }
-      log(`[CandlestickData] Successfully updated ${successCount}/${stocksNeedingData.length} stocks`);
+      log(`[CandlestickData] Successfully updated ${successCount}/${tickers.length} tickers`);
       if (errorCount > 0) {
         log(`[CandlestickData] Failed to fetch data for ${errorCount} stocks:`);
         errors.forEach(({ ticker, error }) => {
@@ -10771,20 +11420,20 @@ function startHoldingsPriceHistoryJob() {
         if (!quote || !quote.currentPrice) {
           continue;
         }
-        const stocks2 = await storage.getStocks();
-        const stock = stocks2.find((s) => s.ticker === ticker);
-        if (!stock) {
-          continue;
+        for (const user of users2) {
+          const userStocks = await storage.getStocks(user.id);
+          const stock = userStocks.find((s) => s.ticker === ticker);
+          if (!stock) continue;
+          const priceHistory = stock.priceHistory || [];
+          priceHistory.push({
+            date: now,
+            price: quote.currentPrice
+          });
+          await storage.updateStock(user.id, ticker, {
+            priceHistory,
+            currentPrice: quote.currentPrice.toString()
+          });
         }
-        const priceHistory = stock.priceHistory || [];
-        priceHistory.push({
-          date: now,
-          price: quote.currentPrice
-        });
-        await storage.updateStock(ticker, {
-          priceHistory,
-          currentPrice: quote.currentPrice.toString()
-        });
         successCount++;
       }
       log(`[HoldingsHistory] Successfully updated ${successCount}/${tickers.length} stocks with new price points`);
@@ -10887,19 +11536,9 @@ function startOpeninsiderFetchJob() {
       let filteredNoQuote = 0;
       let filteredDuplicates = 0;
       const createdTickers = /* @__PURE__ */ new Set();
+      const users2 = await storage.getUsers();
       for (const transaction of transactions) {
         try {
-          const existingTransaction = await storage.getTransactionByCompositeKey(
-            transaction.ticker,
-            transaction.filingDate,
-            transaction.insiderName,
-            transaction.recommendation
-            // Use actual recommendation (buy or sell)
-          );
-          if (existingTransaction) {
-            filteredDuplicates++;
-            continue;
-          }
           const quote = await finnhubService.getQuote(transaction.ticker);
           if (!quote || !quote.currentPrice) {
             filteredNoQuote++;
@@ -10922,46 +11561,58 @@ function startOpeninsiderFetchJob() {
               continue;
             }
           }
-          const newStock = await storage.createStock({
-            ticker: transaction.ticker,
-            companyName: transaction.companyName || transaction.ticker,
-            currentPrice: quote.currentPrice.toString(),
-            previousClose: quote.previousClose?.toString() || quote.currentPrice.toString(),
-            insiderPrice: transaction.price.toString(),
-            insiderQuantity: transaction.quantity,
-            insiderTradeDate: transaction.filingDate,
-            // Use filing date as that's when the info became public
-            insiderName: transaction.insiderName,
-            insiderTitle: transaction.insiderTitle,
-            recommendation: transaction.recommendation,
-            // Use actual recommendation (buy or sell)
-            source: "openinsider",
-            confidenceScore: transaction.confidence || 75,
-            peRatio: null,
-            marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-            description: data?.companyInfo?.description || null,
-            industry: data?.companyInfo?.industry || null,
-            country: data?.companyInfo?.country || null,
-            webUrl: data?.companyInfo?.webUrl || null,
-            ipo: data?.companyInfo?.ipo || null,
-            news: data?.news || [],
-            insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
-            insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
-            priceHistory: []
-          });
+          for (const user of users2) {
+            const existingTransaction = await storage.getTransactionByCompositeKey(
+              user.id,
+              transaction.ticker,
+              transaction.filingDate,
+              transaction.insiderName,
+              transaction.recommendation
+            );
+            if (existingTransaction) {
+              filteredDuplicates++;
+              continue;
+            }
+            await storage.createStock({
+              userId: user.id,
+              ticker: transaction.ticker,
+              companyName: transaction.companyName || transaction.ticker,
+              currentPrice: quote.currentPrice.toString(),
+              previousClose: quote.previousClose?.toString() || quote.currentPrice.toString(),
+              insiderPrice: transaction.price.toString(),
+              insiderQuantity: transaction.quantity,
+              insiderTradeDate: transaction.filingDate,
+              insiderName: transaction.insiderName,
+              insiderTitle: transaction.insiderTitle,
+              recommendation: transaction.recommendation,
+              source: "openinsider",
+              confidenceScore: transaction.confidence || 75,
+              peRatio: null,
+              marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
+              description: data?.companyInfo?.description || null,
+              industry: data?.companyInfo?.industry || null,
+              country: data?.companyInfo?.country || null,
+              webUrl: data?.companyInfo?.webUrl || null,
+              ipo: data?.companyInfo?.ipo || null,
+              news: data?.news || [],
+              insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
+              insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
+              priceHistory: []
+            });
+          }
           createdCount++;
           createdTickers.add(transaction.ticker);
           log(`[OpeninsiderFetch] Created stock recommendation for ${transaction.ticker}`);
           if (ENABLE_TELEGRAM && telegramNotificationService.isReady()) {
             try {
               const notificationSent = await telegramNotificationService.sendStockAlert({
-                ticker: newStock.ticker,
-                companyName: newStock.companyName,
-                recommendation: newStock.recommendation || "buy",
-                currentPrice: newStock.currentPrice,
-                insiderPrice: newStock.insiderPrice || void 0,
-                insiderQuantity: newStock.insiderQuantity || void 0,
-                confidenceScore: newStock.confidenceScore || void 0
+                ticker: transaction.ticker,
+                companyName: transaction.companyName || transaction.ticker,
+                recommendation: transaction.recommendation || "buy",
+                currentPrice: quote.currentPrice.toString(),
+                insiderPrice: transaction.price.toString(),
+                insiderQuantity: transaction.quantity,
+                confidenceScore: transaction.confidence || 75
               });
               if (notificationSent) {
                 log(`[OpeninsiderFetch] Sent Telegram notification for ${transaction.ticker}`);
@@ -11026,52 +11677,57 @@ function startRecommendationCleanupJob() {
   async function cleanupOldRecommendations() {
     try {
       log("[Cleanup] Starting recommendation cleanup job...");
-      const stocks2 = await storage.getStocks();
+      const users2 = await storage.getUsers();
       const now = /* @__PURE__ */ new Date();
       let rejectedCount = 0;
       let deletedCount = 0;
-      const pendingStocks = stocks2.filter(
-        (stock) => stock.recommendationStatus === "pending" && stock.insiderTradeDate
-      );
-      for (const stock of pendingStocks) {
-        try {
-          const dateParts = stock.insiderTradeDate.split(" ")[0].split(".");
-          if (dateParts.length >= 3) {
-            const day = parseInt(dateParts[0], 10);
-            const month = parseInt(dateParts[1], 10) - 1;
-            const year = parseInt(dateParts[2], 10);
-            const tradeDate = new Date(year, month, day);
-            const ageMs = now.getTime() - tradeDate.getTime();
-            if (ageMs > TWO_WEEKS_MS) {
-              await storage.updateStock(stock.ticker, {
-                recommendationStatus: "rejected",
-                rejectedAt: /* @__PURE__ */ new Date()
-              });
-              rejectedCount++;
-              log(`[Cleanup] Rejected ${stock.ticker} - trade date ${stock.insiderTradeDate} is older than 2 weeks`);
+      let totalStocksChecked = 0;
+      for (const user of users2) {
+        const stocks2 = await storage.getStocks(user.id);
+        totalStocksChecked += stocks2.length;
+        const pendingStocks = stocks2.filter(
+          (stock) => stock.recommendationStatus === "pending" && stock.insiderTradeDate
+        );
+        for (const stock of pendingStocks) {
+          try {
+            const dateParts = stock.insiderTradeDate.split(" ")[0].split(".");
+            if (dateParts.length >= 3) {
+              const day = parseInt(dateParts[0], 10);
+              const month = parseInt(dateParts[1], 10) - 1;
+              const year = parseInt(dateParts[2], 10);
+              const tradeDate = new Date(year, month, day);
+              const ageMs = now.getTime() - tradeDate.getTime();
+              if (ageMs > TWO_WEEKS_MS) {
+                await storage.updateStock(user.id, stock.ticker, {
+                  recommendationStatus: "rejected",
+                  rejectedAt: /* @__PURE__ */ new Date()
+                });
+                rejectedCount++;
+                log(`[Cleanup] Rejected ${stock.ticker} for user ${user.id} - trade date ${stock.insiderTradeDate} is older than 2 weeks`);
+              }
             }
+          } catch (parseError) {
+            console.error(`[Cleanup] Error parsing date for ${stock.ticker}:`, parseError);
           }
-        } catch (parseError) {
-          console.error(`[Cleanup] Error parsing date for ${stock.ticker}:`, parseError);
+        }
+        const rejectedStocks = stocks2.filter(
+          (stock) => stock.recommendationStatus === "rejected" && stock.rejectedAt
+        );
+        for (const stock of rejectedStocks) {
+          try {
+            const rejectedDate = new Date(stock.rejectedAt);
+            const ageMs = now.getTime() - rejectedDate.getTime();
+            if (ageMs > TWO_WEEKS_MS) {
+              await storage.deleteStock(user.id, stock.ticker);
+              deletedCount++;
+              log(`[Cleanup] Deleted ${stock.ticker} for user ${user.id} - was rejected on ${stock.rejectedAt}`);
+            }
+          } catch (deleteError) {
+            console.error(`[Cleanup] Error deleting rejected stock ${stock.ticker}:`, deleteError);
+          }
         }
       }
-      const rejectedStocks = stocks2.filter(
-        (stock) => stock.recommendationStatus === "rejected" && stock.rejectedAt
-      );
-      for (const stock of rejectedStocks) {
-        try {
-          const rejectedDate = new Date(stock.rejectedAt);
-          const ageMs = now.getTime() - rejectedDate.getTime();
-          if (ageMs > TWO_WEEKS_MS) {
-            await storage.deleteStock(stock.ticker);
-            deletedCount++;
-            log(`[Cleanup] Deleted ${stock.ticker} - was rejected on ${stock.rejectedAt}`);
-          }
-        } catch (deleteError) {
-          console.error(`[Cleanup] Error deleting rejected stock ${stock.ticker}:`, deleteError);
-        }
-      }
-      log(`[Cleanup] Rejected ${rejectedCount} old recommendations, deleted ${deletedCount} old rejected stocks (checked ${stocks2.length} total stocks)`);
+      log(`[Cleanup] Rejected ${rejectedCount} old recommendations, deleted ${deletedCount} old rejected stocks (checked ${totalStocksChecked} total stocks across ${users2.length} users)`);
     } catch (error) {
       console.error("[Cleanup] Error in cleanup job:", error);
     }
@@ -11110,8 +11766,15 @@ function startSimulatedRuleExecutionJob() {
         log("[SimRuleExec] No simulated holdings to evaluate");
         return;
       }
-      const stocks2 = await storage.getStocks();
-      const stockMap = new Map(stocks2.map((s) => [s.ticker, s]));
+      const stockMap = /* @__PURE__ */ new Map();
+      for (const user of users2) {
+        const userStocks = await storage.getStocks(user.id);
+        for (const stock of userStocks) {
+          if (!stockMap.has(stock.ticker)) {
+            stockMap.set(stock.ticker, stock);
+          }
+        }
+      }
       let executedCount = 0;
       for (const holding of holdings) {
         const stock = stockMap.get(holding.ticker);
@@ -11220,10 +11883,20 @@ function startAIAnalysisJob() {
     isRunning = true;
     try {
       log("[AIAnalysis] Checking for stocks needing AI analysis...");
-      const stocks2 = await storage.getStocks();
-      const pendingStocks = stocks2.filter(
-        (stock) => stock.recommendationStatus === "pending"
-      );
+      const users2 = await storage.getUsers();
+      const allStocks = [];
+      for (const user of users2) {
+        const userStocks = await storage.getStocks(user.id);
+        allStocks.push(...userStocks);
+      }
+      const uniqueTickersSet = /* @__PURE__ */ new Set();
+      const pendingStocks = allStocks.filter((stock) => {
+        if (stock.recommendationStatus === "pending" && !uniqueTickersSet.has(stock.ticker)) {
+          uniqueTickersSet.add(stock.ticker);
+          return true;
+        }
+        return false;
+      });
       if (pendingStocks.length === 0) {
         log("[AIAnalysis] No pending stocks to analyze");
         return;
@@ -11284,12 +11957,12 @@ function startAIAnalysisJob() {
           } : void 0;
           const insiderTradingStrength = await (async () => {
             try {
-              const allStocks = await storage.getAllStocksForTicker(stock.ticker);
-              if (allStocks.length === 0) {
+              const allStocks2 = await storage.getUserStocksForTicker(stock.userId, stock.ticker);
+              if (allStocks2.length === 0) {
                 return void 0;
               }
-              const buyTransactions = allStocks.filter((s) => s.recommendation?.toLowerCase().includes("buy"));
-              const sellTransactions = allStocks.filter((s) => s.recommendation?.toLowerCase().includes("sell"));
+              const buyTransactions = allStocks2.filter((s) => s.recommendation?.toLowerCase().includes("buy"));
+              const sellTransactions = allStocks2.filter((s) => s.recommendation?.toLowerCase().includes("sell"));
               let direction;
               let transactionType;
               let dominantSignal;
@@ -11302,7 +11975,7 @@ function startAIAnalysisJob() {
                 transactionType = "sale";
                 dominantSignal = "BEARISH - Only insider SELLING detected";
               } else if (buyTransactions.length > 0 && sellTransactions.length > 0) {
-                const sortedByDate = allStocks.sort(
+                const sortedByDate = allStocks2.sort(
                   (a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime()
                 );
                 const mostRecentSignal = sortedByDate.find(
@@ -11316,7 +11989,7 @@ function startAIAnalysisJob() {
                 transactionType = "transaction";
                 dominantSignal = "Unknown signal - no clear insider transactions";
               }
-              const primaryStock = allStocks.sort(
+              const primaryStock = allStocks2.sort(
                 (a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime()
               )[0];
               return {
@@ -11325,7 +11998,7 @@ function startAIAnalysisJob() {
                 dominantSignal,
                 buyCount: buyTransactions.length,
                 sellCount: sellTransactions.length,
-                totalTransactions: allStocks.length,
+                totalTransactions: allStocks2.length,
                 quantityStr: primaryStock.insiderQuantity ? `${primaryStock.insiderQuantity.toLocaleString()} shares` : "Unknown",
                 insiderPrice: primaryStock.insiderPrice ? `$${parseFloat(primaryStock.insiderPrice).toFixed(2)}` : "Unknown",
                 currentPrice: primaryStock.currentPrice ? `$${parseFloat(primaryStock.currentPrice).toFixed(2)}` : "Unknown",
@@ -11334,7 +12007,7 @@ function startAIAnalysisJob() {
                 tradeDate: primaryStock.insiderTradeDate || "Unknown",
                 totalValue: primaryStock.insiderPrice && primaryStock.insiderQuantity ? `$${(parseFloat(primaryStock.insiderPrice) * primaryStock.insiderQuantity).toFixed(2)}` : "Unknown",
                 confidence: primaryStock.confidenceScore?.toString() || "Medium",
-                allTransactions: allStocks.map((s) => ({
+                allTransactions: allStocks2.map((s) => ({
                   direction: s.recommendation?.toLowerCase() || "unknown",
                   insiderName: s.insiderName || "Unknown",
                   insiderTitle: s.insiderTitle || "Unknown",
@@ -11514,7 +12187,7 @@ function startDailyBriefJob() {
               }
               const holding = await storage.getPortfolioHoldingByTicker(user.id, ticker);
               const userOwnsPosition = holding !== null;
-              const stock = await storage.getStock(ticker);
+              const stock = await storage.getStock(user.id, ticker);
               const stockData = stock;
               const previousAnalysis = stockData?.overallRating ? {
                 overallRating: stockData.overallRating,

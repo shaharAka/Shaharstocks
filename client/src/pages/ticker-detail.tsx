@@ -36,6 +36,7 @@ import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { StockSimulationPlot } from "@/components/stock-simulation-plot";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
 import { SignalSummary } from "@/components/signal-summary";
+import { CompactSignalBadge } from "@/components/compact-signal-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
@@ -537,10 +538,10 @@ export default function TickerDetail() {
       <StockSimulationPlot ticker={ticker} stock={stock} />
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="signal" className="w-full">
+      <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="signal">Signal Overview</TabsTrigger>
-          <TabsTrigger value="analysis">AI Playbook</TabsTrigger>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="analysis">Analysis</TabsTrigger>
           <TabsTrigger value="news">News</TabsTrigger>
           <TabsTrigger value="insider">Insider</TabsTrigger>
           <TabsTrigger value="discussion">
@@ -553,19 +554,19 @@ export default function TickerDetail() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Signal Overview Tab */}
-        <TabsContent value="signal" className="space-y-4">
-          {/* AI Signal Summary */}
-          <SignalSummary ticker={ticker} />
-
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-4">
           {/* Company Information */}
           {(stock.description || stock.industry || stock.country || stock.webUrl) && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  Company Information
-                </CardTitle>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Company Information
+                  </CardTitle>
+                  <CompactSignalBadge ticker={ticker} />
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 {stock.description && (
@@ -611,8 +612,13 @@ export default function TickerDetail() {
         </TabsContent>
 
         {/* AI Analysis Tab */}
-        <TabsContent value="analysis" className="w-full max-w-full min-w-0 overflow-hidden">
+        <TabsContent value="analysis" className="w-full max-w-full min-w-0 overflow-hidden space-y-4">
           <div className="w-full max-w-full min-w-0">
+            {/* Signal Summary - Detailed breakdown */}
+            <SignalSummary ticker={ticker} />
+          </div>
+          <div className="w-full max-w-full min-w-0">
+            {/* AI Playbook - Detailed analysis */}
             <StockAIAnalysis ticker={ticker} />
           </div>
         </TabsContent>

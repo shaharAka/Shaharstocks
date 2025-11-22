@@ -612,11 +612,7 @@ export default function TickerDetail() {
         </TabsContent>
 
         {/* AI Analysis Tab */}
-        <TabsContent value="analysis" className="w-full max-w-full min-w-0 overflow-hidden space-y-4">
-          <div className="w-full max-w-full min-w-0">
-            {/* Signal Summary - Detailed breakdown */}
-            <SignalSummary ticker={ticker} />
-          </div>
+        <TabsContent value="analysis" className="w-full max-w-full min-w-0 overflow-hidden">
           <div className="w-full max-w-full min-w-0">
             {/* AI Playbook - Detailed analysis */}
             <StockAIAnalysis ticker={ticker} />

@@ -11,10 +11,13 @@ Preferred communication style: Simple, everyday language.
 ### November 22, 2025 - Fetch Configuration UX Redesign
 - **Simplified Fetch Configuration Dialog**: Removed master enable/disable toggle in favor of always-enabled scanning with user-configurable settings
 - **Default to Daily Refresh**: Changed default fetch interval from hourly to daily for better resource usage
-- **Integrated Display Preference**: Added "Buy Only / All Opportunities" toggle directly in fetch configuration with contextual help explaining when to use each mode
+- **Two-Tier Display Preference Pattern**: 
+  - Opportunities page toggle acts as temporary session-scoped view filter (quick access)
+  - Settings > Display Preferences contains persistent default preference
+  - Tooltip on page toggle clarifies temporary nature and points to Settings for permanent changes
 - **Progressive Disclosure Pattern**: Core settings visible by default, advanced options (batch size, community threshold) in collapsible accordion
 - **Contextual Help System**: HoverCard info icons for each setting explaining impact and best practices
-- **Unified Settings Location**: Single dialog now controls both data fetching and display preferences for better UX coherence
+- **Focused Fetch Configuration**: Dialog now exclusively handles data ingestion settings (cadence, filters), keeping clear separation from display preferences
 
 ## System Architecture
 

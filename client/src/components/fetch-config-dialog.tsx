@@ -14,12 +14,10 @@ import { Separator } from "@/components/ui/separator";
 import { RefreshCw, Info, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type OpeninsiderConfig, type User } from "@shared/schema";
-import { useUser } from "@/contexts/UserContext";
+import { type OpeninsiderConfig } from "@shared/schema";
 
 export function FetchConfigDialog() {
   const { toast } = useToast();
-  const { user } = useUser();
 
   // Fetch current configuration
   const { data: config, isLoading } = useQuery<OpeninsiderConfig>({
@@ -39,9 +37,6 @@ export function FetchConfigDialog() {
   const [minCommunityEngagement, setMinCommunityEngagement] = useState(
     config?.minCommunityEngagement ?? 10
   );
-  const [showAllOpportunities, setShowAllOpportunities] = useState(
-    user?.showAllOpportunities ?? false
-  );
 
   // Sync with fetched config
   useEffect(() => {
@@ -54,17 +49,10 @@ export function FetchConfigDialog() {
     }
   }, [config]);
 
-  // Sync with user preference
-  useEffect(() => {
-    if (user) {
-      setShowAllOpportunities(user.showAllOpportunities ?? false);
-    }
-  }, [user]);
 
   // Save configuration
   const saveConfigMutation = useMutation({
     mutationFn: async () => {
-      // Save OpenInsider config
       const configRes = await apiRequest("POST", "/api/openinsider/config", {
         enabled: true,
         fetchInterval,
@@ -77,19 +65,11 @@ export function FetchConfigDialog() {
         fetchPreviousDayOnly: config?.fetchPreviousDayOnly || false,
       });
       
-      // Save user display preference
-      if (user) {
-        await apiRequest("PATCH", `/api/users/${user.id}`, {
-          showAllOpportunities,
-        });
-      }
-      
       return await configRes.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/openinsider-config"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stocks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
       toast({
         title: "Settings saved",
         description: "Your fetch configuration has been updated",
@@ -313,45 +293,6 @@ export function FetchConfigDialog() {
               </p>
             </div>
 
-            {/* Display Preference */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Label className="text-base font-medium">Opportunity Display</Label>
-                <HoverCard>
-                  <HoverCardTrigger>
-                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                  </HoverCardTrigger>
-                  <HoverCardContent className="w-80">
-                    <div className="space-y-2">
-                      <h4 className="font-semibold text-sm">What you'll see</h4>
-                      <p className="text-xs text-muted-foreground">
-                        <strong className="text-foreground">Buy Only:</strong> Shows only insider purchase opportunities (recommended for most traders).
-                        <br /><br />
-                        <strong className="text-foreground">All Opportunities:</strong> Shows both insider buys and sells, useful for short positions or comprehensive market analysis.
-                      </p>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              </div>
-              <div className="flex items-center justify-between bg-muted/50 rounded-md px-4 py-3">
-                <div className="space-y-0.5">
-                  <Label htmlFor="show-all-switch" className="text-sm font-medium cursor-pointer">
-                    {showAllOpportunities ? "All Opportunities" : "Buy Only"}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {showAllOpportunities 
-                      ? "Showing both insider buys and sells"
-                      : "Only showing insider purchase opportunities"}
-                  </p>
-                </div>
-                <Switch
-                  id="show-all-switch"
-                  checked={showAllOpportunities}
-                  onCheckedChange={setShowAllOpportunities}
-                  data-testid="switch-show-all"
-                />
-              </div>
-            </div>
           </div>
         </div>
 

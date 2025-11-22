@@ -440,8 +440,8 @@ export default function TickerDetail() {
                     const stanceConfig = getStanceConfig(activeStance);
                     
                     return (
-                      <div key={brief.id} className={`border rounded-lg overflow-hidden ${!isLatest ? "" : ""}`}>
-                        <div className={`px-4 py-3 ${stanceConfig.bgColor} border-l-4 ${stanceConfig.borderColor}`}>
+                      <div key={brief.id} className={`border rounded-lg overflow-hidden ${stanceConfig.bgColor}`}>
+                        <div className="px-4 py-3">
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>

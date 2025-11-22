@@ -34,13 +34,13 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
   const handleGetStarted = async () => {
     await completeOnboarding();
-    setLocation("/recommendations");
+    setLocation("/dashboard");
     // Dialog will auto-close when experienceState updates in parent
   };
 
   const handleSkip = async () => {
     await completeOnboarding();
-    setLocation("/recommendations");
+    setLocation("/dashboard");
     // Dialog will auto-close when experienceState updates in parent
   };
 
@@ -69,8 +69,8 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
           {step === 1 && (
             <>
               <DialogDescription className="text-base">
-                signal2 surfaces high-quality trading opportunities from SEC insider trading filings, 
-                scored and analyzed by AI to help you make informed investment decisions.
+                signal2 helps you discover and track high-quality trading opportunities from SEC insider trading filings, 
+                scored and analyzed by AI. Your personal watchlist shows all stocks you're following in one simple view.
               </DialogDescription>
 
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
@@ -81,7 +81,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Real insider transactions from SEC regulatory filings, filtered for quality
+                      Real insider transactions from SEC regulatory filings, filtered for companies over $500M market cap
                     </CardDescription>
                   </CardContent>
                 </Card>
@@ -89,24 +89,24 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                 <Card data-testid="card-feature-ai">
                   <CardHeader className="pb-3">
                     <Sparkles className="h-8 w-8 mb-2 text-primary" />
-                    <CardTitle className="text-lg">AI Scoring</CardTitle>
+                    <CardTitle className="text-lg">AI Analysis</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Dual-agent AI analyzes fundamentals and market conditions, scoring opportunity strength (0-100). 
-                      Exceptional signals (90-100) appear in bold amber, strong signals (70-89) in light amber.
+                      Dual-agent AI analyzes company fundamentals and market conditions. Each stock gets an AI stance 
+                      (BUY/SELL/HOLD) and signal score (0-100). Strong signals (70+) appear in amber.
                     </CardDescription>
                   </CardContent>
                 </Card>
 
                 <Card data-testid="card-feature-briefs">
                   <CardHeader className="pb-3">
-                    <TrendingUp className="h-8 w-8 mb-2 text-primary" />
-                    <CardTitle className="text-lg">Daily Briefs</CardTitle>
+                    <Star className="h-8 w-8 mb-2 text-primary" />
+                    <CardTitle className="text-lg">Your Watchlist</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Get daily trading guidance with buy/hold/sell stances for stocks you follow
+                      Follow stocks to track them in your personal watchlist. Get daily AI briefs and detailed analysis.
                     </CardDescription>
                   </CardContent>
                 </Card>
@@ -114,8 +114,8 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
               <div className="bg-muted/50 p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  Data updates automatically in the background. You'll see opportunities from the last 2 weeks, 
-                  filtered for companies over $500M market cap.
+                  <strong>Simple workflow:</strong> Browse opportunities → Follow interesting stocks → Track them in your watchlist. 
+                  Data updates automatically in the background.
                 </p>
               </div>
             </>
@@ -124,21 +124,22 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
           {step === 2 && (
             <div className="space-y-4">
               <DialogDescription className="text-base mb-4">
-                Stay informed with smart notifications and follow stocks to track them over time.
+                Each stock gets comprehensive AI analysis with clear assessments and daily updates.
               </DialogDescription>
 
               <div className="space-y-4">
-                <Card data-testid="card-follow-system">
+                <Card data-testid="card-ai-analysis">
                   <CardHeader className="pb-3">
                     <div className="flex items-center gap-2">
-                      <Star className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-base">Follow Stocks</CardTitle>
+                      <Sparkles className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-base">Complete AI Analysis</CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Click the star button on any stock to follow it. Followed stocks get daily AI briefs 
-                      and appear in your watchlist. They won't be auto-removed after 2 weeks.
+                      Every stock gets a stance (BUY/SELL/HOLD), signal score (0-100), and detailed analysis. 
+                      Click any stock to see financial health assessments: Profitability, Liquidity, Debt Level, 
+                      and Growth rated as Strong/Moderate/Weak based on fundamentals.
                     </CardDescription>
                   </CardContent>
                 </Card>
@@ -152,8 +153,23 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Every day, followed stocks get fresh AI recommendations (BUY/HOLD/SELL) with 
-                      confidence scores and key highlights. Quick insights for fast decisions.
+                      Follow stocks to get fresh AI recommendations every day with confidence scores and 
+                      key highlights. Track whether you're watching (considering entry) or in position (currently holding).
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+
+                <Card data-testid="card-watchlist">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Star className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-base">Your Watchlist</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>
+                      Your Dashboard shows all followed stocks in one simple view - no hidden filters. 
+                      See BUY, SELL, and HOLD recommendations with scores, prices, and "Analyzing..." status for new additions.
                     </CardDescription>
                   </CardContent>
                 </Card>
@@ -162,14 +178,13 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   <CardHeader className="pb-3">
                     <div className="flex items-center gap-2">
                       <Bell className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-base">Smart Notifications</CardTitle>
+                      <CardTitle className="text-base">Smart Alerts</CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <CardDescription>
-                      Get alerts for exceptional opportunities (signal strength 90-100 in bold amber), 
-                      popular stocks (&gt;10 followers), and stance changes on your positions. 
-                      Strong signals (70-89) appear in light amber. Scores represent opportunity strength regardless of BUY/SELL direction.
+                      Get notifications for exceptional opportunities (90+), popular stocks (&gt;10 followers), 
+                      and stance changes on positions. Followed stocks are never auto-removed.
                     </CardDescription>
                   </CardContent>
                 </Card>
@@ -177,8 +192,8 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
 
               <div className="bg-muted/50 p-3 rounded-lg">
                 <p className="text-xs text-muted-foreground">
-                  <strong>2-Week Event Horizon:</strong> Opportunities older than 2 weeks are automatically 
-                  removed unless you follow them. This keeps your feed fresh and focused.
+                  <strong>Note:</strong> Unfollowed opportunities older than 2 weeks are automatically removed 
+                  to keep discovery fresh. Follow stocks to track them permanently.
                 </p>
               </div>
             </div>
@@ -187,7 +202,7 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
           {step === 3 && (
             <div className="space-y-4">
               <DialogDescription className="text-base mb-4">
-                You're ready to start exploring trading opportunities!
+                You're ready to start tracking trading opportunities!
               </DialogDescription>
 
               <Card className="w-full" data-testid="card-next-steps">
@@ -200,12 +215,11 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                       <span className="text-xs font-semibold text-primary">1</span>
                     </div>
                     <div>
-                      <p className="font-medium">Browse Opportunities</p>
+                      <p className="font-medium">Discover Opportunities</p>
                       <p className="text-sm text-muted-foreground">
-                        Review AI-scored opportunities from insider trading. Each stock shows a 
-                        Signal badge (0-100) indicating opportunity strength. Exceptional signals (90-100) 
-                        appear in bold amber, strong signals (70-89) in light amber - representing high-quality 
-                        opportunities regardless of BUY or SELL direction.
+                        Browse AI-scored stocks from insider trading in the "Opportunities" page. 
+                        Each shows an AI stance (BUY/SELL/HOLD) and signal score (0-100). 
+                        Strong signals (70+) appear in amber. Click any stock for detailed analysis.
                       </p>
                     </div>
                   </div>
@@ -214,10 +228,10 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                       <span className="text-xs font-semibold text-primary">2</span>
                     </div>
                     <div>
-                      <p className="font-medium">Follow Interesting Stocks</p>
+                      <p className="font-medium">Follow Stocks</p>
                       <p className="text-sm text-muted-foreground">
-                        Click any stock card to see detailed analysis, then follow it to receive daily briefs 
-                        and simulation charts.
+                        Click the star button to follow stocks that interest you. Followed stocks appear in 
+                        your "My Watchlist" dashboard and receive daily AI briefs with fresh recommendations.
                       </p>
                     </div>
                   </div>
@@ -226,10 +240,10 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                       <span className="text-xs font-semibold text-primary">3</span>
                     </div>
                     <div>
-                      <p className="font-medium">Stay Informed</p>
+                      <p className="font-medium">Track in Your Watchlist</p>
                       <p className="text-sm text-muted-foreground">
-                        Check the notification bell for high-value alerts and review daily briefs 
-                        on your followed stocks.
+                        Your dashboard shows all followed stocks in one simple view with prices, scores, and stances. 
+                        Check the notification bell for important alerts about high signals and stance changes.
                       </p>
                     </div>
                   </div>
@@ -242,8 +256,9 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
                   <p className="text-sm font-medium">Pro Tip</p>
                 </div>
                 <p className="text-xs text-muted-foreground ml-6">
-                  Visit Settings to customize data sources, fetch intervals, and quality filters. 
-                  You can also explore the Analysis page to run backtests and create trading rules.
+                  Visit Settings to customize fetch intervals and quality filters. 
+                  Click any followed stock to see financial health assessments (Profitability, Liquidity, Debt, Growth) 
+                  and detailed AI analysis with daily briefs.
                 </p>
               </div>
             </div>

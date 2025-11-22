@@ -8,7 +8,8 @@ export type TutorialId =
   | "analysis" 
   | "settings" 
   | "community" 
-  | "portfolio";
+  | "portfolio"
+  | "watchlist";
 
 export interface TutorialConfig {
   id: TutorialId;
@@ -29,12 +30,15 @@ export const routeToTutorialMap: RouteMapping[] = [
   { path: "/recommendations", tutorialId: "recommendations" },
   { path: "/purchase", tutorialId: "recommendations" },
   
-  // Portfolio/Watchlist pages (all map to Portfolio component)
+  // Watchlist/Dashboard pages
+  { path: "/dashboard", tutorialId: "watchlist" },
+  
+  // Portfolio/Watchlist pages (legacy - map to Portfolio component)
   { path: "/watchlist", tutorialId: "portfolio" },
   { path: "/portfolio", tutorialId: "portfolio" },
   { path: "/management", tutorialId: "portfolio" },
   { path: "/history", tutorialId: "portfolio" },
-  { path: "/dashboard", tutorialId: "portfolio" },
+  { path: "/followed", tutorialId: "portfolio" },
   
   // Analysis/Trading pages
   { path: "/trading", tutorialId: "analysis" },
@@ -59,22 +63,22 @@ export function getTutorialIdFromRoute(pathname: string): TutorialId | null {
 export const tutorials: Record<TutorialId, TutorialConfig> = {
   "opportunities-intro": {
     id: "opportunities-intro",
-    title: "Opportunities Dashboard",
+    title: "Discover Opportunities",
     triggerCondition: "after-onboarding",
     steps: [
       {
         target: "body",
-        content: "Welcome to your Opportunities dashboard! This is where you'll find stocks with insider trading activity from SEC filings, each analyzed and scored by our AI system.",
+        content: "Welcome! This is where you discover stocks with insider trading activity from SEC filings, each analyzed by AI with a stance (BUY/SELL/HOLD) and signal score (0-100).",
         placement: "center",
       },
       {
-        target: "[data-testid='stock-table']",
-        content: "Each stock shows a Signal badge (0-100) indicating opportunity strength. Exceptional signals (90-100) appear in bold amber, strong signals (70-89) in light amber - representing high-quality opportunities regardless of BUY or SELL direction.",
-        placement: "top",
+        target: "body",
+        content: "Browse through the stock cards. Each shows the AI stance, signal score (70+ highlighted in amber), and current price. Click any card to see detailed analysis including financial health assessments.",
+        placement: "center",
       },
       {
         target: "body",
-        content: "Use the filters at the top to narrow down stocks by insider action (BUY/SELL), signal strength, or sort by different metrics. Click any stock row to see detailed analysis!",
+        content: "When you find interesting stocks, click the star button to follow them. Followed stocks appear in your 'My Watchlist' dashboard and receive daily AI briefs. Let's explore!",
         placement: "center",
       },
     ],
@@ -86,17 +90,17 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
     steps: [
       {
         target: "body",
-        content: "Great! We've found a stock with an exceptional signal (90-100). These represent the highest-quality opportunities identified by our AI analysis.",
+        content: "Great! We've found a stock with an exceptional signal (90+). These represent high-quality opportunities identified by our dual-agent AI analysis of fundamentals and market conditions.",
         placement: "center",
       },
       {
         target: "[data-testid^='button-follow-']",
-        content: "Click the star button to follow this stock. Following a stock adds it to your watchlist and enables daily briefs, AI analysis updates, and personalized notifications.",
+        content: "Click the star button to follow this stock. Following adds it to your 'My Watchlist' dashboard and enables daily AI briefs with fresh recommendations and financial health assessments.",
         placement: "bottom",
       },
       {
         target: "body",
-        content: "You'll receive alerts when followed stocks hit important milestones: stance changes, high scores, or when they become popular with other users. Let's follow a stock to see how it works!",
+        content: "You'll receive alerts for exceptional signals (90+), stance changes, and when stocks become popular (&gt;10 followers). Let's follow a stock to see it in action!",
         placement: "center",
       },
     ],
@@ -108,39 +112,39 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
     steps: [
       {
         target: "body",
-        content: "Excellent! You've followed your first stock. This stock is now in your watchlist and you'll receive personalized updates about it.",
+        content: "Excellent! You've followed your first stock. It's now in your 'My Watchlist' dashboard where you can track it alongside all your other followed stocks.",
         placement: "center",
       },
       {
-        target: "[data-testid='nav-portfolio']",
-        content: "Visit the Portfolio page to see all your followed stocks, track their performance, and view daily AI-generated briefs with trading insights.",
+        target: "[data-testid='link-dashboard']",
+        content: "Visit your Dashboard (My Watchlist) to see all followed stocks in one simple view with prices, scores, stances, and 'Analyzing...' status. Click any stock for detailed analysis.",
         placement: "right",
       },
       {
         target: "[data-testid='button-notifications']",
-        content: "Check the notification bell for important alerts about your followed stocks: signal strength changes, stance shifts, and popularity trends. You're all set to start tracking opportunities!",
+        content: "Check the notification bell for important alerts: high signals, stance changes, and popular stocks. You're all set to track opportunities!",
         placement: "bottom",
       },
     ],
   },
   recommendations: {
     id: "recommendations",
-    title: "Opportunities Dashboard",
+    title: "Discover Opportunities",
     triggerCondition: "route-based",
     steps: [
       {
         target: "body",
-        content: "Welcome to Opportunities! This shows stocks with insider trading activity from SEC filings, scored and filtered by AI. Use the dropdown filters to see BUY recommendations (high signals >60) or SELL recommendations (low scores <70), and filter by team interest or recency.",
+        content: "Welcome to Opportunities! Browse stocks with insider trading activity from SEC filings, each analyzed by AI. Each stock gets a stance (BUY/SELL/HOLD) and signal score (0-100). Strong signals (70+) appear in amber.",
         placement: "center",
       },
       {
         target: "body",
-        content: "Click any stock card to see full details: AI analysis scores, community discussion, and simulation charts. Follow stocks using the star button to track them - followed stocks show daily briefs and appear in your watchlist.",
+        content: "Click any stock card to see detailed analysis: AI stance, signal score, financial health assessments (Profitability, Liquidity, Debt, Growth rated as Strong/Moderate/Weak), and key insights.",
         placement: "center",
       },
       {
         target: "body",
-        content: "Check the notification bell (top-right) for important alerts: high-score buy/sell signals, popular stocks (>10 followers), and stance changes on your positions. Happy trading!",
+        content: "Follow interesting stocks using the star button - they'll appear in your 'My Watchlist' dashboard and receive daily AI briefs. Check the notification bell for high-value alerts. Happy trading!",
         placement: "center",
       },
     ],
@@ -230,6 +234,28 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
         target: "body",
         content: "Vote on existing ideas by clicking the vote buttons on each card. Each user gets one vote per idea, and popular ideas get prioritized for development. That's it!",
         placement: "center",
+      },
+    ],
+  },
+  watchlist: {
+    id: "watchlist",
+    title: "My Watchlist Dashboard",
+    triggerCondition: "route-based",
+    steps: [
+      {
+        target: "body",
+        content: "Your Watchlist dashboard shows all stocks you're following in one simple view - no hidden filters! See prices, signal scores, AI stances (BUY/SELL/HOLD), and 'Analyzing...' status for new additions.",
+        placement: "center",
+      },
+      {
+        target: "[data-testid^='card-watchlist-']",
+        content: "Each card shows the ticker, AI stance badge, signal score (70+ highlighted in amber), current price with change, and a button to view full details. Click 'View Details' to see financial health assessments and daily briefs.",
+        placement: "top",
+      },
+      {
+        target: "[data-testid='button-discover']",
+        content: "Click 'Discover Stocks' to browse new opportunities from insider trading. Follow interesting stocks to add them to this watchlist and receive daily AI updates. That's it!",
+        placement: "left",
       },
     ],
   },

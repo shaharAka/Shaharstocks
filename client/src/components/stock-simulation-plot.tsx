@@ -342,7 +342,7 @@ export function StockSimulationPlot({ ticker, stock }: StockSimulationPlotProps)
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Price Simulation with Trading Rules</CardTitle>
+          <CardTitle>Price Chart with Trading Rules</CardTitle>
           {holding && (
             <Badge variant={isSimulated ? "secondary" : "default"} data-testid="badge-position">
               {isSimulated ? "Simulated Position" : "Actual Position"}

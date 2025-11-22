@@ -8,6 +8,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 22, 2025 - Tutorial System Overhaul
+- **Manual-Only Tutorials**: Removed all auto-triggering logic from TutorialManager - tutorials only show when user clicks the help button
+- **Contextual Tutorials Removed**: Eliminated `opportunities-intro`, `high-signal-follow`, and `first-follow` auto-triggered tutorials
+- **Enhanced Element Targeting**: Updated all route-based tutorials to highlight specific page elements with testids instead of generic "body" targets
+- **Simplified Tutorial Content**: Condensed verbose tutorials into focused, concise steps highlighting important UI elements
+- **Location-Based Reset**: Added automatic reset of manual trigger state on location change to prevent tutorial carryover between pages
+- **Onboarding Compatibility**: Tutorials now work during onboarding when manually triggered via help button
+- **Tutorial Highlights**: 
+  - Recommendations page: Page title, toggle, stock cards, follow buttons, notification bell
+  - Settings page: Config cards, billing management, display preferences
+  - Watchlist page: Stock cards, discover button (already had specific targets)
+
 ### November 22, 2025 - AI Analysis UX Improvements
 - **Compact Signal Badge**: Added minimal signal indicator to Overview tab header showing score + stance (BUY/SELL/HOLD)
 - **Tab Structure Refinement**: 

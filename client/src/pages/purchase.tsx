@@ -25,7 +25,7 @@ import {
   Clock,
   MessageSquare,
   Star,
-  Settings as SettingsIcon,
+  SlidersHorizontal,
   LayoutGrid,
   LayoutList,
   Pin,
@@ -585,7 +585,7 @@ export default function Purchase() {
                 onClick={() => setFetchConfigOpen(true)}
                 data-testid="button-fetch-config"
               >
-                <SettingsIcon className="h-4 w-4" />
+                <SlidersHorizontal className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>

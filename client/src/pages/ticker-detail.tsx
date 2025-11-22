@@ -440,18 +440,16 @@ export default function TickerDetail() {
                     const stanceConfig = getStanceConfig(activeStance);
                     
                     return (
-                      <div key={brief.id} className={`border rounded-lg overflow-hidden ${isLatest ? "ring-2 ring-primary" : ""}`}>
-                        <div className="bg-muted/30 px-4 py-3 border-b">
+                      <div key={brief.id} className={`border rounded-lg overflow-hidden ${!isLatest ? "" : ""}`}>
+                        <div className={`px-4 py-3 ${stanceConfig.bgColor} border-l-4 ${stanceConfig.borderColor}`}>
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
                                 {isLatest ? "Latest" : new Date(brief.briefDate).toLocaleDateString()}
                               </Badge>
-                              {isAct && (
-                                <Badge variant="default" className="bg-primary font-bold" data-testid={`badge-act-${brief.id}`}>
-                                  ACT
-                                </Badge>
-                              )}
+                              <Badge variant={isAct ? "default" : "outline"} className={isAct ? "bg-primary" : ""}>
+                                {stanceConfig.text}
+                              </Badge>
                             </div>
                             <div className="text-right">
                               <p className="text-lg font-mono font-bold">
@@ -464,18 +462,13 @@ export default function TickerDetail() {
                           </div>
                         </div>
                         
-                        <div className={`p-4 ${stanceConfig.bgColor} border-l-4 ${stanceConfig.borderColor}`}>
-                          <div className="flex items-center gap-2 mb-3">
+                        <div className="p-4 space-y-3">
+                          <div className="flex items-center gap-2">
                             <stanceConfig.icon className={`h-5 w-5 ${stanceConfig.color}`} />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <h4 className="text-sm font-bold text-muted-foreground">
-                                  {hasEnteredPosition ? "CURRENTLY IN POSITION" : "CONSIDERING ENTRY"}
-                                </h4>
-                                <Badge variant={isAct ? "default" : "outline"} className={isAct ? "bg-primary" : ""}>
-                                  {stanceConfig.text}
-                                </Badge>
-                              </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-muted-foreground">
+                                {hasEnteredPosition ? "CURRENTLY IN POSITION" : "CONSIDERING ENTRY"}
+                              </h4>
                               <p className="text-xs text-muted-foreground">
                                 Confidence: {activeConfidence}/10
                               </p>

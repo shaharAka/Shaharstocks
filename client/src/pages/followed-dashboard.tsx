@@ -69,6 +69,7 @@ function ClosePositionDialog({ ticker, entryPrice, onSuccess }: { ticker: string
   
   const form = useForm<ClosePositionForm>({
     resolver: zodResolver(closePositionSchema),
+    mode: "onChange",
     defaultValues: {
       sellPrice: "",
       quantity: "1",

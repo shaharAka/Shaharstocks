@@ -1,13 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Star, ArrowUpRight, ArrowDownRight, Lightbulb, Activity, Target, Zap } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { TrendingUp, Star, ArrowUpRight, ArrowDownRight, Lightbulb, Activity, Target, Zap, DollarSign, CircleX } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Stock } from "@shared/schema";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { useState } from "react";
 
 interface FollowedStock {
   ticker: string;
@@ -21,6 +30,7 @@ interface FollowedStock {
   integratedScore?: number | null;
   stanceAlignment?: 'act' | 'hold' | null;
   hasEnteredPosition?: boolean;
+  entryPrice?: string | null;
 }
 
 type StockWithAnalysis = Stock & {
@@ -28,6 +38,143 @@ type StockWithAnalysis = Stock & {
   aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
   isFollowing?: boolean;
 };
+
+const closePositionSchema = z.object({
+  sellPrice: z.string().min(1, "Sell price is required").refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
+    message: "Must be a valid positive number",
+  }),
+  quantity: z.string().min(1, "Quantity is required").refine((val) => !isNaN(parseInt(val)) && parseInt(val) > 0, {
+    message: "Must be a valid positive number",
+  }),
+});
+
+type ClosePositionForm = z.infer<typeof closePositionSchema>;
+
+function ClosePositionDialog({ ticker, entryPrice, onSuccess }: { ticker: string; entryPrice: string; onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+  
+  const form = useForm<ClosePositionForm>({
+    resolver: zodResolver(closePositionSchema),
+    defaultValues: {
+      sellPrice: "",
+      quantity: "1",
+    },
+  });
+  
+  const closePositionMutation = useMutation({
+    mutationFn: async (data: ClosePositionForm) => {
+      return apiRequest(`/api/stocks/${ticker}/close-position`, {
+        method: "POST",
+        body: JSON.stringify({
+          sellPrice: parseFloat(data.sellPrice),
+          quantity: parseInt(data.quantity),
+        }),
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/portfolio/total-pnl"] });
+      toast({
+        title: "Position Closed",
+        description: `P&L: ${parseFloat(data.pnl) >= 0 ? '+' : ''}$${data.pnl}`,
+      });
+      setOpen(false);
+      form.reset();
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to close position",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const handleSubmit = (data: ClosePositionForm) => {
+    closePositionMutation.mutate(data);
+  };
+  
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          data-testid={`button-close-position-${ticker}`}
+          className="gap-2"
+        >
+          <CircleX className="h-4 w-4" />
+          Close Position
+        </Button>
+      </DialogTrigger>
+      <DialogContent onClick={(e) => e.stopPropagation()}>
+        <DialogHeader>
+          <DialogTitle>Close Position - {ticker}</DialogTitle>
+          <DialogDescription>
+            Entry Price: ${parseFloat(entryPrice).toFixed(2)}
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="sellPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sell Price</FormLabel>
+                  <FormControl>
+                    <Input 
+                      {...field} 
+                      type="number" 
+                      step="0.01" 
+                      placeholder="0.00"
+                      data-testid="input-sell-price"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="quantity"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Quantity</FormLabel>
+                  <FormControl>
+                    <Input 
+                      {...field} 
+                      type="number" 
+                      step="1" 
+                      placeholder="1"
+                      data-testid="input-quantity"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button 
+                type="submit" 
+                disabled={closePositionMutation.isPending}
+                data-testid="button-submit-close-position"
+              >
+                {closePositionMutation.isPending ? "Closing..." : "Close Position"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function FollowedDashboard() {
 
@@ -39,6 +186,12 @@ export default function FollowedDashboard() {
       );
       return hasActiveJobs ? 5000 : false;
     },
+    retry: false,
+    meta: { ignoreError: true },
+  });
+
+  const { data: totalPnlData } = useQuery<{ totalPnl: number }>({
+    queryKey: ["/api/portfolio/total-pnl"],
     retry: false,
     meta: { ignoreError: true },
   });
@@ -85,6 +238,7 @@ export default function FollowedDashboard() {
     ? Math.round(followedStocks.reduce((sum, s) => sum + (s.integratedScore ?? 0), 0) / followedStocks.length)
     : 0;
   const buySignals = followedStocks.filter(s => s.aiStance === 'BUY').length;
+  const totalPnl = totalPnlData?.totalPnl ?? 0;
 
   return (
     <div className="p-6 space-y-8 max-w-screen-2xl mx-auto">
@@ -100,7 +254,7 @@ export default function FollowedDashboard() {
 
       {/* Stats Overview - Only show if user has stocks */}
       {followedStocks.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -142,6 +296,26 @@ export default function FollowedDashboard() {
               <div className="text-2xl font-bold">{buySignals}</div>
               <p className="text-xs text-muted-foreground">
                 AI recommends BUY
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Total P&L
+              </CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className={cn(
+                "text-2xl font-bold font-mono",
+                totalPnl >= 0 ? "text-success" : "text-destructive"
+              )}>
+                {totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Realized gains/losses
               </p>
             </CardContent>
           </Card>
@@ -261,6 +435,17 @@ export default function FollowedDashboard() {
                                 />
                               </LineChart>
                             </ResponsiveContainer>
+                          </div>
+                        )}
+
+                        {/* Close Position Button */}
+                        {stock.hasEnteredPosition && stock.entryPrice && (
+                          <div className="pt-2 border-t">
+                            <ClosePositionDialog 
+                              ticker={stock.ticker} 
+                              entryPrice={stock.entryPrice}
+                              onSuccess={() => {}}
+                            />
                           </div>
                         )}
                       </div>

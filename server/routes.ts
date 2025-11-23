@@ -2464,13 +2464,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ticker = req.params.ticker.toUpperCase();
       const { sellPrice, quantity } = req.body;
       
-      // Validate sellPrice
-      if (typeof sellPrice !== 'number' || sellPrice <= 0) {
+      // Validate sellPrice - must be finite positive number
+      if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
         return res.status(400).json({ error: "sellPrice must be a positive number" });
       }
       
-      // Validate quantity if provided, default to 1
-      const validQuantity = quantity && typeof quantity === 'number' && quantity > 0 ? quantity : 1;
+      // Validate quantity - must be finite positive integer, default to 1
+      let validQuantity = 1;
+      if (quantity !== undefined && quantity !== null) {
+        if (!Number.isFinite(quantity) || quantity < 1) {
+          return res.status(400).json({ error: "quantity must be a positive integer" });
+        }
+        validQuantity = Math.floor(quantity);
+      }
       
       const result = await storage.closePosition(ticker, req.session.userId, sellPrice, validQuantity);
       res.status(200).json(result);

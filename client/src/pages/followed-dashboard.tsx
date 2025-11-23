@@ -40,19 +40,32 @@ type StockWithAnalysis = Stock & {
 };
 
 const closePositionSchema = z.object({
-  sellPrice: z.string().min(1, "Sell price is required").refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
-    message: "Must be a valid positive number",
-  }),
-  quantity: z.string().min(1, "Quantity is required").refine((val) => !isNaN(parseInt(val)) && parseInt(val) > 0, {
-    message: "Must be a valid positive number",
-  }),
+  sellPrice: z.string()
+    .min(1, "Sell price is required")
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && Number.isFinite(num) && num > 0;
+    }, {
+      message: "Must be a valid positive number",
+    }),
+  quantity: z.string()
+    .min(1, "Quantity is required")
+    .refine((val) => {
+      const num = parseInt(val, 10);
+      return !isNaN(num) && Number.isFinite(num) && num >= 1;
+    }, {
+      message: "Must be a positive integer",
+    }),
 });
 
 type ClosePositionForm = z.infer<typeof closePositionSchema>;
 
-function ClosePositionDialog({ ticker, entryPrice, onSuccess }: { ticker: string; entryPrice: string; onSuccess: () => void }) {
+function ClosePositionDialog({ ticker, entryPrice, onSuccess }: { ticker: string; entryPrice: string | null; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  
+  // Handle missing entry price
+  const entryPriceNum = entryPrice ? parseFloat(entryPrice) : 0;
   
   const form = useForm<ClosePositionForm>({
     resolver: zodResolver(closePositionSchema),
@@ -64,15 +77,24 @@ function ClosePositionDialog({ ticker, entryPrice, onSuccess }: { ticker: string
   
   const closePositionMutation = useMutation({
     mutationFn: async (data: ClosePositionForm) => {
-      return apiRequest(`/api/stocks/${ticker}/close-position`, {
-        method: "POST",
-        body: JSON.stringify({
-          sellPrice: parseFloat(data.sellPrice),
-          quantity: parseInt(data.quantity),
-        }),
+      const sellPriceNum = parseFloat(data.sellPrice);
+      const quantityNum = parseInt(data.quantity, 10);
+      
+      // Double-check values are valid before sending
+      if (!Number.isFinite(sellPriceNum) || sellPriceNum <= 0) {
+        throw new Error("Invalid sell price");
+      }
+      if (!Number.isFinite(quantityNum) || quantityNum < 1) {
+        throw new Error("Invalid quantity");
+      }
+      
+      const res = await apiRequest("POST", `/api/stocks/${ticker}/close-position`, {
+        sellPrice: sellPriceNum,
+        quantity: quantityNum,
       });
+      return await res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/portfolio/total-pnl"] });
       toast({
@@ -117,7 +139,7 @@ function ClosePositionDialog({ ticker, entryPrice, onSuccess }: { ticker: string
         <DialogHeader>
           <DialogTitle>Close Position - {ticker}</DialogTitle>
           <DialogDescription>
-            Entry Price: ${parseFloat(entryPrice).toFixed(2)}
+            {entryPrice ? `Entry Price: $${entryPriceNum.toFixed(2)}` : "No entry price recorded"}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -420,7 +442,9 @@ export default function FollowedDashboard() {
                           const currentPriceNum = parseFloat(stock.currentPrice);
                           const minPrice = Math.min(previousPrice, currentPriceNum);
                           const maxPrice = Math.max(previousPrice, currentPriceNum);
-                          const padding = (maxPrice - minPrice) * 0.2 || 0.01;
+                          const range = maxPrice - minPrice;
+                          // Ensure padding is always positive - use range-based padding or epsilon
+                          const padding = range > 0 ? range * 0.2 : Math.max(currentPriceNum * 0.01, 0.1);
                           
                           return (
                             <div className="h-12 -mx-2">
@@ -548,7 +572,9 @@ export default function FollowedDashboard() {
                         {(() => {
                           const minPrice = Math.min(previousPrice, currentPrice);
                           const maxPrice = Math.max(previousPrice, currentPrice);
-                          const padding = (maxPrice - minPrice) * 0.2 || 0.01;
+                          const range = maxPrice - minPrice;
+                          // Ensure padding is always positive - use range-based padding or epsilon
+                          const padding = range > 0 ? range * 0.2 : Math.max(currentPrice * 0.01, 0.1);
                           
                           return (
                             <div className="h-12 w-20 shrink-0">

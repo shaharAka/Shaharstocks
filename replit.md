@@ -8,6 +8,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### November 23, 2025 - Icon Consistency & Price Trend Visualizations
+- **Consistent Icons Across App**:
+  - Lightbulb icon now represents Opportunities everywhere (sidebar, dashboard, empty states)
+  - Users icon (people) represents Community section in sidebar
+  - Star icon made outline (removed fill) for Following section in sidebar
+- **Price Trend Sparklines**: Added mini trend line visualizations to dashboard
+  - Watchlist cards show 2-point sparkline (previous close → current price) below price display
+  - Opportunities list rows include compact sparkline between company info and price
+  - Color-coded: green for gains, red for losses matching price change indicators
+  - Uses existing priceChange data, no additional API calls required
+  - Implemented with Recharts LineChart components (h-12 for cards, w-20 for list)
+
 ### November 22, 2025 - Dashboard Modernization & Design Overhaul
 - **Stats Summary Row**: Added three metric cards showing Total Stocks, High Signals (score ≥70), and Buy Signals with icons
 - **Modern Watchlist Cards**: Enhanced visual hierarchy with:

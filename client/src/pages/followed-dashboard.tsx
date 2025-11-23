@@ -7,6 +7,7 @@ import { TrendingUp, Star, ArrowUpRight, ArrowDownRight, Lightbulb, Activity, Ta
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import type { Stock } from "@shared/schema";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
 
 interface FollowedStock {
   ticker: string;
@@ -212,28 +213,54 @@ export default function FollowedDashboard() {
                     </CardHeader>
 
                     <CardContent>
-                      <div className="flex items-end justify-between">
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Current Price</p>
-                          <p className="text-3xl font-mono font-bold">
-                            ${parseFloat(stock.currentPrice).toFixed(2)}
-                          </p>
-                        </div>
-                        {stock.priceChange && (
-                          <div className="text-right">
-                            <div className={cn(
-                              "flex items-center gap-1 text-base font-semibold font-mono",
-                              isPricePositive ? "text-success" : "text-destructive"
-                            )}>
-                              {isPricePositive ? (
-                                <ArrowUpRight className="h-5 w-5" />
-                              ) : (
-                                <ArrowDownRight className="h-5 w-5" />
-                              )}
-                              <span>
-                                {isPricePositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
-                              </span>
+                      <div className="space-y-3">
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Current Price</p>
+                            <p className="text-3xl font-mono font-bold">
+                              ${parseFloat(stock.currentPrice).toFixed(2)}
+                            </p>
+                          </div>
+                          {stock.priceChange && (
+                            <div className="text-right">
+                              <div className={cn(
+                                "flex items-center gap-1 text-base font-semibold font-mono",
+                                isPricePositive ? "text-success" : "text-destructive"
+                              )}>
+                                {isPricePositive ? (
+                                  <ArrowUpRight className="h-5 w-5" />
+                                ) : (
+                                  <ArrowDownRight className="h-5 w-5" />
+                                )}
+                                <span>
+                                  {isPricePositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
+                                </span>
+                              </div>
                             </div>
+                          )}
+                        </div>
+                        
+                        {/* Mini trend line */}
+                        {stock.priceChange && (
+                          <div className="h-12 -mx-2">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart
+                                data={[
+                                  { price: parseFloat(stock.currentPrice) - priceChange },
+                                  { price: parseFloat(stock.currentPrice) }
+                                ]}
+                                margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+                              >
+                                <Line
+                                  type="monotone"
+                                  dataKey="price"
+                                  stroke={isPricePositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
+                                  strokeWidth={2}
+                                  dot={false}
+                                  animationDuration={300}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
                           </div>
                         )}
                       </div>
@@ -318,6 +345,28 @@ export default function FollowedDashboard() {
                           <p className="text-sm text-muted-foreground truncate">
                             {stock.companyName}
                           </p>
+                        </div>
+                        
+                        {/* Mini trend sparkline */}
+                        <div className="h-12 w-20 shrink-0">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={[
+                                { price: previousPrice },
+                                { price: currentPrice }
+                              ]}
+                              margin={{ top: 2, right: 2, left: 2, bottom: 2 }}
+                            >
+                              <Line
+                                type="monotone"
+                                dataKey="price"
+                                stroke={isPricePositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
+                                strokeWidth={2}
+                                dot={false}
+                                animationDuration={300}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
                         </div>
                         
                         <div className="text-right shrink-0">

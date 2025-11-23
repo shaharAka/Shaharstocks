@@ -1038,11 +1038,15 @@ export const followedStocks = pgTable("followed_stocks", {
   followedAt: timestamp("followed_at").notNull().defaultNow(),
   hasEnteredPosition: boolean("has_entered_position").default(false).notNull(), // Track if user entered position
   entryPrice: decimal("entry_price", { precision: 12, scale: 2 }), // Price at which user entered position
+  quantity: integer("quantity").default(1), // Number of shares (default 1 for simplicity)
+  sellPrice: decimal("sell_price", { precision: 12, scale: 2 }), // Price at which position was closed
+  sellDate: timestamp("sell_date"), // When position was closed
+  pnl: decimal("pnl", { precision: 12, scale: 2 }), // Profit/Loss: (sellPrice - entryPrice) * quantity
 }, (table) => ({
   userTickerFollowUnique: uniqueIndex("user_ticker_follow_unique_idx").on(table.userId, table.ticker),
 }));
 
-export const insertFollowedStockSchema = createInsertSchema(followedStocks).omit({ id: true, followedAt: true, hasEnteredPosition: true, entryPrice: true });
+export const insertFollowedStockSchema = createInsertSchema(followedStocks).omit({ id: true, followedAt: true, hasEnteredPosition: true, entryPrice: true, sellPrice: true, sellDate: true, pnl: true, quantity: true });
 export type InsertFollowedStock = z.infer<typeof insertFollowedStockSchema>;
 export type FollowedStock = typeof followedStocks.$inferSelect;
 

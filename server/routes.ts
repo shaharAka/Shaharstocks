@@ -2456,6 +2456,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/stocks/:ticker/close-position", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const ticker = req.params.ticker.toUpperCase();
+      const { sellPrice, quantity } = req.body;
+      
+      // Validate sellPrice
+      if (typeof sellPrice !== 'number' || sellPrice <= 0) {
+        return res.status(400).json({ error: "sellPrice must be a positive number" });
+      }
+      
+      // Validate quantity if provided, default to 1
+      const validQuantity = quantity && typeof quantity === 'number' && quantity > 0 ? quantity : 1;
+      
+      const result = await storage.closePosition(ticker, req.session.userId, sellPrice, validQuantity);
+      res.status(200).json(result);
+    } catch (error) {
+      console.error("Close position error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      if (errorMessage.includes("not being followed")) {
+        return res.status(404).json({ error: "Stock is not being followed" });
+      }
+      
+      if (errorMessage.includes("No open position")) {
+        return res.status(400).json({ error: "No open position to close" });
+      }
+      
+      res.status(500).json({ error: "Failed to close position" });
+    }
+  });
+
   app.post("/api/stocks/bulk-follow", async (req, res) => {
     try {
       if (!req.session.userId) {

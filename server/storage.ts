@@ -256,6 +256,8 @@ export interface IStorage {
   followStock(follow: InsertFollowedStock): Promise<FollowedStock>;
   unfollowStock(ticker: string, userId: string): Promise<boolean>;
   toggleStockPosition(ticker: string, userId: string, hasEnteredPosition: boolean, entryPrice?: number): Promise<boolean>;
+  closePosition(ticker: string, userId: string, sellPrice: number, quantity: number): Promise<{ pnl: string; sellPrice: string; sellDate: Date }>;
+  getTotalPnL(userId: string): Promise<number>;
   getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>>;
   getFollowedStocksWithStatus(userId: string): Promise<Array<FollowedStock & { 
     currentPrice: string; 
@@ -2018,6 +2020,76 @@ export class DatabaseStorage implements IStorage {
     });
     
     return true;
+  }
+
+  async closePosition(ticker: string, userId: string, sellPrice: number, quantity: number): Promise<{ pnl: string; sellPrice: string; sellDate: Date }> {
+    // Get the followed stock record with entryPrice
+    const followedStock = await db
+      .select()
+      .from(followedStocks)
+      .where(
+        and(
+          eq(followedStocks.ticker, ticker),
+          eq(followedStocks.userId, userId)
+        )
+      )
+      .limit(1);
+    
+    if (followedStock.length === 0) {
+      throw new Error("Stock is not being followed");
+    }
+    
+    const stock = followedStock[0];
+    
+    if (!stock.hasEnteredPosition || !stock.entryPrice) {
+      throw new Error("No open position to close");
+    }
+    
+    // Calculate P&L: (sellPrice - entryPrice) * quantity
+    const entryPriceNum = parseFloat(stock.entryPrice);
+    const pnl = (sellPrice - entryPriceNum) * quantity;
+    const sellDate = new Date();
+    
+    // Update the followed stock with sell information
+    await db
+      .update(followedStocks)
+      .set({
+        sellPrice: sellPrice.toString(),
+        sellDate,
+        pnl: pnl.toFixed(2),
+        hasEnteredPosition: false, // Close the position
+      })
+      .where(
+        and(
+          eq(followedStocks.ticker, ticker),
+          eq(followedStocks.userId, userId)
+        )
+      );
+    
+    // Emit event for WebSocket cache invalidation
+    eventDispatcher.emit("FOLLOWED_STOCK_UPDATED", {
+      type: "FOLLOWED_STOCK_UPDATED",
+      userId,
+      ticker,
+      data: { action: "close_position", sellPrice, pnl, sellDate }
+    });
+    
+    return {
+      pnl: pnl.toFixed(2),
+      sellPrice: sellPrice.toString(),
+      sellDate
+    };
+  }
+
+  async getTotalPnL(userId: string): Promise<number> {
+    const result = await db
+      .select({ 
+        totalPnl: sql<number>`COALESCE(SUM(CAST(${followedStocks.pnl} AS DECIMAL)), 0)` 
+      })
+      .from(followedStocks)
+      .where(eq(followedStocks.userId, userId));
+    
+    return result[0]?.totalPnl || 0;
   }
 
   // Cross-user aggregation for "popular stock" notifications

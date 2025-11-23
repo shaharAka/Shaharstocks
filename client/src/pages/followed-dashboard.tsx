@@ -185,7 +185,7 @@ function ClosePositionDialog({ ticker, entryPrice, onSuccess }: { ticker: string
             <DialogFooter>
               <Button 
                 type="submit" 
-                disabled={closePositionMutation.isPending}
+                disabled={closePositionMutation.isPending || !form.formState.isValid}
                 data-testid="button-submit-close-position"
               >
                 {closePositionMutation.isPending ? "Closing..." : "Close Position"}
@@ -443,8 +443,20 @@ export default function FollowedDashboard() {
                           const minPrice = Math.min(previousPrice, currentPriceNum);
                           const maxPrice = Math.max(previousPrice, currentPriceNum);
                           const range = maxPrice - minPrice;
-                          // Ensure padding is always positive - use range-based padding or epsilon
-                          const padding = range > 0 ? range * 0.2 : Math.max(currentPriceNum * 0.01, 0.1);
+                          
+                          // Calculate domain with epsilon padding for flat lines
+                          let domainMin, domainMax;
+                          if (range === 0) {
+                            // When prices are equal, add fixed epsilon padding
+                            const epsilon = Math.max(currentPriceNum * 0.01, 0.1);
+                            domainMin = minPrice - epsilon;
+                            domainMax = maxPrice + epsilon;
+                          } else {
+                            // Normal case with proportional padding
+                            const padding = range * 0.2;
+                            domainMin = minPrice - padding;
+                            domainMax = maxPrice + padding;
+                          }
                           
                           return (
                             <div className="h-12 -mx-2">
@@ -457,7 +469,7 @@ export default function FollowedDashboard() {
                                   margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
                                 >
                                   <YAxis 
-                                    domain={[minPrice - padding, maxPrice + padding]}
+                                    domain={[domainMin, domainMax]}
                                     hide
                                   />
                                   <Line
@@ -573,8 +585,20 @@ export default function FollowedDashboard() {
                           const minPrice = Math.min(previousPrice, currentPrice);
                           const maxPrice = Math.max(previousPrice, currentPrice);
                           const range = maxPrice - minPrice;
-                          // Ensure padding is always positive - use range-based padding or epsilon
-                          const padding = range > 0 ? range * 0.2 : Math.max(currentPrice * 0.01, 0.1);
+                          
+                          // Calculate domain with epsilon padding for flat lines
+                          let domainMin, domainMax;
+                          if (range === 0) {
+                            // When prices are equal, add fixed epsilon padding
+                            const epsilon = Math.max(currentPrice * 0.01, 0.1);
+                            domainMin = minPrice - epsilon;
+                            domainMax = maxPrice + epsilon;
+                          } else {
+                            // Normal case with proportional padding
+                            const padding = range * 0.2;
+                            domainMin = minPrice - padding;
+                            domainMax = maxPrice + padding;
+                          }
                           
                           return (
                             <div className="h-12 w-20 shrink-0">
@@ -587,7 +611,7 @@ export default function FollowedDashboard() {
                                   margin={{ top: 2, right: 2, left: 2, bottom: 2 }}
                                 >
                                   <YAxis 
-                                    domain={[minPrice - padding, maxPrice + padding]}
+                                    domain={[domainMin, domainMax]}
                                     hide
                                   />
                                   <Line

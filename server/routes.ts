@@ -2464,21 +2464,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ticker = req.params.ticker.toUpperCase();
       const { sellPrice, quantity } = req.body;
       
-      // Validate sellPrice - must be finite positive number
-      if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
+      // Convert to numbers and validate
+      const sellPriceNum = Number(sellPrice);
+      if (!Number.isFinite(sellPriceNum) || sellPriceNum <= 0) {
         return res.status(400).json({ error: "sellPrice must be a positive number" });
       }
       
       // Validate quantity - must be finite positive integer, default to 1
       let validQuantity = 1;
       if (quantity !== undefined && quantity !== null) {
-        if (!Number.isFinite(quantity) || quantity < 1) {
+        const quantityNum = Number(quantity);
+        if (!Number.isFinite(quantityNum) || quantityNum < 1) {
           return res.status(400).json({ error: "quantity must be a positive integer" });
         }
-        validQuantity = Math.floor(quantity);
+        validQuantity = Math.floor(quantityNum);
       }
       
-      const result = await storage.closePosition(ticker, req.session.userId, sellPrice, validQuantity);
+      const result = await storage.closePosition(ticker, req.session.userId, sellPriceNum, validQuantity);
       res.status(200).json(result);
     } catch (error) {
       console.error("Close position error:", error);

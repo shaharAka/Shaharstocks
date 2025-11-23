@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Star, ArrowUpRight, ArrowDownRight, Sparkles, Activity, Target, Zap } from "lucide-react";
+import { TrendingUp, Star, ArrowUpRight, ArrowDownRight, Lightbulb, Activity, Target, Zap } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import type { Stock } from "@shared/schema";
@@ -251,7 +251,7 @@ export default function FollowedDashboard() {
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-amber-500" />
+              <Lightbulb className="h-5 w-5 text-amber-500" />
               <h2 className="text-xl font-semibold tracking-tight">High-Signal Opportunities</h2>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -346,7 +346,7 @@ export default function FollowedDashboard() {
             ) : (
               <div className="text-center py-12">
                 <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-                  <Sparkles className="h-8 w-8 text-muted-foreground" />
+                  <Lightbulb className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <h3 className="font-semibold mb-2">No opportunities available</h3>
                 <p className="text-sm text-muted-foreground mb-4">
@@ -377,7 +377,7 @@ export default function FollowedDashboard() {
               </p>
               <Link href="/recommendations">
                 <Button size="lg">
-                  <Sparkles className="h-4 w-4 mr-2" />
+                  <Lightbulb className="h-4 w-4 mr-2" />
                   Explore Opportunities
                 </Button>
               </Link>

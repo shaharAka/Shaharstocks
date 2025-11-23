@@ -2,7 +2,6 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
-  ShoppingCart,
   ShieldCheck,
   Lightbulb,
   MessageSquare,
@@ -12,6 +11,7 @@ import {
   Minus,
   ChevronRight,
   LayoutDashboard,
+  Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,7 @@ const mainMenuItems = [
   {
     title: "Opportunities",
     url: "/recommendations",
-    icon: ShoppingCart,
+    icon: Lightbulb,
     testId: "link-opportunities",
   },
 ];
@@ -304,7 +304,7 @@ export function AppSidebar() {
                           tooltip={isCollapsed ? "Following" : undefined}
                           data-testid="link-following"
                         >
-                          <Star className="h-4 w-4 fill-current" />
+                          <Star className="h-4 w-4" />
                           <span>Following</span>
                           <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                         </SidebarMenuButton>
@@ -359,7 +359,7 @@ export function AppSidebar() {
                       tooltip={isCollapsed ? "Community" : undefined}
                       data-testid="link-community"
                     >
-                      <Lightbulb className="h-4 w-4" />
+                      <Users className="h-4 w-4" />
                       <span>Community</span>
                       <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
                     </SidebarMenuButton>

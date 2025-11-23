@@ -15,7 +15,7 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Stock } from "@shared/schema";
-import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { useState } from "react";
 
 interface FollowedStock {
@@ -415,28 +415,40 @@ export default function FollowedDashboard() {
                         </div>
                         
                         {/* Mini trend line */}
-                        {stock.priceChange && (
-                          <div className="h-12 -mx-2">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart
-                                data={[
-                                  { price: parseFloat(stock.currentPrice) - priceChange },
-                                  { price: parseFloat(stock.currentPrice) }
-                                ]}
-                                margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-                              >
-                                <Line
-                                  type="monotone"
-                                  dataKey="price"
-                                  stroke={isPricePositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
-                                  strokeWidth={2}
-                                  dot={false}
-                                  animationDuration={300}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                        )}
+                        {stock.priceChange && (() => {
+                          const previousPrice = parseFloat(stock.currentPrice) - priceChange;
+                          const currentPriceNum = parseFloat(stock.currentPrice);
+                          const minPrice = Math.min(previousPrice, currentPriceNum);
+                          const maxPrice = Math.max(previousPrice, currentPriceNum);
+                          const padding = (maxPrice - minPrice) * 0.2 || 0.01;
+                          
+                          return (
+                            <div className="h-12 -mx-2">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart
+                                  data={[
+                                    { price: previousPrice },
+                                    { price: currentPriceNum }
+                                  ]}
+                                  margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+                                >
+                                  <YAxis 
+                                    domain={[minPrice - padding, maxPrice + padding]}
+                                    hide
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey="price"
+                                    stroke={isPricePositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
+                                    strokeWidth={2}
+                                    dot={false}
+                                    animationDuration={300}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          );
+                        })()}
 
                         {/* Close Position Button */}
                         {stock.hasEnteredPosition && stock.entryPrice && (
@@ -533,26 +545,38 @@ export default function FollowedDashboard() {
                         </div>
                         
                         {/* Mini trend sparkline */}
-                        <div className="h-12 w-20 shrink-0">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart
-                              data={[
-                                { price: previousPrice },
-                                { price: currentPrice }
-                              ]}
-                              margin={{ top: 2, right: 2, left: 2, bottom: 2 }}
-                            >
-                              <Line
-                                type="monotone"
-                                dataKey="price"
-                                stroke={isPricePositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
-                                strokeWidth={2}
-                                dot={false}
-                                animationDuration={300}
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
+                        {(() => {
+                          const minPrice = Math.min(previousPrice, currentPrice);
+                          const maxPrice = Math.max(previousPrice, currentPrice);
+                          const padding = (maxPrice - minPrice) * 0.2 || 0.01;
+                          
+                          return (
+                            <div className="h-12 w-20 shrink-0">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart
+                                  data={[
+                                    { price: previousPrice },
+                                    { price: currentPrice }
+                                  ]}
+                                  margin={{ top: 2, right: 2, left: 2, bottom: 2 }}
+                                >
+                                  <YAxis 
+                                    domain={[minPrice - padding, maxPrice + padding]}
+                                    hide
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey="price"
+                                    stroke={isPricePositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
+                                    strokeWidth={2}
+                                    dot={false}
+                                    animationDuration={300}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          );
+                        })()}
                         
                         <div className="text-right shrink-0">
                           <p className="text-lg font-mono font-bold mb-0.5">

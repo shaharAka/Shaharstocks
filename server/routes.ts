@@ -1929,6 +1929,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get sparkline data (lightweight - just last 7 close prices for mini charts)
+  app.get("/api/stocks/:ticker/sparkline", async (req, res) => {
+    try {
+      const ticker = req.params.ticker.toUpperCase();
+      const candlesticks = await storage.getCandlesticksByTicker(ticker);
+      
+      if (!candlesticks || !candlesticks.candlestickData || candlesticks.candlestickData.length === 0) {
+        // Return empty array if no data available
+        return res.json([]);
+      }
+      
+      // Get last 7 data points (or all if less than 7)
+      const dataPoints = candlesticks.candlestickData.slice(-7);
+      
+      // Return just the close prices for the sparkline
+      const sparklineData = dataPoints.map(d => ({
+        date: d.date,
+        price: d.close
+      }));
+      
+      res.json(sparklineData);
+    } catch (error) {
+      console.error("[Sparkline] Error fetching sparkline data:", error);
+      res.status(500).json({ error: "Failed to fetch sparkline data" });
+    }
+  });
+
   // Get all stock analyses (returns null scores for stocks with active jobs to show them as "processing")
   app.get("/api/stock-analyses", async (req, res) => {
     try {

@@ -211,14 +211,14 @@ export function AppSidebar() {
                   // Determine action recommendation based on AI STANCE and position status (right of price)
                   // Shows the actual AI recommendation: BUY (entry), SELL (exit/short entry), or HOLD (maintain)
                   // The aiStance already reflects the appropriate action for current position status
-                  let actionTag: { text: string; variant: 'default' | 'secondary' } | null = null;
+                  let actionTag: { text: string; variant: 'default' | 'secondary' | 'outline'; className?: string } | null = null;
                   if (stock.stanceAlignment != null) {
                     if (stock.stanceAlignment === 'act') {
                       // Show the AI's recommended stance (BUY for entry, SELL for exit/short entry)
                       const actionText = stock.aiStance || 'ACT';
                       actionTag = { text: actionText, variant: 'default' };
                     } else if (stock.stanceAlignment === 'hold') {
-                      actionTag = { text: 'HOLD', variant: 'secondary' };
+                      actionTag = { text: 'HOLD', variant: 'outline', className: 'text-muted-foreground border-muted-foreground/30' };
                     }
                   }
                   
@@ -280,7 +280,7 @@ export function AppSidebar() {
                             {actionTag && !isProcessing && (
                               <Badge 
                                 variant={actionTag.variant} 
-                                className="h-4 px-1.5 text-[10px]"
+                                className={cn("h-4 px-1.5 text-[10px]", actionTag.className)}
                                 data-testid={`badge-action-${stock.ticker}`}
                               >
                                 {actionTag.text}

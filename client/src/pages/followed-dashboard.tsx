@@ -450,8 +450,11 @@ export default function FollowedDashboard() {
                           </div>
                           {stock.aiStance && !isAnalyzing && (
                             <Badge 
-                              variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'secondary'}
-                              className="h-5 text-[10px] w-fit"
+                              variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'outline'}
+                              className={cn(
+                                "h-5 text-[10px] w-fit",
+                                stock.aiStance === 'HOLD' && "text-muted-foreground border-muted-foreground/30"
+                              )}
                             >
                               {stock.aiStance}
                             </Badge>
@@ -587,7 +590,13 @@ export default function FollowedDashboard() {
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-mono font-bold text-base">{stock.ticker}</span>
                             {stock.aiStance && (
-                              <Badge variant="default" className="h-4 text-[9px] px-1.5">
+                              <Badge 
+                                variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'outline'}
+                                className={cn(
+                                  "h-4 text-[9px] px-1.5",
+                                  stock.aiStance === 'HOLD' && "text-muted-foreground border-muted-foreground/30"
+                                )}
+                              >
                                 {stock.aiStance}
                               </Badge>
                             )}

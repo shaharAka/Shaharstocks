@@ -61,21 +61,23 @@ const closePositionSchema = z.object({
 type ClosePositionForm = z.infer<typeof closePositionSchema>;
 
 // Sparkline component that fetches and displays historical price trend
-function SparklineChart({ ticker, priceChange, className }: { ticker: string; priceChange: number; className?: string }) {
+function SparklineChart({ ticker, className }: { ticker: string; className?: string }) {
   const { data: sparklineData = [] } = useQuery<Array<{ date: string; price: number }>>({
     queryKey: [`/api/stocks/${ticker}/sparkline`],
     retry: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
     meta: { ignoreError: true },
   });
-
-  // Determine trend color based on overall price change
-  const isPricePositive = priceChange >= 0;
   
   // If no sparkline data available, don't render anything
   if (!sparklineData || sparklineData.length === 0) {
     return null;
   }
+
+  // Determine trend color based on 7-day performance (first vs last close)
+  const firstPrice = sparklineData[0].price;
+  const lastPrice = sparklineData[sparklineData.length - 1].price;
+  const isPricePositive = lastPrice >= firstPrice;
 
   // Calculate domain with epsilon padding
   const prices = sparklineData.map(d => d.price);
@@ -499,7 +501,7 @@ export default function FollowedDashboard() {
                         </div>
                         
                         {/* Mini trend sparkline - shows last 7 days */}
-                        <SparklineChart ticker={stock.ticker} priceChange={priceChange} />
+                        <SparklineChart ticker={stock.ticker} />
 
                         {/* Close Position Button */}
                         {stock.hasEnteredPosition && stock.entryPrice && (
@@ -596,7 +598,7 @@ export default function FollowedDashboard() {
                         </div>
                         
                         {/* Mini trend sparkline - shows last 7 days */}
-                        <SparklineChart ticker={stock.ticker} priceChange={priceChange} className="h-12 w-20 shrink-0" />
+                        <SparklineChart ticker={stock.ticker} className="h-12 w-20 shrink-0" />
                         
                         <div className="text-right shrink-0">
                           <p className="text-lg font-mono font-bold mb-0.5">

@@ -261,7 +261,9 @@ export default function FollowedDashboard() {
     ? Math.round(followedStocks.reduce((sum, s) => sum + (s.integratedScore ?? 0), 0) / followedStocks.length)
     : 0;
   const buySignals = followedStocks.filter(s => s.aiStance === 'BUY').length;
-  const totalPnl = totalPnlData?.totalPnl ?? 0;
+  const totalPnl = typeof totalPnlData?.totalPnl === 'string' 
+    ? parseFloat(totalPnlData.totalPnl) 
+    : (totalPnlData?.totalPnl ?? 0);
 
   return (
     <div className="p-6 space-y-8 max-w-screen-2xl mx-auto">

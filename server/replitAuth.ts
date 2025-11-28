@@ -55,7 +55,8 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: "auto" as any, // Let express determine based on connection
+      sameSite: "lax",
       maxAge: sessionTtl,
     },
   });

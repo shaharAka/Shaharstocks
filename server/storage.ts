@@ -214,12 +214,16 @@ export interface IStorage {
   getAllUserIds(): Promise<string[]>;
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByVerificationToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
   archiveUser(userId: string, archivedBy: string): Promise<User | undefined>;
   unarchiveUser(userId: string): Promise<User | undefined>;
   updateUserSubscriptionStatus(userId: string, status: string, endDate?: Date): Promise<User | undefined>;
+  verifyUserEmail(userId: string): Promise<User | undefined>;
+  updateVerificationToken(userId: string, token: string, expiry: Date): Promise<User | undefined>;
+  purgeUnverifiedUsers(olderThanHours: number): Promise<number>;
   markUserHasSeenOnboarding(userId: string): Promise<void>;
   completeUserOnboarding(userId: string): Promise<void>;
   getUserProgress(userId: string): Promise<{ onboardingCompletedAt: Date | null; tutorialCompletions: Record<string, boolean> }>;
@@ -1680,6 +1684,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
+    return user;
+  }
+
   async createUser(user: InsertUser): Promise<User> {
     const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
@@ -1692,6 +1701,51 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return updatedUser;
+  }
+
+  async verifyUserEmail(userId: string): Promise<User | undefined> {
+    const now = new Date();
+    const trialEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+    
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpiry: null,
+        subscriptionStatus: "trial",
+        subscriptionStartDate: now,
+        trialEndsAt,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async updateVerificationToken(userId: string, token: string, expiry: Date): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        emailVerificationToken: token,
+        emailVerificationExpiry: expiry,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async purgeUnverifiedUsers(olderThanHours: number): Promise<number> {
+    const cutoffDate = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
+    const result = await db
+      .delete(users)
+      .where(
+        and(
+          eq(users.emailVerified, false),
+          eq(users.subscriptionStatus, "pending_verification"),
+          lt(users.createdAt, cutoffDate)
+        )
+      );
+    return result.rowCount || 0;
   }
 
   async markUserInitialDataFetched(userId: string): Promise<void> {

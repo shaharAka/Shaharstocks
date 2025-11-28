@@ -566,7 +566,10 @@ export const users = pgTable("users", {
   avatarColor: text("avatar_color").notNull().default("#3b82f6"), // Hex color for avatar
   isAdmin: boolean("is_admin").notNull().default(false), // Admin users can access backoffice
   isSuperAdmin: boolean("is_super_admin").notNull().default(false), // Super admin users can delete announcements and perform elevated operations
-  subscriptionStatus: text("subscription_status").notNull().default("trial"), // "trial", "active", "inactive", "cancelled", "expired"
+  emailVerified: boolean("email_verified").notNull().default(false), // Email verification status
+  emailVerificationToken: text("email_verification_token"), // Token for email verification
+  emailVerificationExpiry: timestamp("email_verification_expiry"), // Token expiry time
+  subscriptionStatus: text("subscription_status").notNull().default("pending_verification"), // "pending_verification", "trial", "active", "inactive", "cancelled", "expired"
   paypalSubscriptionId: text("paypal_subscription_id"), // PayPal subscription ID
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),

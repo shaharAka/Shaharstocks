@@ -16,6 +16,9 @@ import { openinsiderService } from "./openinsiderService";
 import { createRequireAdmin } from "./session";
 import { verifyPayPalWebhook } from "./paypalWebhookVerifier";
 import { aiAnalysisService } from "./aiAnalysisService";
+import { signupLimiter, loginLimiter, resendVerificationLimiter } from "./middleware/rateLimiter";
+import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "./utils/emailValidation";
+import { sendVerificationEmail } from "./emailService";
 
 /**
  * Check if US stock market is currently open
@@ -332,7 +335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       if (!email || !password) {
@@ -349,6 +352,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isValidPassword = await bcrypt.compare(password, user.passwordHash);
       if (!isValidPassword) {
         return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Check email verification
+      if (!user.emailVerified) {
+        return res.status(403).json({ 
+          error: "Please verify your email before logging in. Check your inbox for the verification link.",
+          emailVerificationRequired: true,
+          email: user.email
+        });
       }
 
       // Check subscription status - allow trial and active users
@@ -405,7 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/signup", async (req, res) => {
+  app.post("/api/auth/signup", signupLimiter, async (req, res) => {
     try {
       const { name, email, password } = req.body;
       if (!name || !email || !password) {
@@ -414,6 +426,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (password.length < 8) {
         return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+
+      // Check for disposable email domains
+      if (isDisposableEmail(email)) {
+        console.log(`[Signup] Blocked disposable email: ${email}`);
+        return res.status(400).json({ error: "Disposable email addresses are not allowed. Please use a permanent email address." });
       }
 
       const existingUser = await storage.getUserByEmail(email);
@@ -428,26 +446,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const avatarColors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
       const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
 
-      // Set up 30-day trial
-      const now = new Date();
-      const trialEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+      // Generate verification token
+      const verificationToken = generateVerificationToken();
+      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
       const newUser = await storage.createUser({
         name,
         email,
         passwordHash,
         avatarColor,
-        subscriptionStatus: "trial", // Start with trial
-        subscriptionStartDate: now,
-        trialEndsAt,
+        emailVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiry: verificationExpiry,
+        subscriptionStatus: "pending_verification", // Start with pending
       });
+
+      // Send verification email
+      const baseUrl = process.env.NODE_ENV === "production" 
+        ? `https://${req.get('host')}`
+        : `http://${req.get('host')}`;
+      const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
+      
+      const emailSent = await sendVerificationEmail({
+        to: email,
+        name,
+        verificationUrl,
+      });
+
+      if (!emailSent) {
+        console.error(`[Signup] Failed to send verification email to ${email}`);
+        // Don't fail signup, but log the error
+      }
 
       // Create admin notification for super admins
       try {
         await storage.createAdminNotification({
           type: "user_signup",
-          title: "New User Signup",
-          message: `${name} (${email}) has signed up for a 30-day trial`,
+          title: "New User Signup (Pending Verification)",
+          message: `${name} (${email}) has signed up and is pending email verification`,
           metadata: {
             userId: newUser.id,
             userName: name,
@@ -456,30 +492,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isRead: false,
         });
       } catch (notifError) {
-        // Don't fail signup if notification creation fails
         console.error("Failed to create admin notification for new signup:", notifError);
       }
 
-      // Log them in immediately
-      req.session.userId = newUser.id;
-      
-      // Explicitly save session before sending response
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error during signup:", err);
-          return res.status(500).json({ error: "Failed to save session" });
-        }
-        
-        res.json({ 
-          user: {
-            ...newUser,
-            passwordHash: undefined, // Don't send password hash to client
-          }
-        });
+      // Don't log them in - they need to verify email first
+      res.json({ 
+        success: true,
+        message: "Account created! Please check your email to verify your account.",
+        email: email
       });
     } catch (error) {
       console.error("Signup error:", error);
       res.status(500).json({ error: "Failed to create account" });
+    }
+  });
+
+  // Email verification endpoint
+  app.get("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ error: "Invalid verification token" });
+      }
+
+      const user = await storage.getUserByVerificationToken(token);
+      
+      if (!user) {
+        return res.status(404).json({ error: "Invalid or expired verification link" });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ error: "Email already verified" });
+      }
+
+      if (isTokenExpired(user.emailVerificationExpiry)) {
+        return res.status(400).json({ error: "Verification link has expired. Please request a new one." });
+      }
+
+      // Verify email and start trial
+      const verifiedUser = await storage.verifyUserEmail(user.id);
+      
+      if (!verifiedUser) {
+        return res.status(500).json({ error: "Failed to verify email" });
+      }
+
+      console.log(`[EmailVerification] User ${user.email} verified successfully`);
+      
+      res.json({ 
+        success: true,
+        message: "Email verified successfully! You can now log in.",
+        email: user.email
+      });
+    } catch (error) {
+      console.error("Email verification error:", error);
+      res.status(500).json({ error: "Failed to verify email" });
+    }
+  });
+
+  // Resend verification email
+  app.post("/api/auth/resend-verification", resendVerificationLimiter, async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      
+      if (!user) {
+        // Don't reveal if email exists for security
+        return res.json({ 
+          success: true,
+          message: "If an account with that email exists, a verification email has been sent."
+        });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ error: "Email is already verified" });
+      }
+
+      // Generate new token
+      const verificationToken = generateVerificationToken();
+      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      await storage.updateVerificationToken(user.id, verificationToken, verificationExpiry);
+
+      // Send verification email
+      const baseUrl = process.env.NODE_ENV === "production" 
+        ? `https://${req.get('host')}`
+        : `http://${req.get('host')}`;
+      const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
+      
+      const emailSent = await sendVerificationEmail({
+        to: email,
+        name: user.name,
+        verificationUrl,
+      });
+
+      if (!emailSent) {
+        console.error(`[ResendVerification] Failed to send verification email to ${email}`);
+        return res.status(500).json({ error: "Failed to send verification email" });
+      }
+
+      res.json({ 
+        success: true,
+        message: "Verification email sent. Please check your inbox."
+      });
+    } catch (error) {
+      console.error("Resend verification error:", error);
+      res.status(500).json({ error: "Failed to resend verification email" });
     }
   });
 

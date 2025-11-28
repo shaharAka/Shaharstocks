@@ -17,3 +17,6 @@ externalPort = 3000
 run = "npm start"
 build = "npm run build"
 deploymentTarget = "cloudrun"
+
+[agent]
+integrations = ["resend:1.0.0"]

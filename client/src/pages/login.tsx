@@ -39,6 +39,8 @@ export default function Login() {
         const error: any = new Error(errorData.error || "Login failed");
         error.trialExpired = errorData.trialExpired;
         error.subscriptionStatus = errorData.subscriptionStatus;
+        error.emailVerificationRequired = errorData.emailVerificationRequired;
+        error.email = errorData.email;
         throw error;
       }
       return response.json();
@@ -65,7 +67,14 @@ export default function Login() {
       window.location.href = "/";
     },
     onError: (error: any) => {
-      if (error.trialExpired) {
+      if (error.emailVerificationRequired) {
+        // Show special message for unverified emails
+        toast({
+          title: "Email Verification Required",
+          description: error.message || "Please verify your email before logging in.",
+          variant: "destructive",
+        });
+      } else if (error.trialExpired) {
         // Show special message for expired trials
         toast({
           title: "Free Trial Expired",
@@ -79,6 +88,26 @@ export default function Login() {
           variant: "destructive",
         });
       }
+    },
+  });
+
+  const resendVerificationMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const response = await apiRequest("POST", "/api/auth/resend-verification", { email });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Email Sent",
+        description: "A new verification email has been sent to your inbox.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to resend",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
     },
   });
 

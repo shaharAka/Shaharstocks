@@ -27,6 +27,7 @@ import TickerDetail from "@/pages/ticker-detail";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Terms from "@/pages/terms";
+import VerifyEmail from "@/pages/verify-email";
 import NotFound from "@/pages/not-found";
 import FollowedDashboard from "@/pages/followed-dashboard";
 import { useEffect, useState } from "react";
@@ -36,6 +37,7 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/verify-email" component={VerifyEmail} />
       <Route path="/terms" component={Terms} />
       <Route path="/" component={Purchase} />
       <Route path="/recommendations" component={Purchase} />
@@ -66,7 +68,7 @@ function AuthenticatedApp() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/terms") {
+    if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/verify-email" && location !== "/terms") {
       setLocation("/login");
     }
   }, [user, isLoading, location, setLocation]);
@@ -90,11 +92,11 @@ function AuthenticatedApp() {
     );
   }
 
-  if (!user && location !== "/login" && location !== "/signup" && location !== "/terms") {
+  if (!user && location !== "/login" && location !== "/signup" && location !== "/verify-email" && location !== "/terms") {
     return null;
   }
 
-  if (location === "/login" || location === "/signup" || location === "/terms") {
+  if (location === "/login" || location === "/signup" || location === "/verify-email" || location === "/terms") {
     return <Router />;
   }
 

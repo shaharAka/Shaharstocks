@@ -39,6 +39,8 @@ export default function Signup() {
   const { toast } = useToast();
   const [showPayPal, setShowPayPal] = useState(false);
   const [paypalLoaded, setPaypalLoaded] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
 
   const form = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
@@ -60,19 +62,40 @@ export default function Signup() {
       });
       return response.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (data: { success: boolean; message: string; email: string }) => {
+      setSignupSuccess(true);
+      setUserEmail(data.email);
       toast({
-        title: "Welcome to signal2!",
-        description: "Your 30-day free trial has started. Enjoy full access to all features!",
+        title: "Account Created!",
+        description: data.message,
       });
-      
-      // CRITICAL FIX: Force full page reload for clean start
-      window.location.href = "/";
     },
     onError: (error: Error) => {
       toast({
         title: "Sign up failed",
         description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resendVerificationMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/auth/resend-verification", {
+        email: userEmail,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Email Sent",
+        description: "A new verification email has been sent to your inbox.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to resend",
+        description: error.message || "Please try again later.",
         variant: "destructive",
       });
     },
@@ -154,6 +177,67 @@ export default function Signup() {
   const onSubmit = (data: SignupForm) => {
     signupMutation.mutate(data);
   };
+
+  if (signupSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
+        <Card className="w-full max-w-2xl">
+          <CardHeader className="text-center space-y-4">
+            <div className="flex justify-center">
+              <CheckCircle2 className="h-16 w-16 text-green-500" />
+            </div>
+            <div>
+              <CardTitle className="text-3xl font-bold mb-2">Check Your Email!</CardTitle>
+              <CardDescription className="text-base">
+                We've sent a verification link to <strong>{userEmail}</strong>
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4 bg-muted/50 rounded-lg p-6">
+              <div className="space-y-2">
+                <h3 className="font-semibold">What's next?</h3>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                  <li>Check your email inbox for our verification message</li>
+                  <li>Click the verification link to activate your account</li>
+                  <li>Log in and start your 30-day free trial!</li>
+                </ol>
+              </div>
+              <div className="text-sm text-muted-foreground pt-4 border-t">
+                <p className="mb-2">Didn't receive the email?</p>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                  <li>Check your spam or junk folder</li>
+                  <li>Make sure you entered the correct email address</li>
+                  <li>Wait a few minutes for the email to arrive</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => resendVerificationMutation.mutate()}
+                disabled={resendVerificationMutation.isPending}
+                data-testid="button-resend-verification"
+              >
+                {resendVerificationMutation.isPending ? "Sending..." : "Resend Verification Email"}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={() => setLocation("/login")}
+                data-testid="button-back-to-login"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Login
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (showPayPal) {
     return (

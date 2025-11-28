@@ -3649,14 +3649,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Apply options deal filter ONLY to BUY transactions using configurable threshold
+          // Filter out deals where insider got MORE than X% discount (likely options exercises)
           if (transaction.recommendation === "buy") {
             const insiderPriceNum = transaction.price;
-            const thresholdPercent = optionsDealThreshold / 100;
-            if (optionsDealThreshold > 0 && insiderPriceNum < quote.currentPrice * thresholdPercent) {
+            const discountPercent = ((quote.currentPrice - insiderPriceNum) / quote.currentPrice) * 100;
+            if (optionsDealThreshold > 0 && discountPercent > optionsDealThreshold) {
               filteredOptionsDeals++;
               console.log(`[OpeninsiderFetch] ⊗ ${transaction.ticker} likely options deal:`);
               console.log(`  Insider: ${transaction.insiderName} (${transaction.insiderTitle || 'N/A'})`);
-              console.log(`  Insider price: $${insiderPriceNum.toFixed(2)} < ${optionsDealThreshold}% of market: $${quote.currentPrice.toFixed(2)}`);
+              console.log(`  Insider got ${discountPercent.toFixed(1)}% discount (>${optionsDealThreshold}% threshold)`);
+              console.log(`  Insider price: $${insiderPriceNum.toFixed(2)}, Market price: $${quote.currentPrice.toFixed(2)}`);
               console.log(`  Transaction value: $${(insiderPriceNum * transaction.quantity).toLocaleString()}, Quantity: ${transaction.quantity.toLocaleString()}`);
               continue;
             }

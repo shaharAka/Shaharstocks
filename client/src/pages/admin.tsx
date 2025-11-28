@@ -44,7 +44,8 @@ import { AdminNotificationBell } from "@/components/admin-notification-bell";
 
 interface User {
   id: string;
-  name: string;
+  firstName?: string | null;
+  lastName?: string | null;
   email: string;
   avatarColor: string;
   isAdmin: boolean;
@@ -56,6 +57,23 @@ interface User {
   archived: boolean;
   archivedAt?: string;
   archivedBy?: string;
+}
+
+function getDisplayName(user: { firstName?: string | null; lastName?: string | null; email?: string | null }): string {
+  if (user.firstName || user.lastName) {
+    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  }
+  return user.email || 'User';
+}
+
+function getUserInitial(user: { firstName?: string | null; lastName?: string | null; email?: string | null }): string {
+  if (user.firstName) {
+    return user.firstName.charAt(0).toUpperCase();
+  }
+  if (user.email) {
+    return user.email.charAt(0).toUpperCase();
+  }
+  return 'U';
 }
 
 interface Payment {
@@ -704,14 +722,14 @@ export default function AdminPage() {
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <Avatar>
                       <AvatarFallback style={{ backgroundColor: user.avatarColor }}>
-                        {user.name.charAt(0).toUpperCase()}
+                        {getUserInitial(user)}
                       </AvatarFallback>
                     </Avatar>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <p className="font-medium truncate" data-testid={`text-name-${user.id}`}>
-                          {user.name}
+                          {getDisplayName(user)}
                         </p>
                         {user.isAdmin && (
                           <Badge variant="secondary" className="shrink-0">
@@ -879,7 +897,7 @@ export default function AdminPage() {
                         
                         <DropdownMenuItem
                           onClick={() => {
-                            if (confirm(`Are you sure you want to permanently delete ${user.name}? This cannot be undone.`)) {
+                            if (confirm(`Are you sure you want to permanently delete ${getDisplayName(user)}? This cannot be undone.`)) {
                               adminActionMutation.mutate({
                                 endpoint: "/api/admin/delete-user",
                                 email: user.email,
@@ -1003,7 +1021,7 @@ export default function AdminPage() {
           <DialogHeader>
             <DialogTitle>Extend Subscription</DialogTitle>
             <DialogDescription>
-              Manually extend subscription for {selectedUser?.name}
+              Manually extend subscription for {selectedUser ? getDisplayName(selectedUser) : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1046,7 +1064,7 @@ export default function AdminPage() {
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
             <DialogDescription>
-              Set a new password for {selectedUser?.name}
+              Set a new password for {selectedUser ? getDisplayName(selectedUser) : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1078,7 +1096,7 @@ export default function AdminPage() {
           <DialogHeader>
             <DialogTitle>Create Manual Payment</DialogTitle>
             <DialogDescription>
-              Record a manual payment for {selectedUser?.name}
+              Record a manual payment for {selectedUser ? getDisplayName(selectedUser) : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1135,7 +1153,7 @@ export default function AdminPage() {
       <Dialog open={viewPaymentsDialogOpen} onOpenChange={setViewPaymentsDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Payment History - {selectedUser?.name}</DialogTitle>
+            <DialogTitle>Payment History - {selectedUser ? getDisplayName(selectedUser) : ''}</DialogTitle>
             <DialogDescription>
               Complete payment and subscription history
             </DialogDescription>

@@ -9,9 +9,9 @@ export default function Terms() {
       <div className="max-w-4xl mx-auto py-8">
         <div className="mb-6">
           <Button variant="ghost" asChild data-testid="button-back">
-            <Link href="/signup">
+            <Link href="/">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Sign Up
+              Back to Home
             </Link>
           </Button>
         </div>
@@ -183,9 +183,9 @@ export default function Terms() {
         </Card>
 
         <div className="mt-6 text-center">
-          <Button asChild data-testid="button-back-to-signup">
-            <Link href="/signup">
-              Back to Sign Up
+          <Button asChild data-testid="button-back-to-home">
+            <Link href="/">
+              Back to Home
             </Link>
           </Button>
         </div>

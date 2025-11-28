@@ -25,26 +25,30 @@ export const sessionMiddleware = session({
   },
 });
 
-// Middleware to check if user is logged in
+// Middleware to check if user is logged in (Replit Auth)
 export function requireUser(req: any, res: any, next: any) {
-  if (!req.session.userId) {
+  const userId = req.user?.claims?.sub;
+  if (!userId) {
     return res.status(401).json({ error: "Not authenticated" });
   }
+  req.userId = userId; // Attach for convenience
   next();
 }
 
-// Factory function to create admin middleware with storage dependency
+// Factory function to create admin middleware with storage dependency (Replit Auth)
 export function createRequireAdmin(storage: IStorage) {
   return async function requireAdmin(req: any, res: any, next: any) {
-    if (!req.session.userId) {
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
       return res.status(401).json({ error: "Not authenticated" });
     }
     
-    const user = await storage.getUser(req.session.userId);
+    const user = await storage.getUser(userId);
     if (!user || !user.isAdmin) {
       return res.status(403).json({ error: "Unauthorized - Admin access required" });
     }
     
+    req.userId = userId; // Attach for convenience
     next();
   };
 }

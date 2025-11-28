@@ -36,12 +36,12 @@ import { Input } from "@/components/ui/input";
 import { LogOut, UserCog, Trash2, CreditCard } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
-import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { BillingManagement } from "@/components/billing-management";
 
 const profileSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
 });
 
@@ -49,7 +49,6 @@ type ProfileForm = z.infer<typeof profileSchema>;
 
 export function UserProfile() {
   const { user } = useUser();
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -58,20 +57,23 @@ export function UserProfile() {
   const form = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      name: user?.name || "",
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
       email: user?.email || "",
     },
   });
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/logout", {});
-    },
-    onSuccess: () => {
-      // CRITICAL FIX: Force full page reload to ensure complete cleanup
-      window.location.href = "/login";
-    },
-  });
+  const handleLogout = () => {
+    // Redirect to Replit Auth logout endpoint
+    window.location.href = "/api/logout";
+  };
+
+  // Get display name from firstName/lastName or email fallback
+  const displayName = user 
+    ? (user.firstName && user.lastName
+        ? `${user.firstName} ${user.lastName}`.trim()
+        : user.email || 'User')
+    : '';
 
   const updateMutation = useMutation({
     mutationFn: async (data: ProfileForm) => {
@@ -101,11 +103,12 @@ export function UserProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/current-user"] });
-      setLocation("/login");
       toast({
         title: "Account deleted",
         description: "Your account has been deleted successfully.",
       });
+      // Redirect to logout to clear session after account deletion
+      window.location.href = "/api/logout";
     },
     onError: (error: Error) => {
       toast({
@@ -129,7 +132,7 @@ export function UserProfile() {
           <Button variant="ghost" size="icon" data-testid="button-user-profile" className="h-11 w-11">
             <Avatar className="h-8 w-8">
               <AvatarFallback style={{ backgroundColor: user.avatarColor }}>
-                {user.name.charAt(0).toUpperCase()}
+                {displayName.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
           </Button>
@@ -137,7 +140,7 @@ export function UserProfile() {
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">{user.name}</p>
+              <p className="text-sm font-medium leading-none">{displayName}</p>
               <p className="text-xs leading-none text-muted-foreground">
                 {user.email}
               </p>
@@ -146,7 +149,7 @@ export function UserProfile() {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => {
-              form.reset({ name: user.name, email: user.email });
+              form.reset({ firstName: user.firstName || '', lastName: user.lastName || '', email: user.email || '' });
               setEditDialogOpen(true);
             }}
             data-testid="button-edit-profile"
@@ -171,8 +174,7 @@ export function UserProfile() {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => logoutMutation.mutate()}
-            disabled={logoutMutation.isPending}
+            onClick={handleLogout}
             data-testid="button-logout"
           >
             <LogOut className="mr-2 h-4 w-4" />
@@ -193,12 +195,25 @@ export function UserProfile() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="name"
+                name="firstName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>First Name</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-edit-name" />
+                      <Input {...field} data-testid="input-edit-first-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-edit-last-name" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

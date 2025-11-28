@@ -3,6 +3,18 @@ import { pgTable, text, varchar, decimal, integer, timestamp, boolean, jsonb, un
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Session storage table for Replit Auth
+// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
+
 // Stock opportunity information from insider trading data feeds
 // Per-user tenant isolation: Each user has their own isolated stock collection
 // Each row represents an individual insider transaction (multiple transactions per ticker allowed)
@@ -558,18 +570,17 @@ export const insertCompoundRuleSchema = z.object({
 export type InsertCompoundRule = z.infer<typeof insertCompoundRuleSchema>;
 
 // Users - for collaboration
+// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(), // Hashed password for authentication
-  avatarColor: text("avatar_color").notNull().default("#3b82f6"), // Hex color for avatar
+  email: varchar("email").unique(), // Email from Replit Auth (can be null for some login methods)
+  firstName: varchar("first_name"), // From Replit Auth claims
+  lastName: varchar("last_name"), // From Replit Auth claims
+  profileImageUrl: varchar("profile_image_url"), // From Replit Auth claims
+  avatarColor: text("avatar_color").notNull().default("#3b82f6"), // Hex color for avatar fallback
   isAdmin: boolean("is_admin").notNull().default(false), // Admin users can access backoffice
   isSuperAdmin: boolean("is_super_admin").notNull().default(false), // Super admin users can delete announcements and perform elevated operations
-  emailVerified: boolean("email_verified").notNull().default(false), // Email verification status
-  emailVerificationToken: text("email_verification_token"), // Token for email verification
-  emailVerificationExpiry: timestamp("email_verification_expiry"), // Token expiry time
-  subscriptionStatus: text("subscription_status").notNull().default("pending_verification"), // "pending_verification", "trial", "active", "inactive", "cancelled", "expired"
+  subscriptionStatus: text("subscription_status").notNull().default("trial"), // "trial", "active", "inactive", "cancelled", "expired"
   paypalSubscriptionId: text("paypal_subscription_id"), // PayPal subscription ID
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
@@ -588,15 +599,25 @@ export const users = pgTable("users", {
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by"), // Which admin archived this user
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ 
-  id: true, 
   createdAt: true,
+  updatedAt: true,
   archivedAt: true,
 });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// UpsertUser type for Replit Auth (required fields for upsert operation)
+export type UpsertUser = {
+  id: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+};
 
 // Payment history - track all payments (PayPal and manual)
 export const payments = pgTable("payments", {

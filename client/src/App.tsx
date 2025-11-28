@@ -24,20 +24,15 @@ import CommunityDiscussion from "@/pages/community-discussion";
 import FeatureSuggestions from "@/pages/community-feature-suggestions";
 import AdminPage from "@/pages/admin";
 import TickerDetail from "@/pages/ticker-detail";
-import Login from "@/pages/login";
-import Signup from "@/pages/signup";
 import Terms from "@/pages/terms";
-import VerifyEmail from "@/pages/verify-email";
 import NotFound from "@/pages/not-found";
 import FollowedDashboard from "@/pages/followed-dashboard";
+import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/login" component={Login} />
-      <Route path="/signup" component={Signup} />
-      <Route path="/verify-email" component={VerifyEmail} />
       <Route path="/terms" component={Terms} />
       <Route path="/" component={Purchase} />
       <Route path="/recommendations" component={Purchase} />
@@ -63,15 +58,16 @@ function Router() {
 }
 
 function AuthenticatedApp() {
-  const { user, isLoading, experienceState } = useUser();
-  const [location, setLocation] = useLocation();
+  const { user, isLoading, experienceState, login } = useAuth();
+  const [location] = useLocation();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/verify-email" && location !== "/terms") {
-      setLocation("/login");
+    // Redirect to Replit Auth login if not authenticated (except for public pages)
+    if (!isLoading && !user && location !== "/terms") {
+      login();
     }
-  }, [user, isLoading, location, setLocation]);
+  }, [user, isLoading, location, login]);
 
   useEffect(() => {
     // Show onboarding dialog when state is pending
@@ -79,7 +75,7 @@ function AuthenticatedApp() {
       setShowOnboarding(true);
     }
     // Close onboarding dialog only when state changes away from pending
-    else if (showOnboarding && experienceState !== "onboarding_pending") {
+    else if (showOnboarding) {
       setShowOnboarding(false);
     }
   }, [experienceState, showOnboarding]);
@@ -92,12 +88,18 @@ function AuthenticatedApp() {
     );
   }
 
-  if (!user && location !== "/login" && location !== "/signup" && location !== "/verify-email" && location !== "/terms") {
-    return null;
+  // Allow access to public pages (terms) without authentication
+  if (location === "/terms") {
+    return <Router />;
   }
 
-  if (location === "/login" || location === "/signup" || location === "/verify-email" || location === "/terms") {
-    return <Router />;
+  // If not authenticated, show loading while redirecting to login
+  if (!user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground">Redirecting to login...</div>
+      </div>
+    );
   }
 
   const style = {

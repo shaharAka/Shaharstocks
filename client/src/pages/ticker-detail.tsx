@@ -429,7 +429,9 @@ export default function TickerDetail() {
                       if (normalizedStance === "buy" || normalizedStance === "enter") {
                         return { icon: ArrowUpCircle, text: "BUY", color: "text-green-600 dark:text-green-400", bgColor: "bg-green-50 dark:bg-green-950/30", borderColor: "border-green-500" };
                       } else if (normalizedStance === "sell" || normalizedStance === "short") {
-                        return { icon: ArrowDownCircle, text: "SELL", color: "text-red-600 dark:text-red-400", bgColor: "bg-red-50 dark:bg-red-950/30", borderColor: "border-red-500" };
+                        // Display "SHORT" when watching (not in position), "SELL" when in position
+                        const displayText = !hasEnteredPosition ? "SHORT" : "SELL";
+                        return { icon: ArrowDownCircle, text: displayText, color: "text-red-600 dark:text-red-400", bgColor: "bg-red-50 dark:bg-red-950/30", borderColor: "border-red-500" };
                       } else if (normalizedStance === "cover") {
                         return { icon: ArrowUpCircle, text: "COVER", color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-50 dark:bg-blue-950/30", borderColor: "border-blue-500" };
                       } else {

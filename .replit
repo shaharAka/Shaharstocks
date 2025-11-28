@@ -20,3 +20,9 @@ deploymentTarget = "cloudrun"
 
 [agent]
 integrations = ["resend:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+VITE_PAYPAL_CLIENT_ID = "${PAYPAL_CLIENT_ID}"
+VITE_PAYPAL_PLAN_ID = "P-7MD97450VP279543SNEHWHRI"

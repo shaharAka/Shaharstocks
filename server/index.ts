@@ -168,6 +168,9 @@ app.use((req, res, next) => {
   
   // Start daily brief generation job for followed stocks
   startDailyBriefJob();
+  
+  // Start automatic cleanup of unverified users after 48 hours
+  startUnverifiedUserCleanupJob();
 })();
 
 /**
@@ -1565,4 +1568,40 @@ function startDailyBriefJob() {
   // Then run once a day
   setInterval(generateDailyBriefs, ONE_DAY);
   log("[DailyBrief] Background job started - generating briefs once a day");
+}
+
+/**
+ * Background job to cleanup unverified users older than 48 hours
+ * Runs every 6 hours
+ */
+function startUnverifiedUserCleanupJob() {
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  const CLEANUP_THRESHOLD_HOURS = 48;
+
+  async function cleanupUnverifiedUsers() {
+    try {
+      log("[UnverifiedCleanup] Starting cleanup of unverified users...");
+      
+      const deletedCount = await storage.purgeUnverifiedUsers(CLEANUP_THRESHOLD_HOURS);
+      
+      if (deletedCount > 0) {
+        log(`[UnverifiedCleanup] Deleted ${deletedCount} unverified user(s) older than ${CLEANUP_THRESHOLD_HOURS} hours`);
+      } else {
+        log("[UnverifiedCleanup] No unverified users to clean up");
+      }
+    } catch (error) {
+      console.error("[UnverifiedCleanup] Error cleaning up unverified users:", error);
+    }
+  }
+
+  // Run immediately on startup (after a 30 second delay)
+  setTimeout(() => {
+    cleanupUnverifiedUsers().catch(err => {
+      console.error("[UnverifiedCleanup] Initial cleanup failed:", err);
+    });
+  }, 30000);
+
+  // Then run every 6 hours
+  setInterval(cleanupUnverifiedUsers, SIX_HOURS);
+  log("[UnverifiedCleanup] Background job started - cleaning up every 6 hours");
 }

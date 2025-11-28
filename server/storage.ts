@@ -1736,12 +1736,20 @@ export class DatabaseStorage implements IStorage {
 
   async purgeUnverifiedUsers(olderThanHours: number): Promise<number> {
     const cutoffDate = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
+    
+    // Only delete users who:
+    // 1. Have not verified their email
+    // 2. Are in "pending_verification" status (not trial, active, or any paid status)
+    // 3. Were created more than N hours ago
+    // 4. Have no admin privileges (safety check)
     const result = await db
       .delete(users)
       .where(
         and(
           eq(users.emailVerified, false),
           eq(users.subscriptionStatus, "pending_verification"),
+          eq(users.isAdmin, false), // Never delete admin users
+          eq(users.isSuperAdmin, false), // Never delete super admin users
           lt(users.createdAt, cutoffDate)
         )
       );

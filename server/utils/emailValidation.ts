@@ -1,4 +1,5 @@
 import disposableDomains from 'disposable-email-domains';
+import { randomBytes } from 'crypto';
 
 /**
  * Check if an email uses a disposable/temporary email domain
@@ -12,12 +13,12 @@ export function isDisposableEmail(email: string): boolean {
 }
 
 /**
- * Generate a random verification token
+ * Generate a cryptographically secure random verification token
+ * Uses crypto.randomBytes for security instead of Math.random
  */
 export function generateVerificationToken(): string {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15) +
-         Date.now().toString(36);
+  // Generate 32 bytes of random data = 64 hex characters
+  return randomBytes(32).toString('hex');
 }
 
 /**

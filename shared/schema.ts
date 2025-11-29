@@ -562,8 +562,12 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(), // Hashed password for authentication
+  passwordHash: text("password_hash"), // Hashed password for authentication (nullable for OAuth users)
   avatarColor: text("avatar_color").notNull().default("#3b82f6"), // Hex color for avatar
+  // OAuth provider fields
+  authProvider: text("auth_provider").notNull().default("email"), // "email", "google"
+  googleSub: text("google_sub").unique(), // Google's unique user ID (sub claim)
+  googlePicture: text("google_picture"), // Google profile picture URL
   isAdmin: boolean("is_admin").notNull().default(false), // Admin users can access backoffice
   isSuperAdmin: boolean("is_super_admin").notNull().default(false), // Super admin users can delete announcements and perform elevated operations
   emailVerified: boolean("email_verified").notNull().default(false), // Email verification status

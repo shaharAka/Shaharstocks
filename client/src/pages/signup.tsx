@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import { Link, useLocation } from "wouter";
 import { TrendingUp, ArrowLeft, CheckCircle2, ShieldAlert, Zap, TrendingUpIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import { SiGoogle } from "react-icons/si";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -41,6 +42,34 @@ export default function Signup() {
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Check if Google OAuth is configured
+  const { data: googleConfigured } = useQuery<{ configured: boolean }>({
+    queryKey: ["/api/auth/google/configured"],
+  });
+
+  const handleGoogleSignUp = async () => {
+    try {
+      setGoogleLoading(true);
+      const response = await fetch("/api/auth/google/url");
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to initialize Google Sign-Up");
+      }
+      
+      // Redirect to Google OAuth
+      window.location.href = data.url;
+    } catch (error: any) {
+      toast({
+        title: "Google Sign-Up Error",
+        description: error.message || "Failed to start Google Sign-Up",
+        variant: "destructive",
+      });
+      setGoogleLoading(false);
+    }
+  };
 
   const form = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
@@ -373,6 +402,33 @@ export default function Signup() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+          {googleConfigured?.configured && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleGoogleSignUp}
+                disabled={googleLoading}
+                data-testid="button-google-signup"
+              >
+                <SiGoogle className="h-4 w-4" />
+                {googleLoading ? "Connecting..." : "Sign up with Google"}
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">
+                    Or sign up with email
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField

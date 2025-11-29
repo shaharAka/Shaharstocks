@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Activity, AlertCircle, TrendingUpIcon, Zap, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SiGoogle } from "react-icons/si";
+import { useState, useEffect } from "react";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -21,7 +23,62 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
   const { toast } = useToast();
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Check if Google OAuth is configured
+  const { data: googleConfigured } = useQuery<{ configured: boolean }>({
+    queryKey: ["/api/auth/google/configured"],
+  });
+
+  // Handle URL error parameters from Google OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const error = params.get("error");
+    
+    if (error) {
+      const errorMessages: Record<string, string> = {
+        google_auth_failed: "Google sign-in failed. Please try again.",
+        missing_code: "Authentication was cancelled. Please try again.",
+        invalid_state: "Security check failed. Please try again.",
+        trial_expired: "Your free trial has expired. Please subscribe to continue.",
+        subscription_required: "An active subscription is required to access the dashboard.",
+        session_error: "Session error. Please try again.",
+      };
+      
+      toast({
+        title: "Sign In Failed",
+        description: errorMessages[error] || "An error occurred during sign-in.",
+        variant: "destructive",
+      });
+      
+      // Clear the error from URL
+      window.history.replaceState({}, "", "/login");
+    }
+  }, [searchString, toast]);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setGoogleLoading(true);
+      const response = await fetch("/api/auth/google/url");
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to initialize Google Sign-In");
+      }
+      
+      // Redirect to Google OAuth
+      window.location.href = data.url;
+    } catch (error: any) {
+      toast({
+        title: "Google Sign-In Error",
+        description: error.message || "Failed to start Google Sign-In",
+        variant: "destructive",
+      });
+      setGoogleLoading(false);
+    }
+  };
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -172,6 +229,33 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+          {googleConfigured?.configured && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading}
+                data-testid="button-google-signin"
+              >
+                <SiGoogle className="h-4 w-4" />
+                {googleLoading ? "Connecting..." : "Continue with Google"}
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">
+                    Or continue with email
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField

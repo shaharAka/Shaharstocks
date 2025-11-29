@@ -7,6 +7,7 @@ const MemStore = MemoryStore(session);
 declare module "express-session" {
   interface SessionData {
     userId?: string;
+    googleOAuthState?: string;
   }
 }
 

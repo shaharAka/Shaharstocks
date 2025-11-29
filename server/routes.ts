@@ -19,6 +19,7 @@ import { aiAnalysisService } from "./aiAnalysisService";
 import { signupLimiter, loginLimiter, resendVerificationLimiter } from "./middleware/rateLimiter";
 import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "./utils/emailValidation";
 import { sendVerificationEmail } from "./emailService";
+import { isGoogleConfigured, generateState, getGoogleAuthUrl, handleGoogleCallback } from "./googleAuthService";
 
 /**
  * Check if US stock market is currently open
@@ -347,6 +348,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
+      // Check if user has a password (Google-only users don't have passwords)
+      if (!user.passwordHash) {
+        return res.status(401).json({ 
+          error: "This account uses Google Sign-In. Please sign in with Google.",
+          authProvider: user.authProvider 
+        });
+      }
+
       // Verify password
       const bcrypt = await import("bcryptjs");
       const isValidPassword = await bcrypt.compare(password, user.passwordHash);
@@ -603,6 +612,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Resend verification error:", error);
       res.status(500).json({ error: "Failed to resend verification email" });
+    }
+  });
+
+  // Google OAuth: Check if configured
+  app.get("/api/auth/google/configured", (req, res) => {
+    res.json({ configured: isGoogleConfigured() });
+  });
+
+  // Google OAuth: Get authorization URL
+  app.get("/api/auth/google/url", (req, res) => {
+    try {
+      if (!isGoogleConfigured()) {
+        return res.status(503).json({ error: "Google Sign-In is not configured" });
+      }
+
+      const state = generateState();
+      
+      // Store state in session for verification
+      req.session.googleOAuthState = state;
+      
+      const baseUrl = process.env.NODE_ENV === "production" 
+        ? `https://${req.get('host')}`
+        : `http://${req.get('host')}`;
+      const redirectUri = `${baseUrl}/api/auth/google/callback`;
+      
+      const authUrl = getGoogleAuthUrl(redirectUri, state);
+      
+      res.json({ url: authUrl });
+    } catch (error) {
+      console.error("[Google OAuth] Failed to generate auth URL:", error);
+      res.status(500).json({ error: "Failed to initialize Google Sign-In" });
+    }
+  });
+
+  // Google OAuth: Callback handler
+  app.get("/api/auth/google/callback", async (req, res) => {
+    try {
+      const { code, state, error: oauthError } = req.query;
+      
+      if (oauthError) {
+        console.error("[Google OAuth] Error from Google:", oauthError);
+        return res.redirect("/login?error=google_auth_failed");
+      }
+
+      if (!code || typeof code !== "string") {
+        return res.redirect("/login?error=missing_code");
+      }
+
+      // Verify state to prevent CSRF
+      if (!state || state !== req.session.googleOAuthState) {
+        return res.redirect("/login?error=invalid_state");
+      }
+      
+      // Clear the state
+      delete req.session.googleOAuthState;
+
+      const baseUrl = process.env.NODE_ENV === "production" 
+        ? `https://${req.get('host')}`
+        : `http://${req.get('host')}`;
+      const redirectUri = `${baseUrl}/api/auth/google/callback`;
+
+      // Exchange code for tokens and get user info
+      const googleUser = await handleGoogleCallback(code, redirectUri);
+      
+      // Check if user exists by Google sub ID
+      let user = await storage.getUserByGoogleSub(googleUser.sub);
+      
+      if (!user) {
+        // Check if user exists by email (linking case)
+        user = await storage.getUserByEmail(googleUser.email);
+        
+        if (user) {
+          // Link Google account to existing email user
+          await storage.linkGoogleAccount(user.id, googleUser.sub, googleUser.picture);
+          
+          // If they had pending verification, mark as verified since Google verified the email
+          if (!user.emailVerified) {
+            await storage.updateUser(user.id, { 
+              emailVerified: true,
+              subscriptionStatus: user.subscriptionStatus === "pending_verification" ? "trial" : user.subscriptionStatus,
+              trialEndsAt: user.subscriptionStatus === "pending_verification" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : user.trialEndsAt,
+            });
+          }
+        } else {
+          // Create new user with Google account
+          const avatarColors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4"];
+          const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
+          
+          user = await storage.createGoogleUser({
+            name: googleUser.name,
+            email: googleUser.email,
+            googleSub: googleUser.sub,
+            googlePicture: googleUser.picture,
+            avatarColor,
+            authProvider: "google",
+            emailVerified: true, // Google already verified the email
+            subscriptionStatus: "trial",
+            trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day trial
+          });
+        }
+      }
+
+      // Check subscription status before allowing login
+      if (user.subscriptionStatus === "expired") {
+        return res.redirect("/login?error=trial_expired");
+      }
+
+      if (user.subscriptionStatus !== "trial" && user.subscriptionStatus !== "active") {
+        return res.redirect("/login?error=subscription_required");
+      }
+
+      // Set session
+      req.session.userId = user.id;
+      
+      req.session.save((err) => {
+        if (err) {
+          console.error("[Google OAuth] Session save error:", err);
+          return res.redirect("/login?error=session_error");
+        }
+        
+        // Redirect to home on success
+        res.redirect("/?login=success&provider=google");
+      });
+    } catch (error) {
+      console.error("[Google OAuth] Callback error:", error);
+      res.redirect("/login?error=google_auth_failed");
     }
   });
 

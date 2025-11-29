@@ -214,8 +214,21 @@ export interface IStorage {
   getAllUserIds(): Promise<string[]>;
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByGoogleSub(googleSub: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createGoogleUser(user: {
+    name: string;
+    email: string;
+    googleSub: string;
+    googlePicture?: string;
+    avatarColor: string;
+    authProvider: string;
+    emailVerified: boolean;
+    subscriptionStatus: string;
+    trialEndsAt: Date;
+  }): Promise<User>;
+  linkGoogleAccount(userId: string, googleSub: string, googlePicture?: string): Promise<User | undefined>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
   archiveUser(userId: string, archivedBy: string): Promise<User | undefined>;
@@ -1684,6 +1697,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByGoogleSub(googleSub: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.googleSub, googleSub));
+    return user;
+  }
+
   async getUserByVerificationToken(token: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
     return user;
@@ -1692,6 +1710,44 @@ export class DatabaseStorage implements IStorage {
   async createUser(user: InsertUser): Promise<User> {
     const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
+  }
+
+  async createGoogleUser(user: {
+    name: string;
+    email: string;
+    googleSub: string;
+    googlePicture?: string;
+    avatarColor: string;
+    authProvider: string;
+    emailVerified: boolean;
+    subscriptionStatus: string;
+    trialEndsAt: Date;
+  }): Promise<User> {
+    const [newUser] = await db.insert(users).values({
+      name: user.name,
+      email: user.email,
+      googleSub: user.googleSub,
+      googlePicture: user.googlePicture,
+      avatarColor: user.avatarColor,
+      authProvider: user.authProvider,
+      emailVerified: user.emailVerified,
+      subscriptionStatus: user.subscriptionStatus,
+      trialEndsAt: user.trialEndsAt,
+    }).returning();
+    return newUser;
+  }
+
+  async linkGoogleAccount(userId: string, googleSub: string, googlePicture?: string): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ 
+        googleSub,
+        googlePicture: googlePicture || undefined,
+        authProvider: "google",
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
   }
 
   async updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined> {

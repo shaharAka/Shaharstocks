@@ -122,6 +122,7 @@ export default function AdminPage() {
   const [releaseNotesInput, setReleaseNotesInput] = useState("");
   
   const [selectedAIProvider, setSelectedAIProvider] = useState<string>("");
+  const [selectedAIModel, setSelectedAIModel] = useState<string>("");
 
   const handleSetAdminSecret = () => {
     if (secretInput) {
@@ -1187,12 +1188,12 @@ export default function AdminPage() {
                     {aiProviderInfo?.provider === "gemini" ? "Google Gemini" : "OpenAI GPT"}
                   </Badge>
                 </div>
-                {aiProviderInfo?.model && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Model:</span>
-                    <span className="text-sm font-mono">{aiProviderInfo.model}</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Current Model:</span>
+                  <Badge variant="outline" className="font-mono" data-testid="text-current-ai-model">
+                    {aiProviderInfo?.model || (aiProviderInfo?.provider === "gemini" ? "gemini-2.5-flash" : "gpt-4o")}
+                  </Badge>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -1200,7 +1201,10 @@ export default function AdminPage() {
                   <Label htmlFor="ai-provider">Select AI Provider</Label>
                   <Select 
                     value={selectedAIProvider || aiProviderInfo?.provider || "openai"} 
-                    onValueChange={setSelectedAIProvider}
+                    onValueChange={(value) => {
+                      setSelectedAIProvider(value);
+                      setSelectedAIModel("");
+                    }}
                   >
                     <SelectTrigger data-testid="select-ai-provider">
                       <SelectValue placeholder="Select AI provider" />
@@ -1224,6 +1228,39 @@ export default function AdminPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="ai-model">Select Model</Label>
+                  <Select 
+                    value={selectedAIModel || aiProviderInfo?.model || ""} 
+                    onValueChange={setSelectedAIModel}
+                  >
+                    <SelectTrigger data-testid="select-ai-model">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(() => {
+                        const currentProvider = selectedAIProvider || aiProviderInfo?.provider || "openai";
+                        const providerInfo = aiProviderInfo?.availableProviders?.find(p => p.id === currentProvider);
+                        return providerInfo?.models?.map((model) => (
+                          <SelectItem 
+                            key={model} 
+                            value={model}
+                            data-testid={`select-item-model-${model}`}
+                          >
+                            {model}
+                          </SelectItem>
+                        )) || null;
+                      })()}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {(selectedAIProvider || aiProviderInfo?.provider) === "gemini" 
+                      ? "gemini-2.5-flash: Fast and cost-effective. gemini-2.5-pro: Most capable for complex analysis."
+                      : "gpt-4o: Most capable. gpt-4o-mini: Fast and cost-effective. gpt-4-turbo: Previous generation."}
+                  </p>
+                </div>
+
                 <p className="text-xs text-muted-foreground">
                   Changes affect all AI-powered features: stock analysis, macro sector analysis, and backtest scenario generation.
                 </p>
@@ -1238,8 +1275,10 @@ export default function AdminPage() {
                       });
                       return;
                     }
-                    updateAIProviderMutation.mutate({ provider });
+                    const model = selectedAIModel || aiProviderInfo?.model || undefined;
+                    updateAIProviderMutation.mutate({ provider, model });
                     setSelectedAIProvider("");
+                    setSelectedAIModel("");
                   }}
                   disabled={
                     updateAIProviderMutation.isPending || 

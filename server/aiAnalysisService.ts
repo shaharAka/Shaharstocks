@@ -1,20 +1,23 @@
 /**
  * AI Financial Analysis Service
- * Uses OpenAI GPT-4.1 via Replit AI Integrations to analyze stocks with multi-signal approach
+ * Supports multiple AI providers (OpenAI, Gemini) for stock analysis
  * Combines fundamental data, technical indicators, news sentiment, price-news correlation,
  * volume analysis, and insider trading patterns for comprehensive analysis.
  * 
- * This internally uses Replit AI Integrations, which provides OpenAI-compatible API access
- * without requiring your own OpenAI API key. Charges are billed to your Replit credits.
+ * Provider selection is configurable via admin backoffice settings.
  */
 
 import OpenAI from "openai";
 import type { TechnicalIndicators, NewsSentiment, PriceNewsCorrelation } from "./stockService";
+import { getAIProvider, type AIProviderConfig, type AIProvider, type ChatMessage } from "./aiProvider";
 
-// Using OpenAI API for AI-powered stock analysis
+// Default OpenAI client for backwards compatibility
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+// Current AI provider configuration (will be loaded from database)
+let currentProviderConfig: AIProviderConfig = { provider: "openai" };
 
 export interface FinancialAnalysis {
   ticker: string;
@@ -113,6 +116,29 @@ interface FinancialData {
 }
 
 class AIAnalysisService {
+  /**
+   * Set the AI provider configuration
+   * Called when admin changes the provider in settings
+   */
+  setProviderConfig(config: AIProviderConfig): void {
+    console.log(`[AIAnalysisService] Setting AI provider to: ${config.provider}${config.model ? ` (model: ${config.model})` : ""}`);
+    currentProviderConfig = config;
+  }
+
+  /**
+   * Get the current AI provider configuration
+   */
+  getProviderConfig(): AIProviderConfig {
+    return currentProviderConfig;
+  }
+
+  /**
+   * Get the AI provider instance based on current configuration
+   */
+  private getProvider(): AIProvider {
+    return getAIProvider(currentProviderConfig);
+  }
+
   /**
    * Analyze a stock using AI with multi-signal approach
    * Combines fundamental data, technical indicators, news sentiment, and insider trading
@@ -340,15 +366,18 @@ NOTE: This micro score will be adjusted by a separate MACRO analysis that consid
 Focus on actionable insights. Be direct. This is for real money decisions.`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4.1", // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        max_completion_tokens: 8192,
+      const provider = this.getProvider();
+      console.log(`[AIAnalysisService] Analyzing ${ticker} using ${provider.getName()} (${provider.getModel()})`);
+      
+      const messages: ChatMessage[] = [{ role: "user", content: prompt }];
+      
+      const content = await provider.generateCompletion(messages, {
+        temperature: 0.3,
+        maxTokens: 8192,
+        responseFormat: "json"
       });
 
-      const content = response.choices[0]?.message?.content || "{}";
-      const analysis = JSON.parse(content);
+      const analysis = JSON.parse(content || "{}");
 
       // Add metadata
       return {
@@ -666,15 +695,16 @@ Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
 - Owning a SHORT position: Use "buy" (cover short) or "hold" (stay short)`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4.1",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        max_completion_tokens: 500, // Keep it lightweight
+      const provider = this.getProvider();
+      const messages: ChatMessage[] = [{ role: "user", content: prompt }];
+      
+      const content = await provider.generateCompletion(messages, {
+        temperature: 0.3,
+        maxTokens: 500,
+        responseFormat: "json"
       });
 
-      const content = response.choices[0]?.message?.content || "{}";
-      const brief = JSON.parse(content);
+      const brief = JSON.parse(content || "{}");
       
       // Validate and enforce word limit on briefText
       const wordCount = brief.briefText?.split(/\s+/).length || 0;

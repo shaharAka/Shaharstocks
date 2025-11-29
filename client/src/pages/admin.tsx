@@ -120,6 +120,8 @@ export default function AdminPage() {
   
   const [versionInput, setVersionInput] = useState("");
   const [releaseNotesInput, setReleaseNotesInput] = useState("");
+  
+  const [selectedAIProvider, setSelectedAIProvider] = useState<string>("");
 
   const handleSetAdminSecret = () => {
     if (secretInput) {
@@ -399,6 +401,56 @@ export default function AdminPage() {
       toast({
         title: "Success",
         description: "App version updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  interface AIProviderInfo {
+    provider: string;
+    model: string | null;
+    availableProviders: Array<{
+      id: string;
+      name: string;
+      available: boolean;
+      models: string[];
+    }>;
+  }
+
+  const { data: aiProviderInfo, isLoading: isLoadingAIProvider } = useQuery<AIProviderInfo>({
+    queryKey: ["/api/admin/ai-provider"],
+    enabled: !!currentUser?.isAdmin,
+  });
+
+  const updateAIProviderMutation = useMutation({
+    mutationFn: async ({ provider, model }: { provider: string; model?: string }) => {
+      const res = await fetch("/api/admin/ai-provider", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ provider, model }),
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to update AI provider");
+      }
+      
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/ai-provider"] });
+      toast({
+        title: "Success",
+        description: "AI provider updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -1118,6 +1170,84 @@ export default function AdminPage() {
                   data-testid="button-update-version"
                 >
                   {updateVersionMutation.isPending ? "Updating..." : "Update Version"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Provider Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Current Provider:</span>
+                  <Badge variant="outline" className="font-mono" data-testid="text-current-ai-provider">
+                    {aiProviderInfo?.provider === "gemini" ? "Google Gemini" : "OpenAI GPT"}
+                  </Badge>
+                </div>
+                {aiProviderInfo?.model && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Model:</span>
+                    <span className="text-sm font-mono">{aiProviderInfo.model}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="ai-provider">Select AI Provider</Label>
+                  <Select 
+                    value={selectedAIProvider || aiProviderInfo?.provider || "openai"} 
+                    onValueChange={setSelectedAIProvider}
+                  >
+                    <SelectTrigger data-testid="select-ai-provider">
+                      <SelectValue placeholder="Select AI provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aiProviderInfo?.availableProviders?.map((p) => (
+                        <SelectItem 
+                          key={p.id} 
+                          value={p.id} 
+                          disabled={!p.available}
+                          data-testid={`select-item-${p.id}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span>{p.name}</span>
+                            {!p.available && (
+                              <Badge variant="secondary" className="text-xs">API key not configured</Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Changes affect all AI-powered features: stock analysis, macro sector analysis, and backtest scenario generation.
+                </p>
+                <Button
+                  onClick={() => {
+                    const provider = selectedAIProvider || aiProviderInfo?.provider;
+                    if (!provider || !["openai", "gemini"].includes(provider)) {
+                      toast({
+                        title: "Error",
+                        description: "Please select a valid AI provider",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    updateAIProviderMutation.mutate({ provider });
+                    setSelectedAIProvider("");
+                  }}
+                  disabled={
+                    updateAIProviderMutation.isPending || 
+                    isLoadingAIProvider
+                  }
+                  data-testid="button-update-ai-provider"
+                >
+                  {updateAIProviderMutation.isPending ? "Updating..." : "Update AI Provider"}
                 </Button>
               </div>
             </CardContent>

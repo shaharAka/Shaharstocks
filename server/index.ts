@@ -72,6 +72,32 @@ app.use((req, res, next) => {
   await storage.initializeDefaults();
   log("Server starting with session-based admin authentication...");
   
+  // Initialize AI provider configuration from database
+  try {
+    const settings = await storage.getSystemSettings();
+    if (settings?.aiProvider) {
+      const { setMacroProviderConfig } = await import("./macroAgentService");
+      const { setBacktestProviderConfig } = await import("./backtestService");
+      const { clearProviderCache } = await import("./aiProvider");
+      
+      const config = { 
+        provider: settings.aiProvider as "openai" | "gemini", 
+        model: settings.aiModel || undefined 
+      };
+      
+      aiAnalysisService.setProviderConfig(config);
+      setMacroProviderConfig(config);
+      setBacktestProviderConfig(config);
+      clearProviderCache();
+      
+      log(`AI provider initialized: ${settings.aiProvider}${settings.aiModel ? ` (model: ${settings.aiModel})` : ""}`);
+    } else {
+      log("AI provider using default: OpenAI");
+    }
+  } catch (err) {
+    log(`AI provider initialization skipped: ${(err as Error).message}`);
+  }
+  
   // Initialize Telegram services only if feature flag is enabled
   if (ENABLE_TELEGRAM) {
     // Initialize Telegram client if configured

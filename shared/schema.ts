@@ -1119,6 +1119,9 @@ export const systemSettings = pgTable("system_settings", {
   releaseNotes: text("release_notes"), // Optional notes for the current version
   lastUpdatedBy: varchar("last_updated_by").references(() => users.id), // Admin who last updated
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  // AI Provider Configuration
+  aiProvider: text("ai_provider").notNull().default("openai"), // "openai" or "gemini"
+  aiModel: text("ai_model"), // Optional specific model override (e.g., "gpt-4o", "gemini-2.5-pro")
 });
 
 export const insertSystemSettingsSchema = createInsertSchema(systemSettings).omit({ id: true, updatedAt: true });

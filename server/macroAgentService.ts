@@ -1,10 +1,19 @@
 import OpenAI from "openai";
 import type { MacroAnalysis, InsertMacroAnalysis } from "@shared/schema";
+import { getAIProvider, type AIProviderConfig, type ChatMessage } from "./aiProvider";
 
-// Using OpenAI API for macro analysis
+// Using OpenAI API for macro analysis (deprecated, using provider interface now)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Current AI provider configuration (shared with aiAnalysisService)
+let currentProviderConfig: AIProviderConfig = { provider: "openai" };
+
+export function setMacroProviderConfig(config: AIProviderConfig): void {
+  console.log(`[MacroAgent] Setting AI provider to: ${config.provider}`);
+  currentProviderConfig = config;
+}
 
 const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY!;
 
@@ -581,22 +590,24 @@ Respond in JSON format:
   "risks": ["<risk1>", "<risk2>", ...]
 }`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are a macro economic analyst providing market-wide analysis. Always respond with valid JSON only, no markdown or additional text.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.3,
-    });
+    const provider = getAIProvider(currentProviderConfig);
+    console.log(`[MacroAgent] Using ${provider.getName()} (${provider.getModel()}) for macro analysis`);
+    
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content: "You are a macro economic analyst providing market-wide analysis. Always respond with valid JSON only, no markdown or additional text.",
+      },
+      {
+        role: "user",
+        content: prompt,
+      },
+    ];
 
-    let responseText = completion.choices[0].message.content || "{}";
+    let responseText = await provider.generateCompletion(messages, {
+      temperature: 0.3,
+      responseFormat: "json"
+    });
     sanitizedResponse = responseText;
     
     // Strip markdown code fences if present (e.g., ```json ... ```)

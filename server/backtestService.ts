@@ -4,11 +4,20 @@ import { openinsiderService } from "./openinsiderService";
 import { finnhubService } from "./finnhubService";
 import type { BacktestJob } from "@shared/schema";
 import OpenAI from "openai";
+import { getAIProvider, type AIProviderConfig, type ChatMessage } from "./aiProvider";
 
-// Initialize OpenAI for backtesting analysis
+// Initialize OpenAI for backtesting analysis (deprecated, using provider interface)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Current AI provider configuration
+let currentProviderConfig: AIProviderConfig = { provider: "openai" };
+
+export function setBacktestProviderConfig(config: AIProviderConfig): void {
+  console.log(`[BacktestService] Setting AI provider to: ${config.provider}`);
+  currentProviderConfig = config;
+}
 
 interface DailyPrice {
   date: string;
@@ -608,19 +617,22 @@ Return ONLY valid JSON in this exact format:
 Generate 100 diverse scenarios exploring all ranges of risk/reward profiles.`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "You are a stock trading strategist. Return only valid JSON with 100 diverse trading scenarios." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.9, // Higher creativity for diverse scenarios
-        max_tokens: 16000, // Increased for 100 scenarios
-      });
+      const provider = getAIProvider(currentProviderConfig);
+      console.log(`[BacktestJob ${jobId}] Using ${provider.getName()} (${provider.getModel()}) for scenario generation`);
+      
+      const messages: ChatMessage[] = [
+        { role: "system", content: "You are a stock trading strategist. Return only valid JSON with 100 diverse trading scenarios." },
+        { role: "user", content: prompt }
+      ];
 
-      const content = response.choices[0]?.message?.content;
+      const content = await provider.generateCompletion(messages, {
+        temperature: 0.9,
+        maxTokens: 16000,
+        responseFormat: "json"
+      });
+      
       if (!content) {
-        throw new Error("No response from OpenAI");
+        throw new Error("No response from AI provider");
       }
 
       // Strip markdown code blocks if present (```json ... ```)

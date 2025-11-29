@@ -263,6 +263,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: Get AI provider configuration
+  app.get("/api/admin/ai-provider", requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getSystemSettings();
+      const { getAvailableProviders } = await import("./aiProvider");
+      
+      res.json({
+        provider: settings?.aiProvider || "openai",
+        model: settings?.aiModel || null,
+        availableProviders: getAvailableProviders(),
+      });
+    } catch (error) {
+      console.error("Error getting AI provider:", error);
+      res.status(500).json({ error: "Failed to get AI provider configuration" });
+    }
+  });
+
+  // Admin: Update AI provider configuration
+  app.post("/api/admin/ai-provider", requireAdmin, async (req, res) => {
+    try {
+      const { provider, model } = req.body;
+      
+      if (!provider || !["openai", "gemini"].includes(provider)) {
+        return res.status(400).json({ error: "Invalid provider. Must be 'openai' or 'gemini'" });
+      }
+      
+      // Check if the selected provider is available
+      const { isOpenAIAvailable, isGeminiAvailable, clearProviderCache } = await import("./aiProvider");
+      
+      if (provider === "openai" && !isOpenAIAvailable()) {
+        return res.status(400).json({ error: "OpenAI API key is not configured" });
+      }
+      
+      if (provider === "gemini" && !isGeminiAvailable()) {
+        return res.status(400).json({ error: "Gemini API key is not configured. Please add GEMINI_API_KEY to secrets." });
+      }
+      
+      // Update settings
+      const settings = await storage.updateSystemSettings({
+        aiProvider: provider,
+        aiModel: model || null,
+        lastUpdatedBy: req.session.userId,
+      });
+      
+      // Clear the provider cache so the new provider is used
+      clearProviderCache();
+      
+      // Update all services that use AI
+      const { aiAnalysisService } = await import("./aiAnalysisService");
+      const { setMacroProviderConfig } = await import("./macroAgentService");
+      const { setBacktestProviderConfig } = await import("./backtestService");
+      
+      const config = { provider: settings.aiProvider as "openai" | "gemini", model: settings.aiModel || undefined };
+      aiAnalysisService.setProviderConfig(config);
+      setMacroProviderConfig(config);
+      setBacktestProviderConfig(config);
+      
+      console.log(`[Admin] AI provider updated to: ${provider}${model ? ` (model: ${model})` : ""}`);
+      
+      res.json({
+        success: true,
+        provider: settings.aiProvider,
+        model: settings.aiModel,
+      });
+    } catch (error) {
+      console.error("Error updating AI provider:", error);
+      res.status(500).json({ error: "Failed to update AI provider configuration" });
+    }
+  });
+
   // User authentication routes
   app.get("/api/auth/current-user", async (req, res) => {
     try {

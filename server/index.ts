@@ -19,6 +19,9 @@ const ENABLE_TELEGRAM = process.env.ENABLE_TELEGRAM === "true";
 
 const app = express();
 
+// Trust proxy for correct protocol/host detection behind Replit's reverse proxy
+app.set('trust proxy', 1);
+
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown

@@ -632,12 +632,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store state in session for verification
       req.session.googleOAuthState = state;
       
-      const host = req.get('host') || '';
-      const isReplit = host.includes('replit') || host.includes('riker');
-      const baseUrl = (process.env.NODE_ENV === "production" || isReplit)
-        ? `https://${host}`
-        : `http://${host}`;
-      const redirectUri = `${baseUrl}/api/auth/google/callback`;
+      const hostname = req.hostname || req.get('host')?.split(':')[0] || '';
+      const protocol = req.protocol || 'https';
+      const redirectUri = `${protocol}://${hostname}/api/auth/google/callback`;
+      
+      console.log(`[Google OAuth] Generated redirect URI: ${redirectUri}`);
       
       const authUrl = getGoogleAuthUrl(redirectUri, state);
       
@@ -670,12 +669,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clear the state
       delete req.session.googleOAuthState;
 
-      const host = req.get('host') || '';
-      const isReplit = host.includes('replit') || host.includes('riker');
-      const baseUrl = (process.env.NODE_ENV === "production" || isReplit)
-        ? `https://${host}`
-        : `http://${host}`;
-      const redirectUri = `${baseUrl}/api/auth/google/callback`;
+      const hostname = req.hostname || req.get('host')?.split(':')[0] || '';
+      const protocol = req.protocol || 'https';
+      const redirectUri = `${protocol}://${hostname}/api/auth/google/callback`;
 
       // Exchange code for tokens and get user info
       const googleUser = await handleGoogleCallback(code, redirectUri);

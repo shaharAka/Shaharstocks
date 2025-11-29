@@ -36,7 +36,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Redirect } from "wouter";
 import { format } from "date-fns";
-import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle, Gift, Pencil } from "lucide-react";
+import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle, Gift, Pencil, Settings } from "lucide-react";
 import { useState } from "react";
 import type { Announcement } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -117,6 +117,9 @@ export default function AdminPage() {
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementContent, setAnnouncementContent] = useState("");
   const [announcementType, setAnnouncementType] = useState<"feature" | "update" | "maintenance" | "announcement">("announcement");
+  
+  const [versionInput, setVersionInput] = useState("");
+  const [releaseNotesInput, setReleaseNotesInput] = useState("");
 
   const handleSetAdminSecret = () => {
     if (secretInput) {
@@ -358,6 +361,53 @@ export default function AdminPage() {
   const { data: announcements = [] } = useQuery<Announcement[]>({
     queryKey: ["/api/announcements/all"],
     enabled: !!currentUser?.isAdmin,
+  });
+
+  // Version management
+  interface VersionInfo {
+    version: string;
+    name: string;
+    releaseNotes: string | null;
+    updatedAt: string | null;
+  }
+  
+  const { data: versionInfo } = useQuery<VersionInfo>({
+    queryKey: ["/api/version"],
+    enabled: !!currentUser?.isAdmin,
+  });
+
+  const updateVersionMutation = useMutation({
+    mutationFn: async ({ appVersion, releaseNotes }: { appVersion: string; releaseNotes: string }) => {
+      const res = await fetch("/api/admin/version", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ appVersion, releaseNotes }),
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to update version");
+      }
+      
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/version"] });
+      toast({
+        title: "Success",
+        description: "App version updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const createAnnouncementMutation = useMutation({
@@ -608,6 +658,10 @@ export default function AdminPage() {
           <TabsTrigger value="announcements" data-testid="tab-announcements">
             <Gift className="w-4 h-4 mr-2" />
             Announcements
+          </TabsTrigger>
+          <TabsTrigger value="settings" data-testid="tab-settings">
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
           </TabsTrigger>
         </TabsList>
 
@@ -993,6 +1047,79 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>App Version</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Current Version:</span>
+                  <Badge variant="outline" className="font-mono" data-testid="text-current-version">
+                    {versionInfo?.version || "1.0.0"}
+                  </Badge>
+                </div>
+                {versionInfo?.releaseNotes && (
+                  <p className="text-sm text-muted-foreground">
+                    {versionInfo.releaseNotes}
+                  </p>
+                )}
+                {versionInfo?.updatedAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Last updated: {format(new Date(versionInfo.updatedAt), "MMM d, yyyy 'at' h:mm a")}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="version">New Version</Label>
+                  <Input
+                    id="version"
+                    placeholder="e.g., 1.2.0"
+                    value={versionInput}
+                    onChange={(e) => setVersionInput(e.target.value)}
+                    data-testid="input-version"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="releaseNotes">Release Notes (Optional)</Label>
+                  <Textarea
+                    id="releaseNotes"
+                    placeholder="What's new in this version?"
+                    value={releaseNotesInput}
+                    onChange={(e) => setReleaseNotesInput(e.target.value)}
+                    data-testid="input-release-notes"
+                  />
+                </div>
+                <Button
+                  onClick={() => {
+                    if (!versionInput.trim()) {
+                      toast({
+                        title: "Error",
+                        description: "Please enter a version number",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    updateVersionMutation.mutate({
+                      appVersion: versionInput.trim(),
+                      releaseNotes: releaseNotesInput.trim(),
+                    });
+                    setVersionInput("");
+                    setReleaseNotesInput("");
+                  }}
+                  disabled={updateVersionMutation.isPending || !versionInput.trim()}
+                  data-testid="button-update-version"
+                >
+                  {updateVersionMutation.isPending ? "Updating..." : "Update Version"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

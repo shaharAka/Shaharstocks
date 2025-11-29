@@ -30,6 +30,7 @@ import {
   LayoutList,
   Pin,
   PinOff,
+  HelpCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -595,9 +596,39 @@ export default function Purchase() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">
-            {getTerm("opportunities")}
-          </h1>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl md:text-2xl font-semibold" data-testid="text-page-title">
+              {getTerm("opportunities")}
+            </h1>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6"
+                  tabIndex={0}
+                  aria-label="Learn how opportunities work"
+                  data-testid="button-help-opportunities"
+                >
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-sm p-4 space-y-3 text-left">
+                <p className="font-semibold text-sm">How the Board Works</p>
+                <div className="space-y-2 text-xs">
+                  <p><strong>High Signal:</strong> Stocks with AI score 70+ showing strong opportunity</p>
+                  <p><strong>Recent:</strong> Mid-range scores (40-69) from the last 2 days</p>
+                  <p><strong>Processing:</strong> Awaiting AI analysis</p>
+                  <p><strong>Community:</strong> Stocks with high user engagement</p>
+                  <p><strong>Rejected:</strong> Stocks you've dismissed</p>
+                </div>
+                <div className="pt-2 border-t space-y-1 text-xs text-muted-foreground">
+                  <p>Stocks are automatically removed after 10-14 days unless you follow them.</p>
+                  <p>Low-confidence signals (score {"<"} 40) are auto-rejected.</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <p className="text-sm text-muted-foreground">
             {getTerm("opportunitiesDescription")}
           </p>

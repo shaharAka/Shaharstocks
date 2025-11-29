@@ -215,13 +215,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Version endpoint
+  // Version endpoint - returns version from database if set, otherwise from package.json
   app.get("/api/version", async (req, res) => {
-    const packageJson = await import("../package.json", { assert: { type: "json" } });
-    res.json({
-      version: packageJson.default.version,
-      name: packageJson.default.name,
-    });
+    try {
+      const settings = await storage.getSystemSettings();
+      const packageJson = await import("../package.json", { assert: { type: "json" } });
+      
+      res.json({
+        version: settings?.appVersion || packageJson.default.version,
+        name: packageJson.default.name,
+        releaseNotes: settings?.releaseNotes || null,
+        updatedAt: settings?.updatedAt || null,
+      });
+    } catch (error) {
+      const packageJson = await import("../package.json", { assert: { type: "json" } });
+      res.json({
+        version: packageJson.default.version,
+        name: packageJson.default.name,
+      });
+    }
+  });
+
+  // Admin: Update app version
+  app.post("/api/admin/version", requireAdmin, async (req, res) => {
+    try {
+      const { appVersion, releaseNotes } = req.body;
+      
+      if (!appVersion || typeof appVersion !== "string") {
+        return res.status(400).json({ error: "Version is required" });
+      }
+      
+      const settings = await storage.updateSystemSettings({
+        appVersion: appVersion.trim(),
+        releaseNotes: releaseNotes?.trim() || null,
+        lastUpdatedBy: req.session.userId,
+      });
+      
+      res.json({
+        success: true,
+        version: settings.appVersion,
+        releaseNotes: settings.releaseNotes,
+        updatedAt: settings.updatedAt,
+      });
+    } catch (error) {
+      console.error("Error updating version:", error);
+      res.status(500).json({ error: "Failed to update version" });
+    }
   });
 
   // User authentication routes

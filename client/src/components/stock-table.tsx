@@ -386,18 +386,28 @@ export function StockTable({
                     // Check if analysis is in progress
                     if (analysis.status === "pending" || analysis.status === "analyzing" || analysis.status === "processing") {
                       return (
-                        <div className="flex items-center gap-2 justify-end">
-                          <Badge variant="outline" className="text-xs">
-                            Analyzing...
-                          </Badge>
-                          <AnalysisPhaseIndicator
-                            microCompleted={stock.microAnalysisCompleted}
-                            macroCompleted={stock.macroAnalysisCompleted}
-                            combinedCompleted={stock.combinedAnalysisCompleted}
-                            currentPhase={(stock as any).analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "complete" | null | undefined}
-                            size="sm"
-                          />
-                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-2 justify-end cursor-help">
+                              <Badge variant="outline" className="text-xs">
+                                Analyzing...
+                              </Badge>
+                              <AnalysisPhaseIndicator
+                                microCompleted={stock.microAnalysisCompleted}
+                                macroCompleted={stock.macroAnalysisCompleted}
+                                combinedCompleted={stock.combinedAnalysisCompleted}
+                                currentPhase={(stock as any).analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "complete" | null | undefined}
+                                size="sm"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="text-xs max-w-xs">
+                            <p className="font-semibold mb-1">AI Analysis in Progress</p>
+                            <p className="text-muted-foreground">
+                              Our system is analyzing SEC filings, financials, and sector data to generate a signal score.
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
                       );
                     }
                     

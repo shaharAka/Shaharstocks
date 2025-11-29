@@ -1,5 +1,8 @@
-import disposableDomains from 'disposable-email-domains';
+import { createRequire } from 'module';
 import { randomBytes } from 'crypto';
+
+const require = createRequire(import.meta.url);
+const disposableDomains: string[] = require('disposable-email-domains');
 
 /**
  * Check if an email uses a disposable/temporary email domain

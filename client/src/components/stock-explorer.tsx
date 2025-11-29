@@ -191,12 +191,17 @@ export function StockExplorer({
             </Card>
 
             {/* Company Summary */}
-            {(stock.industry || stock.marketCap || stock.country) && (
+            {(stock.description || stock.industry || stock.marketCap || stock.country) && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Company</CardTitle>
+                  <CardTitle className="text-base">About the Company</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-3">
+                  {stock.description && (
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {stock.description}
+                    </p>
+                  )}
                   <div className="flex flex-wrap items-center gap-3 text-sm">
                     {stock.industry && (
                       <div className="flex items-center gap-1.5">

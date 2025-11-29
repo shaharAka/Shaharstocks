@@ -25,11 +25,18 @@ import {
   DollarSign,
   Star,
   XCircle,
+  Info,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { StockComments } from "@/components/stock-comments";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
 import { InsiderHistoryDialog } from "@/components/insider-history-dialog";
+import { CompactSignalBadge } from "@/components/compact-signal-badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
@@ -131,9 +138,9 @@ export function StockExplorer({
         <Tabs defaultValue="overview" className="w-full min-w-0">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="ai">AI Analysis</TabsTrigger>
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="news">News</TabsTrigger>
-            <TabsTrigger value="ai">AI Analysis</TabsTrigger>
             <TabsTrigger value="discussion">
               <span>Discussion</span>
               {comments.length > 0 && (
@@ -145,6 +152,47 @@ export function StockExplorer({
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
+            {/* AI Signal Score */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">AI Signal</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CompactSignalBadge ticker={stock.ticker} />
+              </CardContent>
+            </Card>
+
+            {/* Company Summary */}
+            {(stock.industry || stock.marketCap || stock.country) && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Company</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    {stock.industry && (
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span>{stock.industry}</span>
+                      </div>
+                    )}
+                    {stock.marketCap && (
+                      <div className="flex items-center gap-1.5">
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <span>{stock.marketCap}</span>
+                      </div>
+                    )}
+                    {stock.country && (
+                      <div className="flex items-center gap-1.5">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                        <span>{stock.country}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Price Overview */}
             <Card>
               <CardHeader>
@@ -188,7 +236,24 @@ export function StockExplorer({
                 <CardContent className="space-y-2">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Insider</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-muted-foreground">Insider</p>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button 
+                              type="button" 
+                              className="inline-flex items-center justify-center focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
+                              aria-label="Insider info"
+                              data-testid="button-insider-info"
+                            >
+                              <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Click the name to see their trading history</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                       {stock.insiderName ? (
                         <Button
                           variant="ghost"

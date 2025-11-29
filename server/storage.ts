@@ -74,6 +74,8 @@ import {
   type InsertDailyBrief,
   type StockCandlesticks,
   type InsertStockCandlesticks,
+  type SystemSettings,
+  type InsertSystemSettings,
   stocks,
   portfolioHoldings,
   trades,
@@ -110,6 +112,7 @@ import {
   adminNotifications,
   followedStocks,
   dailyBriefs,
+  systemSettings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
@@ -379,6 +382,10 @@ export interface IStorage {
   createAdminNotification(notification: InsertAdminNotification): Promise<AdminNotification>;
   markAdminNotificationAsRead(id: string): Promise<AdminNotification | undefined>;
   markAllAdminNotificationsAsRead(): Promise<void>;
+
+  // System Settings
+  getSystemSettings(): Promise<SystemSettings | undefined>;
+  updateSystemSettings(updates: Partial<InsertSystemSettings>): Promise<SystemSettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3569,6 +3576,31 @@ export class DatabaseStorage implements IStorage {
       .update(adminNotifications)
       .set({ isRead: true, readAt: new Date() })
       .where(eq(adminNotifications.isRead, false));
+  }
+
+  // System Settings
+  async getSystemSettings(): Promise<SystemSettings | undefined> {
+    const [settings] = await db.select().from(systemSettings).limit(1);
+    return settings;
+  }
+
+  async updateSystemSettings(updates: Partial<InsertSystemSettings>): Promise<SystemSettings> {
+    const existing = await this.getSystemSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(systemSettings)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(systemSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(systemSettings)
+        .values({ ...updates, updatedAt: new Date() })
+        .returning();
+      return created;
+    }
   }
 }
 

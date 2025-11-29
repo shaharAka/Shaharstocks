@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { StockAnalysis } from "@shared/schema";
 
 interface CompactSignalBadgeProps {
   ticker: string;
+  showEmptyState?: boolean;
 }
 
-export function CompactSignalBadge({ ticker }: CompactSignalBadgeProps) {
+export function CompactSignalBadge({ ticker, showEmptyState = false }: CompactSignalBadgeProps) {
   const { data: analysis, isLoading } = useQuery<StockAnalysis | null>({
     queryKey: ["/api/ai-analysis", ticker],
     queryFn: async () => {
@@ -18,13 +19,36 @@ export function CompactSignalBadge({ ticker }: CompactSignalBadgeProps) {
     },
   });
 
-  if (isLoading || !analysis) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="compact-signal-badge-loading">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Loading signal...</span>
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    if (showEmptyState) {
+      return (
+        <div className="text-sm text-muted-foreground" data-testid="compact-signal-badge-empty">
+          No AI analysis yet. Check the AI Analysis tab to generate one.
+        </div>
+      );
+    }
     return null;
   }
 
   const primaryScore = analysis.integratedScore ?? analysis.confidenceScore ?? null;
   
   if (primaryScore === null) {
+    if (showEmptyState) {
+      return (
+        <div className="text-sm text-muted-foreground" data-testid="compact-signal-badge-no-score">
+          Analysis pending...
+        </div>
+      );
+    }
     return null;
   }
 

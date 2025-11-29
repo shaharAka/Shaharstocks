@@ -127,16 +127,16 @@ export default function Purchase() {
     }
   }, [currentUser?.showAllOpportunities]);
 
-  // Fetch opportunities - auto-refresh every 10 seconds to show real-time updates
+  // Fetch opportunities - auto-refresh every 15 seconds since WebSocket is disabled
   const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
-    // Removed aggressive polling - WebSocket invalidates cache on updates
+    refetchInterval: 15000, // Poll every 15 seconds for updates
   });
 
-  // Fetch AI analyses - auto-refresh every 10 seconds to show real-time updates
+  // Fetch AI analyses - auto-refresh every 10 seconds to catch completed AI jobs
   const { data: analyses = [] } = useQuery<any[]>({
     queryKey: ["/api/stock-analyses"],
-    // Removed aggressive polling - WebSocket invalidates cache on updates
+    refetchInterval: 10000, // Poll every 10 seconds to update processing → analyzed
   });
 
   // Fetch users

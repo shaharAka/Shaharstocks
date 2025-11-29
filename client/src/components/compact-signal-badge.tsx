@@ -17,6 +17,13 @@ export function CompactSignalBadge({ ticker, showEmptyState = false }: CompactSi
       if (!response.ok) throw new Error("Failed to fetch AI analysis");
       return response.json();
     },
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && (data.status === "pending" || data.status === "analyzing")) {
+        return 3000;
+      }
+      return false;
+    },
   });
 
   if (isLoading) {

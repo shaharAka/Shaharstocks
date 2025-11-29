@@ -102,6 +102,13 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
       if (!response.ok) throw new Error("Failed to fetch analysis");
       return response.json();
     },
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && (data.status === "pending" || data.status === "analyzing")) {
+        return 3000;
+      }
+      return false;
+    },
   });
 
   const { data: macroAnalysis } = useQuery<MacroAnalysis | null>({

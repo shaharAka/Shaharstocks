@@ -63,24 +63,13 @@ export function StockComments({ ticker }: StockCommentsProps) {
     });
   };
 
-  const getDisplayName = (user: { firstName?: string | null; lastName?: string | null; email?: string | null }) => {
-    if (user.firstName || user.lastName) {
-      return `${user.firstName || ''} ${user.lastName || ''}`.trim();
-    }
-    return user.email || 'User';
-  };
-
-  const getInitials = (user: { firstName?: string | null; lastName?: string | null; email?: string | null }) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    }
-    if (user.firstName) {
-      return user.firstName.slice(0, 2).toUpperCase();
-    }
-    if (user.email) {
-      return user.email.slice(0, 2).toUpperCase();
-    }
-    return 'U';
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   const formatTime = (date: Date | string | null) => {
@@ -129,13 +118,13 @@ export function StockComments({ ticker }: StockCommentsProps) {
               >
                 <Avatar className="h-8 w-8" style={{ backgroundColor: comment.user.avatarColor }}>
                   <AvatarFallback className="text-white" style={{ backgroundColor: comment.user.avatarColor }}>
-                    {getInitials(comment.user)}
+                    {getInitials(comment.user.name)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 space-y-1">
                   <div className="flex items-baseline gap-2">
                     <span className="text-sm font-medium" data-testid={`text-comment-author-${comment.id}`}>
-                      {getDisplayName(comment.user)}
+                      {comment.user.name}
                     </span>
                     <span className="text-xs text-muted-foreground" data-testid={`text-comment-time-${comment.id}`}>
                       {formatTime(comment.createdAt)}

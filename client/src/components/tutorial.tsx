@@ -13,8 +13,31 @@ interface TutorialProps {
 export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps) {
   const { user } = useUser();
   const [runTutorial, setRunTutorial] = useState(false);
+  const [hasSeenTutorial, setHasSeenTutorial] = useState(false);
   
   const tutorial = tutorials[tutorialId];
+
+  // Check if user has completed this tutorial
+  useEffect(() => {
+    const checkTutorialStatus = async () => {
+      if (!user) return;
+      
+      try {
+        const response = await fetch(`/api/tutorials/${tutorialId}/status`);
+        const data = await response.json();
+        setHasSeenTutorial(data.completed);
+        
+        // Auto-start tutorial if user hasn't seen it (first visit)
+        if (!data.completed) {
+          setRunTutorial(true);
+        }
+      } catch (error) {
+        console.error("Failed to check tutorial status:", error);
+      }
+    };
+
+    checkTutorialStatus();
+  }, [user, tutorialId]);
 
   // Handle tutorial completion
   const handleJoyrideCallback = async (data: CallBackProps) => {
@@ -26,6 +49,7 @@ export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps)
         // Mark tutorial as completed (uses session for user ID)
         await apiRequest("POST", `/api/tutorials/${tutorialId}/complete`, {});
         
+        setHasSeenTutorial(true);
         setRunTutorial(false);
         
         // Invalidate queries to refresh tutorial status
@@ -40,10 +64,22 @@ export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps)
     }
   };
 
-  // Sync internal state with run prop from TutorialManager
+  // Manually start tutorial (from help button or replay event)
   useEffect(() => {
-    setRunTutorial(run);
+    if (run && !runTutorial) {
+      setRunTutorial(true);
+    }
   }, [run]);
+
+  // Listen for replay-tutorial event
+  useEffect(() => {
+    const handleReplay = () => {
+      setRunTutorial(true);
+    };
+
+    window.addEventListener('replay-tutorial', handleReplay);
+    return () => window.removeEventListener('replay-tutorial', handleReplay);
+  }, []);
 
   if (!user || !tutorial) return null;
 

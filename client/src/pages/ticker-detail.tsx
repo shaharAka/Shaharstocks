@@ -237,24 +237,8 @@ export default function TickerDetail() {
     },
   });
 
-  const getDisplayName = (user: { firstName?: string | null; lastName?: string | null; email?: string | null }) => {
-    if (user.firstName || user.lastName) {
-      return `${user.firstName || ''} ${user.lastName || ''}`.trim();
-    }
-    return user.email || 'User';
-  };
-
-  const getInitials = (user: { firstName?: string | null; lastName?: string | null; email?: string | null }) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    }
-    if (user.firstName) {
-      return user.firstName.slice(0, 2).toUpperCase();
-    }
-    if (user.email) {
-      return user.email.slice(0, 2).toUpperCase();
-    }
-    return 'U';
+  const getInitials = (name: string) => {
+    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
   if (stockLoading) {
@@ -786,12 +770,12 @@ export default function TickerDetail() {
                       <div key={comment.id} className="flex gap-3" data-testid={`comment-${comment.id}`}>
                         <Avatar>
                           <AvatarFallback>
-                            {getInitials(comment.user)}
+                            {getInitials(comment.user.name)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-sm">{getDisplayName(comment.user)}</span>
+                            <span className="font-medium text-sm">{comment.user.name}</span>
                             {comment.createdAt && (
                               <span className="text-xs text-muted-foreground">
                                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}

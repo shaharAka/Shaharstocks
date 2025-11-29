@@ -10,20 +10,12 @@ import { aiAnalysisService } from "./aiAnalysisService";
 import { startCleanupScheduler } from "./jobs/cleanupStaleStocks";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
-import { setupAuth } from "./replitAuth";
+import { sessionMiddleware } from "./session";
 import { queueWorker } from "./queueWorker";
 import { websocketManager } from "./websocketServer";
 
 // Feature flags
 const ENABLE_TELEGRAM = process.env.ENABLE_TELEGRAM === "true";
-
-// Helper to get display name for users in logs
-function getUserDisplayName(user: { firstName?: string | null; lastName?: string | null; email?: string | null }): string {
-  if (user.firstName || user.lastName) {
-    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
-  }
-  return user.email || 'Unknown';
-}
 
 const app = express();
 
@@ -38,6 +30,9 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: false }));
+
+// Add session middleware
+app.use(sessionMiddleware);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -72,10 +67,7 @@ app.use((req, res, next) => {
 (async () => {
   // Initialize default configuration
   await storage.initializeDefaults();
-  log("Server starting with Replit Auth (OIDC)...");
-  
-  // Setup Replit Auth (session + passport)
-  await setupAuth(app);
+  log("Server starting with session-based admin authentication...");
   
   // Initialize Telegram services only if feature flag is enabled
   if (ENABLE_TELEGRAM) {
@@ -176,6 +168,9 @@ app.use((req, res, next) => {
   
   // Start daily brief generation job for followed stocks
   startDailyBriefJob();
+  
+  // Start automatic cleanup of unverified users after 48 hours
+  startUnverifiedUserCleanupJob();
 })();
 
 /**
@@ -1382,11 +1377,11 @@ function startDailyBriefJob() {
           const followedStocks = await storage.getUserFollowedStocks(user.id);
           
           if (followedStocks.length === 0) {
-            log(`[DailyBrief] User ${getUserDisplayName(user)} has no followed stocks, skipping`);
+            log(`[DailyBrief] User ${user.name} has no followed stocks, skipping`);
             continue;
           }
           
-          log(`[DailyBrief] Processing ${followedStocks.length} followed stocks for user ${getUserDisplayName(user)}...`);
+          log(`[DailyBrief] Processing ${followedStocks.length} followed stocks for user ${user.name}...`);
           
           // Generate brief for each followed stock
           for (const followedStock of followedStocks) {
@@ -1397,7 +1392,7 @@ function startDailyBriefJob() {
               const todayBrief = await storage.getDailyBriefForUser(user.id, ticker, today);
               
               if (todayBrief) {
-                log(`[DailyBrief] Skipping ${ticker} for ${getUserDisplayName(user)} - brief already exists for today`);
+                log(`[DailyBrief] Skipping ${ticker} for ${user.name} - brief already exists for today`);
                 skippedCount++;
                 userSkippedCount++;
                 continue;
@@ -1464,7 +1459,7 @@ function startDailyBriefJob() {
                 }));
               
               // Generate DUAL-SCENARIO brief (both watching and owning)
-              log(`[DailyBrief] Generating dual-scenario brief for ${ticker} - user ${getUserDisplayName(user)} (${userOwnsPosition ? 'owns' : 'watching'}, ${opportunityType} opportunity)...`);
+              log(`[DailyBrief] Generating dual-scenario brief for ${ticker} - user ${user.name} (${userOwnsPosition ? 'owns' : 'watching'}, ${opportunityType} opportunity)...`);
               const brief = await aiAnalysisService.generateDailyBrief({
                 ticker,
                 currentPrice: quote.price,
@@ -1512,7 +1507,7 @@ function startDailyBriefJob() {
                   
                   if (yesterdayBrief && yesterdayBrief.recommendedStance === 'hold') {
                     // Stance changed from hold to sell on owned position - notify!
-                    log(`[DailyBrief] Stance change detected for ${ticker} (${getUserDisplayName(user)}): hold→sell on owned position`);
+                    log(`[DailyBrief] Stance change detected for ${ticker} (${user.name}): hold→sell on owned position`);
                     await storage.createNotification({
                       userId: user.id,
                       ticker,
@@ -1524,36 +1519,36 @@ function startDailyBriefJob() {
                       },
                       isRead: false,
                     });
-                    log(`[DailyBrief] Created stance_change notification for ${ticker} (${getUserDisplayName(user)})`);
+                    log(`[DailyBrief] Created stance_change notification for ${ticker} (${user.name})`);
                   }
                 } catch (notifError) {
                   // Ignore duplicate notification errors
                   if (notifError instanceof Error && !notifError.message.includes('unique constraint')) {
-                    log(`[DailyBrief] Failed to create stance change notification for ${ticker} (${getUserDisplayName(user)}): ${notifError.message}`);
+                    log(`[DailyBrief] Failed to create stance change notification for ${ticker} (${user.name}): ${notifError.message}`);
                   }
                 }
               }
               
               generatedCount++;
               userGeneratedCount++;
-              log(`[DailyBrief] Generated dual-scenario brief for ${ticker} (${getUserDisplayName(user)}): Watching=${brief.watching.recommendedStance}(${brief.watching.confidence}), Owning=${brief.owning.recommendedStance}(${brief.owning.confidence})`);
+              log(`[DailyBrief] Generated dual-scenario brief for ${ticker} (${user.name}): Watching=${brief.watching.recommendedStance}(${brief.watching.confidence}), Owning=${brief.owning.recommendedStance}(${brief.owning.confidence})`);
               
             } catch (error) {
               errorCount++;
               userErrorCount++;
               const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-              log(`[DailyBrief] Error generating brief for ${ticker} (${getUserDisplayName(user)}): ${errorMsg}`);
+              log(`[DailyBrief] Error generating brief for ${ticker} (${user.name}): ${errorMsg}`);
             }
           }
           
           // Log per-user summary for operational visibility
-          log(`[DailyBrief] User ${getUserDisplayName(user)} complete: generated ${userGeneratedCount}, skipped ${userSkippedCount}, errors ${userErrorCount}`);
+          log(`[DailyBrief] User ${user.name} complete: generated ${userGeneratedCount}, skipped ${userSkippedCount}, errors ${userErrorCount}`);
           
         } catch (error) {
           errorCount++;
           userErrorCount++;
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-          log(`[DailyBrief] Error processing user ${getUserDisplayName(user)}: ${errorMsg}`);
+          log(`[DailyBrief] Error processing user ${user.name}: ${errorMsg}`);
         }
       }
       
@@ -1575,3 +1570,38 @@ function startDailyBriefJob() {
   log("[DailyBrief] Background job started - generating briefs once a day");
 }
 
+/**
+ * Background job to cleanup unverified users older than 48 hours
+ * Runs every 6 hours
+ */
+function startUnverifiedUserCleanupJob() {
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  const CLEANUP_THRESHOLD_HOURS = 48;
+
+  async function cleanupUnverifiedUsers() {
+    try {
+      log("[UnverifiedCleanup] Starting cleanup of unverified users...");
+      
+      const deletedCount = await storage.purgeUnverifiedUsers(CLEANUP_THRESHOLD_HOURS);
+      
+      if (deletedCount > 0) {
+        log(`[UnverifiedCleanup] Deleted ${deletedCount} unverified user(s) older than ${CLEANUP_THRESHOLD_HOURS} hours`);
+      } else {
+        log("[UnverifiedCleanup] No unverified users to clean up");
+      }
+    } catch (error) {
+      console.error("[UnverifiedCleanup] Error cleaning up unverified users:", error);
+    }
+  }
+
+  // Run immediately on startup (after a 30 second delay)
+  setTimeout(() => {
+    cleanupUnverifiedUsers().catch(err => {
+      console.error("[UnverifiedCleanup] Initial cleanup failed:", err);
+    });
+  }, 30000);
+
+  // Then run every 6 hours
+  setInterval(cleanupUnverifiedUsers, SIX_HOURS);
+  log("[UnverifiedCleanup] Background job started - cleaning up every 6 hours");
+}

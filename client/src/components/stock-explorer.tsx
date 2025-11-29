@@ -79,6 +79,34 @@ export function StockExplorer({
 
   const isFollowing = followedStocks.some(f => f.ticker === stock?.ticker);
 
+  const followMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      const response = await fetch(`/api/stocks/${ticker}/follow`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to follow stock");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      toast({
+        title: "Following",
+        description: `Now following ${stock?.ticker}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to follow stock",
+        variant: "destructive",
+      });
+    },
+  });
+
   const unfollowMutation = useMutation({
     mutationFn: async (ticker: string) => {
       const response = await fetch(`/api/stocks/${ticker}/follow`, {
@@ -309,14 +337,14 @@ export function StockExplorer({
                   if (isFollowing) {
                     unfollowMutation.mutate(stock.ticker);
                   } else {
-                    onFollow?.(stock);
+                    followMutation.mutate(stock.ticker);
                   }
                 }}
-                disabled={unfollowMutation.isPending}
+                disabled={followMutation.isPending || unfollowMutation.isPending}
                 data-testid={`button-explorer-follow-${stock.ticker}`}
               >
                 <Star className={`h-4 w-4 mr-2 ${isFollowing ? "fill-current" : ""}`} />
-                {unfollowMutation.isPending ? "Processing..." : isFollowing ? "Unfollow" : "Follow"}
+                {followMutation.isPending ? "Following..." : unfollowMutation.isPending ? "Unfollowing..." : isFollowing ? "Unfollow" : "Follow"}
               </Button>
               <Button
                 variant="outline"

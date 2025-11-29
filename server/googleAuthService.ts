@@ -1,7 +1,11 @@
 import crypto from "crypto";
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+function getGoogleCredentials() {
+  return {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  };
+}
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -29,7 +33,8 @@ interface GoogleTokenInfo {
 }
 
 export function isGoogleConfigured(): boolean {
-  return !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+  const { clientId, clientSecret } = getGoogleCredentials();
+  return !!(clientId && clientSecret);
 }
 
 export function generateState(): string {
@@ -37,12 +42,13 @@ export function generateState(): string {
 }
 
 export function getGoogleAuthUrl(redirectUri: string, state: string): string {
-  if (!GOOGLE_CLIENT_ID) {
+  const { clientId } = getGoogleCredentials();
+  if (!clientId) {
     throw new Error("Google OAuth not configured");
   }
 
   const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
     scope: "openid email profile",
@@ -58,7 +64,8 @@ export async function exchangeCodeForTokens(
   code: string,
   redirectUri: string
 ): Promise<GoogleTokenResponse> {
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+  const { clientId, clientSecret } = getGoogleCredentials();
+  if (!clientId || !clientSecret) {
     throw new Error("Google OAuth not configured");
   }
 
@@ -68,8 +75,8 @@ export async function exchangeCodeForTokens(
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
+      client_id: clientId,
+      client_secret: clientSecret,
       code: code,
       grant_type: "authorization_code",
       redirect_uri: redirectUri,
@@ -86,6 +93,8 @@ export async function exchangeCodeForTokens(
 }
 
 async function verifyIdTokenWithGoogle(idToken: string): Promise<GoogleTokenInfo> {
+  const { clientId } = getGoogleCredentials();
+  
   const response = await fetch(
     `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
   );
@@ -98,8 +107,8 @@ async function verifyIdTokenWithGoogle(idToken: string): Promise<GoogleTokenInfo
 
   const tokenInfo: GoogleTokenInfo = await response.json();
 
-  if (tokenInfo.aud !== GOOGLE_CLIENT_ID) {
-    console.error("[Google OAuth] Token audience mismatch:", tokenInfo.aud, "vs", GOOGLE_CLIENT_ID);
+  if (tokenInfo.aud !== clientId) {
+    console.error("[Google OAuth] Token audience mismatch:", tokenInfo.aud, "vs", clientId);
     throw new Error("Token was not issued for this application");
   }
 

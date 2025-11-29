@@ -29,6 +29,7 @@ import {
   SidebarMenuSubButton,
   SidebarHeader,
   SidebarFooter,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
@@ -131,16 +132,22 @@ export function AppSidebar() {
   const currentPath = location.split('?')[0];
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-6">
-        <div className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
-            <Activity className="h-6 w-6 text-primary-foreground" />
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary flex-shrink-0">
+              <Activity className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div className="group-data-[collapsible=icon]:hidden min-w-0">
+              <h1 className="text-base font-semibold truncate">signal2</h1>
+              <p className="text-xs text-muted-foreground truncate">Opportunity Tracker</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold">signal2</h1>
-            <p className="text-xs text-muted-foreground">Opportunity Tracker</p>
-          </div>
+          <SidebarTrigger 
+            className="h-8 w-8 flex-shrink-0 group-data-[collapsible=icon]:hidden" 
+            data-testid="button-sidebar-toggle" 
+          />
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -416,12 +423,19 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t">
-        <div className="text-xs text-muted-foreground text-center">
-          <div className="font-mono" data-testid="text-version">
-            v{versionInfo?.version || "1.0.0"}
+      <SidebarFooter className="p-2 border-t">
+        {isCollapsed ? (
+          <SidebarTrigger 
+            className="h-8 w-8 mx-auto" 
+            data-testid="button-sidebar-expand" 
+          />
+        ) : (
+          <div className="text-xs text-muted-foreground text-center px-2">
+            <div className="font-mono" data-testid="text-version">
+              v{versionInfo?.version || "1.0.0"}
+            </div>
           </div>
-        </div>
+        )}
       </SidebarFooter>
     </Sidebar>
   );

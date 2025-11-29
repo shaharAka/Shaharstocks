@@ -133,3 +133,172 @@ export async function sendVerificationEmail({ to, name, verificationUrl }: Verif
     return false;
   }
 }
+
+interface AdminNotificationParams {
+  adminEmails: string[];
+  userName: string;
+  userEmail: string;
+  signupMethod: 'email' | 'google';
+}
+
+export async function notifySuperAdminsNewSignup({ adminEmails, userName, userEmail, signupMethod }: AdminNotificationParams): Promise<boolean> {
+  if (adminEmails.length === 0) {
+    console.log('[EmailService] No super admins to notify');
+    return true;
+  }
+
+  try {
+    const { client, fromEmail } = await getUncachableResendClient();
+    
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: adminEmails,
+      subject: `New User Signup - ${userName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f3f4f6;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 40px 0;">
+              <tr>
+                <td align="center">
+                  <table width="500" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                    <tr>
+                      <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <h1 style="margin: 0; color: #ffffff; font-size: 20px;">New User Signup</h1>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 30px;">
+                        <p style="margin: 0 0 16px; color: #374151; font-size: 16px;">A new user has signed up for signal2:</p>
+                        <table style="width: 100%; border-collapse: collapse;">
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Name:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${userName}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Email:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${userEmail}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Signup Method:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${signupMethod === 'google' ? 'Google OAuth' : 'Email/Password'}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Date:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${new Date().toLocaleString()}</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error('[EmailService] Failed to send admin signup notification:', error);
+      return false;
+    }
+
+    console.log('[EmailService] Admin signup notification sent:', data?.id);
+    return true;
+  } catch (error) {
+    console.error('[EmailService] Error sending admin signup notification:', error);
+    return false;
+  }
+}
+
+interface PaymentNotificationParams {
+  adminEmails: string[];
+  userName: string;
+  userEmail: string;
+  amount: string;
+  subscriptionId: string;
+}
+
+export async function notifySuperAdminsFirstPayment({ adminEmails, userName, userEmail, amount, subscriptionId }: PaymentNotificationParams): Promise<boolean> {
+  if (adminEmails.length === 0) {
+    console.log('[EmailService] No super admins to notify');
+    return true;
+  }
+
+  try {
+    const { client, fromEmail } = await getUncachableResendClient();
+    
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: adminEmails,
+      subject: `New Paying Customer - ${userName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f3f4f6;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 40px 0;">
+              <tr>
+                <td align="center">
+                  <table width="500" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                    <tr>
+                      <td style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <h1 style="margin: 0; color: #ffffff; font-size: 20px;">New Paying Customer!</h1>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 30px;">
+                        <p style="margin: 0 0 16px; color: #374151; font-size: 16px;">A user has made their first payment:</p>
+                        <table style="width: 100%; border-collapse: collapse;">
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Name:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${userName}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Email:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${userEmail}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Amount:</td>
+                            <td style="padding: 8px 0; color: #10b981; font-size: 14px; font-weight: 600;">${amount}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Subscription ID:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${subscriptionId}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Date:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${new Date().toLocaleString()}</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error('[EmailService] Failed to send admin payment notification:', error);
+      return false;
+    }
+
+    console.log('[EmailService] Admin payment notification sent:', data?.id);
+    return true;
+  } catch (error) {
+    console.error('[EmailService] Error sending admin payment notification:', error);
+    return false;
+  }
+}

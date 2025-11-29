@@ -18,7 +18,7 @@ import { verifyPayPalWebhook } from "./paypalWebhookVerifier";
 import { aiAnalysisService } from "./aiAnalysisService";
 import { signupLimiter, loginLimiter, resendVerificationLimiter } from "./middleware/rateLimiter";
 import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "./utils/emailValidation";
-import { sendVerificationEmail } from "./emailService";
+import { sendVerificationEmail, notifySuperAdminsNewSignup, notifySuperAdminsFirstPayment } from "./emailService";
 import { isGoogleConfigured, generateState, getGoogleAuthUrl, handleGoogleCallback } from "./googleAuthService";
 
 /**
@@ -504,6 +504,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Failed to create admin notification for new signup:", notifError);
       }
 
+      // Send email notification to super admins (fire and forget)
+      storage.getSuperAdminUsers().then(async (superAdmins) => {
+        const adminEmails = superAdmins.map(a => a.email);
+        if (adminEmails.length > 0) {
+          await notifySuperAdminsNewSignup({
+            adminEmails,
+            userName: name,
+            userEmail: email,
+            signupMethod: 'email',
+          });
+        }
+      }).catch(err => console.error("Failed to notify super admins of signup:", err));
+
       // Don't log them in - they need to verify email first
       res.json({ 
         success: true,
@@ -711,6 +724,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             subscriptionStatus: "trial",
             trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day trial
           });
+
+          // Send email notification to super admins for new Google signup (fire and forget)
+          storage.getSuperAdminUsers().then(async (superAdmins) => {
+            const adminEmails = superAdmins.map(a => a.email);
+            if (adminEmails.length > 0) {
+              await notifySuperAdminsNewSignup({
+                adminEmails,
+                userName: googleUser.name,
+                userEmail: googleUser.email,
+                signupMethod: 'google',
+              });
+            }
+          }).catch(err => console.error("Failed to notify super admins of Google signup:", err));
         }
       }
 
@@ -834,6 +860,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           await storage.updateUser(user.id, updateData);
           console.log(`[PayPal Webhook] ✅ Activated paid subscription for ${custom_id}${bonusDays > 0 ? ` with ${bonusDays} bonus days` : ''}`);
+
+          // Send email notification to super admins for first payment (fire and forget)
+          // Only notify if this is TRULY the first payment:
+          // - User was on trial or pending verification (not cancelled/expired)
+          // - User has never had a PayPal subscription before (prevents reactivation spam)
+          const isFirstPayment = !user.paypalSubscriptionId && 
+            (user.subscriptionStatus === "trial" || user.subscriptionStatus === "pending_verification");
+          
+          if (isFirstPayment) {
+            storage.getSuperAdminUsers().then(async (superAdmins) => {
+              const adminEmails = superAdmins.map(a => a.email);
+              if (adminEmails.length > 0) {
+                await notifySuperAdminsFirstPayment({
+                  adminEmails,
+                  userName: user.name,
+                  userEmail: user.email,
+                  amount: "$9.99/month", // Standard subscription price
+                  subscriptionId,
+                });
+              }
+            }).catch(err => console.error("Failed to notify super admins of first payment:", err));
+          }
 
           if (!user.initialDataFetched) {
             fetchInitialDataForUser(user.id).catch(err => {

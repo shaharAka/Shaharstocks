@@ -1111,3 +1111,16 @@ export const glossaryTerms = pgTable("glossary_terms", {
 export const insertGlossaryTermSchema = createInsertSchema(glossaryTerms).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertGlossaryTerm = z.infer<typeof insertGlossaryTermSchema>;
 export type GlossaryTerm = typeof glossaryTerms.$inferSelect;
+
+// System Settings - Global application configuration (single row table)
+export const systemSettings = pgTable("system_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  appVersion: text("app_version").notNull().default("1.0.0"), // Application version displayed to users
+  releaseNotes: text("release_notes"), // Optional notes for the current version
+  lastUpdatedBy: varchar("last_updated_by").references(() => users.id), // Admin who last updated
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSystemSettingsSchema = createInsertSchema(systemSettings).omit({ id: true, updatedAt: true });
+export type InsertSystemSettings = z.infer<typeof insertSystemSettingsSchema>;
+export type SystemSettings = typeof systemSettings.$inferSelect;

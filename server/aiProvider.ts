@@ -187,13 +187,134 @@ export function getAvailableProviders(): { id: string; name: string; available: 
       id: "openai",
       name: "OpenAI",
       available: isOpenAIAvailable(),
-      models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
+      models: ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"]
     },
     {
       id: "gemini",
       name: "Google Gemini",
       available: isGeminiAvailable(),
-      models: ["gemini-2.5-flash", "gemini-2.5-pro"]
+      models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"]
     }
   ];
+}
+
+interface OpenAIModel {
+  id: string;
+  object: string;
+  created: number;
+  owned_by: string;
+}
+
+interface GeminiModel {
+  name: string;
+  displayName: string;
+  description: string;
+  supportedGenerationMethods: string[];
+}
+
+export async function fetchOpenAIModels(): Promise<string[]> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"];
+  }
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/models", {
+      headers: {
+        "Authorization": `Bearer ${apiKey}`
+      }
+    });
+
+    if (!response.ok) {
+      console.error("[AIProvider] Failed to fetch OpenAI models:", response.statusText);
+      return ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"];
+    }
+
+    const data = await response.json() as { data: OpenAIModel[] };
+    
+    const chatModels = data.data
+      .filter((m: OpenAIModel) => {
+        const id = m.id.toLowerCase();
+        return (id.startsWith("gpt-4") || id.startsWith("gpt-5")) && 
+               !id.includes("vision") &&
+               !id.includes("realtime") &&
+               !id.includes("audio") &&
+               !id.includes("instruct") &&
+               m.owned_by === "openai" || m.owned_by === "system";
+      })
+      .map((m: OpenAIModel) => m.id)
+      .sort((a: string, b: string) => {
+        const priority = (id: string) => {
+          if (id.includes("gpt-5")) return 0;
+          if (id.includes("gpt-4.1") && !id.includes("mini") && !id.includes("nano")) return 1;
+          if (id.includes("gpt-4.1-mini")) return 2;
+          if (id.includes("gpt-4.1-nano")) return 3;
+          if (id.includes("gpt-4o") && !id.includes("mini")) return 4;
+          if (id.includes("gpt-4o-mini")) return 5;
+          return 10;
+        };
+        return priority(a) - priority(b);
+      });
+
+    return chatModels.length > 0 ? chatModels : ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"];
+  } catch (error) {
+    console.error("[AIProvider] Error fetching OpenAI models:", error);
+    return ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"];
+  }
+}
+
+export async function fetchGeminiModels(): Promise<string[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"];
+  }
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+    );
+
+    if (!response.ok) {
+      console.error("[AIProvider] Failed to fetch Gemini models:", response.statusText);
+      return ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"];
+    }
+
+    const data = await response.json() as { models: GeminiModel[] };
+    
+    const chatModels = data.models
+      .filter((m: GeminiModel) => {
+        const name = m.name.replace("models/", "");
+        return (name.startsWith("gemini-2") || name.startsWith("gemini-3")) &&
+               m.supportedGenerationMethods?.includes("generateContent") &&
+               !name.includes("image") &&
+               !name.includes("audio") &&
+               !name.includes("vision") &&
+               !name.includes("embedding");
+      })
+      .map((m: GeminiModel) => m.name.replace("models/", ""))
+      .sort((a: string, b: string) => {
+        const priority = (id: string) => {
+          if (id.includes("gemini-3") && id.includes("pro") && !id.includes("preview")) return 0;
+          if (id.includes("gemini-3.0-pro-preview")) return 1;
+          if (id.includes("gemini-2.5-pro") && !id.includes("preview")) return 2;
+          if (id.includes("gemini-2.5-flash") && !id.includes("lite") && !id.includes("preview")) return 3;
+          if (id.includes("gemini-2.5-flash-lite")) return 4;
+          return 10;
+        };
+        return priority(a) - priority(b);
+      });
+
+    return chatModels.length > 0 ? chatModels : ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"];
+  } catch (error) {
+    console.error("[AIProvider] Error fetching Gemini models:", error);
+    return ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"];
+  }
+}
+
+export async function fetchAvailableModels(provider: "openai" | "gemini"): Promise<string[]> {
+  if (provider === "openai") {
+    return fetchOpenAIModels();
+  } else {
+    return fetchGeminiModels();
+  }
 }

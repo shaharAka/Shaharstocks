@@ -333,6 +333,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: Fetch available models from provider APIs dynamically
+  app.get("/api/admin/ai-provider/models", requireAdmin, async (req, res) => {
+    try {
+      const provider = req.query.provider as string;
+      
+      if (!provider || !["openai", "gemini"].includes(provider)) {
+        return res.status(400).json({ error: "Invalid provider. Must be 'openai' or 'gemini'" });
+      }
+      
+      const { fetchAvailableModels } = await import("./aiProvider");
+      const models = await fetchAvailableModels(provider as "openai" | "gemini");
+      
+      res.json({
+        provider,
+        models,
+      });
+    } catch (error) {
+      console.error("Error fetching AI models:", error);
+      res.status(500).json({ error: "Failed to fetch AI models" });
+    }
+  });
+
   // User authentication routes
   app.get("/api/auth/current-user", async (req, res) => {
     try {

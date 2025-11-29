@@ -429,6 +429,23 @@ export default function AdminPage() {
     enabled: !!currentUser?.isAdmin,
   });
 
+  const currentProvider = selectedAIProvider || aiProviderInfo?.provider || "openai";
+  
+  const { data: dynamicModels, isLoading: isLoadingModels, refetch: refetchModels } = useQuery<{ provider: string; models: string[] }>({
+    queryKey: ["/api/admin/ai-provider/models", currentProvider],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/ai-provider/models?provider=${currentProvider}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to fetch models");
+      }
+      return res.json();
+    },
+    enabled: !!currentUser?.isAdmin,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+
   const updateAIProviderMutation = useMutation({
     mutationFn: async ({ provider, model }: { provider: string; model?: string }) => {
       const res = await fetch("/api/admin/ai-provider", {

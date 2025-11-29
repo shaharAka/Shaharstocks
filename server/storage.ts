@@ -211,6 +211,7 @@ export interface IStorage {
 
   // Users
   getUsers(options?: { includeArchived?: boolean }): Promise<User[]>;
+  getSuperAdminUsers(): Promise<User[]>;
   getAllUserIds(): Promise<string[]>;
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -1680,6 +1681,10 @@ export class DatabaseStorage implements IStorage {
       return await db.select().from(users);
     }
     return await db.select().from(users).where(eq(users.archived, false));
+  }
+
+  async getSuperAdminUsers(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.isSuperAdmin, true));
   }
 
   async getAllUserIds(): Promise<string[]> {

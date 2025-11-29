@@ -632,9 +632,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store state in session for verification
       req.session.googleOAuthState = state;
       
-      const baseUrl = process.env.NODE_ENV === "production" 
-        ? `https://${req.get('host')}`
-        : `http://${req.get('host')}`;
+      const host = req.get('host') || '';
+      const isReplit = host.includes('replit') || host.includes('riker');
+      const baseUrl = (process.env.NODE_ENV === "production" || isReplit)
+        ? `https://${host}`
+        : `http://${host}`;
       const redirectUri = `${baseUrl}/api/auth/google/callback`;
       
       const authUrl = getGoogleAuthUrl(redirectUri, state);
@@ -668,9 +670,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clear the state
       delete req.session.googleOAuthState;
 
-      const baseUrl = process.env.NODE_ENV === "production" 
-        ? `https://${req.get('host')}`
-        : `http://${req.get('host')}`;
+      const host = req.get('host') || '';
+      const isReplit = host.includes('replit') || host.includes('riker');
+      const baseUrl = (process.env.NODE_ENV === "production" || isReplit)
+        ? `https://${host}`
+        : `http://${host}`;
       const redirectUri = `${baseUrl}/api/auth/google/callback`;
 
       // Exchange code for tokens and get user info

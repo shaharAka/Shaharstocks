@@ -11,29 +11,21 @@ interface GoogleTokenResponse {
   id_token: string;
 }
 
-interface GoogleUserInfo {
-  sub: string;
-  email: string;
-  email_verified: boolean;
-  name: string;
-  picture?: string;
-  given_name?: string;
-  family_name?: string;
-}
-
-interface DecodedIdToken {
+interface GoogleTokenInfo {
   iss: string;
   azp: string;
   aud: string;
   sub: string;
   email: string;
-  email_verified: boolean;
-  name: string;
+  email_verified: string;
+  name?: string;
   picture?: string;
   given_name?: string;
   family_name?: string;
-  iat: number;
-  exp: number;
+  iat: string;
+  exp: string;
+  alg: string;
+  kid: string;
 }
 
 export function isGoogleConfigured(): boolean {
@@ -93,51 +85,29 @@ export async function exchangeCodeForTokens(
   return response.json();
 }
 
-export function decodeIdToken(idToken: string): DecodedIdToken {
-  const parts = idToken.split(".");
-  if (parts.length !== 3) {
-    throw new Error("Invalid ID token format");
-  }
-
-  const payload = Buffer.from(parts[1], "base64url").toString("utf-8");
-  return JSON.parse(payload);
-}
-
-export function verifyIdToken(decoded: DecodedIdToken): void {
-  if (!GOOGLE_CLIENT_ID) {
-    throw new Error("Google OAuth not configured");
-  }
-
-  if (decoded.iss !== "https://accounts.google.com" && decoded.iss !== "accounts.google.com") {
-    throw new Error("Invalid token issuer");
-  }
-
-  if (decoded.aud !== GOOGLE_CLIENT_ID) {
-    throw new Error("Invalid token audience");
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (decoded.exp < now) {
-    throw new Error("Token has expired");
-  }
-
-  if (!decoded.email_verified) {
-    throw new Error("Email not verified with Google");
-  }
-}
-
-export async function getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
-  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+async function verifyIdTokenWithGoogle(idToken: string): Promise<GoogleTokenInfo> {
+  const response = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+  );
 
   if (!response.ok) {
-    throw new Error("Failed to fetch user info from Google");
+    const error = await response.text();
+    console.error("[Google OAuth] Token verification failed:", error);
+    throw new Error("Invalid or expired ID token");
   }
 
-  return response.json();
+  const tokenInfo: GoogleTokenInfo = await response.json();
+
+  if (tokenInfo.aud !== GOOGLE_CLIENT_ID) {
+    console.error("[Google OAuth] Token audience mismatch:", tokenInfo.aud, "vs", GOOGLE_CLIENT_ID);
+    throw new Error("Token was not issued for this application");
+  }
+
+  if (tokenInfo.email_verified !== "true") {
+    throw new Error("Email not verified with Google");
+  }
+
+  return tokenInfo;
 }
 
 export interface GoogleAuthResult {
@@ -154,14 +124,13 @@ export async function handleGoogleCallback(
 ): Promise<GoogleAuthResult> {
   const tokens = await exchangeCodeForTokens(code, redirectUri);
   
-  const decoded = decodeIdToken(tokens.id_token);
-  verifyIdToken(decoded);
+  const tokenInfo = await verifyIdTokenWithGoogle(tokens.id_token);
 
   return {
-    sub: decoded.sub,
-    email: decoded.email,
-    name: decoded.name || decoded.given_name || "User",
-    picture: decoded.picture,
-    emailVerified: decoded.email_verified,
+    sub: tokenInfo.sub,
+    email: tokenInfo.email,
+    name: tokenInfo.name || tokenInfo.given_name || "User",
+    picture: tokenInfo.picture,
+    emailVerified: tokenInfo.email_verified === "true",
   };
 }

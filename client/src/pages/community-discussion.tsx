@@ -44,6 +44,7 @@ export default function CommunityDiscussion() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       toast({
         title: "Stock Followed",
         description: "Day-0 AI analysis has been queued for this stock",

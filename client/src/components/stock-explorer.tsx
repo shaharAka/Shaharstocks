@@ -93,6 +93,7 @@ export function StockExplorer({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       toast({
         title: "Following",
         description: `Now following ${stock?.ticker}`,
@@ -119,6 +120,7 @@ export function StockExplorer({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       toast({
         title: "Success",
         description: `Unfollowed ${stock?.ticker}`,

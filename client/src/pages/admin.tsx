@@ -1249,40 +1249,40 @@ export default function AdminPage() {
                   <Select 
                     value={selectedAIModel || aiProviderInfo?.model || ""} 
                     onValueChange={setSelectedAIModel}
+                    disabled={isLoadingModels}
                   >
                     <SelectTrigger data-testid="select-ai-model">
-                      <SelectValue placeholder="Select model" />
+                      <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select model"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {(selectedAIProvider || aiProviderInfo?.provider) === "gemini" ? (
-                        <>
-                          <SelectItem value="gemini-2.5-flash" data-testid="select-item-model-gemini-2.5-flash">
-                            gemini-2.5-flash
-                          </SelectItem>
-                          <SelectItem value="gemini-2.5-pro" data-testid="select-item-model-gemini-2.5-pro">
-                            gemini-2.5-pro
-                          </SelectItem>
-                        </>
-                      ) : (
-                        <>
-                          <SelectItem value="gpt-4o" data-testid="select-item-model-gpt-4o">
-                            gpt-4o
-                          </SelectItem>
-                          <SelectItem value="gpt-4o-mini" data-testid="select-item-model-gpt-4o-mini">
-                            gpt-4o-mini
-                          </SelectItem>
-                          <SelectItem value="gpt-4-turbo" data-testid="select-item-model-gpt-4-turbo">
-                            gpt-4-turbo
-                          </SelectItem>
-                        </>
-                      )}
+                      {dynamicModels?.models?.map((model) => (
+                        <SelectItem 
+                          key={model} 
+                          value={model}
+                          data-testid={`select-item-model-${model}`}
+                        >
+                          {model}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {(selectedAIProvider || aiProviderInfo?.provider) === "gemini" 
-                      ? "gemini-2.5-flash: Fast and cost-effective. gemini-2.5-pro: Most capable for complex analysis."
-                      : "gpt-4o: Most capable. gpt-4o-mini: Fast and cost-effective. gpt-4-turbo: Previous generation."}
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      {isLoadingModels 
+                        ? "Fetching available models from provider..."
+                        : `${dynamicModels?.models?.length || 0} models available from ${currentProvider === "gemini" ? "Google Gemini" : "OpenAI"}`}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => refetchModels()}
+                      disabled={isLoadingModels}
+                      className="h-6 text-xs"
+                      data-testid="button-refresh-models"
+                    >
+                      {isLoadingModels ? "Loading..." : "Refresh"}
+                    </Button>
+                  </div>
                 </div>
 
                 <p className="text-xs text-muted-foreground">

@@ -187,13 +187,13 @@ export function getAvailableProviders(): { id: string; name: string; available: 
       id: "openai",
       name: "OpenAI",
       available: isOpenAIAvailable(),
-      models: ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"]
+      models: ["gpt-5.1", "gpt-4o", "gpt-4o-mini"]
     },
     {
       id: "gemini",
       name: "Google Gemini",
       available: isGeminiAvailable(),
-      models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"]
+      models: ["gemini-2.5-pro", "gemini-2.5-flash"]
     }
   ];
 }
@@ -215,7 +215,7 @@ interface GeminiModel {
 export async function fetchOpenAIModels(): Promise<string[]> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"];
+    return ["gpt-5.1", "gpt-4o", "gpt-4o-mini"];
   }
 
   try {
@@ -227,7 +227,7 @@ export async function fetchOpenAIModels(): Promise<string[]> {
 
     if (!response.ok) {
       console.error("[AIProvider] Failed to fetch OpenAI models:", response.statusText);
-      return ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"];
+      return ["gpt-5.1", "gpt-4o", "gpt-4o-mini"];
     }
 
     const data = await response.json() as { data: OpenAIModel[] };
@@ -235,38 +235,44 @@ export async function fetchOpenAIModels(): Promise<string[]> {
     const chatModels = data.data
       .filter((m: OpenAIModel) => {
         const id = m.id.toLowerCase();
-        return (id.startsWith("gpt-4") || id.startsWith("gpt-5")) && 
-               !id.includes("vision") &&
+        const isGPT = id.startsWith("gpt-4") || id.startsWith("gpt-5");
+        const isNotSpecialized = !id.includes("vision") &&
                !id.includes("realtime") &&
                !id.includes("audio") &&
                !id.includes("instruct") &&
-               m.owned_by === "openai" || m.owned_by === "system";
+               !id.includes("codex") &&
+               !id.includes("embedding");
+        const isValidOwner = m.owned_by === "openai" || m.owned_by === "system";
+        return isGPT && isNotSpecialized && isValidOwner;
       })
       .map((m: OpenAIModel) => m.id)
       .sort((a: string, b: string) => {
         const priority = (id: string) => {
-          if (id.includes("gpt-5")) return 0;
-          if (id.includes("gpt-4.1") && !id.includes("mini") && !id.includes("nano")) return 1;
-          if (id.includes("gpt-4.1-mini")) return 2;
-          if (id.includes("gpt-4.1-nano")) return 3;
-          if (id.includes("gpt-4o") && !id.includes("mini")) return 4;
-          if (id.includes("gpt-4o-mini")) return 5;
+          if (id === "gpt-5.1") return 0;
+          if (id.startsWith("gpt-5.1") && !id.includes("mini") && !id.includes("nano")) return 1;
+          if (id === "gpt-4o") return 2;
+          if (id === "gpt-4o-mini") return 3;
+          if (id === "gpt-4") return 4;
+          if (id.includes("gpt-5")) return 5;
+          if (id.includes("gpt-4o")) return 6;
+          if (id.includes("gpt-4")) return 7;
           return 10;
         };
         return priority(a) - priority(b);
       });
 
-    return chatModels.length > 0 ? chatModels : ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"];
+    console.log("[AIProvider] Fetched OpenAI models:", chatModels);
+    return chatModels.length > 0 ? chatModels : ["gpt-5.1", "gpt-4o", "gpt-4o-mini"];
   } catch (error) {
     console.error("[AIProvider] Error fetching OpenAI models:", error);
-    return ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"];
+    return ["gpt-5.1", "gpt-4o", "gpt-4o-mini"];
   }
 }
 
 export async function fetchGeminiModels(): Promise<string[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"];
+    return ["gemini-2.5-pro", "gemini-2.5-flash"];
   }
 
   try {
@@ -276,7 +282,7 @@ export async function fetchGeminiModels(): Promise<string[]> {
 
     if (!response.ok) {
       console.error("[AIProvider] Failed to fetch Gemini models:", response.statusText);
-      return ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"];
+      return ["gemini-2.5-pro", "gemini-2.5-flash"];
     }
 
     const data = await response.json() as { models: GeminiModel[] };
@@ -284,30 +290,36 @@ export async function fetchGeminiModels(): Promise<string[]> {
     const chatModels = data.models
       .filter((m: GeminiModel) => {
         const name = m.name.replace("models/", "");
-        return (name.startsWith("gemini-2") || name.startsWith("gemini-3")) &&
-               m.supportedGenerationMethods?.includes("generateContent") &&
-               !name.includes("image") &&
+        const isGemini = name.startsWith("gemini-2") || name.startsWith("gemini-3");
+        const supportsChat = m.supportedGenerationMethods?.includes("generateContent");
+        const isNotSpecialized = !name.includes("image") &&
                !name.includes("audio") &&
                !name.includes("vision") &&
-               !name.includes("embedding");
+               !name.includes("embedding") &&
+               !name.includes("exp") &&
+               !name.includes("thinking");
+        return isGemini && supportsChat && isNotSpecialized;
       })
       .map((m: GeminiModel) => m.name.replace("models/", ""))
       .sort((a: string, b: string) => {
         const priority = (id: string) => {
-          if (id.includes("gemini-3") && id.includes("pro") && !id.includes("preview")) return 0;
-          if (id.includes("gemini-3.0-pro-preview")) return 1;
-          if (id.includes("gemini-2.5-pro") && !id.includes("preview")) return 2;
-          if (id.includes("gemini-2.5-flash") && !id.includes("lite") && !id.includes("preview")) return 3;
-          if (id.includes("gemini-2.5-flash-lite")) return 4;
+          if (id === "gemini-2.5-pro") return 0;
+          if (id === "gemini-2.5-flash") return 1;
+          if (id.includes("gemini-3") && id.includes("pro")) return 2;
+          if (id.includes("gemini-2.5-pro")) return 3;
+          if (id.includes("gemini-2.5-flash") && !id.includes("lite")) return 4;
+          if (id.includes("gemini-2.5-flash-lite")) return 5;
+          if (id.includes("gemini-3")) return 6;
           return 10;
         };
         return priority(a) - priority(b);
       });
 
-    return chatModels.length > 0 ? chatModels : ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"];
+    console.log("[AIProvider] Fetched Gemini models:", chatModels);
+    return chatModels.length > 0 ? chatModels : ["gemini-2.5-pro", "gemini-2.5-flash"];
   } catch (error) {
     console.error("[AIProvider] Error fetching Gemini models:", error);
-    return ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.0-pro-preview"];
+    return ["gemini-2.5-pro", "gemini-2.5-flash"];
   }
 }
 

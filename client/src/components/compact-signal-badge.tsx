@@ -10,9 +10,9 @@ interface CompactSignalBadgeProps {
 
 export function CompactSignalBadge({ ticker, showEmptyState = false }: CompactSignalBadgeProps) {
   const { data: analysis, isLoading } = useQuery<StockAnalysis | null>({
-    queryKey: ["/api/ai-analysis", ticker],
+    queryKey: ["/api/stocks", ticker, "analysis"],
     queryFn: async () => {
-      const response = await fetch(`/api/ai-analysis/${ticker}`);
+      const response = await fetch(`/api/stocks/${ticker}/analysis`);
       if (response.status === 404) return null;
       if (!response.ok) throw new Error("Failed to fetch AI analysis");
       return response.json();

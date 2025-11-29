@@ -186,7 +186,7 @@ export function StockExplorer({
                 <CardTitle className="text-base">AI Signal</CardTitle>
               </CardHeader>
               <CardContent>
-                <CompactSignalBadge ticker={stock.ticker} />
+                <CompactSignalBadge ticker={stock.ticker} showEmptyState={true} />
               </CardContent>
             </Card>
 

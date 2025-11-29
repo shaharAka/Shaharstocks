@@ -1210,23 +1210,21 @@ export default function AdminPage() {
                       <SelectValue placeholder="Select AI provider" />
                     </SelectTrigger>
                     <SelectContent>
-                      {aiProviderInfo?.availableProviders?.map((p) => (
-                        <SelectItem 
-                          key={p.id} 
-                          value={p.id} 
-                          disabled={!p.available}
-                          data-testid={`select-item-${p.id}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span>{p.name}</span>
-                            {!p.available && (
-                              <Badge variant="secondary" className="text-xs">API key not configured</Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="openai" data-testid="select-item-openai">
+                        OpenAI
+                      </SelectItem>
+                      <SelectItem value="gemini" data-testid="select-item-gemini">
+                        Google Gemini
+                      </SelectItem>
                     </SelectContent>
                   </Select>
+                  {aiProviderInfo?.availableProviders && (
+                    <p className="text-xs text-muted-foreground">
+                      {aiProviderInfo.availableProviders.map(p => 
+                        `${p.name}: ${p.available ? "Available" : "API key not configured"}`
+                      ).join(" | ")}
+                    </p>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
@@ -1239,19 +1237,28 @@ export default function AdminPage() {
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(() => {
-                        const currentProvider = selectedAIProvider || aiProviderInfo?.provider || "openai";
-                        const providerInfo = aiProviderInfo?.availableProviders?.find(p => p.id === currentProvider);
-                        return providerInfo?.models?.map((model) => (
-                          <SelectItem 
-                            key={model} 
-                            value={model}
-                            data-testid={`select-item-model-${model}`}
-                          >
-                            {model}
+                      {(selectedAIProvider || aiProviderInfo?.provider) === "gemini" ? (
+                        <>
+                          <SelectItem value="gemini-2.5-flash" data-testid="select-item-model-gemini-2.5-flash">
+                            gemini-2.5-flash
                           </SelectItem>
-                        )) || null;
-                      })()}
+                          <SelectItem value="gemini-2.5-pro" data-testid="select-item-model-gemini-2.5-pro">
+                            gemini-2.5-pro
+                          </SelectItem>
+                        </>
+                      ) : (
+                        <>
+                          <SelectItem value="gpt-4o" data-testid="select-item-model-gpt-4o">
+                            gpt-4o
+                          </SelectItem>
+                          <SelectItem value="gpt-4o-mini" data-testid="select-item-model-gpt-4o-mini">
+                            gpt-4o-mini
+                          </SelectItem>
+                          <SelectItem value="gpt-4-turbo" data-testid="select-item-model-gpt-4-turbo">
+                            gpt-4-turbo
+                          </SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">

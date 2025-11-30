@@ -436,13 +436,13 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     };
   }): Promise<{
     watching: {
-      recommendedStance: "buy" | "hold" | "sell";
+      recommendedStance: "buy" | "hold" | "sell" | "cover";
       confidence: number; // 1-10
       briefText: string; // <120 words
       keyHighlights: string[]; // 2-3 bullet points
     };
     owning: {
-      recommendedStance: "buy" | "hold" | "sell";
+      recommendedStance: "buy" | "hold" | "sell" | "cover";
       confidence: number; // 1-10
       briefText: string; // <120 words
       keyHighlights: string[]; // 2-3 bullet points
@@ -495,7 +495,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       analyzedAt?: string;
     };
   }): Promise<{
-    recommendedStance: "buy" | "hold" | "sell";
+    recommendedStance: "buy" | "hold" | "sell" | "cover";
     confidence: number;
     briefText: string;
     keyHighlights: string[];
@@ -599,21 +599,21 @@ Decision: SELL when trend confirms exit. HOLD when trend supports staying in. NE
         : `STANCE RULES for OWNED SHORT POSITION (Sell/Short Opportunity):
 You have a SHORT position. Price DECLINE = your profit. Focus on COVERING strategy.
 
-⚠️ CRITICAL: You can ONLY recommend "buy" or "hold" - NO OTHER VALUES.
-- "buy" = Cover the short position / Close the short NOW
+⚠️ CRITICAL: You can ONLY recommend "cover" or "hold" - NO OTHER VALUES.
+- "cover" = Close/exit the short position NOW (buy back shares to cover)
 - "hold" = Keep the short position open / Stay short
 
-BUY (COVER SHORT):
-- "buy" if price -5%+ (take short profit on significant decline)
-- "buy" if price +3%+ AND initial bearish trend reversing bullish (stop loss - trend against you)
-- "buy" if strong bullish news violates bearish thesis (cut losses early)
+COVER (EXIT SHORT):
+- "cover" if price -5%+ (take short profit on significant decline)
+- "cover" if price +3%+ AND initial bearish trend reversing bullish (stop loss - trend against you)
+- "cover" if strong bullish news violates bearish thesis (cut losses early)
 
 HOLD (STAY SHORT):
 - "hold" if price declining -1% to -4% with initial bearish trend intact (let it run down)
 - "hold" if sideways action with initial trend still bearish/weak (wait for more decline)
 - "hold" if price +1% to +2% (small rally) but initial trend still bearish (noise, not reversal)
 
-Decision: "buy" (cover) when you've profited enough OR trend reversing against you. "hold" (stay short) when bearish trend continues. For shorts, price FALLING = your gain.`
+Decision: "cover" when you've profited enough OR trend reversing against you. "hold" when bearish trend continues. For shorts, price FALLING = your gain.`
     } else {
       // User doesn't own - focus on entry evaluation with ENTER/WAIT logic
       const scoreGuidance = isBuyOpportunity
@@ -766,7 +766,7 @@ BE DECISIVE. Near-term traders need action, not patience.
 
 Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
 {
-  "recommendedStance": "buy" | "hold" | "sell",
+  "recommendedStance": "buy" | "hold" | "sell" | "cover",
   "confidence": 1-10,
   "briefText": "A concise summary under 120 words with your recommendation and reasoning. Focus on NEAR-TERM action.",
   "keyHighlights": ["2-3 bullet points highlighting key price movements, catalysts, or concerns"]
@@ -776,7 +776,7 @@ Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
 - Watching a BUY opportunity: Use "buy" (enter now) or "hold" (wait for better setup)
 - Watching a SELL opportunity: Use "sell" (short now) or "hold" (wait for better short setup)
 - Owning a LONG position: Use "sell" (exit now) or "hold" (stay in position)
-- Owning a SHORT position: Use "buy" (cover short) or "hold" (stay short)`;
+- Owning a SHORT position: Use "cover" (exit short/buy to cover) or "hold" (stay short)`;
 
     try {
       const provider = this.getProvider();

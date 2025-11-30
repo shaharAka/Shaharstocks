@@ -1076,7 +1076,7 @@ export const dailyBriefs = pgTable("daily_briefs", {
   watchingHighlights: text("watching_highlights").array().default([]), // Key points for watching
   
   // OWNING SCENARIO (Exit Strategy) - "If I already own it, what should I do?"
-  owningStance: text("owning_stance").notNull(), // "buy", "hold", "sell"
+  owningStance: text("owning_stance").notNull(), // "buy", "hold", "sell", "cover" (cover = exit short)
   owningConfidence: integer("owning_confidence").notNull(), // 1-10
   owningText: text("owning_text").notNull(), // Brief for owning scenario
   owningHighlights: text("owning_highlights").array().default([]), // Key points for owning

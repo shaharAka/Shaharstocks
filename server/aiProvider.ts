@@ -48,6 +48,9 @@ class OpenAIProvider implements AIProvider {
     messages: ChatMessage[],
     options?: AICompletionOptions
   ): Promise<string> {
+    console.log(`[OpenAIProvider] 🚀 Making API call with model: ${this.model}`);
+    
+    const startTime = Date.now();
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages: messages.map(m => ({
@@ -60,6 +63,9 @@ class OpenAIProvider implements AIProvider {
         ? { type: "json_object" } 
         : undefined
     });
+    const duration = Date.now() - startTime;
+    
+    console.log(`[OpenAIProvider] ✅ API call completed in ${duration}ms using model: ${this.model}`);
 
     return response.choices[0]?.message?.content || "";
   }
@@ -90,6 +96,8 @@ class GeminiProvider implements AIProvider {
     messages: ChatMessage[],
     options?: AICompletionOptions
   ): Promise<string> {
+    console.log(`[GeminiProvider] 🚀 Making API call with model: ${this.model}`);
+    
     const systemMessage = messages.find(m => m.role === "system");
     const userMessages = messages.filter(m => m.role !== "system");
     
@@ -117,7 +125,11 @@ class GeminiProvider implements AIProvider {
       request.systemInstruction = { parts: [{ text: systemMessage.content }] };
     }
 
+    const startTime = Date.now();
     const response = await this.client.models.generateContent(request);
+    const duration = Date.now() - startTime;
+    
+    console.log(`[GeminiProvider] ✅ API call completed in ${duration}ms using model: ${this.model}`);
 
     // Extract text from response properly
     const candidate = response.candidates?.[0];

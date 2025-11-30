@@ -1458,10 +1458,50 @@ function startDailyBriefJob() {
               const holding = await storage.getPortfolioHoldingByTicker(user.id, ticker);
               const userOwnsPosition = holding !== null;
               
-              // Get previous analysis for context (if available)
+              // Get LATEST AI analysis from stock_analyses table (primary source of truth)
+              const latestAnalysis = await storage.getStockAnalysis(ticker);
+              
+              if (latestAnalysis?.status === 'completed') {
+                log(`[DailyBrief] Using enriched AI playbook for ${ticker}: score=${latestAnalysis.integratedScore || latestAnalysis.confidenceScore || 'N/A'}, rating=${latestAnalysis.overallRating || 'N/A'}`);
+              } else {
+                log(`[DailyBrief] No completed AI analysis for ${ticker}, using fallback stock data`);
+              }
+              
+              // Fallback to stock record data if no analysis available
               const stock = await storage.getStock(user.id, ticker);
-              const stockData = stock as any; // Cast to bypass type narrowing
-              const previousAnalysis = stockData?.overallRating ? {
+              const stockData = stock as any;
+              
+              // Build enriched analysis context from latest AI playbook
+              // Helper to safely convert analyzedAt (could be Date or string from DB)
+              const getAnalyzedAtString = (val: Date | string | null | undefined): string | undefined => {
+                if (!val) return undefined;
+                if (val instanceof Date) return val.toISOString();
+                if (typeof val === 'string') return val;
+                return undefined;
+              };
+              
+              const previousAnalysis = latestAnalysis?.status === 'completed' ? {
+                overallRating: latestAnalysis.overallRating || 'hold',
+                summary: latestAnalysis.summary || "No summary available",
+                recommendation: latestAnalysis.recommendation || undefined,
+                integratedScore: latestAnalysis.integratedScore ?? undefined,
+                confidenceScore: latestAnalysis.confidenceScore ?? undefined,
+                technicalAnalysis: {
+                  trend: latestAnalysis.technicalAnalysisTrend || 'neutral',
+                  momentum: latestAnalysis.technicalAnalysisMomentum || 'weak',
+                  score: latestAnalysis.technicalAnalysisScore ?? 50,
+                  signals: latestAnalysis.technicalAnalysisSignals || []
+                },
+                sentimentAnalysis: {
+                  trend: latestAnalysis.sentimentAnalysisTrend || 'neutral',
+                  newsVolume: latestAnalysis.sentimentAnalysisNewsVolume || 'low',
+                  score: latestAnalysis.sentimentAnalysisScore ?? 50,
+                  keyThemes: latestAnalysis.sentimentAnalysisKeyThemes || []
+                },
+                risks: latestAnalysis.risks || [],
+                opportunities: latestAnalysis.opportunities || [],
+                analyzedAt: getAnalyzedAtString(latestAnalysis.analyzedAt)
+              } : stockData?.overallRating ? {
                 overallRating: stockData.overallRating,
                 summary: stockData.summary || "No previous analysis available",
                 technicalAnalysis: stockData.technicalAnalysis ? {
@@ -1472,20 +1512,40 @@ function startDailyBriefJob() {
                 } : undefined
               } : undefined;
               
-              // Get opportunity type from stock recommendation (case-insensitive check)
-              const opportunityType = stockData?.recommendation?.toLowerCase().includes("sell") ? "sell" : "buy";
+              // Get opportunity type from latest analysis or stock recommendation
+              const opportunityType = (latestAnalysis?.recommendation?.toLowerCase().includes("sell") || 
+                                       latestAnalysis?.recommendation?.toLowerCase().includes("avoid") ||
+                                       stockData?.recommendation?.toLowerCase().includes("sell")) ? "sell" : "buy";
               
-              // Get recent news (last 24h only, if available)
-              const now = Date.now() / 1000; // Unix timestamp in seconds
-              const oneDayAgo = now - (24 * 60 * 60);
-              const recentNews = stockData?.news
-                ?.filter((article: any) => article.datetime && article.datetime >= oneDayAgo)
-                ?.slice(0, 3)
-                ?.map((article: any) => ({
-                  title: article.headline || "Untitled",
-                  sentiment: 0, // Finnhub news doesn't include sentiment, use neutral
-                  source: article.source || "Unknown"
-                }));
+              // Fetch FRESH news sentiment from Alpha Vantage (with fallback to cached)
+              let recentNews: { title: string; sentiment: number; source: string }[] | undefined;
+              try {
+                const freshNewsSentiment = await stockService.getNewsSentiment(ticker);
+                if (freshNewsSentiment?.articles && freshNewsSentiment.articles.length > 0) {
+                  recentNews = freshNewsSentiment.articles.slice(0, 5).map(article => ({
+                    title: article.title || "Untitled",
+                    sentiment: typeof article.sentiment === 'number' ? article.sentiment : 0,
+                    source: article.source || "Unknown"
+                  }));
+                  log(`[DailyBrief] Fetched ${recentNews.length} fresh news articles for ${ticker} (overall sentiment: ${freshNewsSentiment.aggregateSentiment?.toFixed(2) || 'N/A'})`);
+                }
+              } catch (newsError) {
+                log(`[DailyBrief] Fresh news fetch failed for ${ticker}, using cached: ${newsError instanceof Error ? newsError.message : 'Unknown'}`);
+              }
+              
+              // Fallback to cached news if fresh fetch failed
+              if (!recentNews || recentNews.length === 0) {
+                const now = Date.now() / 1000;
+                const oneDayAgo = now - (24 * 60 * 60);
+                recentNews = stockData?.news
+                  ?.filter((article: any) => article.datetime && article.datetime >= oneDayAgo)
+                  ?.slice(0, 3)
+                  ?.map((article: any) => ({
+                    title: article.headline || "Untitled",
+                    sentiment: 0,
+                    source: article.source || "Unknown"
+                  }));
+              }
               
               // Generate DUAL-SCENARIO brief (both watching and owning)
               log(`[DailyBrief] Generating dual-scenario brief for ${ticker} - user ${user.name} (${userOwnsPosition ? 'owns' : 'watching'}, ${opportunityType} opportunity)...`);

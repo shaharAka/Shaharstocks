@@ -412,7 +412,28 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     previousPrice: number;
     opportunityType?: "buy" | "sell"; // Type of opportunity (based on insider action)
     recentNews?: { title: string; sentiment: number; source: string }[];
-    previousAnalysis?: { overallRating: string; summary: string; technicalAnalysis?: any }; // Include technical analysis from full AI analysis
+    previousAnalysis?: { 
+      overallRating: string; 
+      summary: string; 
+      recommendation?: string; // Full AI recommendation text from playbook
+      integratedScore?: number; // Combined micro+macro score (0-100)
+      confidenceScore?: number; // MICRO AGENT confidence (0-100)
+      technicalAnalysis?: {
+        trend?: string;
+        momentum?: string;
+        score?: number;
+        signals?: string[];
+      };
+      sentimentAnalysis?: {
+        trend?: string;
+        newsVolume?: string;
+        score?: number;
+        keyThemes?: string[];
+      };
+      risks?: string[];
+      opportunities?: string[];
+      analyzedAt?: string;
+    };
   }): Promise<{
     watching: {
       recommendedStance: "buy" | "hold" | "sell";
@@ -451,7 +472,28 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     opportunityType: "buy" | "sell";
     userOwnsPosition: boolean;
     recentNews?: { title: string; sentiment: number; source: string }[];
-    previousAnalysis?: { overallRating: string; summary: string; technicalAnalysis?: any };
+    previousAnalysis?: { 
+      overallRating: string; 
+      summary: string; 
+      recommendation?: string;
+      integratedScore?: number;
+      confidenceScore?: number;
+      technicalAnalysis?: {
+        trend?: string;
+        momentum?: string;
+        score?: number;
+        signals?: string[];
+      };
+      sentimentAnalysis?: {
+        trend?: string;
+        newsVolume?: string;
+        score?: number;
+        keyThemes?: string[];
+      };
+      risks?: string[];
+      opportunities?: string[];
+      analyzedAt?: string;
+    };
   }): Promise<{
     recommendedStance: "buy" | "hold" | "sell";
     confidence: number;
@@ -478,22 +520,59 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       ? "This is a BUY OPPORTUNITY - insiders recently BOUGHT shares, signaling potential upside."
       : "This is a SELL/SHORT OPPORTUNITY - insiders recently SOLD shares, signaling potential downside or weakness. Low AI score indicates company weakness, making this a good shorting candidate.";
     
-    // Build technical trend context from initial AI analysis if available
+    // Build enriched context from latest AI analysis (playbook)
     let trendContext = "";
     let signalScore = 50; // Default if no analysis available
-    if (previousAnalysis?.technicalAnalysis) {
-      const tech = previousAnalysis.technicalAnalysis;
-      const trend = tech.trend || "neutral"; // bullish, bearish, neutral
-      const momentum = tech.momentum || "weak"; // strong, moderate, weak
-      signalScore = typeof tech.score === "number" ? tech.score : 50; // 0-100, preserve 0 as valid bearish score
-      const signals = Array.isArray(tech.signals) ? tech.signals.slice(0, 3) : [];
+    let aiPlaybookContext = "";
+    
+    if (previousAnalysis) {
+      // Use integrated score if available (combines micro + macro agents)
+      signalScore = previousAnalysis.integratedScore ?? previousAnalysis.confidenceScore ?? 50;
       
-      trendContext = `
-INITIAL AI TECHNICAL ANALYSIS (baseline trend from insider opportunity):
+      // Build technical analysis context
+      if (previousAnalysis.technicalAnalysis) {
+        const tech = previousAnalysis.technicalAnalysis;
+        const trend = tech.trend || "neutral";
+        const momentum = tech.momentum || "weak";
+        const techScore = typeof tech.score === "number" ? tech.score : 50;
+        const signals = Array.isArray(tech.signals) ? tech.signals.slice(0, 3) : [];
+        
+        trendContext = `
+TECHNICAL ANALYSIS (from latest AI playbook):
 - Trend: ${trend}
 - Momentum: ${momentum}
-- Signal Score: ${signalScore}/100 ${signalScore >= 90 ? '🔥 VERY HIGH' : signalScore >= 70 ? '⚡ HIGH' : signalScore >= 50 ? '➡️  MODERATE' : '⚠️  LOW'}
-${signals.length > 0 ? `- Signals: ${signals.join(', ')}` : ''}`;
+- Technical Score: ${techScore}/100
+${signals.length > 0 ? `- Key Signals: ${signals.join(', ')}` : ''}`;
+      }
+      
+      // Build sentiment context
+      if (previousAnalysis.sentimentAnalysis) {
+        const sentiment = previousAnalysis.sentimentAnalysis;
+        trendContext += `
+SENTIMENT ANALYSIS:
+- Sentiment Trend: ${sentiment.trend || 'neutral'}
+- News Volume: ${sentiment.newsVolume || 'low'}
+- Sentiment Score: ${sentiment.score || 50}/100
+${sentiment.keyThemes && sentiment.keyThemes.length > 0 ? `- Key Themes: ${sentiment.keyThemes.slice(0, 3).join(', ')}` : ''}`;
+      }
+      
+      // Build comprehensive AI playbook context
+      const analysisAge = previousAnalysis.analyzedAt 
+        ? Math.floor((Date.now() - new Date(previousAnalysis.analyzedAt).getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+      
+      aiPlaybookContext = `
+=== LATEST AI PLAYBOOK (${analysisAge !== null ? `${analysisAge} days old` : 'date unknown'}) ===
+INTEGRATED SIGNAL SCORE: ${signalScore}/100 ${signalScore >= 90 ? '🔥 VERY HIGH CONVICTION' : signalScore >= 70 ? '⚡ HIGH CONVICTION' : signalScore >= 50 ? '➡️ MODERATE' : '⚠️ LOW/CAUTIONARY'}
+OVERALL RATING: ${previousAnalysis.overallRating?.toUpperCase() || 'N/A'}
+SUMMARY: ${previousAnalysis.summary || 'No summary available'}
+${previousAnalysis.recommendation ? `
+AI RECOMMENDATION: ${previousAnalysis.recommendation}` : ''}
+${previousAnalysis.risks && previousAnalysis.risks.length > 0 ? `
+KEY RISKS: ${previousAnalysis.risks.slice(0, 3).join('; ')}` : ''}
+${previousAnalysis.opportunities && previousAnalysis.opportunities.length > 0 ? `
+KEY OPPORTUNITIES: ${previousAnalysis.opportunities.slice(0, 3).join('; ')}` : ''}
+=== END PLAYBOOK ===`;
     }
     
     // Different stance rules based on ownership - NOW WITH TREND AWARENESS
@@ -652,27 +731,32 @@ OPPORTUNITY TYPE: ${opportunityContext}
 
 CURRENT STATUS:
 - Current Price: $${currentPrice.toFixed(2)}
-- Previous Close: $${previousPrice.toFixed(2)}
+- Previous Close: $${previousPrice.toFixed(2)}  
 - Change: ${priceChange >= 0 ? '+' : ''}$${priceChange.toFixed(2)} (${priceChangePercent}%)
+
+${aiPlaybookContext}
 
 ${trendContext}
 
-${previousAnalysis ? `PREVIOUS ANALYSIS CONTEXT:
-Rating: ${previousAnalysis.overallRating}
-Summary: ${previousAnalysis.summary}
-` : ''}
+${recentNews && recentNews.length > 0 ? `FRESH NEWS (with sentiment scores -1 to +1):
+${recentNews.slice(0, 5).map(n => {
+  const sentiment = typeof n.sentiment === 'number' ? n.sentiment : 0;
+  const sentimentLabel = sentiment > 0.2 ? '📈 POSITIVE' : sentiment < -0.2 ? '📉 NEGATIVE' : '➡️ NEUTRAL';
+  return `- ${n.title || 'Untitled'} (${n.source || 'Unknown'}, sentiment: ${sentimentLabel} ${sentiment.toFixed(2)})`;
+}).join('\n')}
+` : 'No significant news available'}
 
-${recentNews && recentNews.length > 0 ? `RECENT NEWS (last 24h):
-${recentNews.slice(0, 3).map(n => `- ${n.title} (${n.source}, sentiment: ${n.sentiment > 0 ? 'positive' : n.sentiment < 0 ? 'negative' : 'neutral'})`).join('\n')}
-` : 'No significant news in last 24h'}
+YOUR TASK: Provide an ACTION-ORIENTED brief (<120 words). Reference the AI PLAYBOOK insights and fresh news.
+- Use the INTEGRATED SIGNAL SCORE as your primary conviction anchor
+- Factor in the AI RECOMMENDATION when making your stance decision
+- Consider any KEY RISKS or OPPORTUNITIES from the playbook
+- Weight fresh news sentiment appropriately
 
-YOUR TASK: Provide an ACTION-ORIENTED brief (<120 words). Near-term traders MUST act on trends.
-
-${trendContext ? `
+${trendContext || aiPlaybookContext ? `
 TREND-BASED DECISION MAKING:
-The initial AI trend is your BASELINE. Compare current price action against this baseline:
-- If price action CONFIRMS the trend → Consider ACT stance
-- If price action VIOLATES the trend (owned position) → Consider ACT stance (stop loss)
+The AI playbook provides your BASELINE conviction. Compare current price action against this baseline:
+- If price action CONFIRMS the playbook thesis → Consider ACT stance
+- If price action VIOLATES the playbook thesis (owned position) → Consider ACT stance (stop loss)
 - If price action is NEUTRAL → Consider HOLD stance
 ` : ''}
 

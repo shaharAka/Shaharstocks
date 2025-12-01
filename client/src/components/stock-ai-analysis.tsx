@@ -236,31 +236,31 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
 
   // Render completed AI Playbook
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {/* Section 1: Signal Drivers - Why this score */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
+        <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+            <Target className="h-4 sm:h-5 w-4 sm:w-5" />
             Signal Drivers
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
           {analysis.summary && (
-            <p className="text-sm leading-relaxed" data-testid="text-signal-drivers">
+            <p className="text-xs sm:text-sm leading-relaxed" data-testid="text-signal-drivers">
               {analysis.summary}
             </p>
           )}
 
           {analysis.strengths && analysis.strengths.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-amber-600 dark:text-amber-400">
-                <TrendingUp className="h-4 w-4" />
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400">
+                <TrendingUp className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
                 <span>Key Strengths</span>
               </div>
               <ul className="space-y-1">
                 {analysis.strengths.map((strength: string, index: number) => (
-                  <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
                     <span className="text-amber-600 dark:text-amber-400 shrink-0">•</span>
                     <span className="flex-1">{strength}</span>
                   </li>
@@ -270,12 +270,12 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           )}
 
           {(analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Fundamental Signals</div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="text-xs sm:text-sm font-medium">Fundamental Signals</div>
               <ul className="space-y-1">
                 {(analysis as any).fundamentalSignals.map((signal: string, index: number) => (
-                  <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                    <Zap className="h-4 w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                    <Zap className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
                     <span className="flex-1">{signal}</span>
                   </li>
                 ))}
@@ -284,16 +284,16 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           )}
 
           {(analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium">SEC Filing Insights</div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-xs sm:text-sm font-medium">SEC Filing Insights</div>
                 {(analysis as any).secFilingType && (
-                  <Badge variant="outline">{(analysis as any).secFilingType}</Badge>
+                  <Badge variant="outline" className="text-[10px] sm:text-xs">{(analysis as any).secFilingType}</Badge>
                 )}
               </div>
               <ul className="space-y-1">
                 {(analysis as any).secFilingInsights.map((insight: string, index: number) => (
-                  <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
                     <span className="shrink-0">•</span>
                     <span className="flex-1">{insight}</span>
                   </li>
@@ -305,18 +305,18 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           {/* Supporting Metrics (Micro + Macro Breakdown) */}
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="metrics">
-              <AccordionTrigger className="text-sm" data-testid="button-toggle-metrics">
+              <AccordionTrigger className="text-xs sm:text-sm" data-testid="button-toggle-metrics">
                 View Signal Components
               </AccordionTrigger>
-              <AccordionContent className="space-y-4 pt-2">
+              <AccordionContent className="space-y-3 sm:space-y-4 pt-2">
                 {/* Micro Score (Company Analysis) */}
                 {analysis.confidenceScore != null && (
-                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
                     <div className="flex items-center gap-2">
-                      <Brain className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Company Analysis</span>
+                      <Brain className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs sm:text-sm font-medium">Company Analysis</span>
                     </div>
-                    <span className="text-sm font-mono font-semibold" data-testid="text-micro-score">
+                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-micro-score">
                       {analysis.confidenceScore}/100
                     </span>
                   </div>
@@ -324,12 +324,12 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
 
                 {/* Macro Factor (Market Context) */}
                 {macroAnalysis?.macroFactor != null && (
-                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
                     <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Market Context Factor</span>
+                      <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs sm:text-sm font-medium">Market Context</span>
                     </div>
-                    <span className="text-sm font-mono font-semibold" data-testid="text-macro-factor">
+                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-macro-factor">
                       ×{macroAnalysis.macroFactor}
                     </span>
                   </div>
@@ -339,14 +339,14 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                 {analysis.integratedScore != null && 
                  macroAnalysis?.macroFactor != null && 
                  analysis.confidenceScore != null && (
-                  <div className="text-xs text-center text-muted-foreground pt-2 border-t">
+                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
                     Signal derived from Company Analysis ({analysis.confidenceScore}) adjusted by Market Context (×{macroAnalysis.macroFactor})
                   </div>
                 )}
                 
                 {/* If only company score exists (no macro integration yet) */}
                 {analysis.integratedScore == null && analysis.confidenceScore != null && (
-                  <div className="text-xs text-center text-muted-foreground pt-2 border-t">
+                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
                     Signal based on Company Analysis only (Market Context pending)
                   </div>
                 )}
@@ -368,23 +368,23 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
 
       {/* Section 2: Key Watchpoints - Risks and catalysts */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5" />
+        <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+            <Eye className="h-4 sm:h-5 w-4 sm:w-5" />
             Key Watchpoints
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
           {analysis.redFlags && analysis.redFlags.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-                <AlertTriangle className="h-4 w-4" />
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-destructive">
+                <AlertTriangle className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
                 <span>Risk Factors</span>
               </div>
               <ul className="space-y-1">
                 {analysis.redFlags.map((flag: string, index: number) => (
-                  <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-destructive" />
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                    <AlertCircle className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-destructive" />
                     <span className="flex-1">{flag}</span>
                   </li>
                 ))}
@@ -393,11 +393,11 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           )}
 
           {analysis.weaknesses && analysis.weaknesses.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Weaknesses to Monitor</div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="text-xs sm:text-sm font-medium">Weaknesses to Monitor</div>
               <ul className="space-y-1">
                 {analysis.weaknesses.map((weakness: string, index: number) => (
-                  <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
                     <span className="shrink-0">•</span>
                     <span className="flex-1">{weakness}</span>
                   </li>
@@ -407,12 +407,12 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           )}
 
           {analysis.risks && analysis.risks.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Additional Risks</div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="text-xs sm:text-sm font-medium">Additional Risks</div>
               <ul className="space-y-1">
                 {analysis.risks.map((risk: string, index: number) => (
-                  <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                    <AlertTriangle className="h-3 sm:h-3.5 w-3 sm:w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
                     <span className="flex-1">{risk}</span>
                   </li>
                 ))}
@@ -421,11 +421,11 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           )}
 
           {analysis.opportunities && analysis.opportunities.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-amber-600 dark:text-amber-400">Potential Catalysts</div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400">Potential Catalysts</div>
               <ul className="space-y-1">
                 {analysis.opportunities.map((opportunity: string, index: number) => (
-                  <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
                     <span className="text-amber-600 dark:text-amber-400 shrink-0">↗</span>
                     <span className="flex-1">{opportunity}</span>
                   </li>
@@ -438,7 +438,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
            (!analysis.weaknesses || analysis.weaknesses.length === 0) &&
            (!analysis.risks || analysis.risks.length === 0) &&
            (!analysis.opportunities || analysis.opportunities.length === 0) && (
-            <p className="text-sm text-muted-foreground italic">No significant watchpoints identified</p>
+            <p className="text-xs sm:text-sm text-muted-foreground italic">No significant watchpoints identified</p>
           )}
         </CardContent>
       </Card>
@@ -446,58 +446,58 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
       {/* Section 3: Market Context - Macro factors */}
       {macroAnalysis && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+            <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+              <Globe className="h-4 sm:h-5 w-4 sm:w-5" />
               Market Context
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
             {macroAnalysis.summary && (
-              <p className="text-sm leading-relaxed text-muted-foreground italic">
+              <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground italic">
                 {macroAnalysis.summary}
               </p>
             )}
 
             {macroAnalysis.industry && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Industry Segment:</span>
-                <Badge variant="secondary">{macroAnalysis.industry}</Badge>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs sm:text-sm text-muted-foreground">Industry:</span>
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">{macroAnalysis.industry}</Badge>
               </div>
             )}
 
             {macroAnalysis.industrySectorAnalysis && (
-              <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Sector ETF: {macroAnalysis.industrySectorAnalysis.etfSymbol}</span>
+              <div className="space-y-2 sm:space-y-3 p-2 sm:p-3 bg-muted/30 rounded-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
+                  <span className="text-xs sm:text-sm font-medium">ETF: {macroAnalysis.industrySectorAnalysis.etfSymbol}</span>
                   <Badge variant={
                     macroAnalysis.industrySectorAnalysis.sectorWeight > 70 ? 'default' :
                     macroAnalysis.industrySectorAnalysis.sectorWeight > 40 ? 'secondary' : 'outline'
-                  }>
+                  } className="text-[10px] sm:text-xs w-fit">
                     Influence: {macroAnalysis.industrySectorAnalysis.sectorWeight}/100
                   </Badge>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-3 text-sm">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm">
                   <div>
-                    <div className="text-muted-foreground text-xs">Day</div>
-                    <div className={`font-mono font-semibold ${
+                    <div className="text-muted-foreground text-[10px] sm:text-xs">Day</div>
+                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
                       macroAnalysis.industrySectorAnalysis.dayChange >= 0 ? 'text-success' : 'text-destructive'
                     }`}>
                       {macroAnalysis.industrySectorAnalysis.dayChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.dayChange.toFixed(2)}%
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground text-xs">Week</div>
-                    <div className={`font-mono font-semibold ${
+                    <div className="text-muted-foreground text-[10px] sm:text-xs">Week</div>
+                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
                       macroAnalysis.industrySectorAnalysis.weekChange >= 0 ? 'text-success' : 'text-destructive'
                     }`}>
                       {macroAnalysis.industrySectorAnalysis.weekChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.weekChange.toFixed(2)}%
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground text-xs">Month</div>
-                    <div className={`font-mono font-semibold ${
+                    <div className="text-muted-foreground text-[10px] sm:text-xs">Month</div>
+                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
                       macroAnalysis.industrySectorAnalysis.monthChange >= 0 ? 'text-success' : 'text-destructive'
                     }`}>
                       {macroAnalysis.industrySectorAnalysis.monthChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.monthChange.toFixed(2)}%
@@ -505,21 +505,21 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   </div>
                 </div>
 
-                <p className="text-xs text-muted-foreground italic bg-background/50 p-2 rounded">
+                <p className="text-[10px] sm:text-xs text-muted-foreground italic bg-background/50 p-1.5 sm:p-2 rounded">
                   {macroAnalysis.industrySectorAnalysis.sectorExplanation}
                 </p>
               </div>
             )}
 
             {macroAnalysis.marketCondition && (
-              <div className="flex items-center gap-4 text-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm">
                 <div>
-                  <span className="text-muted-foreground">Market Condition: </span>
+                  <span className="text-muted-foreground">Market: </span>
                   <span className="font-medium capitalize">{macroAnalysis.marketCondition}</span>
                 </div>
                 {macroAnalysis.riskAppetite && (
                   <div>
-                    <span className="text-muted-foreground">Risk Appetite: </span>
+                    <span className="text-muted-foreground">Risk: </span>
                     <span className="font-medium capitalize">{macroAnalysis.riskAppetite}</span>
                   </div>
                 )}
@@ -531,33 +531,33 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
 
       {/* Section 4: 2-Week Execution Notes */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
+        <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+            <Clock className="h-4 sm:h-5 w-4 sm:w-5" />
             2-Week Execution Notes
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
           {analysis.recommendation && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Recommended Action</div>
-              <p className="text-sm leading-relaxed">
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="text-xs sm:text-sm font-medium">Recommended Action</div>
+              <p className="text-xs sm:text-sm leading-relaxed">
                 {analysis.recommendation}
               </p>
             </div>
           )}
 
           {(analysis as any).insiderValidation && (
-            <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
-              <div className="text-sm font-medium">Insider Trade Context</div>
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-1.5 sm:space-y-2 p-2 sm:p-3 bg-muted/30 rounded-lg">
+              <div className="text-xs sm:text-sm font-medium">Insider Trade Context</div>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {(analysis as any).insiderValidation}
               </p>
             </div>
           )}
 
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-            <p className="text-xs text-muted-foreground">
+          <div className="p-2 sm:p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               <strong>Time Horizon:</strong> This analysis is optimized for a 2-week trading window. 
               Monitor daily briefs for position updates and changing market conditions.
             </p>

@@ -536,15 +536,16 @@ export default function TickerDetail() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
-          <TabsTrigger value="news">News</TabsTrigger>
-          <TabsTrigger value="insider">Insider</TabsTrigger>
-          <TabsTrigger value="discussion">
-            Discussion
+        <TabsList className="w-full h-auto flex flex-wrap gap-1 p-1 sm:grid sm:grid-cols-5 sm:gap-0 sm:h-10 sm:p-1">
+          <TabsTrigger value="overview" className="text-[11px] sm:text-sm flex-1 min-w-[60px] h-8 sm:h-auto">Overview</TabsTrigger>
+          <TabsTrigger value="analysis" className="text-[11px] sm:text-sm flex-1 min-w-[40px] h-8 sm:h-auto">AI</TabsTrigger>
+          <TabsTrigger value="news" className="text-[11px] sm:text-sm flex-1 min-w-[45px] h-8 sm:h-auto">News</TabsTrigger>
+          <TabsTrigger value="insider" className="text-[11px] sm:text-sm flex-1 min-w-[55px] h-8 sm:h-auto">Insider</TabsTrigger>
+          <TabsTrigger value="discussion" className="text-[11px] sm:text-sm flex-1 min-w-[60px] h-8 sm:h-auto">
+            <span className="hidden sm:inline">Discussion</span>
+            <span className="sm:hidden">Chat</span>
             {comments.length > 0 && (
-              <Badge variant="secondary" className="ml-2">
+              <Badge variant="secondary" className="ml-1 sm:ml-2 text-[9px] sm:text-xs">
                 {comments.length}
               </Badge>
             )}
@@ -552,54 +553,54 @@ export default function TickerDetail() {
         </TabsList>
 
         {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-4">
+        <TabsContent value="overview" className="space-y-3 sm:space-y-4">
           {/* Company Information */}
           {(stock.description || stock.industry || stock.country || stock.webUrl) && (
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
+              <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+                <div className="flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <Building2 className="h-4 sm:h-5 w-4 sm:w-5" />
                     Company Information
                   </CardTitle>
                   <CompactSignalBadge ticker={ticker} />
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
                 {stock.description && (
                   <div>
-                    <h4 className="text-sm font-medium mb-2">About</h4>
-                    <p className="text-sm text-muted-foreground" data-testid="text-description">
+                    <h4 className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">About</h4>
+                    <p className="text-xs sm:text-sm text-muted-foreground" data-testid="text-description">
                       {stock.description}
                     </p>
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                   {stock.industry && (
                     <div>
-                      <p className="text-sm text-muted-foreground">Industry</p>
-                      <p className="font-medium" data-testid="text-industry">{stock.industry}</p>
+                      <p className="text-[10px] sm:text-sm text-muted-foreground">Industry</p>
+                      <p className="text-xs sm:text-base font-medium truncate" data-testid="text-industry">{stock.industry}</p>
                     </div>
                   )}
                   {stock.country && (
                     <div>
-                      <p className="text-sm text-muted-foreground">Country</p>
-                      <p className="font-medium" data-testid="text-country">{stock.country}</p>
+                      <p className="text-[10px] sm:text-sm text-muted-foreground">Country</p>
+                      <p className="text-xs sm:text-base font-medium" data-testid="text-country">{stock.country}</p>
                     </div>
                   )}
                   {stock.ipo && (
                     <div>
-                      <p className="text-sm text-muted-foreground">IPO Date</p>
-                      <p className="font-medium" data-testid="text-ipo">{stock.ipo}</p>
+                      <p className="text-[10px] sm:text-sm text-muted-foreground">IPO Date</p>
+                      <p className="text-xs sm:text-base font-medium" data-testid="text-ipo">{stock.ipo}</p>
                     </div>
                   )}
                 </div>
                 {stock.webUrl && (
-                  <Button variant="outline" size="sm" asChild data-testid="button-website">
+                  <Button variant="outline" size="sm" asChild data-testid="button-website" className="text-xs sm:text-sm">
                     <a href={stock.webUrl} target="_blank" rel="noopener noreferrer">
-                      <Globe className="h-4 w-4 mr-2" />
-                      Visit Website
-                      <ExternalLink className="h-3 w-3 ml-2" />
+                      <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 mr-1.5 sm:mr-2" />
+                      Website
+                      <ExternalLink className="h-3 w-3 ml-1.5 sm:ml-2" />
                     </a>
                   </Button>
                 )}
@@ -617,79 +618,79 @@ export default function TickerDetail() {
         </TabsContent>
 
         {/* News Tab */}
-        <TabsContent value="news" className="space-y-4">
+        <TabsContent value="news" className="space-y-3 sm:space-y-4">
           {newsItems.length > 0 ? (
             newsItems.map((item: any, index: number) => (
               <Card key={index}>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-start justify-between gap-4">
-                    <span>{item.headline}</span>
-                    <Button variant="ghost" size="sm" asChild>
+                <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+                  <CardTitle className="text-sm sm:text-lg flex items-start justify-between gap-2 sm:gap-4">
+                    <span className="line-clamp-2">{item.headline}</span>
+                    <Button variant="ghost" size="icon" asChild className="flex-shrink-0">
                       <a href={item.url} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="h-4 w-4" />
                       </a>
                     </Button>
                   </CardTitle>
-                  <CardDescription className="flex items-center gap-2">
-                    <Newspaper className="h-4 w-4" />
-                    {item.source}
+                  <CardDescription className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-sm flex-wrap">
+                    <Newspaper className="h-3 sm:h-4 w-3 sm:w-4" />
+                    <span className="truncate max-w-[100px] sm:max-w-none">{item.source}</span>
                     <span>•</span>
-                    <Calendar className="h-4 w-4" />
+                    <Calendar className="h-3 sm:h-4 w-3 sm:w-4" />
                     {new Date(item.datetime * 1000).toLocaleDateString()}
                   </CardDescription>
                 </CardHeader>
                 {item.summary && (
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">{item.summary}</p>
+                  <CardContent className="p-3 sm:p-6 pt-0">
+                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-3 sm:line-clamp-none">{item.summary}</p>
                   </CardContent>
                 )}
               </Card>
             ))
           ) : (
             <Card>
-              <CardContent className="p-8 text-center">
-                <p className="text-muted-foreground">No news available</p>
+              <CardContent className="p-6 sm:p-8 text-center">
+                <p className="text-xs sm:text-sm text-muted-foreground">No news available</p>
               </CardContent>
             </Card>
           )}
         </TabsContent>
 
         {/* Insider Tab */}
-        <TabsContent value="insider" className="space-y-4">
+        <TabsContent value="insider" className="space-y-3 sm:space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Insider Trade Information</CardTitle>
+            <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+              <CardTitle className="text-sm sm:text-base">Insider Trade Information</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <CardContent className="p-3 sm:p-6 pt-0">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {stock.insiderPrice && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Insider Price</p>
-                    <p className="text-lg font-mono font-medium" data-testid="text-insider-price">
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">Insider Price</p>
+                    <p className="text-sm sm:text-lg font-mono font-medium" data-testid="text-insider-price">
                       ${parseFloat(stock.insiderPrice).toFixed(2)}
                     </p>
                   </div>
                 )}
                 {stock.insiderQuantity && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Shares</p>
-                    <p className="text-lg font-medium" data-testid="text-insider-quantity">
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">Shares</p>
+                    <p className="text-sm sm:text-lg font-medium" data-testid="text-insider-quantity">
                       {stock.insiderQuantity.toLocaleString()}
                     </p>
                   </div>
                 )}
                 {stock.insiderTradeDate && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Trade Date</p>
-                    <p className="text-lg font-medium" data-testid="text-trade-date">
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">Trade Date</p>
+                    <p className="text-sm sm:text-lg font-medium" data-testid="text-trade-date">
                       {stock.insiderTradeDate}
                     </p>
                   </div>
                 )}
                 {stock.marketPriceAtInsiderDate && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Market Price at Trade</p>
-                    <p className="text-lg font-mono font-medium" data-testid="text-market-price-at-trade">
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">Market at Trade</p>
+                    <p className="text-sm sm:text-lg font-mono font-medium" data-testid="text-market-price-at-trade">
                       ${parseFloat(stock.marketPriceAtInsiderDate).toFixed(2)}
                     </p>
                   </div>

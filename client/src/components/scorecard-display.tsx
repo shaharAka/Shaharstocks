@@ -104,17 +104,17 @@ function MetricRow({ metric }: { metric: MetricScore }) {
   
   return (
     <div className={cn(
-      "flex items-center justify-between gap-2 p-2 rounded-md border",
+      "flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 p-2 rounded-md border",
       bucketBgColors[metric.ruleBucket]
     )}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium truncate">{metric.name}</span>
+          <span className="text-[11px] sm:text-xs font-medium truncate">{metric.name}</span>
           <Tooltip>
             <TooltipTrigger asChild>
               <Info className="h-3 w-3 text-muted-foreground cursor-help flex-shrink-0" />
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-xs">
+            <TooltipContent side="top" className="max-w-[280px] sm:max-w-xs">
               <p className="text-xs">{metric.rationale}</p>
             </TooltipContent>
           </Tooltip>
@@ -126,10 +126,10 @@ function MetricRow({ metric }: { metric: MetricScore }) {
         </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", bucketColors[metric.ruleBucket])}>
+        <Badge variant="outline" className={cn("text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0", bucketColors[metric.ruleBucket])}>
           {metric.ruleBucket.toUpperCase()}
         </Badge>
-        <span className={cn("font-mono text-sm font-bold", getScoreColor(metric.score * 10))}>
+        <span className={cn("font-mono text-xs sm:text-sm font-bold", getScoreColor(metric.score * 10))}>
           {metric.score}/{metric.maxScore}
         </span>
       </div>
@@ -144,30 +144,30 @@ function SectionCard({ sectionKey, section }: { sectionKey: string; section: Sec
   
   return (
     <AccordionItem value={sectionKey} className="border rounded-lg mb-2">
-      <AccordionTrigger className="px-4 py-3 hover:no-underline hover-elevate rounded-t-lg">
-        <div className="flex items-center justify-between w-full gap-4 pr-2">
+      <AccordionTrigger className="px-3 sm:px-4 py-2 sm:py-3 hover:no-underline hover-elevate rounded-t-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-1.5 sm:gap-4 pr-2">
           <div className="flex items-center gap-2">
-            <Icon className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium text-sm">{section.name || sectionKey}</span>
-            <Badge variant="outline" className="text-[10px] px-1.5">
+            <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <span className="font-medium text-xs sm:text-sm truncate">{section.name || sectionKey}</span>
+            <Badge variant="outline" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 flex-shrink-0">
               {section.weight || 0}%
             </Badge>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+          <div className="flex items-center gap-2 sm:gap-3 ml-6 sm:ml-0">
+            <div className="w-16 sm:w-20 h-1.5 sm:h-2 bg-muted rounded-full overflow-hidden">
               <div 
                 className={cn("h-full rounded-full transition-all", getProgressColor(section.score || 0))}
                 style={{ width: `${section.score || 0}%` }}
               />
             </div>
-            <span className={cn("font-mono text-sm font-bold min-w-[3rem] text-right", getScoreColor(section.score || 0))}>
+            <span className={cn("font-mono text-xs sm:text-sm font-bold min-w-[2.5rem] sm:min-w-[3rem] text-right", getScoreColor(section.score || 0))}>
               {section.score || 0}/100
             </span>
           </div>
         </div>
       </AccordionTrigger>
-      <AccordionContent className="px-4 pb-3">
-        <div className="space-y-2">
+      <AccordionContent className="px-3 sm:px-4 pb-3">
+        <div className="space-y-1.5 sm:space-y-2">
           {metrics.length > 0 ? (
             metrics.map((metric) => (
               <MetricRow key={metric.name} metric={metric} />
@@ -212,26 +212,26 @@ export function ScorecardDisplay({ scorecard, className }: ScorecardDisplayProps
 
   return (
     <Card className={className}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+      <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="text-sm sm:text-base flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Score Breakdown
             </CardTitle>
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-[9px] sm:text-[10px]">
               v{version}
             </Badge>
           </div>
           <div className="flex items-center gap-2">
             <Badge 
               variant="outline" 
-              className={cn("text-xs", confidenceColors[confidence])}
+              className={cn("text-[10px] sm:text-xs", confidenceColors[confidence])}
             >
-              {confidence.toUpperCase()} confidence
+              {confidence.toUpperCase()}
             </Badge>
             <div className={cn(
-              "px-3 py-1 rounded-md font-mono text-lg font-bold",
+              "px-2 sm:px-3 py-0.5 sm:py-1 rounded-md font-mono text-base sm:text-lg font-bold",
               globalScore >= 70 
                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
                 : globalScore >= 50 
@@ -242,18 +242,18 @@ export function ScorecardDisplay({ scorecard, className }: ScorecardDisplayProps
             </div>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
           {tradingHorizon} trading horizon
           {missingDataPenalty > 0 && (
             <span className="text-orange-500 ml-2">
-              ({Math.round(missingDataPenalty)}% data missing)
+              ({Math.round(missingDataPenalty)}% missing)
             </span>
           )}
         </p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
         {scorecard.summary && (
-          <p className="text-sm text-muted-foreground mb-4 p-3 bg-muted/50 rounded-md">
+          <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4 p-2 sm:p-3 bg-muted/50 rounded-md">
             {scorecard.summary}
           </p>
         )}

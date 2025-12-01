@@ -302,14 +302,14 @@ export default function FollowedDashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid gap-4 md:grid-cols-3">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-screen-2xl mx-auto">
+        <Skeleton className="h-8 sm:h-10 w-48 sm:w-64" />
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-24" />
+            <Skeleton key={i} className="h-20 sm:h-24" />
           ))}
         </div>
-        <Skeleton className="h-64" />
+        <Skeleton className="h-48 sm:h-64" />
       </div>
     );
   }
@@ -327,81 +327,81 @@ export default function FollowedDashboard() {
     : (totalPnlData?.totalPnl ?? 0);
 
   return (
-    <div className="p-6 space-y-8 max-w-screen-2xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 max-w-screen-2xl mx-auto">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
+      <div className="space-y-1 sm:space-y-2">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-page-title">
           My Watchlist
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-xs sm:text-sm text-muted-foreground">
           Track your followed stocks and discover new opportunities
         </p>
       </div>
 
       {/* Stats Overview - Only show if user has stocks */}
       {followedStocks.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 p-3 sm:p-6 pb-2 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">
                 Total Stocks
               </CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+              <Activity className="h-4 w-4 text-muted-foreground hidden sm:block" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{followedStocks.length}</div>
-              <p className="text-xs text-muted-foreground">
+            <CardContent className="p-3 sm:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold">{followedStocks.length}</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Actively tracking
               </p>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 p-3 sm:p-6 pb-2 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">
                 High Signals
               </CardTitle>
-              <Zap className="h-4 w-4 text-amber-500" />
+              <Zap className="h-4 w-4 text-amber-500 hidden sm:block" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{highSignalCount}</div>
-              <p className="text-xs text-muted-foreground">
+            <CardContent className="p-3 sm:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold">{highSignalCount}</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Score ≥ 70
               </p>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 p-3 sm:p-6 pb-2 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">
                 Buy Signals
               </CardTitle>
-              <Target className="h-4 w-4 text-success" />
+              <Target className="h-4 w-4 text-success hidden sm:block" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{buySignals}</div>
-              <p className="text-xs text-muted-foreground">
+            <CardContent className="p-3 sm:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold">{buySignals}</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 AI recommends BUY
               </p>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+            <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 p-3 sm:p-6 pb-2 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">
                 Total P&L
               </CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-6 pt-0">
               <div className={cn(
-                "text-2xl font-bold font-mono",
+                "text-lg sm:text-2xl font-bold font-mono truncate",
                 totalPnl >= 0 ? "text-success" : "text-destructive"
               )}>
                 {totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Realized gains/losses
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                Realized P&L
               </p>
             </CardContent>
           </Card>
@@ -410,15 +410,15 @@ export default function FollowedDashboard() {
 
       {/* Followed Stocks */}
       {sortedFollowedStocks.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold tracking-tight">Your Stocks</h2>
-            <span className="text-sm text-muted-foreground">
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg sm:text-xl font-semibold tracking-tight">Your Stocks</h2>
+            <span className="text-xs sm:text-sm text-muted-foreground">
               {sortedFollowedStocks.length} {sortedFollowedStocks.length === 1 ? 'stock' : 'stocks'}
             </span>
           </div>
           
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {sortedFollowedStocks.map((stock) => {
               const priceChange = parseFloat(stock.priceChange || "0");
               const priceChangePercent = parseFloat(stock.priceChangePercent || "0");
@@ -435,15 +435,15 @@ export default function FollowedDashboard() {
                     )}
                     data-testid={`card-watchlist-${stock.ticker}`}
                   >
-                    <CardHeader className="pb-3">
+                    <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-3">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <CardTitle className="text-xl font-mono font-semibold">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <CardTitle className="text-lg sm:text-xl font-mono font-semibold">
                               {stock.ticker}
                             </CardTitle>
                             {isAnalyzing && (
-                              <Badge variant="outline" className="h-5 text-[10px]">
+                              <Badge variant="outline" className="h-5 text-[9px] sm:text-[10px]">
                                 Analyzing...
                               </Badge>
                             )}
@@ -452,7 +452,7 @@ export default function FollowedDashboard() {
                             <Badge 
                               variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'outline'}
                               className={cn(
-                                "h-5 text-[10px] w-fit",
+                                "h-5 text-[9px] sm:text-[10px] w-fit",
                                 stock.aiStance === 'HOLD' && "text-muted-foreground border-muted-foreground/30"
                               )}
                             >
@@ -464,7 +464,7 @@ export default function FollowedDashboard() {
                           <Badge 
                             variant="outline"
                             className={cn(
-                              "h-7 px-2.5 text-sm font-bold",
+                              "h-6 sm:h-7 px-2 sm:px-2.5 text-xs sm:text-sm font-bold flex-shrink-0",
                               stock.integratedScore >= 90 && "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400",
                               stock.integratedScore >= 70 && stock.integratedScore < 90 && "border-amber-300 bg-amber-300/10 text-amber-600 dark:text-amber-400"
                             )}
@@ -475,23 +475,23 @@ export default function FollowedDashboard() {
                       </div>
                     </CardHeader>
 
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div className="flex items-end justify-between">
+                    <CardContent className="p-3 sm:p-6 pt-0">
+                      <div className="space-y-2 sm:space-y-3">
+                        <div className="flex items-end justify-between gap-2">
                           <div>
-                            <p className="text-xs text-muted-foreground mb-1">Current Price</p>
-                            <p className="text-3xl font-mono font-bold">
+                            <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5 sm:mb-1">Price</p>
+                            <p className="text-xl sm:text-3xl font-mono font-bold">
                               ${parseFloat(stock.currentPrice).toFixed(2)}
                             </p>
                           </div>
                           {stock.priceChange && (
                             <div className="text-right">
                               <div className={cn(
-                                "flex items-center gap-1 text-base font-semibold font-mono",
+                                "flex items-center gap-0.5 sm:gap-1 text-sm sm:text-base font-semibold font-mono",
                                 isPricePositive ? "text-success" : "text-destructive"
                               )}>
                                 {isPricePositive ? (
-                                  <ArrowUpRight className="h-5 w-5" />
+                                  <ArrowUpRight className="h-4 sm:h-5 w-4 sm:w-5" />
                                 ) : (
                                   <ArrowDownRight className="h-5 w-5" />
                                 )}
@@ -527,36 +527,36 @@ export default function FollowedDashboard() {
       )}
 
       {/* Top Opportunities Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
+      <div className="space-y-3 sm:space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="space-y-0.5 sm:space-y-1 min-w-0">
             <div className="flex items-center gap-2">
-              <Lightbulb className="h-5 w-5 text-amber-500" />
-              <h2 className="text-xl font-semibold tracking-tight">High-Signal Opportunities</h2>
+              <Lightbulb className="h-4 sm:h-5 w-4 sm:w-5 text-amber-500 flex-shrink-0" />
+              <h2 className="text-lg sm:text-xl font-semibold tracking-tight truncate">High-Signal Opportunities</h2>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               Top-rated stocks you're not following yet
             </p>
           </div>
           <Link href="/recommendations">
-            <Button variant="ghost" size="sm" data-testid="link-view-all-opportunities">
+            <Button variant="ghost" size="sm" data-testid="link-view-all-opportunities" className="text-xs sm:text-sm flex-shrink-0">
               View All
             </Button>
           </Link>
         </div>
 
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="p-3 sm:p-6 pt-4 sm:pt-6">
             {isLoadingOpportunities ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center gap-4 py-3">
-                    <Skeleton className="h-12 w-12 rounded" />
+                  <div key={i} className="flex items-center gap-3 sm:gap-4 py-2 sm:py-3">
+                    <Skeleton className="h-10 sm:h-12 w-10 sm:w-12 rounded" />
                     <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-3 w-48" />
+                      <Skeleton className="h-4 w-24 sm:w-32" />
+                      <Skeleton className="h-3 w-32 sm:w-48" />
                     </div>
-                    <Skeleton className="h-10 w-24" />
+                    <Skeleton className="h-8 sm:h-10 w-16 sm:w-24" />
                   </div>
                 ))}
               </div>
@@ -572,13 +572,13 @@ export default function FollowedDashboard() {
                   return (
                     <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
                       <div 
-                        className="flex items-center gap-4 py-4 hover-elevate active-elevate-2 cursor-pointer rounded-lg px-2 -mx-2"
+                        className="flex items-center gap-2 sm:gap-4 py-3 sm:py-4 hover-elevate active-elevate-2 cursor-pointer rounded-lg px-1 sm:px-2 -mx-1 sm:-mx-2"
                         data-testid={`opportunity-${stock.ticker}`}
                       >
                         <Badge 
                           variant="outline"
                           className={cn(
-                            "h-12 w-12 flex items-center justify-center font-mono font-bold text-base rounded-lg shrink-0",
+                            "h-10 sm:h-12 w-10 sm:w-12 flex items-center justify-center font-mono font-bold text-sm sm:text-base rounded-lg shrink-0",
                             stock.integratedScore! >= 90 && "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400",
                             stock.integratedScore! >= 70 && stock.integratedScore! < 90 && "border-amber-300 bg-amber-300/10 text-amber-600 dark:text-amber-400"
                           )}
@@ -587,13 +587,13 @@ export default function FollowedDashboard() {
                         </Badge>
                         
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-mono font-bold text-base">{stock.ticker}</span>
+                          <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
+                            <span className="font-mono font-bold text-sm sm:text-base">{stock.ticker}</span>
                             {stock.aiStance && (
                               <Badge 
                                 variant={stock.aiStance === 'BUY' ? 'default' : stock.aiStance === 'SELL' ? 'destructive' : 'outline'}
                                 className={cn(
-                                  "h-4 text-[9px] px-1.5",
+                                  "h-4 text-[8px] sm:text-[9px] px-1 sm:px-1.5",
                                   stock.aiStance === 'HOLD' && "text-muted-foreground border-muted-foreground/30"
                                 )}
                               >
@@ -601,26 +601,26 @@ export default function FollowedDashboard() {
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground truncate">
+                          <p className="text-xs sm:text-sm text-muted-foreground truncate">
                             {stock.companyName}
                           </p>
                         </div>
                         
-                        {/* Mini trend sparkline - shows last 7 days */}
-                        <SparklineChart ticker={stock.ticker} className="h-12 w-20 shrink-0" />
+                        {/* Mini trend sparkline - hidden on very small screens */}
+                        <SparklineChart ticker={stock.ticker} className="h-10 sm:h-12 w-14 sm:w-20 shrink-0 hidden xs:block" />
                         
                         <div className="text-right shrink-0">
-                          <p className="text-lg font-mono font-bold mb-0.5">
+                          <p className="text-base sm:text-lg font-mono font-bold mb-0.5">
                             ${currentPrice.toFixed(2)}
                           </p>
                           <div className={cn(
-                            "flex items-center justify-end gap-1 text-sm font-semibold font-mono",
+                            "flex items-center justify-end gap-0.5 sm:gap-1 text-xs sm:text-sm font-semibold font-mono",
                             isPricePositive ? "text-success" : "text-destructive"
                           )}>
                             {isPricePositive ? (
-                              <ArrowUpRight className="h-4 w-4" />
+                              <ArrowUpRight className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
                             ) : (
-                              <ArrowDownRight className="h-4 w-4" />
+                              <ArrowDownRight className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
                             )}
                             <span>
                               {isPricePositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
@@ -633,16 +633,16 @@ export default function FollowedDashboard() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-                  <Lightbulb className="h-8 w-8 text-muted-foreground" />
+              <div className="text-center py-8 sm:py-12">
+                <div className="inline-flex h-12 sm:h-16 w-12 sm:w-16 items-center justify-center rounded-full bg-muted mb-3 sm:mb-4">
+                  <Lightbulb className="h-6 sm:h-8 w-6 sm:w-8 text-muted-foreground" />
                 </div>
-                <h3 className="font-semibold mb-2">No opportunities available</h3>
-                <p className="text-sm text-muted-foreground mb-4">
+                <h3 className="text-sm sm:text-base font-semibold mb-1.5 sm:mb-2">No opportunities available</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
                   All high-signal stocks are already in your watchlist
                 </p>
                 <Link href="/recommendations">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="text-xs sm:text-sm">
                     Browse All Opportunities
                   </Button>
                 </Link>
@@ -655,17 +655,17 @@ export default function FollowedDashboard() {
       {/* Empty state for new users - only show if no followed stocks */}
       {sortedFollowedStocks.length === 0 && (
         <Card>
-          <CardContent className="pt-16 pb-16">
+          <CardContent className="pt-10 sm:pt-16 pb-10 sm:pb-16 px-4 sm:px-6">
             <div className="text-center max-w-md mx-auto">
-              <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 mb-6">
-                <Star className="h-10 w-10 text-primary" />
+              <div className="inline-flex h-16 sm:h-20 w-16 sm:w-20 items-center justify-center rounded-full bg-primary/10 mb-4 sm:mb-6">
+                <Star className="h-8 sm:h-10 w-8 sm:w-10 text-primary" />
               </div>
-              <h3 className="text-2xl font-semibold mb-2">Your watchlist is empty</h3>
-              <p className="text-muted-foreground mb-6">
+              <h3 className="text-xl sm:text-2xl font-semibold mb-1.5 sm:mb-2">Your watchlist is empty</h3>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
                 Discover high-signal stocks and start building your portfolio
               </p>
               <Link href="/recommendations">
-                <Button size="lg">
+                <Button size="default">
                   <Lightbulb className="h-4 w-4 mr-2" />
                   Explore Opportunities
                 </Button>

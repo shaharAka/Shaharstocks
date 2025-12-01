@@ -444,6 +444,18 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       risks?: string[];
       opportunities?: string[];
       analyzedAt?: string;
+      scorecard?: {
+        globalScore: number;
+        confidence: "high" | "medium" | "low";
+        sections?: {
+          fundamentals?: { score: number; weight: number };
+          technicals?: { score: number; weight: number };
+          insiderActivity?: { score: number; weight: number };
+          newsSentiment?: { score: number; weight: number };
+          macroSector?: { score: number; weight: number };
+        };
+        summary?: string;
+      };
     };
   }): Promise<{
     watching: {
@@ -504,6 +516,18 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       risks?: string[];
       opportunities?: string[];
       analyzedAt?: string;
+      scorecard?: {
+        globalScore: number;
+        confidence: "high" | "medium" | "low";
+        sections?: {
+          fundamentals?: { score: number; weight: number };
+          technicals?: { score: number; weight: number };
+          insiderActivity?: { score: number; weight: number };
+          newsSentiment?: { score: number; weight: number };
+          macroSector?: { score: number; weight: number };
+        };
+        summary?: string;
+      };
     };
   }): Promise<{
     recommendedStance: "buy" | "hold" | "sell" | "cover";
@@ -572,6 +596,22 @@ ${sentiment.keyThemes && sentiment.keyThemes.length > 0 ? `- Key Themes: ${senti
         ? Math.floor((Date.now() - new Date(previousAnalysis.analyzedAt).getTime()) / (1000 * 60 * 60 * 24))
         : null;
       
+      // Build scorecard breakdown if available
+      let scorecardContext = "";
+      if (previousAnalysis.scorecard) {
+        const sc = previousAnalysis.scorecard;
+        const sections = sc.sections || {};
+        scorecardContext = `
+SCORECARD BREAKDOWN (${sc.confidence?.toUpperCase() || 'MEDIUM'} confidence):
+- Global Score: ${sc.globalScore}/100
+${sections.fundamentals ? `- Fundamentals: ${sections.fundamentals.score}/100 (${sections.fundamentals.weight}% weight)` : ''}
+${sections.technicals ? `- Technicals: ${sections.technicals.score}/100 (${sections.technicals.weight}% weight)` : ''}
+${sections.insiderActivity ? `- Insider Activity: ${sections.insiderActivity.score}/100 (${sections.insiderActivity.weight}% weight)` : ''}
+${sections.newsSentiment ? `- News Sentiment: ${sections.newsSentiment.score}/100 (${sections.newsSentiment.weight}% weight)` : ''}
+${sections.macroSector ? `- Macro/Sector: ${sections.macroSector.score}/100 (${sections.macroSector.weight}% weight)` : ''}
+${sc.summary ? `SCORECARD SUMMARY: ${sc.summary}` : ''}`;
+      }
+      
       aiPlaybookContext = `
 === LATEST AI PLAYBOOK (${analysisAge !== null ? `${analysisAge} days old` : 'date unknown'}) ===
 INTEGRATED SIGNAL SCORE: ${signalScore}/100 ${signalScore >= 90 ? '🔥 VERY HIGH CONVICTION' : signalScore >= 70 ? '⚡ HIGH CONVICTION' : signalScore >= 50 ? '➡️ MODERATE' : '⚠️ LOW/CAUTIONARY'}
@@ -579,6 +619,7 @@ OVERALL RATING: ${previousAnalysis.overallRating?.toUpperCase() || 'N/A'}
 SUMMARY: ${previousAnalysis.summary || 'No summary available'}
 ${previousAnalysis.recommendation ? `
 AI RECOMMENDATION: ${previousAnalysis.recommendation}` : ''}
+${scorecardContext}
 ${previousAnalysis.risks && previousAnalysis.risks.length > 0 ? `
 KEY RISKS: ${previousAnalysis.risks.slice(0, 3).join('; ')}` : ''}
 ${previousAnalysis.opportunities && previousAnalysis.opportunities.length > 0 ? `

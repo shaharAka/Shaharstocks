@@ -598,7 +598,7 @@ class StockService {
         return null;
       }
 
-      // Parse and return relevant fields
+      // Parse and return relevant fields including YoY growth metrics for scorecard
       return {
         marketCap: data.MarketCapitalization || null,
         peRatio: parseFloat(data.PERatio) || null,
@@ -614,6 +614,8 @@ class StockService {
         debtToEquity: parseFloat(data.DebtToEquityRatio) || null,
         currentRatio: parseFloat(data.CurrentRatio) || null,
         quickRatio: parseFloat(data.QuickRatio) || null,
+        revenueGrowthYoY: data.QuarterlyRevenueGrowthYOY ? parseFloat(data.QuarterlyRevenueGrowthYOY) * 100 : null,
+        epsGrowthYoY: data.QuarterlyEarningsGrowthYOY ? parseFloat(data.QuarterlyEarningsGrowthYOY) * 100 : null,
       };
     } catch (error) {
       console.error(`[StockService] Error fetching company overview for ${symbol}:`, error);
@@ -672,10 +674,18 @@ class StockService {
 
       const latest = data.quarterlyReports[0];
       
+      // Calculate total debt (short-term + long-term debt)
+      const shortTermDebt = parseFloat(latest.shortTermDebt || '0');
+      const longTermDebt = parseFloat(latest.longTermDebt || '0');
+      const totalDebt = shortTermDebt + longTermDebt;
+      
       return {
         totalAssets: latest.totalAssets || null,
         totalLiabilities: latest.totalLiabilities || null,
         totalShareholderEquity: latest.totalShareholderEquity || null,
+        shortTermDebt: latest.shortTermDebt || null,
+        longTermDebt: latest.longTermDebt || null,
+        totalDebt: totalDebt > 0 ? totalDebt : null,
       };
     } catch (error) {
       console.error(`[StockService] Error fetching balance sheet for ${symbol}:`, error);

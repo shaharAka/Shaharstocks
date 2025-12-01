@@ -15,6 +15,16 @@ import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
 import { aiAnalysisService } from "./aiAnalysisService";
 import type { AiAnalysisJob } from "@shared/schema";
+import {
+  extractTechnicalsFromCandlesticks,
+  determineSmaAlignment,
+  determineMacdCondition,
+  determineRsiCondition,
+  determineVolumeCondition,
+  determineInsiderRoleCondition,
+  determineSentimentCondition,
+  determineProfitMarginTrend,
+} from "./scoring/scorecardDataExtractor";
 
 class QueueWorker {
   private running = false;
@@ -363,35 +373,73 @@ class QueueWorker {
       try {
         console.log(`[QueueWorker] 📊 Generating rule-based scorecard for ${job.ticker}...`);
         
-        // Extract data for scorecard generation from available sources
+        // Fetch candlestick data for enhanced technical metrics
+        const candlestickRecord = await storage.getCandlesticksByTicker(job.ticker);
+        const candlestickData = candlestickRecord?.candlestickData || [];
+        
+        // Extract additional technicals from candlestick data (5/10-day SMAs, volume)
+        const extractedTechnicals = extractTechnicalsFromCandlesticks(candlestickData);
+        
+        // Determine RSI direction from signal
+        const rsiDirection: 'rising' | 'falling' | 'flat' = 
+          technicalIndicators?.rsi?.signal === 'oversold' ? 'rising' : 
+          technicalIndicators?.rsi?.signal === 'overbought' ? 'falling' : 'flat';
+        
+        // Get fallback current price from stock record if not available from candlesticks
+        const fallbackCurrentPrice = stock?.currentPrice ? parseFloat(stock.currentPrice) : undefined;
+        const currentPriceValue = extractedTechnicals?.currentPrice || fallbackCurrentPrice;
+        
+        // Safely determine SMA alignment (guards for undefined values)
+        const safeCurrentPrice = currentPriceValue;
+        const safeSma5 = extractedTechnicals?.sma5;
+        const safeSma10 = extractedTechnicals?.sma10;
+        const safeSma20 = extractedTechnicals?.sma20 || technicalIndicators?.sma20;
+        
+        // Only calculate SMA alignment if we have current price and at least one SMA
+        const canCalculateSmaAlignment = safeCurrentPrice !== undefined && (safeSma5 !== undefined || safeSma10 !== undefined || safeSma20 !== undefined);
+        
+        // Determine price direction for volume condition (only when both values exist)
+        const priceDirection: 'up' | 'down' | undefined = 
+          (safeCurrentPrice !== undefined && safeSma5 !== undefined) 
+            ? (safeCurrentPrice > safeSma5 ? 'up' : 'down') 
+            : undefined;
+        
+        // Build comprehensive scorecard input with all available data
         const scorecardInput = {
           ticker: job.ticker,
           fundamentals: comprehensiveFundamentals ? {
-            revenueGrowthYoY: undefined, // Would need YoY comparison data
-            epsGrowthYoY: undefined, // Would need YoY comparison data
-            profitMarginTrend: comprehensiveFundamentals.profitMargin !== undefined 
-              ? (comprehensiveFundamentals.profitMargin > 0.15 ? 'improving' : 
-                 comprehensiveFundamentals.profitMargin > 0.05 ? 'stable' : 'declining')
-              : undefined,
+            revenueGrowthYoY: comprehensiveFundamentals.revenueGrowthYoY,
+            epsGrowthYoY: comprehensiveFundamentals.epsGrowthYoY,
+            profitMarginTrend: determineProfitMarginTrend(comprehensiveFundamentals.profitMargin),
             freeCashFlow: comprehensiveFundamentals.freeCashFlow 
               ? parseFloat(comprehensiveFundamentals.freeCashFlow.replace(/[^0-9.-]/g, '')) 
               : undefined,
-            totalDebt: undefined, // Would need from balance sheet
+            totalDebt: comprehensiveFundamentals.totalDebt,
             debtToEquity: comprehensiveFundamentals.debtToEquity,
           } : undefined,
-          technicals: technicalIndicators ? {
-            currentPrice: undefined, // Would need from stock data
-            sma5: undefined, // Would need 5-day SMA
-            sma10: undefined, // Would need 10-day SMA
-            sma20: technicalIndicators.sma20,
-            rsi: technicalIndicators.rsi?.value,
-            rsiDirection: technicalIndicators.rsi?.signal === 'oversold' ? 'rising' : 
-                          technicalIndicators.rsi?.signal === 'overbought' ? 'falling' : 'flat',
-            macdLine: technicalIndicators.macd?.value,
-            macdSignal: technicalIndicators.macd?.signal,
-            macdHistogram: technicalIndicators.macd?.histogram,
-            volumeVsAvg: undefined, // Would need volume data
-          } : undefined,
+          technicals: {
+            currentPrice: currentPriceValue,
+            sma5: safeSma5,
+            sma10: safeSma10,
+            sma20: safeSma20,
+            smaAlignment: canCalculateSmaAlignment 
+              ? determineSmaAlignment(safeCurrentPrice!, safeSma5, safeSma10, safeSma20) 
+              : undefined,
+            rsi: technicalIndicators?.rsi?.value,
+            rsiCondition: determineRsiCondition(technicalIndicators?.rsi?.value, rsiDirection),
+            macdLine: technicalIndicators?.macd?.value,
+            macdSignal: technicalIndicators?.macd?.signal,
+            macdHistogram: technicalIndicators?.macd?.histogram,
+            macdCondition: determineMacdCondition(
+              technicalIndicators?.macd?.value,
+              technicalIndicators?.macd?.signal,
+              technicalIndicators?.macd?.histogram
+            ),
+            volumeVsAvg: extractedTechnicals?.volumeVsAvg,
+            volumeCondition: (extractedTechnicals?.volumeVsAvg !== undefined && priceDirection !== undefined)
+              ? determineVolumeCondition(extractedTechnicals.volumeVsAvg, priceDirection)
+              : undefined,
+          },
           insiderActivity: insiderTradingStrength ? {
             netBuyRatio30d: insiderTradingStrength.buyCount > 0 || insiderTradingStrength.sellCount > 0
               ? ((insiderTradingStrength.buyCount - insiderTradingStrength.sellCount) / 
@@ -400,21 +448,23 @@ class QueueWorker {
             daysSinceLastTransaction: insiderTradingStrength.tradeDate 
               ? Math.floor((Date.now() - new Date(insiderTradingStrength.tradeDate).getTime()) / (1000 * 60 * 60 * 24))
               : undefined,
-            transactionSizeVsFloat: undefined, // Would need float data
+            transactionSizeVsFloat: undefined, // Still requires float data from external source
             insiderRoles: insiderTradingStrength.insiderTitle 
-              ? [insiderTradingStrength.insiderTitle.toLowerCase().includes('ceo') ? 'ceo' :
-                 insiderTradingStrength.insiderTitle.toLowerCase().includes('cfo') ? 'cfo' :
-                 insiderTradingStrength.insiderTitle.toLowerCase().includes('director') ? 'director' : 'vp']
+              ? [insiderTradingStrength.insiderTitle.toLowerCase()]
               : undefined,
+            insiderRoleCondition: determineInsiderRoleCondition(
+              insiderTradingStrength.insiderTitle ? [insiderTradingStrength.insiderTitle.toLowerCase()] : undefined
+            ),
           } : undefined,
           newsSentiment: newsSentiment ? {
             avgSentiment: newsSentiment.aggregateSentiment,
             sentimentTrend: newsSentiment.sentimentTrend,
+            sentimentCondition: determineSentimentCondition(newsSentiment.sentimentTrend),
             newsCount7d: newsSentiment.newsVolume,
             upcomingCatalyst: undefined, // Would need catalyst detection
           } : undefined,
           macroSector: macroAnalysis ? {
-            sectorVsSpy10d: undefined, // Would need sector performance data
+            sectorVsSpy10d: undefined, // Would need sector ETF performance data
             macroRiskEnvironment: macroAnalysis.macroScore !== null && macroAnalysis.macroScore !== undefined
               ? (macroAnalysis.macroScore > 70 ? 'favorable_tailwinds' :
                  macroAnalysis.macroScore > 50 ? 'low_risk' :
@@ -422,6 +472,18 @@ class QueueWorker {
               : undefined,
           } : undefined,
         };
+        
+        // Log data availability for debugging
+        const availableMetrics = {
+          fundamentals: !!scorecardInput.fundamentals,
+          technicals: !!scorecardInput.technicals?.currentPrice,
+          smas: !!(scorecardInput.technicals?.sma5 && scorecardInput.technicals?.sma10),
+          volume: !!scorecardInput.technicals?.volumeVsAvg,
+          insider: !!scorecardInput.insiderActivity,
+          news: !!scorecardInput.newsSentiment,
+          macro: !!scorecardInput.macroSector,
+        };
+        console.log(`[QueueWorker] Scorecard data availability:`, availableMetrics);
         
         scorecard = await aiAnalysisService.generateScorecard(scorecardInput);
         console.log(`[QueueWorker] ✅ Scorecard complete: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);

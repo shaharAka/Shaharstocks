@@ -1500,7 +1500,34 @@ function startDailyBriefJob() {
                 },
                 risks: latestAnalysis.risks || [],
                 opportunities: latestAnalysis.opportunities || [],
-                analyzedAt: getAnalyzedAtString(latestAnalysis.analyzedAt)
+                analyzedAt: getAnalyzedAtString(latestAnalysis.analyzedAt),
+                scorecard: latestAnalysis.scorecard ? {
+                  globalScore: latestAnalysis.scorecard.globalScore,
+                  confidence: latestAnalysis.scorecard.confidence,
+                  sections: latestAnalysis.scorecard.sections ? {
+                    fundamentals: latestAnalysis.scorecard.sections.fundamentals ? {
+                      score: latestAnalysis.scorecard.sections.fundamentals.score,
+                      weight: latestAnalysis.scorecard.sections.fundamentals.weight
+                    } : undefined,
+                    technicals: latestAnalysis.scorecard.sections.technicals ? {
+                      score: latestAnalysis.scorecard.sections.technicals.score,
+                      weight: latestAnalysis.scorecard.sections.technicals.weight
+                    } : undefined,
+                    insiderActivity: latestAnalysis.scorecard.sections.insiderActivity ? {
+                      score: latestAnalysis.scorecard.sections.insiderActivity.score,
+                      weight: latestAnalysis.scorecard.sections.insiderActivity.weight
+                    } : undefined,
+                    newsSentiment: latestAnalysis.scorecard.sections.newsSentiment ? {
+                      score: latestAnalysis.scorecard.sections.newsSentiment.score,
+                      weight: latestAnalysis.scorecard.sections.newsSentiment.weight
+                    } : undefined,
+                    macroSector: latestAnalysis.scorecard.sections.macroSector ? {
+                      score: latestAnalysis.scorecard.sections.macroSector.score,
+                      weight: latestAnalysis.scorecard.sections.macroSector.weight
+                    } : undefined
+                  } : undefined,
+                  summary: latestAnalysis.scorecard.summary
+                } : undefined
               } : stockData?.overallRating ? {
                 overallRating: stockData.overallRating,
                 summary: stockData.summary || "No previous analysis available",

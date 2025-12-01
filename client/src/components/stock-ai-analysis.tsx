@@ -24,6 +24,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { TermTooltip } from "@/components/term-tooltip";
+import { ScorecardDisplay } from "@/components/scorecard-display";
 
 interface StockAIAnalysisProps {
   ticker: string;
@@ -354,6 +355,16 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           </Accordion>
         </CardContent>
       </Card>
+
+      {/* Scorecard Breakdown - Detailed metric-by-metric analysis */}
+      {(analysis as any).scorecard && 
+       typeof (analysis as any).scorecard === 'object' && 
+       (analysis as any).scorecard.globalScore !== undefined && (
+        <ScorecardDisplay 
+          scorecard={(analysis as any).scorecard} 
+          data-testid="scorecard-display"
+        />
+      )}
 
       {/* Section 2: Key Watchpoints - Risks and catalysts */}
       <Card>

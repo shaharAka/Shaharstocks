@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { UserProfile } from "@/components/user-profile";
@@ -116,8 +116,9 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1">
-          <header className="flex items-center justify-end px-2 py-2 md:p-4 border-b bg-background shrink-0">
-            <div className="flex items-center gap-1 md:gap-2">
+          <header className="flex items-center justify-between px-2 py-2 md:px-4 border-b bg-background shrink-0">
+            <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
+            <div className="flex items-center gap-1 md:gap-2 ml-auto">
               <Button
                 size="icon"
                 variant="ghost"
@@ -125,7 +126,7 @@ function AuthenticatedApp() {
                   window.dispatchEvent(new CustomEvent('replay-tutorial'));
                 }}
                 data-testid="button-help"
-                className="h-11 w-11"
+                className="h-10 w-10"
               >
                 <HelpCircle className="h-5 w-5" />
               </Button>

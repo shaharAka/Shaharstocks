@@ -12,7 +12,8 @@ import {
   Target,
   Eye,
   Zap,
-  Clock
+  Clock,
+  RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -146,6 +147,28 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     },
   });
 
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/analysis-jobs/reset/${ticker}`);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "analysis"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock-analyses"] });
+      toast({
+        title: "Analysis Reset",
+        description: `Cleared stuck analysis for ${ticker}. You can now start a fresh analysis.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Reset Failed",
+        description: error.message || "Unable to reset analysis. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (isLoadingExisting) {
     return (
       <Card>
@@ -194,9 +217,34 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     return (
       <Card>
         <CardContent className="p-6">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>AI playbook in progress...</span>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>AI playbook in progress...</span>
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <span className="text-xs text-muted-foreground">Stuck for too long?</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => resetMutation.mutate()}
+                disabled={resetMutation.isPending}
+                data-testid={`button-reset-${ticker}`}
+                className="text-xs h-7"
+              >
+                {resetMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Resetting...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Reset & Retry
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -213,21 +261,43 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
               <AlertTriangle className="h-4 w-4" />
               <span>Analysis failed: {analysis.errorMessage || "Unknown error"}</span>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => analyzeMutation.mutate()}
-              disabled={analyzeMutation.isPending}
-              data-testid={`button-retry-${ticker}`}
-            >
-              {analyzeMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Retrying...
-                </>
-              ) : (
-                "Retry Analysis"
-              )}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => analyzeMutation.mutate()}
+                disabled={analyzeMutation.isPending || resetMutation.isPending}
+                data-testid={`button-retry-${ticker}`}
+              >
+                {analyzeMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Retrying...
+                  </>
+                ) : (
+                  "Retry Analysis"
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => resetMutation.mutate()}
+                disabled={resetMutation.isPending || analyzeMutation.isPending}
+                data-testid={`button-reset-failed-${ticker}`}
+                className="text-xs"
+              >
+                {resetMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Resetting...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Clear & Reset
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

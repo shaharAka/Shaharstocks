@@ -2569,6 +2569,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Reset/cancel stuck analysis jobs for a ticker
+  app.post("/api/analysis-jobs/reset/:ticker", async (req, res) => {
+    try {
+      const ticker = req.params.ticker.toUpperCase();
+      
+      console.log(`[Queue API] Resetting stuck jobs for ticker: ${ticker}`);
+      
+      // Cancel any pending/processing jobs for this ticker
+      await storage.cancelAnalysisJobsForTicker(ticker);
+      
+      // Reset the analysis phase flags on the stock
+      await storage.resetStockAnalysisPhaseFlags(ticker);
+      
+      res.json({ 
+        success: true, 
+        message: `Reset analysis jobs for ${ticker}. You can now trigger a new analysis.` 
+      });
+    } catch (error) {
+      console.error("[Queue API] Error resetting jobs:", error);
+      res.status(500).json({ error: "Failed to reset analysis jobs" });
+    }
+  });
+
   // Bulk analyze all pending stocks for current user
   app.post("/api/stocks/analyze-all", async (req, res) => {
     try {

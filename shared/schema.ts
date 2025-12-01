@@ -194,6 +194,34 @@ export const stockAnalyses = pgTable("stock_analyses", {
   macroAnalysisId: varchar("macro_analysis_id").references(() => macroAnalyses.id), // Reference to the macro analysis used
   integratedScore: integer("integrated_score"), // Final score combining micro + macro (0-100)
   scoreAdjustment: text("score_adjustment"), // Explanation of how macro adjusted the score
+  // Rule-based scorecard with per-metric breakdowns for explainable scoring
+  scorecard: jsonb("scorecard").$type<{
+    version: string;
+    tradingHorizon: string;
+    computedAt: string;
+    sections: Record<string, {
+      name: string;
+      weight: number;
+      score: number;
+      maxScore: 100;
+      metrics: Record<string, {
+        name: string;
+        measurement: string | number | null;
+        ruleBucket: "excellent" | "good" | "neutral" | "weak" | "poor" | "missing";
+        score: number;
+        maxScore: 10;
+        weight: number;
+        rationale: string;
+      }>;
+      missingMetrics: string[];
+    }>;
+    globalScore: number;
+    maxGlobalScore: 100;
+    missingDataPenalty: number;
+    confidence: "high" | "medium" | "low";
+    summary: string;
+  }>(),
+  scorecardVersion: text("scorecard_version"), // Version of scorecard config used (e.g., "1.0")
   createdAt: timestamp("created_at").defaultNow(),
 });
 

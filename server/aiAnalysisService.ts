@@ -10,6 +10,17 @@
 import OpenAI from "openai";
 import type { TechnicalIndicators, NewsSentiment, PriceNewsCorrelation } from "./stockService";
 import { getAIProvider, type AIProviderConfig, type AIProvider, type ChatMessage } from "./aiProvider";
+import { 
+  generateScoringRubricPrompt, 
+  scorecardConfig, 
+  SCORECARD_VERSION,
+  type Scorecard,
+  type SectionScore,
+  type MetricScore,
+  calculateSectionScore,
+  calculateGlobalScore,
+  determineConfidence
+} from "./scoring/scorecardConfig";
 
 // Default OpenAI client for backwards compatibility
 const openai = new OpenAI({
@@ -803,6 +814,363 @@ Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
       console.error(`[AIAnalysisService] Error generating daily brief for ${ticker}:`, error);
       throw new Error(`Failed to generate daily brief for ${ticker}: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
+  }
+
+  /**
+   * Generate a rule-based scorecard with per-metric scoring
+   * This provides explainable, consistent scoring across all stocks
+   * 
+   * The LLM evaluates each metric based on the rubric and provides:
+   * 1. A measurement value (extracted from the data)
+   * 2. A rule bucket (excellent/good/neutral/weak/poor/missing)
+   * 3. A score (0-10)
+   * 4. A brief rationale
+   * 
+   * The server then aggregates section and global scores deterministically.
+   */
+  async generateScorecard(params: {
+    ticker: string;
+    fundamentals?: {
+      revenueGrowthYoY?: number;
+      epsGrowthYoY?: number;
+      profitMarginTrend?: string;
+      freeCashFlow?: number;
+      totalDebt?: number;
+      debtToEquity?: number;
+    };
+    technicals?: {
+      sma5?: number;
+      sma10?: number;
+      sma20?: number;
+      currentPrice?: number;
+      rsi?: number;
+      rsiDirection?: string;
+      macdLine?: number;
+      macdSignal?: number;
+      macdHistogram?: number;
+      volumeVsAvg?: number;
+      priceConfirmation?: boolean;
+    };
+    insiderActivity?: {
+      netBuyRatio30d?: number;
+      daysSinceLastTransaction?: number;
+      transactionSizeVsFloat?: number;
+      insiderRoles?: string[];
+    };
+    newsSentiment?: {
+      avgSentiment?: number;
+      sentimentTrend?: string;
+      newsCount7d?: number;
+      upcomingCatalyst?: string;
+    };
+    macroSector?: {
+      sectorVsSpy10d?: number;
+      macroRiskEnvironment?: string;
+    };
+  }): Promise<Scorecard> {
+    const { ticker } = params;
+
+    // Build the context string with all available data
+    const dataContext = this.buildScorecardDataContext(params);
+    
+    // Generate the scoring rubric prompt
+    const rubricPrompt = generateScoringRubricPrompt();
+
+    const prompt = `You are a quantitative analyst scoring a stock using a RULE-BASED scorecard.
+Your job is to evaluate each metric according to the EXACT thresholds in the rubric.
+
+STOCK: ${ticker}
+
+${rubricPrompt}
+
+=== AVAILABLE DATA FOR ${ticker} ===
+${dataContext}
+
+=== YOUR TASK ===
+Score EACH metric according to the rubric. For each metric:
+1. Extract the MEASUREMENT from the data (use "N/A" if not available)
+2. Determine which RULE BUCKET it falls into (excellent/good/neutral/weak/poor)
+3. Assign the corresponding SCORE (10/8/5/2/0)
+4. Write a brief RATIONALE explaining why
+
+CRITICAL: 
+- If data is missing for a metric, set ruleBucket="missing" and score=0
+- Use the EXACT threshold ranges from the rubric
+- Be consistent - the same measurement should always get the same score
+
+Return your evaluation as JSON with this EXACT structure:
+{
+  "fundamentals": {
+    "revenueGrowth": { "measurement": <number or "N/A">, "ruleBucket": "excellent|good|neutral|weak|poor|missing", "score": 0-10, "rationale": "brief explanation" },
+    "epsGrowth": { "measurement": <number or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "profitMarginTrend": { "measurement": "condition string or N/A", "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "fcfToDebt": { "measurement": <number or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "debtToEquity": { "measurement": <number or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." }
+  },
+  "technicals": {
+    "smaAlignment": { "measurement": "condition string", "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "rsiMomentum": { "measurement": "RSI value + direction", "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "macdSignal": { "measurement": "condition string", "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "volumeSurge": { "measurement": "Xx avg", "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "priceVsResistance": { "measurement": "condition string", "ruleBucket": "...", "score": 0-10, "rationale": "..." }
+  },
+  "insiderActivity": {
+    "netBuyRatio": { "measurement": <percentage or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "transactionRecency": { "measurement": <days or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "transactionSize": { "measurement": <percentage or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "insiderRole": { "measurement": "role description", "ruleBucket": "...", "score": 0-10, "rationale": "..." }
+  },
+  "newsSentiment": {
+    "avgSentiment": { "measurement": <-1 to 1 or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "sentimentMomentum": { "measurement": "trend description", "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "newsVolume": { "measurement": <count or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "catalystPresence": { "measurement": "catalyst description", "ruleBucket": "...", "score": 0-10, "rationale": "..." }
+  },
+  "macroSector": {
+    "sectorMomentum": { "measurement": <percentage or "N/A">, "ruleBucket": "...", "score": 0-10, "rationale": "..." },
+    "macroRiskFlags": { "measurement": "risk description", "ruleBucket": "...", "score": 0-10, "rationale": "..." }
+  },
+  "summary": "One sentence summary of the overall scoring: what are the main strengths and weaknesses?"
+}
+
+REMEMBER: This is a 1-2 WEEK trading horizon. Weight short-term catalysts and momentum appropriately.`;
+
+    try {
+      const provider = this.getProvider();
+      console.log(`[AIAnalysisService] Generating scorecard for ${ticker} using ${provider.getName()}`);
+      
+      const messages: ChatMessage[] = [{ role: "user", content: prompt }];
+      
+      const content = await provider.generateCompletion(messages, {
+        temperature: 0.2, // Lower temperature for more consistent scoring
+        maxTokens: 4096,
+        responseFormat: "json"
+      });
+
+      const llmResponse = JSON.parse(content || "{}");
+      
+      // Build the full scorecard from LLM response
+      return this.buildScorecardFromLLMResponse(llmResponse, ticker);
+    } catch (error) {
+      console.error(`[AIAnalysisService] Error generating scorecard for ${ticker}:`, error);
+      throw new Error(`Failed to generate scorecard for ${ticker}: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  /**
+   * Build context string from available data for scorecard generation
+   */
+  private buildScorecardDataContext(params: {
+    ticker: string;
+    fundamentals?: any;
+    technicals?: any;
+    insiderActivity?: any;
+    newsSentiment?: any;
+    macroSector?: any;
+  }): string {
+    const sections: string[] = [];
+
+    // Fundamentals
+    if (params.fundamentals) {
+      const f = params.fundamentals;
+      sections.push(`FUNDAMENTALS:
+- Revenue Growth YoY: ${f.revenueGrowthYoY !== undefined ? f.revenueGrowthYoY + '%' : 'N/A'}
+- EPS Growth YoY: ${f.epsGrowthYoY !== undefined ? f.epsGrowthYoY + '%' : 'N/A'}
+- Profit Margin Trend: ${f.profitMarginTrend || 'N/A'}
+- Free Cash Flow: ${f.freeCashFlow !== undefined ? '$' + f.freeCashFlow.toLocaleString() : 'N/A'}
+- Total Debt: ${f.totalDebt !== undefined ? '$' + f.totalDebt.toLocaleString() : 'N/A'}
+- Debt-to-Equity: ${f.debtToEquity !== undefined ? f.debtToEquity.toFixed(2) : 'N/A'}`);
+    } else {
+      sections.push('FUNDAMENTALS: No data available');
+    }
+
+    // Technicals
+    if (params.technicals) {
+      const t = params.technicals;
+      sections.push(`TECHNICALS:
+- Current Price: ${t.currentPrice !== undefined ? '$' + t.currentPrice.toFixed(2) : 'N/A'}
+- SMA5: ${t.sma5 !== undefined ? '$' + t.sma5.toFixed(2) : 'N/A'}
+- SMA10: ${t.sma10 !== undefined ? '$' + t.sma10.toFixed(2) : 'N/A'}
+- SMA20: ${t.sma20 !== undefined ? '$' + t.sma20.toFixed(2) : 'N/A'}
+- RSI (14): ${t.rsi !== undefined ? t.rsi.toFixed(1) : 'N/A'} ${t.rsiDirection ? '(' + t.rsiDirection + ')' : ''}
+- MACD Line: ${t.macdLine !== undefined ? t.macdLine.toFixed(4) : 'N/A'}
+- MACD Signal: ${t.macdSignal !== undefined ? t.macdSignal.toFixed(4) : 'N/A'}
+- MACD Histogram: ${t.macdHistogram !== undefined ? t.macdHistogram.toFixed(4) : 'N/A'}
+- Volume vs 10-day Avg: ${t.volumeVsAvg !== undefined ? t.volumeVsAvg.toFixed(2) + 'x' : 'N/A'}
+- Price Confirmation: ${t.priceConfirmation !== undefined ? (t.priceConfirmation ? 'Yes' : 'No') : 'N/A'}`);
+    } else {
+      sections.push('TECHNICALS: No data available');
+    }
+
+    // Insider Activity
+    if (params.insiderActivity) {
+      const i = params.insiderActivity;
+      sections.push(`INSIDER ACTIVITY:
+- Net Buy Ratio (30d): ${i.netBuyRatio30d !== undefined ? i.netBuyRatio30d + '%' : 'N/A'}
+- Days Since Last Transaction: ${i.daysSinceLastTransaction !== undefined ? i.daysSinceLastTransaction : 'N/A'}
+- Transaction Size vs Float: ${i.transactionSizeVsFloat !== undefined ? i.transactionSizeVsFloat + '%' : 'N/A'}
+- Insider Roles: ${i.insiderRoles && i.insiderRoles.length > 0 ? i.insiderRoles.join(', ') : 'N/A'}`);
+    } else {
+      sections.push('INSIDER ACTIVITY: No data available');
+    }
+
+    // News Sentiment
+    if (params.newsSentiment) {
+      const n = params.newsSentiment;
+      sections.push(`NEWS SENTIMENT:
+- Average Sentiment: ${n.avgSentiment !== undefined ? n.avgSentiment.toFixed(2) : 'N/A'}
+- Sentiment Trend: ${n.sentimentTrend || 'N/A'}
+- News Count (7d): ${n.newsCount7d !== undefined ? n.newsCount7d : 'N/A'}
+- Upcoming Catalyst: ${n.upcomingCatalyst || 'N/A'}`);
+    } else {
+      sections.push('NEWS SENTIMENT: No data available');
+    }
+
+    // Macro/Sector
+    if (params.macroSector) {
+      const m = params.macroSector;
+      sections.push(`MACRO/SECTOR:
+- Sector vs SPY (10d): ${m.sectorVsSpy10d !== undefined ? (m.sectorVsSpy10d >= 0 ? '+' : '') + m.sectorVsSpy10d + '%' : 'N/A'}
+- Macro Risk Environment: ${m.macroRiskEnvironment || 'N/A'}`);
+    } else {
+      sections.push('MACRO/SECTOR: No data available');
+    }
+
+    return sections.join('\n\n');
+  }
+
+  /**
+   * Build a full Scorecard object from LLM response
+   * This function validates and normalizes the LLM output
+   */
+  private buildScorecardFromLLMResponse(llmResponse: any, ticker: string): Scorecard {
+    const sections: Record<string, SectionScore> = {};
+
+    // Process each section
+    for (const [sectionKey, sectionConfig] of Object.entries(scorecardConfig.sections)) {
+      const llmSection = llmResponse[sectionKey] || {};
+      const metrics: Record<string, MetricScore> = {};
+      const missingMetrics: string[] = [];
+
+      for (const [metricKey, metricConfig] of Object.entries(sectionConfig.metrics)) {
+        const llmMetric = llmSection[metricKey] || {};
+        
+        // Validate and normalize the LLM response
+        const ruleBucket = this.normalizeRuleBucket(llmMetric.ruleBucket);
+        const score = this.normalizeScore(llmMetric.score, ruleBucket);
+        const measurement = llmMetric.measurement ?? null;
+        
+        if (ruleBucket === 'missing') {
+          missingMetrics.push(metricKey);
+        }
+
+        metrics[metricKey] = {
+          name: metricConfig.name,
+          measurement: measurement,
+          ruleBucket: ruleBucket,
+          score: score,
+          maxScore: 10,
+          weight: metricConfig.weight,
+          rationale: llmMetric.rationale || `${metricConfig.name}: ${measurement} → ${ruleBucket} (${score}/10)`
+        };
+      }
+
+      sections[sectionKey] = {
+        name: sectionConfig.name,
+        weight: sectionConfig.weight,
+        score: calculateSectionScore(metrics),
+        maxScore: 100,
+        metrics,
+        missingMetrics
+      };
+    }
+
+    const globalScore = calculateGlobalScore(sections);
+    const confidence = determineConfidence(sections);
+
+    // Calculate missing data penalty
+    let totalMissing = 0;
+    let totalMetrics = 0;
+    for (const section of Object.values(sections)) {
+      totalMissing += section.missingMetrics.length;
+      totalMetrics += Object.keys(section.metrics).length;
+    }
+    const missingDataPenalty = Math.round((totalMissing / totalMetrics) * 100);
+
+    // Build summary
+    const summaryParts: string[] = [];
+    for (const section of Object.values(sections)) {
+      const status = section.score >= 70 ? '✓' : section.score >= 40 ? '~' : '✗';
+      summaryParts.push(`${section.name}: ${section.score} ${status}`);
+    }
+
+    const llmSummary = llmResponse.summary || '';
+
+    return {
+      version: SCORECARD_VERSION,
+      tradingHorizon: scorecardConfig.tradingHorizon,
+      computedAt: new Date().toISOString(),
+      sections,
+      globalScore,
+      maxGlobalScore: 100,
+      missingDataPenalty,
+      confidence,
+      summary: `${ticker}: ${globalScore}/100 (${confidence} confidence). ${summaryParts.join(' | ')}. ${llmSummary}`
+    };
+  }
+
+  /**
+   * Normalize rule bucket from LLM response
+   */
+  private normalizeRuleBucket(bucket: string | undefined): MetricScore['ruleBucket'] {
+    if (!bucket) return 'missing';
+    
+    const normalized = bucket.toLowerCase().trim();
+    const validBuckets = ['excellent', 'good', 'neutral', 'weak', 'poor', 'missing'];
+    
+    if (validBuckets.includes(normalized)) {
+      return normalized as MetricScore['ruleBucket'];
+    }
+    
+    // Map common variations
+    if (normalized.includes('excellent') || normalized.includes('exceptional')) return 'excellent';
+    if (normalized.includes('good') || normalized.includes('strong')) return 'good';
+    if (normalized.includes('neutral') || normalized.includes('average')) return 'neutral';
+    if (normalized.includes('weak') || normalized.includes('below')) return 'weak';
+    if (normalized.includes('poor') || normalized.includes('bad')) return 'poor';
+    if (normalized.includes('missing') || normalized.includes('n/a') || normalized.includes('unavailable')) return 'missing';
+    
+    return 'neutral'; // Default fallback
+  }
+
+  /**
+   * Normalize score from LLM response
+   */
+  private normalizeScore(score: number | string | undefined, ruleBucket: MetricScore['ruleBucket']): number {
+    if (ruleBucket === 'missing') return 0;
+    
+    if (typeof score === 'number' && !isNaN(score)) {
+      return Math.max(0, Math.min(10, Math.round(score)));
+    }
+    
+    if (typeof score === 'string') {
+      const parsed = parseFloat(score);
+      if (!isNaN(parsed)) {
+        return Math.max(0, Math.min(10, Math.round(parsed)));
+      }
+    }
+    
+    // Fallback based on bucket
+    const bucketDefaults: Record<string, number> = {
+      excellent: 10,
+      good: 8,
+      neutral: 5,
+      weak: 2,
+      poor: 0,
+      missing: 0
+    };
+    
+    return bucketDefaults[ruleBucket] || 5;
   }
 }
 

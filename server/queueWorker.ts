@@ -358,6 +358,78 @@ class QueueWorker {
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
       console.log(`[QueueWorker] ✅ Micro analysis phase complete for ${job.ticker}`);
 
+      // PHASE 3.5: Generate Rule-Based Scorecard (parallel to integration, non-blocking)
+      let scorecard: any = null;
+      try {
+        console.log(`[QueueWorker] 📊 Generating rule-based scorecard for ${job.ticker}...`);
+        
+        // Extract data for scorecard generation from available sources
+        const scorecardInput = {
+          ticker: job.ticker,
+          fundamentals: comprehensiveFundamentals ? {
+            revenueGrowthYoY: undefined, // Would need YoY comparison data
+            epsGrowthYoY: undefined, // Would need YoY comparison data
+            profitMarginTrend: comprehensiveFundamentals.profitMargin !== undefined 
+              ? (comprehensiveFundamentals.profitMargin > 0.15 ? 'improving' : 
+                 comprehensiveFundamentals.profitMargin > 0.05 ? 'stable' : 'declining')
+              : undefined,
+            freeCashFlow: comprehensiveFundamentals.freeCashFlow 
+              ? parseFloat(comprehensiveFundamentals.freeCashFlow.replace(/[^0-9.-]/g, '')) 
+              : undefined,
+            totalDebt: undefined, // Would need from balance sheet
+            debtToEquity: comprehensiveFundamentals.debtToEquity,
+          } : undefined,
+          technicals: technicalIndicators ? {
+            currentPrice: undefined, // Would need from stock data
+            sma5: undefined, // Would need 5-day SMA
+            sma10: undefined, // Would need 10-day SMA
+            sma20: technicalIndicators.sma20,
+            rsi: technicalIndicators.rsi?.value,
+            rsiDirection: technicalIndicators.rsi?.signal === 'oversold' ? 'rising' : 
+                          technicalIndicators.rsi?.signal === 'overbought' ? 'falling' : 'flat',
+            macdLine: technicalIndicators.macd?.value,
+            macdSignal: technicalIndicators.macd?.signal,
+            macdHistogram: technicalIndicators.macd?.histogram,
+            volumeVsAvg: undefined, // Would need volume data
+          } : undefined,
+          insiderActivity: insiderTradingStrength ? {
+            netBuyRatio30d: insiderTradingStrength.buyCount > 0 || insiderTradingStrength.sellCount > 0
+              ? ((insiderTradingStrength.buyCount - insiderTradingStrength.sellCount) / 
+                 (insiderTradingStrength.buyCount + insiderTradingStrength.sellCount)) * 100
+              : undefined,
+            daysSinceLastTransaction: insiderTradingStrength.tradeDate 
+              ? Math.floor((Date.now() - new Date(insiderTradingStrength.tradeDate).getTime()) / (1000 * 60 * 60 * 24))
+              : undefined,
+            transactionSizeVsFloat: undefined, // Would need float data
+            insiderRoles: insiderTradingStrength.insiderTitle 
+              ? [insiderTradingStrength.insiderTitle.toLowerCase().includes('ceo') ? 'ceo' :
+                 insiderTradingStrength.insiderTitle.toLowerCase().includes('cfo') ? 'cfo' :
+                 insiderTradingStrength.insiderTitle.toLowerCase().includes('director') ? 'director' : 'vp']
+              : undefined,
+          } : undefined,
+          newsSentiment: newsSentiment ? {
+            avgSentiment: newsSentiment.aggregateSentiment,
+            sentimentTrend: newsSentiment.sentimentTrend,
+            newsCount7d: newsSentiment.newsVolume,
+            upcomingCatalyst: undefined, // Would need catalyst detection
+          } : undefined,
+          macroSector: macroAnalysis ? {
+            sectorVsSpy10d: undefined, // Would need sector performance data
+            macroRiskEnvironment: macroAnalysis.macroScore !== null && macroAnalysis.macroScore !== undefined
+              ? (macroAnalysis.macroScore > 70 ? 'favorable_tailwinds' :
+                 macroAnalysis.macroScore > 50 ? 'low_risk' :
+                 macroAnalysis.macroScore > 30 ? 'neutral' : 'some_headwinds')
+              : undefined,
+          } : undefined,
+        };
+        
+        scorecard = await aiAnalysisService.generateScorecard(scorecardInput);
+        console.log(`[QueueWorker] ✅ Scorecard complete: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
+      } catch (scorecardError) {
+        // Non-fatal: log and continue with analysis save
+        console.warn(`[QueueWorker] ⚠️ Scorecard generation failed for ${job.ticker}:`, scorecardError);
+      }
+
       // PHASE 4: Score Integration
       await this.updateProgress(job.id, job.ticker, "calculating_score", {
         phase: "integration",
@@ -404,7 +476,9 @@ class QueueWorker {
         businessOverview: secFilingData?.businessOverview,
         fundamentalData: comprehensiveFundamentals,
         macroAnalysisId: macroAnalysis.id,
-        integratedScore: integratedScore,
+        integratedScore: scorecard ? scorecard.globalScore : integratedScore, // Use scorecard global score if available
+        scorecard: scorecard || undefined,
+        scorecardVersion: scorecard ? scorecard.version : undefined,
       });
 
       // Set combined flag after integrated score is saved

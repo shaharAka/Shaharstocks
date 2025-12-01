@@ -208,30 +208,32 @@ export function StockTable({
                   />
                 )}
               </TableHead>
-              <TableHead className="min-w-[60px] px-1">
+              <TableHead className="min-w-[50px] sm:min-w-[60px] px-0.5 sm:px-1">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handleSort("ticker")}
-                  className="px-1 h-7"
+                  className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
                   data-testid="sort-ticker"
                 >
-                  Ticker
+                  <span className="hidden sm:inline">Ticker</span>
+                  <span className="sm:hidden">Tick</span>
                   <SortIcon field="ticker" />
                 </Button>
               </TableHead>
               <TableHead className="hidden md:table-cell min-w-[100px] px-1">Company</TableHead>
-              <TableHead className="text-right hidden lg:table-cell w-[70px] px-1">
+              <TableHead className="text-right w-[60px] sm:w-[70px] px-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleSort("aiScore")}
-                      className="px-1 h-7"
+                      className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
                       data-testid="sort-ai-score"
                     >
-                      Signal
+                      <span className="hidden sm:inline">Signal</span>
+                      <span className="sm:hidden">Sig</span>
                       <SortIcon field="aiScore" />
                     </Button>
                   </TooltipTrigger>
@@ -248,40 +250,42 @@ export function StockTable({
                   </TooltipContent>
                 </Tooltip>
               </TableHead>
-              <TableHead className="min-w-[55px] px-1">
+              <TableHead className="min-w-[45px] sm:min-w-[55px] px-0.5 sm:px-1">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handleSort("recommendation")}
-                  className="px-1 h-7"
+                  className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
                   data-testid="sort-recommendation"
                 >
                   Type
                   <SortIcon field="recommendation" />
                 </Button>
               </TableHead>
-              <TableHead className="text-right min-w-[65px] px-1">
+              <TableHead className="text-right min-w-[55px] sm:min-w-[65px] px-0.5 sm:px-1">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handleSort("price")}
-                  className="px-1 h-7"
+                  className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
                   data-testid="sort-price"
                 >
-                  Price
+                  <span className="hidden sm:inline">Price</span>
+                  <span className="sm:hidden">$</span>
                   <SortIcon field="price" />
                 </Button>
               </TableHead>
               <TableHead className="hidden lg:table-cell min-w-[100px] px-1">Trend</TableHead>
-              <TableHead className="text-right min-w-[70px] px-1">
+              <TableHead className="text-right min-w-[55px] sm:min-w-[70px] px-0.5 sm:px-1">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handleSort("change")}
-                  className="px-1 h-7"
+                  className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
                   data-testid="sort-change"
                 >
-                  Chg %
+                  <span className="hidden sm:inline">Chg %</span>
+                  <span className="sm:hidden">%</span>
                   <SortIcon field="change" />
                 </Button>
               </TableHead>
@@ -352,24 +356,24 @@ export function StockTable({
                     />
                   )}
                 </TableCell>
-                <TableCell className="font-medium font-mono py-1 px-1" data-testid={`cell-ticker-${stock.ticker}`}>
-                  <div className="flex items-center gap-1.5">
+                <TableCell className="font-medium font-mono py-1 px-0.5 sm:px-1 text-[11px] sm:text-xs" data-testid={`cell-ticker-${stock.ticker}`}>
+                  <div className="flex items-center gap-0.5 sm:gap-1.5 flex-wrap">
                     {(stock as any).isFollowing && (
-                      <Star className="h-3 w-3 text-primary fill-current" data-testid={`icon-following-${stock.ticker}`} />
+                      <Star className="h-2.5 sm:h-3 w-2.5 sm:w-3 text-primary fill-current" data-testid={`icon-following-${stock.ticker}`} />
                     )}
                     <span>{stock.ticker}</span>
                     {isNewStock(stock.ticker, stock.insiderTradeDate) && (
-                      <Badge variant="default" className="text-[10px] px-1 py-0" data-testid={`badge-new-${stock.ticker}`}>
+                      <Badge variant="default" className="text-[8px] sm:text-[10px] px-0.5 sm:px-1 py-0" data-testid={`badge-new-${stock.ticker}`}>
                         NEW
                       </Badge>
                     )}
                     {simulatedTickers.has(stock.ticker) && (
-                      <Badge variant="outline" className="text-[10px] px-1 py-0 bg-accent/50" data-testid={`badge-simulated-${stock.ticker}`}>
+                      <Badge variant="outline" className="text-[8px] sm:text-[10px] px-0.5 sm:px-1 py-0 bg-accent/50 hidden sm:inline-flex" data-testid={`badge-simulated-${stock.ticker}`}>
                         SIM
                       </Badge>
                     )}
                     {(stock as any).isStale && (
-                      <Badge variant="secondary" className="text-[10px] px-1 py-0" data-testid={`badge-stale-${stock.ticker}`}>
+                      <Badge variant="secondary" className="text-[8px] sm:text-[10px] px-0.5 sm:px-1 py-0 hidden sm:inline-flex" data-testid={`badge-stale-${stock.ticker}`}>
                         {(stock as any).ageDays}d
                       </Badge>
                     )}
@@ -378,19 +382,20 @@ export function StockTable({
                 <TableCell className="hidden md:table-cell max-w-xs truncate text-muted-foreground py-1 px-1" data-testid={`cell-company-${stock.ticker}`}>
                   {stock.companyName}
                 </TableCell>
-                <TableCell className="text-right hidden lg:table-cell py-1 px-1" data-testid={`cell-ai-score-${stock.ticker}`}>
+                <TableCell className="text-right py-1 px-1" data-testid={`cell-ai-score-${stock.ticker}`}>
                   {(() => {
                     const analysis = getAIAnalysis(stock.ticker);
-                    if (!analysis) return <span className="text-xs text-muted-foreground">-</span>;
+                    if (!analysis) return <span className="text-[10px] sm:text-xs text-muted-foreground">-</span>;
                     
                     // Check if analysis is in progress
                     if (analysis.status === "pending" || analysis.status === "analyzing" || analysis.status === "processing") {
                       return (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className="flex items-center gap-2 justify-end cursor-help">
-                              <Badge variant="outline" className="text-xs">
-                                Analyzing...
+                            <div className="flex items-center gap-1 sm:gap-2 justify-end cursor-help">
+                              <Badge variant="outline" className="text-[9px] sm:text-xs px-1">
+                                <span className="hidden sm:inline">Analyzing...</span>
+                                <span className="sm:hidden">...</span>
                               </Badge>
                               <AnalysisPhaseIndicator
                                 microCompleted={stock.microAnalysisCompleted}
@@ -414,8 +419,8 @@ export function StockTable({
                     // Show error state
                     if (analysis.status === "failed") {
                       return (
-                        <Badge variant="destructive" className="text-xs">
-                          Error
+                        <Badge variant="destructive" className="text-[9px] sm:text-xs px-1">
+                          Err
                         </Badge>
                       );
                     }
@@ -433,15 +438,16 @@ export function StockTable({
                         <TooltipTrigger asChild>
                           <Badge 
                             className={cn(
-                              "font-mono transition-all border-0 cursor-help",
-                              isExceptional && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
-                              isStrong && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
-                              isModerate && "bg-secondary text-secondary-foreground text-xs",
-                              !isModerate && !isStrong && !isExceptional && "bg-secondary text-muted-foreground text-xs opacity-60"
+                              "font-mono transition-all border-0 cursor-help text-[10px] sm:text-xs px-1 sm:px-1.5",
+                              isExceptional && "bg-amber-500 text-white sm:text-sm font-bold shadow-md dark:bg-amber-600",
+                              isStrong && "bg-amber-100 text-amber-700 font-semibold dark:bg-amber-950 dark:text-amber-400",
+                              isModerate && "bg-secondary text-secondary-foreground",
+                              !isModerate && !isStrong && !isExceptional && "bg-secondary text-muted-foreground opacity-60"
                             )}
                             data-testid={`badge-signal-${stock.ticker}`}
                           >
-                            {score}/100
+                            <span className="hidden sm:inline">{score}/100</span>
+                            <span className="sm:hidden">{score}</span>
                           </Badge>
                         </TooltipTrigger>
                         <TooltipContent side="left" className="text-xs">
@@ -451,31 +457,32 @@ export function StockTable({
                     );
                   })()}
                 </TableCell>
-                <TableCell className="py-1 px-1">
+                <TableCell className="py-1 px-0.5 sm:px-1">
                   {stock.recommendation && (
                     <Badge
                       variant={stock.recommendation.toLowerCase().includes("buy") ? "default" : "destructive"}
-                      className="text-[10px] px-1"
+                      className="text-[8px] sm:text-[10px] px-0.5 sm:px-1"
                       data-testid={`badge-rec-${stock.ticker}`}
                     >
                       {stock.recommendation.toLowerCase().includes("buy") ? (
-                        <ArrowUpRight className="h-2.5 w-2.5 mr-0.5" />
+                        <ArrowUpRight className="h-2 sm:h-2.5 w-2 sm:w-2.5 mr-0.5" />
                       ) : (
-                        <ArrowDownRight className="h-2.5 w-2.5 mr-0.5" />
+                        <ArrowDownRight className="h-2 sm:h-2.5 w-2 sm:w-2.5 mr-0.5" />
                       )}
-                      {stock.recommendation.replace("_", " ").toUpperCase()}
+                      <span className="hidden sm:inline">{stock.recommendation.replace("_", " ").toUpperCase()}</span>
+                      <span className="sm:hidden">{stock.recommendation.toLowerCase().includes("buy") ? "B" : "S"}</span>
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell className="text-right font-mono py-1 px-1" data-testid={`cell-price-${stock.ticker}`}>
+                <TableCell className="text-right font-mono py-1 px-0.5 sm:px-1 text-[10px] sm:text-xs" data-testid={`cell-price-${stock.ticker}`}>
                   ${currentPrice.toFixed(2)}
                 </TableCell>
                 <TableCell className="hidden lg:table-cell w-24 py-1 px-1" data-testid={`cell-chart-${stock.ticker}`}>
                   <CandlestickChartCell ticker={stock.ticker} height={40} />
                 </TableCell>
-                <TableCell className="text-right py-1 px-1">
-                  <div className={`flex items-center justify-end gap-0.5 ${isPositive ? "text-success" : "text-destructive"}`}>
-                    {isPositive ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+                <TableCell className="text-right py-1 px-0.5 sm:px-1">
+                  <div className={`flex items-center justify-end gap-0.5 text-[10px] sm:text-xs ${isPositive ? "text-success" : "text-destructive"}`}>
+                    {isPositive ? <TrendingUp className="h-2 sm:h-2.5 w-2 sm:w-2.5" /> : <TrendingDown className="h-2 sm:h-2.5 w-2 sm:w-2.5" />}
                     <span className="font-mono font-medium">
                       {isPositive ? "+" : ""}{priceChangePercent.toFixed(1)}%
                     </span>

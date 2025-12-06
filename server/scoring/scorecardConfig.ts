@@ -377,12 +377,18 @@ export interface Scorecard {
 
 /**
  * Calculate section score from metric scores
+ * IMPORTANT: Missing metrics are EXCLUDED from the calculation to avoid skewing scores.
+ * Only metrics with actual data contribute to the weighted average.
  */
 export function calculateSectionScore(metrics: Record<string, MetricScore>): number {
   let weightedSum = 0;
   let totalWeight = 0;
 
   for (const metric of Object.values(metrics)) {
+    // Skip missing metrics - they should not contribute to the score
+    if (metric.ruleBucket === 'missing') {
+      continue;
+    }
     weightedSum += metric.score * metric.weight;
     totalWeight += metric.weight;
   }

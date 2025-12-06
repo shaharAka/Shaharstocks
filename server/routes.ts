@@ -3251,6 +3251,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/stock-views/:userId", async (req, res) => {
     try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      // Ensure users can only access their own viewed stocks
+      if (req.params.userId !== req.session.userId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const viewedTickers = await storage.getUserStockViews(req.params.userId);
       res.json(viewedTickers);
     } catch (error) {

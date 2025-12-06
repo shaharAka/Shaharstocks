@@ -14,7 +14,7 @@ import { backtestService } from "./backtestService";
 import { finnhubService } from "./finnhubService";
 import { openinsiderService } from "./openinsiderService";
 import { createRequireAdmin } from "./session";
-import { verifyPayPalWebhook } from "./paypalWebhookVerifier";
+import { verifyPayPalWebhook, cancelPayPalSubscription, getSubscriptionTransactions } from "./paypalService";
 import { aiAnalysisService } from "./aiAnalysisService";
 import { signupLimiter, loginLimiter, resendVerificationLimiter } from "./middleware/rateLimiter";
 import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "./utils/emailValidation";
@@ -1200,11 +1200,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Cancel PayPal subscription if exists
+      let subscriptionCancelled = false;
+      if (user.paypalSubscriptionId) {
+        const cancelResult = await cancelPayPalSubscription(
+          user.paypalSubscriptionId, 
+          'Account archived by administrator'
+        );
+        subscriptionCancelled = cancelResult.success;
+        if (!cancelResult.success) {
+          console.warn(`[Archive User] Failed to cancel PayPal subscription for ${email}: ${cancelResult.error}`);
+        }
+      }
+
       const archivedUser = await storage.archiveUser(user.id, req.session.userId!);
+
+      // Update subscription status to cancelled
+      if (user.paypalSubscriptionId) {
+        await storage.updateUser(user.id, { subscriptionStatus: 'cancelled' });
+      }
 
       res.json({
         success: true,
         message: "User archived",
+        subscriptionCancelled,
         user: {
           ...archivedUser,
           passwordHash: undefined,
@@ -1258,11 +1277,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Cancel PayPal subscription if exists
+      let subscriptionCancelled = false;
+      if (user.paypalSubscriptionId) {
+        const cancelResult = await cancelPayPalSubscription(
+          user.paypalSubscriptionId, 
+          'Account permanently deleted by administrator'
+        );
+        subscriptionCancelled = cancelResult.success;
+        if (!cancelResult.success) {
+          console.warn(`[Delete User] Failed to cancel PayPal subscription for ${email}: ${cancelResult.error}`);
+        }
+      }
+
       const deleted = await storage.deleteUser(user.id);
 
       res.json({
         success: deleted,
         message: deleted ? "User permanently deleted" : "Failed to delete user",
+        subscriptionCancelled,
       });
     } catch (error) {
       console.error("Delete user error:", error);
@@ -1475,6 +1508,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Unauthorized" });
       }
 
+      // Get user to check for PayPal subscription
+      const user = await storage.getUser(id);
+      
+      // Cancel PayPal subscription if exists
+      let subscriptionCancelled = false;
+      if (user?.paypalSubscriptionId) {
+        const cancelResult = await cancelPayPalSubscription(
+          user.paypalSubscriptionId, 
+          'Account deleted by user'
+        );
+        subscriptionCancelled = cancelResult.success;
+        if (!cancelResult.success) {
+          console.warn(`[Self Delete] Failed to cancel PayPal subscription for user ${id}: ${cancelResult.error}`);
+        }
+      }
+
       await storage.deleteUser(id);
       req.session.destroy((err) => {
         if (err) {
@@ -1482,9 +1531,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      res.json({ success: true });
+      res.json({ success: true, subscriptionCancelled });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  // Get subscription payment history
+  app.get("/api/subscriptions/transactions", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (!user.paypalSubscriptionId || user.paypalSubscriptionId === 'manual_activation') {
+        return res.json({ 
+          transactions: [],
+          message: user.paypalSubscriptionId === 'manual_activation' 
+            ? "Manual subscription - no PayPal transactions" 
+            : "No active subscription" 
+        });
+      }
+
+      const result = await getSubscriptionTransactions(user.paypalSubscriptionId);
+      
+      if (!result.success) {
+        return res.status(500).json({ error: result.error || "Failed to fetch transactions" });
+      }
+
+      res.json({ transactions: result.transactions || [] });
+    } catch (error) {
+      console.error("Get subscription transactions error:", error);
+      res.status(500).json({ error: "Failed to fetch subscription transactions" });
     }
   });
 

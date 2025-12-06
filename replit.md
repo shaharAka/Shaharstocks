@@ -46,7 +46,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Database & ORM**: @neondatabase/serverless, Drizzle ORM, drizzle-zod.
 - **Data Management**: @tanstack/react-query, react-hook-form, zod, date-fns.
 - **Integration Points**:
-    - **PayPal**: @paypal/checkout-server-sdk for subscription payments and webhook verification.
+    - **PayPal**: Centralized `paypalService.ts` handles subscription management including webhook verification, automatic subscription cancellation on account archive/deletion, payment history retrieval, and subscription details. Token caching improves API efficiency.
     - **Telegram**: GramJS for MTProto API communication.
     - **SEC Insider Trading Filings**: Automated collection from SEC regulatory data sources.
     - **SEC EDGAR API**: For company filings.

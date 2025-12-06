@@ -681,8 +681,8 @@ export default function Purchase() {
           />
         </div>
         
-        <div className="flex items-center justify-between gap-2 border rounded-md px-3 h-9 w-full sm:w-40">
-          <Label htmlFor="show-all-toggle" className="text-sm font-medium cursor-pointer whitespace-nowrap">
+        <div className="flex items-center justify-between gap-2 border rounded-md px-3 h-9 w-full sm:w-48">
+          <Label htmlFor="show-all-toggle" className="text-sm font-medium cursor-pointer whitespace-nowrap flex-1">
             {showAllOpportunities ? "All" : "Buy Only"}
           </Label>
           <Switch

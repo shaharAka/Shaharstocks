@@ -217,9 +217,9 @@ export const scorecardConfig: ScorecardConfig = {
           missingDataScore: 0,
         },
         transactionSize: {
-          name: "Transaction Size vs Float",
+          name: "Transaction Size",
           weight: 20,
-          description: "Insider transaction value relative to float",
+          description: "Insider transaction value as % of market cap (proxy for significance)",
           thresholds: {
             excellent: { min: 0.5, score: 10 },
             good: { min: 0.1, max: 0.5, score: 8 },

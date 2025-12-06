@@ -487,17 +487,17 @@ export function calculateInsiderSection(data: RawStockData): SectionScore {
     rationale: generateRationale('Recency', recencyScore.measurement !== null ? `${recencyScore.measurement} days` : null, recencyScore.ruleBucket, recencyScore.score)
   };
   
-  // Transaction Size
+  // Transaction Size (as % of market cap)
   const sizeScore = scoreNumericMetric(data.insiderActivity?.transactionSizeVsFloat, 'transactionSize', 'insiderActivity');
   if (sizeScore.ruleBucket === 'missing') missingMetrics.push('transactionSize');
   metrics.transactionSize = {
     name: sectionConfig.metrics.transactionSize.name,
-    measurement: sizeScore.measurement !== null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null,
+    measurement: sizeScore.measurement !== null ? `${(sizeScore.measurement as number).toFixed(4)}% of mkt cap` : null,
     ruleBucket: sizeScore.ruleBucket,
     score: sizeScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.transactionSize.weight,
-    rationale: generateRationale('Size vs Float', sizeScore.measurement !== null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null, sizeScore.ruleBucket, sizeScore.score)
+    rationale: generateRationale('Transaction Size', sizeScore.measurement !== null ? `${(sizeScore.measurement as number).toFixed(4)}% of market cap` : null, sizeScore.ruleBucket, sizeScore.score)
   };
   
   // Insider Role

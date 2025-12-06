@@ -483,7 +483,40 @@ class QueueWorker {
             daysSinceLastTransaction: insiderTradingStrength.tradeDate 
               ? Math.floor((Date.now() - new Date(insiderTradingStrength.tradeDate).getTime()) / (1000 * 60 * 60 * 24))
               : undefined,
-            transactionSizeVsFloat: undefined, // Still requires float data from external source
+            transactionSizeVsFloat: (() => {
+              // Calculate transaction value relative to market cap (proxy for float)
+              // Parse transaction value from formatted string like "$1,234,567.89"
+              const txValueStr = insiderTradingStrength.totalValue;
+              if (!txValueStr || txValueStr === "Unknown") return undefined;
+              const txValue = parseFloat(txValueStr.replace(/[^0-9.-]/g, ''));
+              if (isNaN(txValue) || txValue <= 0) return undefined;
+              
+              // Parse market cap - handle formats like "100B", "50M", "$100,000,000,000", etc.
+              const marketCapStr = comprehensiveFundamentals?.marketCap || companyOverview?.marketCapitalization;
+              if (!marketCapStr) return undefined;
+              
+              let marketCap: number;
+              const cleanedStr = String(marketCapStr).replace(/[,$]/g, '').trim().toUpperCase();
+              
+              if (cleanedStr.endsWith('T')) {
+                marketCap = parseFloat(cleanedStr.slice(0, -1)) * 1e12;
+              } else if (cleanedStr.endsWith('B')) {
+                marketCap = parseFloat(cleanedStr.slice(0, -1)) * 1e9;
+              } else if (cleanedStr.endsWith('M')) {
+                marketCap = parseFloat(cleanedStr.slice(0, -1)) * 1e6;
+              } else if (cleanedStr.endsWith('K')) {
+                marketCap = parseFloat(cleanedStr.slice(0, -1)) * 1e3;
+              } else {
+                marketCap = parseFloat(cleanedStr);
+              }
+              
+              if (isNaN(marketCap) || marketCap <= 0) return undefined;
+              
+              // Return percentage: (transaction value / market cap) * 100
+              const pct = (txValue / marketCap) * 100;
+              console.log(`[QueueWorker] Transaction size vs market cap: $${txValue.toLocaleString()} / $${marketCap.toLocaleString()} = ${pct.toFixed(6)}%`);
+              return pct;
+            })(),
             insiderRoles: normalizeInsiderRoles(insiderTradingStrength.insiderTitle),
           } : undefined,
           newsSentiment: newsSentiment ? {

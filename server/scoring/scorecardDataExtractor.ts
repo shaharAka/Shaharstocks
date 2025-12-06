@@ -268,12 +268,96 @@ export function determineSentimentCondition(
 }
 
 /**
+ * Normalize sentiment trend from stock service format to scorecard format
+ */
+export type ScorecardSentimentTrend = 'strong_positive_shift' | 'improving' | 'stable' | 'worsening' | 'sharp_negative_shift';
+
+export function normalizeSentimentTrend(
+  trend?: 'improving' | 'declining' | 'stable'
+): ScorecardSentimentTrend | undefined {
+  if (trend === undefined) {
+    return undefined;
+  }
+  
+  switch (trend) {
+    case 'improving':
+      return 'improving';
+    case 'declining':
+      return 'worsening';
+    case 'stable':
+      return 'stable';
+    default:
+      return 'stable';
+  }
+}
+
+/**
+ * Normalize insider title to expected role types
+ * Handles multi-role titles (e.g., "Chairman & CEO", "President and COO")
+ * Covers various synonyms and alternative titles used in SEC filings
+ */
+export type InsiderRole = 'ceo' | 'cfo' | 'coo' | 'vp' | 'director' | '10%_holder';
+
+export function normalizeInsiderRoles(
+  insiderTitle?: string
+): InsiderRole[] | undefined {
+  if (!insiderTitle) return undefined;
+  
+  const title = insiderTitle.toLowerCase();
+  const roles: InsiderRole[] = [];
+  
+  // Check for CEO (various executive leader titles)
+  if (title.includes('ceo') || title.includes('chief executive') || 
+      title.includes('president') || title.includes('principal executive') ||
+      title.includes('managing director') || title.includes('general manager') ||
+      title.includes('executive director')) {
+    roles.push('ceo');
+  }
+  // Check for CFO (various finance leader titles)
+  if (title.includes('cfo') || title.includes('chief financial') ||
+      title.includes('principal financial') || title.includes('treasurer') ||
+      title.includes('controller') || title.includes('comptroller') ||
+      title.includes('chief accounting') || title.includes('principal accounting')) {
+    roles.push('cfo');
+  }
+  // Check for COO (various operations leader titles)
+  if (title.includes('coo') || title.includes('chief operating') ||
+      title.includes('principal operating') || title.includes('chief administrative') ||
+      title.includes('chief business') || title.includes('chief strategy')) {
+    roles.push('coo');
+  }
+  // Check for VP (various VP levels)
+  if (title.includes('vp') || title.includes('vice president') || 
+      title.includes('evp') || title.includes('svp') || title.includes('vice-president') ||
+      title.includes('senior vice') || title.includes('executive vice') ||
+      title.includes('group vice') || title.includes('corporate vice')) {
+    roles.push('vp');
+  }
+  // Check for Director (board members and equivalent governance roles)
+  if (title.includes('director') || title.includes('chairman') || title.includes('chairwoman') ||
+      title.includes('chairperson') || title.includes('board member') || title.includes('board chair') ||
+      title.includes('trustee') || title.includes('non-executive') || title.includes('independent member') ||
+      title.includes('lead independent')) {
+    roles.push('director');
+  }
+  // Check for 10% holder (beneficial owners and significant shareholders)
+  if (title.includes('10%') || title.includes('beneficial owner') ||
+      title.includes('10 percent') || title.includes('ten percent') ||
+      title.includes('major shareholder') || title.includes('significant shareholder') ||
+      title.includes('principal shareholder')) {
+    roles.push('10%_holder');
+  }
+  
+  return roles.length > 0 ? roles : undefined;
+}
+
+/**
  * Determine profit margin trend condition string
  */
 export function determineProfitMarginTrend(
   currentMargin?: number,
   previousMargin?: number
-): string | undefined {
+): 'strong_growth' | 'improving' | 'stable' | 'declining' | 'declining_fast' | undefined {
   if (currentMargin === undefined) {
     return undefined;
   }

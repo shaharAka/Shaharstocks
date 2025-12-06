@@ -115,7 +115,7 @@ import {
   systemSettings,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, inArray, lt } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, lt, isNull } from "drizzle-orm";
 import { isStockStale, getStockAgeInDays } from "@shared/time";
 import { eventDispatcher } from "./eventDispatcher";
 
@@ -2535,13 +2535,8 @@ export class DatabaseStorage implements IStorage {
       twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
       const twoWeeksAgoString = twoWeeksAgo.toISOString().split('T')[0]; // Format as YYYY-MM-DD
       
-      // Get all stocks with user statuses, filtered by:
-      // 1. CRITICAL: Stocks must belong to this user (userId)
-      // 2. Global stock status must be 'pending' (not rejected at stock level)
-      // 3. Within last 2 weeks (insiderTradeDate >= 2 weeks ago), OR followed by user
-      // 4. User status filtering happens in frontend (excluded rejected/dismissed)
-      // Note: insiderTradeDate is stored as text (YYYY-MM-DD), so compare with string
-      const results = await db
+      // STEP 1: Get ALL followed stocks for this user (NO LIMIT - these must always appear)
+      const followedResults = await db
         .select({
           stock: stocks,
           userStatus: userStockStatuses.status,
@@ -2551,6 +2546,13 @@ export class DatabaseStorage implements IStorage {
           isFollowing: followedStocks.ticker,
         })
         .from(stocks)
+        .innerJoin(
+          followedStocks,
+          and(
+            eq(stocks.ticker, followedStocks.ticker),
+            eq(followedStocks.userId, userId)
+          )
+        )
         .leftJoin(
           userStockStatuses,
           and(
@@ -2558,24 +2560,78 @@ export class DatabaseStorage implements IStorage {
             eq(userStockStatuses.userId, userId)
           )
         )
-        .leftJoin(
-          followedStocks,
+        .where(
           and(
-            eq(stocks.ticker, followedStocks.ticker),
-            eq(followedStocks.userId, userId)
+            eq(stocks.userId, userId),
+            eq(stocks.recommendationStatus, 'pending')
+          )
+        )
+        .orderBy(desc(stocks.insiderTradeDate));
+      
+      console.log(`[Storage] Found ${followedResults.length} followed stocks (no limit)`);
+      
+      // Build set of followed tickers for deduplication
+      const followedTickerSet = new Set(followedResults.map(r => r.stock.ticker.toUpperCase()));
+      
+      // STEP 2: Get recent NON-followed stocks (with limit, within 2 weeks)
+      const recentNonFollowedResults = await db
+        .select({
+          stock: stocks,
+          userStatus: userStockStatuses.status,
+          userApprovedAt: userStockStatuses.approvedAt,
+          userRejectedAt: userStockStatuses.rejectedAt,
+          userDismissedAt: userStockStatuses.dismissedAt,
+          isFollowing: sql<string | null>`NULL`,
+        })
+        .from(stocks)
+        .leftJoin(
+          userStockStatuses,
+          and(
+            eq(stocks.ticker, userStockStatuses.ticker),
+            eq(userStockStatuses.userId, userId)
           )
         )
         .where(
           and(
-            eq(stocks.userId, userId), // CRITICAL: Filter by user
+            eq(stocks.userId, userId),
             eq(stocks.recommendationStatus, 'pending'),
-            sql`(${stocks.insiderTradeDate} >= ${twoWeeksAgoString} OR ${followedStocks.ticker} IS NOT NULL)`
+            sql`${stocks.insiderTradeDate} >= ${twoWeeksAgoString}`,
+            // Exclude followed stocks (they're already in followedResults)
+            sql`NOT EXISTS (
+              SELECT 1 FROM followed_stocks fs 
+              WHERE fs.ticker = ${stocks.ticker} AND fs.user_id = ${userId}
+            )`
           )
         )
         .orderBy(desc(stocks.insiderTradeDate))
         .limit(limit);
-
-      console.log(`[Storage] Query returned ${results.length} rows`);
+      
+      console.log(`[Storage] Found ${recentNonFollowedResults.length} recent non-followed stocks`);
+      
+      // STEP 3: Merge results - followed stocks first, then recent non-followed
+      const seenTickers = new Set<string>();
+      const dedupedResults: typeof followedResults = [];
+      
+      // Add all followed stocks first (they have priority)
+      for (const row of followedResults) {
+        const upperTicker = row.stock.ticker.toUpperCase();
+        if (!seenTickers.has(upperTicker)) {
+          seenTickers.add(upperTicker);
+          dedupedResults.push(row);
+        }
+      }
+      
+      // Add recent non-followed stocks (guaranteed not to overlap due to NOT EXISTS)
+      for (const row of recentNonFollowedResults) {
+        const upperTicker = row.stock.ticker.toUpperCase();
+        if (!seenTickers.has(upperTicker)) {
+          seenTickers.add(upperTicker);
+          dedupedResults.push(row as typeof followedResults[0]);
+        }
+      }
+      
+      console.log(`[Storage] After merge: ${dedupedResults.length} unique stocks`);
+      console.log(`[Storage] Followed stocks in results: ${dedupedResults.filter(r => r.isFollowing).length}`);
 
       // Get latest AI jobs for all tickers
       const allJobs = await db
@@ -2583,7 +2639,7 @@ export class DatabaseStorage implements IStorage {
         .from(aiAnalysisJobs)
         .where(
           and(
-            inArray(aiAnalysisJobs.ticker, results.map(r => r.stock.ticker)),
+            inArray(aiAnalysisJobs.ticker, dedupedResults.map(r => r.stock.ticker)),
             inArray(aiAnalysisJobs.status, ['pending', 'processing', 'failed'])
           )
         );
@@ -2599,8 +2655,8 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Transform results
-      const transformed = results.map(row => {
+      // Transform deduplicated results
+      const transformed = dedupedResults.map(row => {
         const latestJob = jobsByTicker.get(row.stock.ticker);
         const lastUpdated = row.stock.lastUpdated || new Date();
         

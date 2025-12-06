@@ -24,7 +24,10 @@ import {
   determineInsiderRoleCondition,
   determineSentimentCondition,
   determineProfitMarginTrend,
+  normalizeInsiderRoles,
+  normalizeSentimentTrend,
 } from "./scoring/scorecardDataExtractor";
+import { generateScorecard as generateRuleBasedScorecard } from "./scoring/metricCalculators";
 
 class QueueWorker {
   private running = false;
@@ -449,26 +452,20 @@ class QueueWorker {
               ? Math.floor((Date.now() - new Date(insiderTradingStrength.tradeDate).getTime()) / (1000 * 60 * 60 * 24))
               : undefined,
             transactionSizeVsFloat: undefined, // Still requires float data from external source
-            insiderRoles: insiderTradingStrength.insiderTitle 
-              ? [insiderTradingStrength.insiderTitle.toLowerCase()]
-              : undefined,
-            insiderRoleCondition: determineInsiderRoleCondition(
-              insiderTradingStrength.insiderTitle ? [insiderTradingStrength.insiderTitle.toLowerCase()] : undefined
-            ),
+            insiderRoles: normalizeInsiderRoles(insiderTradingStrength.insiderTitle),
           } : undefined,
           newsSentiment: newsSentiment ? {
             avgSentiment: newsSentiment.aggregateSentiment,
-            sentimentTrend: newsSentiment.sentimentTrend,
-            sentimentCondition: determineSentimentCondition(newsSentiment.sentimentTrend),
+            sentimentTrend: normalizeSentimentTrend(newsSentiment.sentimentTrend),
             newsCount7d: newsSentiment.newsVolume,
             upcomingCatalyst: undefined, // Would need catalyst detection
           } : undefined,
           macroSector: macroAnalysis ? {
             sectorVsSpy10d: undefined, // Would need sector ETF performance data
             macroRiskEnvironment: macroAnalysis.macroScore !== null && macroAnalysis.macroScore !== undefined
-              ? (macroAnalysis.macroScore > 70 ? 'favorable_tailwinds' :
-                 macroAnalysis.macroScore > 50 ? 'low_risk' :
-                 macroAnalysis.macroScore > 30 ? 'neutral' : 'some_headwinds')
+              ? (macroAnalysis.macroScore > 70 ? 'favorable_tailwinds' as const :
+                 macroAnalysis.macroScore > 50 ? 'low_risk' as const :
+                 macroAnalysis.macroScore > 30 ? 'neutral' as const : 'some_headwinds' as const)
               : undefined,
           } : undefined,
         };
@@ -485,7 +482,8 @@ class QueueWorker {
         };
         console.log(`[QueueWorker] Scorecard data availability:`, availableMetrics);
         
-        scorecard = await aiAnalysisService.generateScorecard(scorecardInput);
+        // Use pure rule-based scorecard generation (no LLM dependency, deterministic)
+        scorecard = generateRuleBasedScorecard(scorecardInput);
         console.log(`[QueueWorker] ✅ Scorecard complete: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
       } catch (scorecardError) {
         // Non-fatal: log and continue with analysis save

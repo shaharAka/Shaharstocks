@@ -538,7 +538,7 @@ export default function TickerDetail() {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full h-auto flex flex-wrap gap-1 p-1 sm:grid sm:grid-cols-5 sm:gap-0 sm:h-10 sm:p-1">
           <TabsTrigger value="overview" className="text-[11px] sm:text-sm flex-1 min-w-[60px] h-8 sm:h-auto">Overview</TabsTrigger>
-          <TabsTrigger value="analysis" className="text-[11px] sm:text-sm flex-1 min-w-[40px] h-8 sm:h-auto">AI</TabsTrigger>
+          <TabsTrigger value="analysis" className="text-[11px] sm:text-sm flex-1 min-w-[55px] h-8 sm:h-auto">AI Analysis</TabsTrigger>
           <TabsTrigger value="news" className="text-[11px] sm:text-sm flex-1 min-w-[45px] h-8 sm:h-auto">News</TabsTrigger>
           <TabsTrigger value="insider" className="text-[11px] sm:text-sm flex-1 min-w-[55px] h-8 sm:h-auto">Insider</TabsTrigger>
           <TabsTrigger value="discussion" className="text-[11px] sm:text-sm flex-1 min-w-[60px] h-8 sm:h-auto">

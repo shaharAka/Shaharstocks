@@ -446,6 +446,9 @@ export default function Purchase() {
         return;
       }
 
+      // Check if user has recently viewed this stock
+      const isRecentlyViewed = viewedTickers.includes(group.latestTransaction.ticker);
+
       // SELL opportunity logic (unified signal scale: higher = better opportunity)
       if (isSell) {
         // High Signal: Score >= 70 (high confidence SELL opportunity)
@@ -456,8 +459,8 @@ export default function Purchase() {
         else if (score < 40 && group.transactionCount === 1) {
           sections.rejected.push(group);
         }
-        // Recents: Score 40-69 and < 2 days old
-        else if (score >= 40 && score < 70 && group.daysSinceLatest < 2) {
+        // Recently Viewed: User has viewed this stock
+        else if (isRecentlyViewed) {
           sections.recents.push(group);
         }
       }
@@ -471,8 +474,8 @@ export default function Purchase() {
         else if (score >= 70) {
           sections.worthExploring.push(group);
         }
-        // Recents: Score 40-69 and < 2 days old
-        else if (score >= 40 && score < 70 && group.daysSinceLatest < 2) {
+        // Recently Viewed: User has viewed this stock
+        else if (isRecentlyViewed) {
           sections.recents.push(group);
         }
       }
@@ -517,7 +520,7 @@ export default function Purchase() {
     sections.communityPicks = sortGroupedStocks(sections.communityPicks);
 
     return { groupedStocks: groupedArray, funnelSections: sections };
-  }, [stocks, analyses, sortBy, tickerSearch, showAllOpportunities, followedStocks, users, commentCounts, openinsiderConfig]);
+  }, [stocks, analyses, sortBy, tickerSearch, showAllOpportunities, followedStocks, users, commentCounts, openinsiderConfig, viewedTickers]);
 
   // Get current section's stocks and flatten for rendering
   const groupedOpportunities = funnelSections[funnelSection] || [];
@@ -745,7 +748,7 @@ export default function Purchase() {
           onClick={() => setFunnelSection("recents")}
           data-testid="filter-recents"
         >
-          Recent ({funnelSections.recents?.length || 0})
+          Viewed ({funnelSections.recents?.length || 0})
         </Badge>
         <Badge
           variant={funnelSection === "processing" ? "default" : "outline"}

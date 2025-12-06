@@ -12,7 +12,7 @@ import { Link, useLocation } from "wouter";
 import { TrendingUp, ArrowLeft, CheckCircle2, ShieldAlert, Zap, TrendingUpIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import signalBackground from "@assets/moving_signal_boomerang_1765052569624.gif";
+import signalBackground from "@assets/moving_signal_boomerang_slow.gif";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),

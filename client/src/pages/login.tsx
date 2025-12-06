@@ -12,7 +12,7 @@ import { Activity, AlertCircle, TrendingUpIcon, Zap, ShieldAlert } from "lucide-
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState, useEffect } from "react";
-import signalBackground from "@assets/moving_signal_boomerang_1765052569624.gif";
+import signalBackground from "@assets/moving_signal_boomerang_slow.gif";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),

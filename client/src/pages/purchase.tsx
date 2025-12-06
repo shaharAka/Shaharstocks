@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -523,38 +523,6 @@ export default function Purchase() {
     aiScore: group.highestScore,
     isFollowing: group.isFollowing,
   }));
-
-  // Auto-mark stocks as viewed when they appear in the list
-  // This ensures the "new" badge count stays accurate
-  const markedTickersRef = useRef<Set<string>>(new Set());
-  
-  useEffect(() => {
-    if (opportunities.length > 0 && currentUser?.id && !isLoading) {
-      const tickers = opportunities.map(opp => opp.ticker);
-      // Only mark non-viewed tickers that haven't been marked in this session yet
-      const newTickers = tickers.filter(
-        ticker => !viewedTickers.includes(ticker) && !markedTickersRef.current.has(ticker)
-      );
-      
-      if (newTickers.length > 0) {
-        // Mark as "being processed" to prevent re-submission
-        newTickers.forEach(ticker => markedTickersRef.current.add(ticker));
-        
-        // Call bulk-view endpoint
-        apiRequest("POST", "/api/stocks/bulk-view", { tickers: newTickers })
-          .then(() => {
-            // Invalidate viewed tickers cache to update badge
-            queryClient.invalidateQueries({ queryKey: ["/api/stock-views", currentUser.id] });
-          })
-          .catch(err => {
-            console.error("Failed to mark stocks as viewed:", err);
-            // Remove from ref on error so it can be retried
-            newTickers.forEach(ticker => markedTickersRef.current.delete(ticker));
-          });
-      }
-    }
-  }, [opportunities, currentUser?.id, isLoading, viewedTickers]);
-
 
   if (isLoading) {
     return (

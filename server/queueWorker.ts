@@ -35,6 +35,9 @@ class QueueWorker {
   private idleInterval = 10000; // Poll every 10 seconds when queue is empty
   private processingCount = 0;
   private maxConcurrent = 1; // Process one job at a time for now
+  private stuckJobTimeoutMs = 30 * 60 * 1000; // 30 minutes timeout for stuck jobs
+  private lastStuckJobCleanup = 0;
+  private stuckJobCleanupInterval = 5 * 60 * 1000; // Check for stuck jobs every 5 minutes
 
   /**
    * Update job progress with current step and details
@@ -86,6 +89,32 @@ class QueueWorker {
     this.running = false;
   }
 
+  /**
+   * Reset jobs that have been stuck in 'processing' state for too long
+   * This handles cases where the worker crashed or timed out during processing
+   */
+  private async cleanupStuckJobs(): Promise<number> {
+    const now = Date.now();
+    
+    // Only run cleanup every 5 minutes to avoid excessive queries
+    if (now - this.lastStuckJobCleanup < this.stuckJobCleanupInterval) {
+      return 0;
+    }
+    
+    this.lastStuckJobCleanup = now;
+    
+    try {
+      const resetCount = await storage.resetStuckProcessingJobs(this.stuckJobTimeoutMs);
+      if (resetCount > 0) {
+        console.log(`[QueueWorker] 🔄 Reset ${resetCount} stuck processing job(s)`);
+      }
+      return resetCount;
+    } catch (error) {
+      console.error("[QueueWorker] Error cleaning up stuck jobs:", error);
+      return 0;
+    }
+  }
+
   private async processLoop() {
     console.log("[QueueWorker] ✅ Process loop started, running =", this.running);
     
@@ -95,6 +124,9 @@ class QueueWorker {
       console.log(`[QueueWorker] 🔄 Loop iteration ${iterationCount}, processingCount = ${this.processingCount}`);
       
       try {
+        // Periodically clean up stuck processing jobs
+        await this.cleanupStuckJobs();
+        
         // Check if we can process more jobs
         if (this.processingCount < this.maxConcurrent) {
           console.log("[QueueWorker] 📥 Polling for jobs...");

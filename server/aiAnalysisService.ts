@@ -30,6 +30,22 @@ const openai = new OpenAI({
 // Current AI provider configuration (will be loaded from database)
 let currentProviderConfig: AIProviderConfig = { provider: "openai" };
 
+/**
+ * Strip markdown code fences from JSON response
+ * Handles formats like: ```json\n{...}\n```, ```\n{...}\n```, or just {...}
+ */
+function stripMarkdownCodeBlocks(content: string): string {
+  let cleaned = content.trim();
+  if (cleaned.startsWith('```')) {
+    // Remove opening fence (```json or ```)
+    cleaned = cleaned.replace(/^```(?:json|JSON)?\s*\n?/, '');
+    // Remove closing fence
+    cleaned = cleaned.replace(/\n?```\s*$/, '');
+    cleaned = cleaned.trim();
+  }
+  return cleaned;
+}
+
 export interface FinancialAnalysis {
   ticker: string;
   overallRating: "strong_buy" | "buy" | "hold" | "avoid" | "strong_avoid";
@@ -388,7 +404,8 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
         responseFormat: "json"
       });
 
-      const analysis = JSON.parse(content || "{}");
+      const cleanedContent = stripMarkdownCodeBlocks(content || "{}");
+      const analysis = JSON.parse(cleanedContent);
 
       // Add metadata
       return {
@@ -840,7 +857,8 @@ Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
         responseFormat: "json"
       });
 
-      const brief = JSON.parse(content || "{}");
+      const cleanedContent = stripMarkdownCodeBlocks(content || "{}");
+      const brief = JSON.parse(cleanedContent);
       
       // Validate and enforce word limit on briefText
       const wordCount = brief.briefText?.split(/\s+/).length || 0;
@@ -988,7 +1006,8 @@ REMEMBER: This is a 1-2 WEEK trading horizon. Weight short-term catalysts and mo
         responseFormat: "json"
       });
 
-      const llmResponse = JSON.parse(content || "{}");
+      const cleanedContent2 = stripMarkdownCodeBlocks(content || "{}");
+      const llmResponse = JSON.parse(cleanedContent2);
       
       // Build the full scorecard from LLM response
       return this.buildScorecardFromLLMResponse(llmResponse, ticker);

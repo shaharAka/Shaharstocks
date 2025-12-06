@@ -340,6 +340,7 @@ export interface IStorage {
   markStockAnalysisPhaseComplete(ticker: string, phase: 'micro' | 'macro' | 'combined'): Promise<void>;
   getStocksWithIncompleteAnalysis(): Promise<Stock[]>;
   getQueueStats(): Promise<{ pending: number; processing: number; completed: number; failed: number }>;
+  resetStuckProcessingJobs(timeoutMs: number): Promise<number>;
 
   // Macro Analysis
   getLatestMacroAnalysis(industry?: string | null): Promise<MacroAnalysis | undefined>;
@@ -3321,6 +3322,24 @@ export class DatabaseStorage implements IStorage {
     }
 
     return result;
+  }
+
+  async resetStuckProcessingJobs(timeoutMs: number): Promise<number> {
+    // Reset jobs that have been stuck in 'processing' state for longer than the timeout
+    // This handles cases where the worker crashed or timed out during processing
+    const timeoutInterval = `${Math.floor(timeoutMs / 1000)} seconds`;
+    
+    const result = await db.execute(sql`
+      UPDATE ${aiAnalysisJobs}
+      SET status = 'pending',
+          started_at = NULL,
+          retry_count = retry_count + 1
+      WHERE status = 'processing'
+        AND started_at < NOW() - INTERVAL '${sql.raw(timeoutInterval)}'
+    `);
+    
+    // Return the number of affected rows
+    return (result as any).rowCount || 0;
   }
 
   // Macro Analysis Methods

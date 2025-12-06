@@ -175,44 +175,50 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
       <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6">
-        <Card className="md:flex md:flex-col md:justify-center">
-          <CardHeader>
-            <div className="flex items-center gap-2 mb-2">
-              <Activity className="h-8 w-8 text-primary" />
-              <CardTitle className="text-3xl font-bold">signal2</CardTitle>
+        <Card className="md:flex md:flex-col md:justify-center border-0 shadow-none bg-transparent">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-3 mb-4">
+              <Activity className="h-10 w-10 text-primary" />
+              <CardTitle className="text-4xl font-bold tracking-tight">signal2</CardTitle>
             </div>
-            <CardDescription className="text-base">
+            <CardDescription className="text-lg text-foreground/80">
               Find high-conviction trades by following what insiders know
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <TrendingUpIcon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+          <CardContent className="pt-6">
+            <div className="space-y-6">
+              <div className="flex items-start gap-4">
+                <div className="rounded-lg bg-primary/10 p-2.5 flex-shrink-0">
+                  <TrendingUpIcon className="h-5 w-5 text-primary" />
+                </div>
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Insider Trading Signals</h3>
-                  <p className="text-sm text-muted-foreground">
-                    SEC insider transactions scored by AI on a 0-100 scale. Filter noise and surface the strongest opportunities based on fundamentals, sector trends, and insider conviction.
+                  <h3 className="font-semibold mb-1">Insider Trading Signals</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    SEC insider transactions scored by AI on a 0-100 scale. Filter noise and surface the strongest opportunities.
                   </p>
                 </div>
               </div>
               
-              <div className="flex items-start gap-3">
-                <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-4">
+                <div className="rounded-lg bg-primary/10 p-2.5 flex-shrink-0">
+                  <Zap className="h-5 w-5 text-primary" />
+                </div>
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">AI Analysis on Your Watchlist</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Follow stocks and get daily AI briefs with updated recommendations. Track positions with P&L and know when the thesis changes.
+                  <h3 className="font-semibold mb-1">AI Analysis on Your Watchlist</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Follow stocks and get daily AI briefs with updated recommendations. Track positions with P&L.
                   </p>
                 </div>
               </div>
               
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-4">
+                <div className="rounded-lg bg-primary/10 p-2.5 flex-shrink-0">
+                  <ShieldAlert className="h-5 w-5 text-primary" />
+                </div>
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Smart Alerts</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Set price and condition rules to get notified when it matters. Never miss a signal change, price target, or high-score opportunity.
+                  <h3 className="font-semibold mb-1">Smart Alerts</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Set rules to get notified when it matters. Never miss a signal change or high-score opportunity.
                   </p>
                 </div>
               </div>

@@ -182,7 +182,7 @@ export default function Login() {
               <CardTitle className="text-3xl font-bold">signal2</CardTitle>
             </div>
             <CardDescription className="text-base">
-              Stock analysis dashboard with AI-powered insider trading signals
+              Find high-conviction trades by following what insiders know
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -192,7 +192,7 @@ export default function Login() {
                 <div>
                   <h3 className="font-semibold text-sm mb-1">Insider Trading Signals</h3>
                   <p className="text-sm text-muted-foreground">
-                    Track SEC insider transactions analyzed by AI. Get scored recommendations combining fundamental data and sector momentum to identify high-conviction opportunities.
+                    SEC insider transactions scored by AI on a 0-100 scale. Filter noise and surface the strongest opportunities based on fundamentals, sector trends, and insider conviction.
                   </p>
                 </div>
               </div>
@@ -200,9 +200,9 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Watchlist & Position Tracking</h3>
+                  <h3 className="font-semibold text-sm mb-1">AI Analysis on Your Watchlist</h3>
                   <p className="text-sm text-muted-foreground">
-                    Follow stocks you're interested in. Track your positions with P&L calculations and receive daily AI briefs on your watchlist.
+                    Follow stocks and get daily AI briefs with updated recommendations. Track positions with P&L and know when the thesis changes.
                   </p>
                 </div>
               </div>
@@ -210,9 +210,9 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Backtesting & Simulation</h3>
+                  <h3 className="font-semibold text-sm mb-1">Smart Alerts</h3>
                   <p className="text-sm text-muted-foreground">
-                    Test trading strategies with historical data. Visualize price movements with simulation charts to validate your approach before committing.
+                    Set price and condition rules to get notified when it matters. Never miss a signal change, price target, or high-score opportunity.
                   </p>
                 </div>
               </div>

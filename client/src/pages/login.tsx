@@ -12,6 +12,7 @@ import { Activity, AlertCircle, TrendingUpIcon, Zap, ShieldAlert } from "lucide-
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState, useEffect } from "react";
+import signalBackground from "@assets/moving_signal_boomerang_1765052569624.gif";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -173,8 +174,17 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 relative"
+      style={{
+        backgroundImage: `url(${signalBackground})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center bottom',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      <div className="absolute inset-0 bg-background/85 dark:bg-background/90" />
+      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6 relative z-10">
         <Card className="md:flex md:flex-col md:justify-center border-0 shadow-none bg-transparent">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-3 mb-4">

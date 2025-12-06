@@ -12,6 +12,7 @@ import { Link, useLocation } from "wouter";
 import { TrendingUp, ArrowLeft, CheckCircle2, ShieldAlert, Zap, TrendingUpIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import signalBackground from "@assets/moving_signal_boomerang_1765052569624.gif";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -208,8 +209,17 @@ export default function Signup() {
 
   if (signupSuccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-        <Card className="w-full max-w-2xl">
+      <div 
+        className="min-h-screen flex items-center justify-center p-4 relative"
+        style={{
+          backgroundImage: `url(${signalBackground})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center bottom',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        <div className="absolute inset-0 bg-background/85 dark:bg-background/90" />
+        <Card className="w-full max-w-2xl relative z-10">
           <CardHeader className="text-center space-y-4">
             <div className="flex justify-center">
               <CheckCircle2 className="h-16 w-16 text-green-500" />
@@ -269,8 +279,17 @@ export default function Signup() {
 
   if (showPayPal) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-        <Card className="w-full max-w-4xl">
+      <div 
+        className="min-h-screen flex items-center justify-center p-4 relative"
+        style={{
+          backgroundImage: `url(${signalBackground})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center bottom',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        <div className="absolute inset-0 bg-background/85 dark:bg-background/90" />
+        <Card className="w-full max-w-4xl relative z-10">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
               <CheckCircle2 className="h-8 w-8 text-green-500" />
@@ -346,8 +365,17 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 relative"
+      style={{
+        backgroundImage: `url(${signalBackground})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center bottom',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      <div className="absolute inset-0 bg-background/85 dark:bg-background/90" />
+      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6 relative z-10">
         <Card className="md:flex md:flex-col md:justify-center">
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">

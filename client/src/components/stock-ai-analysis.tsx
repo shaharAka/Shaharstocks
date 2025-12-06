@@ -13,7 +13,9 @@ import {
   Eye,
   Zap,
   Clock,
-  RotateCcw
+  RotateCcw,
+  Users,
+  Newspaper
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -373,57 +375,55 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
             </div>
           )}
 
-          {/* Supporting Metrics (Micro + Macro Breakdown) */}
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="metrics">
-              <AccordionTrigger className="text-xs sm:text-sm" data-testid="button-toggle-metrics">
-                View Signal Components
-              </AccordionTrigger>
-              <AccordionContent className="space-y-3 sm:space-y-4 pt-2">
-                {/* Micro Score (Company Analysis) */}
-                {analysis.confidenceScore != null && (
-                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
-                    <div className="flex items-center gap-2">
-                      <Brain className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs sm:text-sm font-medium">Company Analysis</span>
+          {/* Supporting Metrics - Scorecard Section Breakdown */}
+          {(analysis as any).scorecard?.sections && (
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="metrics">
+                <AccordionTrigger className="text-xs sm:text-sm" data-testid="button-toggle-metrics">
+                  View Signal Components
+                </AccordionTrigger>
+                <AccordionContent className="space-y-2 sm:space-y-3 pt-2">
+                  {/* Render each scorecard section */}
+                  {Object.entries((analysis as any).scorecard.sections).map(([sectionKey, section]: [string, any]) => {
+                    const sectionIcons: Record<string, any> = {
+                      fundamentals: Brain,
+                      technicals: TrendingUp,
+                      insiderActivity: Users,
+                      newsSentiment: Newspaper,
+                      macroSector: Globe,
+                    };
+                    const Icon = sectionIcons[sectionKey] || Brain;
+                    const score = section?.score ?? 0;
+                    const scoreColor = score >= 70 
+                      ? "text-emerald-600 dark:text-emerald-400" 
+                      : score >= 50 
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-red-500/70 dark:text-red-400/70";
+                    const statusIcon = score >= 70 ? "✓" : score >= 40 ? "~" : "✗";
+                    
+                    return (
+                      <div key={sectionKey} className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-xs sm:text-sm font-medium">{section?.name || sectionKey}</span>
+                        </div>
+                        <span className={`text-xs sm:text-sm font-mono font-semibold ${scoreColor}`} data-testid={`text-section-score-${sectionKey}`}>
+                          {score}/100 {statusIcon}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Global score summary */}
+                  {(analysis as any).scorecard?.globalScore != null && (
+                    <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
+                      Integrated Signal: {(analysis as any).scorecard.globalScore}/100 ({(analysis as any).scorecard?.confidence || 'medium'} confidence)
                     </div>
-                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-micro-score">
-                      {analysis.confidenceScore}/100
-                    </span>
-                  </div>
-                )}
-
-                {/* Macro Factor (Market Context) */}
-                {macroAnalysis?.macroFactor != null && (
-                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs sm:text-sm font-medium">Market Context</span>
-                    </div>
-                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-macro-factor">
-                      ×{macroAnalysis.macroFactor}
-                    </span>
-                  </div>
-                )}
-
-                {/* Calculation - only show if we have integrated score and both components */}
-                {analysis.integratedScore != null && 
-                 macroAnalysis?.macroFactor != null && 
-                 analysis.confidenceScore != null && (
-                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
-                    Signal derived from Company Analysis ({analysis.confidenceScore}) adjusted by Market Context (×{macroAnalysis.macroFactor})
-                  </div>
-                )}
-                
-                {/* If only company score exists (no macro integration yet) */}
-                {analysis.integratedScore == null && analysis.confidenceScore != null && (
-                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
-                    Signal based on Company Analysis only (Market Context pending)
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          )}
         </CardContent>
       </Card>
 

@@ -58,12 +58,13 @@ export interface FinancialAnalysis {
   confidenceScore: number; // 0-100
   summary: string;
   // NEW: Section-aligned explanations that map to the 5 scorecard sections
-  sectionExplanations: {
-    fundamentals: SectionExplanation;
-    technicals: SectionExplanation;
-    insiderActivity: SectionExplanation;
-    newsSentiment: SectionExplanation;
-    macroSector: SectionExplanation;
+  // Optional since AI may not always return all sections
+  sectionExplanations?: {
+    fundamentals?: SectionExplanation;
+    technicals?: SectionExplanation;
+    insiderActivity?: SectionExplanation;
+    newsSentiment?: SectionExplanation;
+    macroSector?: SectionExplanation;
   };
   // Legacy fields - kept for backward compatibility
   financialHealth: {

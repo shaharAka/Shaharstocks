@@ -29,6 +29,77 @@ import {
 } from "./scoring/scorecardDataExtractor";
 import { generateScorecard as generateRuleBasedScorecard } from "./scoring/metricCalculators";
 
+/**
+ * Validate and normalize sectionExplanations from AI response
+ * Ensures each section has the expected structure with meaningful defaults
+ * Provides placeholder text for missing sections rather than empty strings
+ */
+function validateSectionExplanations(raw: any): {
+  fundamentals?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+  technicals?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+  insiderActivity?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+  newsSentiment?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+  macroSector?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+} | undefined {
+  if (!raw || typeof raw !== 'object') {
+    console.log('[QueueWorker] sectionExplanations not provided by AI');
+    return undefined;
+  }
+  
+  const sectionLabels: Record<string, string> = {
+    fundamentals: 'Fundamentals',
+    technicals: 'Technicals',
+    insiderActivity: 'Insider Activity',
+    newsSentiment: 'News Sentiment',
+    macroSector: 'Macro/Sector',
+  };
+  
+  const validateSection = (section: any, sectionName: string) => {
+    if (!section || typeof section !== 'object') {
+      // Return a placeholder for missing sections
+      return {
+        summary: `${sectionLabels[sectionName]} analysis not available for this stock.`,
+        keyFactors: [],
+        outlook: 'neutral' as const,
+      };
+    }
+    const validOutlooks = ['bullish', 'neutral', 'bearish'];
+    const summary = typeof section.summary === 'string' && section.summary.trim() 
+      ? section.summary 
+      : `${sectionLabels[sectionName]} analysis pending.`;
+    return {
+      summary,
+      keyFactors: Array.isArray(section.keyFactors) 
+        ? section.keyFactors.filter((f: any) => typeof f === 'string' && f.trim()) 
+        : [],
+      outlook: validOutlooks.includes(section.outlook) ? section.outlook : 'neutral',
+    };
+  };
+  
+  const result: any = {};
+  const sectionKeys = ['fundamentals', 'technicals', 'insiderActivity', 'newsSentiment', 'macroSector'];
+  let hasValidData = false;
+  
+  for (const key of sectionKeys) {
+    const validated = validateSection(raw[key], key);
+    result[key] = validated;
+    // Track if we got any real data from the AI
+    if (raw[key] && typeof raw[key] === 'object') {
+      hasValidData = true;
+    }
+  }
+  
+  // Only return if AI provided at least some real data
+  // This avoids storing purely placeholder data
+  if (hasValidData) {
+    console.log(`[QueueWorker] Validated sectionExplanations: ${Object.keys(raw).filter(k => raw[k]).length}/5 sections provided`);
+    return result;
+  }
+  
+  console.log('[QueueWorker] sectionExplanations empty or malformed, skipping storage');
+  return undefined;
+}
+
 class QueueWorker {
   private running = false;
   private pollInterval = 2000; // Poll every 2 seconds when queue is active
@@ -604,6 +675,7 @@ class QueueWorker {
         integratedScore: scorecard ? scorecard.globalScore : integratedScore, // Use scorecard global score if available
         scorecard: scorecard || undefined,
         scorecardVersion: scorecard ? scorecard.version : undefined,
+        sectionExplanations: validateSectionExplanations(analysis.sectionExplanations),
       });
 
       // Set combined flag after integrated score is saved

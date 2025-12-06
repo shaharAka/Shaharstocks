@@ -194,6 +194,14 @@ export const stockAnalyses = pgTable("stock_analyses", {
   macroAnalysisId: varchar("macro_analysis_id").references(() => macroAnalyses.id), // Reference to the macro analysis used
   integratedScore: integer("integrated_score"), // Final score combining micro + macro (0-100)
   scoreAdjustment: text("score_adjustment"), // Explanation of how macro adjusted the score
+  // AI-generated section explanations aligned with the 5 scorecard sections
+  sectionExplanations: jsonb("section_explanations").$type<{
+    fundamentals?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+    technicals?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+    insiderActivity?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+    newsSentiment?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+    macroSector?: { summary: string; keyFactors: string[]; outlook: "bullish" | "neutral" | "bearish" };
+  }>(),
   // Rule-based scorecard with per-metric breakdowns for explainable scoring
   scorecard: jsonb("scorecard").$type<{
     version: string;

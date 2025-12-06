@@ -128,16 +128,19 @@ export default function Purchase() {
     }
   }, [currentUser?.showAllOpportunities]);
 
-  // Fetch opportunities - auto-refresh every 15 seconds since WebSocket is disabled
+  // Fetch opportunities - refresh on window focus and after stale time
   const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
-    refetchInterval: 15000, // Poll every 15 seconds for updates
+    staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
+    refetchOnWindowFocus: true,
   });
 
-  // Fetch AI analyses - auto-refresh every 10 seconds to catch completed AI jobs
+  // Fetch AI analyses - poll every 30 seconds to catch completed AI jobs while user is on page
   const { data: analyses = [] } = useQuery<any[]>({
     queryKey: ["/api/stock-analyses"],
-    refetchInterval: 10000, // Poll every 10 seconds to update processing → analyzed
+    staleTime: 30 * 1000, // Consider fresh for 30 seconds
+    refetchOnWindowFocus: true,
+    refetchInterval: 60 * 1000, // Poll every 60 seconds for AI analysis completion
   });
 
   // Fetch users

@@ -23,22 +23,20 @@ export function useNewStocksCount(showAllOpportunities: boolean = false) {
   
   const { data: stocks = [] } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchOnWindowFocus: true,
-    refetchInterval: 30000, // Poll every 30 seconds for new opportunities
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    refetchOnWindowFocus: true, // Refresh when user returns to tab
   });
 
   const { data: analyses = [] } = useQuery<any[]>({
     queryKey: ["/api/stock-analyses"],
-    staleTime: 30000,
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
-    refetchInterval: 30000, // Poll every 30 seconds for AI analysis updates
   });
 
   const { data: viewedTickers = [] } = useQuery<string[]>({
     queryKey: ["/api/stock-views", user?.id],
     enabled: !!user,
-    staleTime: 30000,
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
   });
 

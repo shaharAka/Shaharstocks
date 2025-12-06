@@ -283,9 +283,8 @@ export default function FollowedDashboard() {
   // Fetch top high-signal opportunities (already filtered by backend)
   const { data: topOpportunities = [], isLoading: isLoadingOpportunities } = useQuery<StockWithAnalysis[]>({
     queryKey: ["/api/stocks/top-signals"],
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
     refetchOnWindowFocus: true, // Refresh when user returns to tab
-    refetchInterval: 30000, // Poll every 30 seconds for new high-signal opportunities
     retry: false,
     meta: { ignoreError: true },
   });

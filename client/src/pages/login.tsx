@@ -182,7 +182,7 @@ export default function Login() {
               <CardTitle className="text-3xl font-bold">signal2</CardTitle>
             </div>
             <CardDescription className="text-base">
-              Professional stock trading dashboard with AI-powered analysis
+              Stock analysis dashboard with AI-powered insider trading signals
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -192,7 +192,7 @@ export default function Login() {
                 <div>
                   <h3 className="font-semibold text-sm mb-1">Insider Trading Signals</h3>
                   <p className="text-sm text-muted-foreground">
-                    Track SEC insider transactions with dual-agent AI analysis combining fundamental data and sector momentum. Get AI-scored buy/sell recommendations with personalized filters.
+                    Track SEC insider transactions analyzed by AI. Get scored recommendations combining fundamental data and sector momentum to identify high-conviction opportunities.
                   </p>
                 </div>
               </div>
@@ -200,9 +200,9 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Real-Time Portfolio Tracking</h3>
+                  <h3 className="font-semibold text-sm mb-1">Watchlist & Position Tracking</h3>
                   <p className="text-sm text-muted-foreground">
-                    Monitor holdings with live P&L tracking, automated price updates, and intelligent notifications for high-value opportunities and position changes.
+                    Follow stocks you're interested in. Track your positions with P&L calculations and receive daily AI briefs on your watchlist.
                   </p>
                 </div>
               </div>
@@ -210,9 +210,9 @@ export default function Login() {
               <div className="flex items-start gap-3">
                 <ShieldAlert className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-sm mb-1">Automated Trading Rules</h3>
+                  <h3 className="font-semibold text-sm mb-1">Backtesting & Simulation</h3>
                   <p className="text-sm text-muted-foreground">
-                    Create trigger-based rules for automated trade execution. Backtest strategies with historical data and visualize performance with simulation charts.
+                    Test trading strategies with historical data. Visualize price movements with simulation charts to validate your approach before committing.
                   </p>
                 </div>
               </div>

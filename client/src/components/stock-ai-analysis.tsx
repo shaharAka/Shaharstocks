@@ -10,16 +10,13 @@ import {
   AlertCircle, 
   Globe,
   Target,
-  Eye,
-  Zap,
-  Clock,
   RotateCcw,
   Users,
   Newspaper
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { StockAnalysis, MacroAnalysis } from "@shared/schema";
+import type { StockAnalysis } from "@shared/schema";
 import {
   Accordion,
   AccordionContent,
@@ -27,7 +24,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { TermTooltip } from "@/components/term-tooltip";
-import { ScorecardDisplay } from "@/components/scorecard-display";
 
 interface StockAIAnalysisProps {
   ticker: string;
@@ -113,18 +109,6 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         return 3000;
       }
       return false;
-    },
-  });
-
-  const { data: macroAnalysis } = useQuery<MacroAnalysis | null>({
-    queryKey: ["/api/macro-analysis", analysis?.macroAnalysisId],
-    enabled: analysis?.macroAnalysisId != null,
-    queryFn: async () => {
-      if (analysis?.macroAnalysisId == null) return null;
-      const response = await fetch(`/api/macro-analysis/${analysis.macroAnalysisId}`);
-      if (response.status === 404) return null;
-      if (!response.ok) throw new Error("Failed to fetch macro analysis");
-      return response.json();
     },
   });
 
@@ -307,368 +291,227 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     );
   }
 
+  // Helper to get signal label from score
+  const getSignalLabel = (score: number | null | undefined): string => {
+    if (score == null) return "Analyzing...";
+    if (score >= 75) return "Strong Buy";
+    if (score >= 60) return "Moderate Buy";
+    if (score >= 45) return "Hold";
+    if (score >= 30) return "Weak";
+    return "Avoid";
+  };
+
+  const globalScore = (analysis as any).scorecard?.globalScore ?? analysis.integratedScore;
+  const signalLabel = getSignalLabel(globalScore);
+  const scoreColor = globalScore >= 70 
+    ? "text-emerald-600 dark:text-emerald-400" 
+    : globalScore >= 50 
+      ? "text-amber-600 dark:text-amber-400"
+      : "text-red-500/70 dark:text-red-400/70";
+
   // Render completed AI Playbook
   return (
     <div className="space-y-3 sm:space-y-4">
-      {/* Section 1: Signal Drivers - Why this score */}
+      {/* Section 1: AI Playbook - Front and Center */}
       <Card>
         <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-            <Target className="h-4 sm:h-5 w-4 sm:w-5" />
-            Signal Drivers
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-          {analysis.summary && (
-            <p className="text-xs sm:text-sm leading-relaxed" data-testid="text-signal-drivers">
-              {analysis.summary}
-            </p>
-          )}
-
-          {analysis.strengths && analysis.strengths.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400">
-                <TrendingUp className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
-                <span>Key Strengths</span>
-              </div>
-              <ul className="space-y-1">
-                {analysis.strengths.map((strength: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="text-amber-600 dark:text-amber-400 shrink-0">•</span>
-                    <span className="flex-1">{strength}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {(analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Fundamental Signals</div>
-              <ul className="space-y-1">
-                {(analysis as any).fundamentalSignals.map((signal: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <Zap className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                    <span className="flex-1">{signal}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {(analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="text-xs sm:text-sm font-medium">SEC Filing Insights</div>
-                {(analysis as any).secFilingType && (
-                  <Badge variant="outline" className="text-[10px] sm:text-xs">{(analysis as any).secFilingType}</Badge>
-                )}
-              </div>
-              <ul className="space-y-1">
-                {(analysis as any).secFilingInsights.map((insight: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="shrink-0">•</span>
-                    <span className="flex-1">{insight}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Supporting Metrics - Scorecard Section Breakdown with AI Explanations */}
-          {(analysis as any).scorecard?.sections && (
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="metrics">
-                <AccordionTrigger className="text-xs sm:text-sm" data-testid="button-toggle-metrics">
-                  View Signal Components
-                </AccordionTrigger>
-                <AccordionContent className="space-y-2 sm:space-y-3 pt-2">
-                  {/* Render each scorecard section with AI explanation */}
-                  {Object.entries((analysis as any).scorecard.sections).map(([sectionKey, section]: [string, any]) => {
-                    const sectionIcons: Record<string, any> = {
-                      fundamentals: Brain,
-                      technicals: TrendingUp,
-                      insiderActivity: Users,
-                      newsSentiment: Newspaper,
-                      macroSector: Globe,
-                    };
-                    const Icon = sectionIcons[sectionKey] || Brain;
-                    const score = section?.score ?? 0;
-                    const scoreColor = score >= 70 
-                      ? "text-emerald-600 dark:text-emerald-400" 
-                      : score >= 50 
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-red-500/70 dark:text-red-400/70";
-                    const statusIcon = score >= 70 ? "✓" : score >= 40 ? "~" : "✗";
-                    
-                    const sectionExplanation = (analysis as any).sectionExplanations?.[sectionKey];
-                    const outlookColors: Record<string, string> = {
-                      bullish: "text-emerald-600 dark:text-emerald-400",
-                      neutral: "text-amber-600 dark:text-amber-400",
-                      bearish: "text-red-500/70 dark:text-red-400/70"
-                    };
-                    
-                    return (
-                      <div key={sectionKey} className="p-2 sm:p-3 bg-muted/30 rounded-lg space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Icon className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="text-xs sm:text-sm font-medium">{section?.name || sectionKey}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {sectionExplanation?.outlook && (
-                              <span className={`text-[10px] sm:text-xs font-medium capitalize ${outlookColors[sectionExplanation.outlook] || ''}`}>
-                                {sectionExplanation.outlook}
-                              </span>
-                            )}
-                            <span className={`text-xs sm:text-sm font-mono font-semibold ${scoreColor}`} data-testid={`text-section-score-${sectionKey}`}>
-                              {score}/100 {statusIcon}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        {sectionExplanation?.summary && (
-                          <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
-                            {sectionExplanation.summary}
-                          </p>
-                        )}
-                        
-                        {sectionExplanation?.keyFactors && sectionExplanation.keyFactors.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {sectionExplanation.keyFactors.slice(0, 3).map((factor: string, idx: number) => (
-                              <Badge key={idx} variant="outline" className="text-[9px] sm:text-[10px] px-1.5 py-0.5">
-                                {factor}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  
-                  {/* Global score summary */}
-                  {(analysis as any).scorecard?.globalScore != null && (
-                    <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
-                      Integrated Signal: {(analysis as any).scorecard.globalScore}/100 ({(analysis as any).scorecard?.confidence || 'medium'} confidence)
-                    </div>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Scorecard Breakdown - Detailed metric-by-metric analysis */}
-      {(analysis as any).scorecard && 
-       typeof (analysis as any).scorecard === 'object' && 
-       (analysis as any).scorecard.globalScore !== undefined && (
-        <ScorecardDisplay 
-          scorecard={(analysis as any).scorecard} 
-          data-testid="scorecard-display"
-        />
-      )}
-
-      {/* Section 2: Key Watchpoints - Risks and catalysts */}
-      <Card>
-        <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-            <Eye className="h-4 sm:h-5 w-4 sm:w-5" />
-            Key Watchpoints
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-          {analysis.redFlags && analysis.redFlags.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-destructive">
-                <AlertTriangle className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
-                <span>Risk Factors</span>
-              </div>
-              <ul className="space-y-1">
-                {analysis.redFlags.map((flag: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <AlertCircle className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-destructive" />
-                    <span className="flex-1">{flag}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {analysis.weaknesses && analysis.weaknesses.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Weaknesses to Monitor</div>
-              <ul className="space-y-1">
-                {analysis.weaknesses.map((weakness: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="shrink-0">•</span>
-                    <span className="flex-1">{weakness}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {analysis.risks && analysis.risks.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Additional Risks</div>
-              <ul className="space-y-1">
-                {analysis.risks.map((risk: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <AlertTriangle className="h-3 sm:h-3.5 w-3 sm:w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                    <span className="flex-1">{risk}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {analysis.opportunities && analysis.opportunities.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400">Potential Catalysts</div>
-              <ul className="space-y-1">
-                {analysis.opportunities.map((opportunity: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="text-amber-600 dark:text-amber-400 shrink-0">↗</span>
-                    <span className="flex-1">{opportunity}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {(!analysis.redFlags || analysis.redFlags.length === 0) && 
-           (!analysis.weaknesses || analysis.weaknesses.length === 0) &&
-           (!analysis.risks || analysis.risks.length === 0) &&
-           (!analysis.opportunities || analysis.opportunities.length === 0) && (
-            <p className="text-xs sm:text-sm text-muted-foreground italic">No significant watchpoints identified</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Section 3: Market Context - Macro factors */}
-      {macroAnalysis && (
-        <Card>
-          <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-              <Globe className="h-4 sm:h-5 w-4 sm:w-5" />
-              Market Context
+              <Brain className="h-4 sm:h-5 w-4 sm:w-5" />
+              AI Playbook
             </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-            {macroAnalysis.summary && (
-              <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground italic">
-                {macroAnalysis.summary}
-              </p>
-            )}
-
-            {macroAnalysis.industry && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs sm:text-sm text-muted-foreground">Industry:</span>
-                <Badge variant="secondary" className="text-[10px] sm:text-xs">{macroAnalysis.industry}</Badge>
-              </div>
-            )}
-
-            {macroAnalysis.industrySectorAnalysis && (
-              <div className="space-y-2 sm:space-y-3 p-2 sm:p-3 bg-muted/30 rounded-lg">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
-                  <span className="text-xs sm:text-sm font-medium">ETF: {macroAnalysis.industrySectorAnalysis.etfSymbol}</span>
-                  <Badge variant={
-                    macroAnalysis.industrySectorAnalysis.sectorWeight > 70 ? 'default' :
-                    macroAnalysis.industrySectorAnalysis.sectorWeight > 40 ? 'secondary' : 'outline'
-                  } className="text-[10px] sm:text-xs w-fit">
-                    Influence: {macroAnalysis.industrySectorAnalysis.sectorWeight}/100
-                  </Badge>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm">
-                  <div>
-                    <div className="text-muted-foreground text-[10px] sm:text-xs">Day</div>
-                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
-                      macroAnalysis.industrySectorAnalysis.dayChange >= 0 ? 'text-success' : 'text-destructive'
-                    }`}>
-                      {macroAnalysis.industrySectorAnalysis.dayChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.dayChange.toFixed(2)}%
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground text-[10px] sm:text-xs">Week</div>
-                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
-                      macroAnalysis.industrySectorAnalysis.weekChange >= 0 ? 'text-success' : 'text-destructive'
-                    }`}>
-                      {macroAnalysis.industrySectorAnalysis.weekChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.weekChange.toFixed(2)}%
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground text-[10px] sm:text-xs">Month</div>
-                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
-                      macroAnalysis.industrySectorAnalysis.monthChange >= 0 ? 'text-success' : 'text-destructive'
-                    }`}>
-                      {macroAnalysis.industrySectorAnalysis.monthChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.monthChange.toFixed(2)}%
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[10px] sm:text-xs text-muted-foreground italic bg-background/50 p-1.5 sm:p-2 rounded">
-                  {macroAnalysis.industrySectorAnalysis.sectorExplanation}
-                </p>
-              </div>
-            )}
-
-            {macroAnalysis.marketCondition && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm">
-                <div>
-                  <span className="text-muted-foreground">Market: </span>
-                  <span className="font-medium capitalize">{macroAnalysis.marketCondition}</span>
-                </div>
-                {macroAnalysis.riskAppetite && (
-                  <div>
-                    <span className="text-muted-foreground">Risk: </span>
-                    <span className="font-medium capitalize">{macroAnalysis.riskAppetite}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Section 4: 2-Week Execution Notes */}
-      <Card>
-        <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-            <Clock className="h-4 sm:h-5 w-4 sm:w-5" />
-            2-Week Execution Notes
-          </CardTitle>
+            <div className="flex items-center gap-2">
+              <Badge variant={
+                globalScore >= 70 ? 'default' :
+                globalScore >= 50 ? 'secondary' : 'destructive'
+              } className="text-xs sm:text-sm font-semibold">
+                {signalLabel}
+              </Badge>
+              <span className={`text-lg sm:text-xl font-mono font-bold ${scoreColor}`} data-testid="text-global-score">
+                {globalScore ?? '—'}/100
+              </span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
+          {/* Primary Recommendation */}
           {analysis.recommendation && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Recommended Action</div>
-              <p className="text-xs sm:text-sm leading-relaxed">
+            <div className="p-3 sm:p-4 bg-muted/50 rounded-lg border-l-4 border-l-amber-500">
+              <p className="text-xs sm:text-sm leading-relaxed font-medium" data-testid="text-recommendation">
                 {analysis.recommendation}
               </p>
             </div>
           )}
 
-          {(analysis as any).insiderValidation && (
-            <div className="space-y-1.5 sm:space-y-2 p-2 sm:p-3 bg-muted/30 rounded-lg">
-              <div className="text-xs sm:text-sm font-medium">Insider Trade Context</div>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {(analysis as any).insiderValidation}
-              </p>
+          {/* Summary - Why this score */}
+          {analysis.summary && (
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed" data-testid="text-signal-drivers">
+              {analysis.summary}
+            </p>
+          )}
+
+          {/* Key Strengths - Compact */}
+          {analysis.strengths && analysis.strengths.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {analysis.strengths.slice(0, 4).map((strength: string, index: number) => (
+                <Badge key={index} variant="outline" className="text-[10px] sm:text-xs bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
+                  {strength.length > 40 ? strength.substring(0, 40) + '...' : strength}
+                </Badge>
+              ))}
             </div>
           )}
 
-          <div className="p-2 sm:p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              <strong>Time Horizon:</strong> This analysis is optimized for a 2-week trading window. 
-              Monitor daily briefs for position updates and changing market conditions.
-            </p>
-          </div>
+          {/* Time Horizon Note */}
+          <p className="text-[10px] sm:text-xs text-muted-foreground italic">
+            Optimized for 1-2 week trading horizon
+          </p>
         </CardContent>
       </Card>
 
-      {/* Advanced Section - For Technical Investors */}
+      {/* Section 2: Score Breakdown - Expandable */}
+      {(analysis as any).scorecard?.sections && (
+        <Accordion type="single" collapsible className="w-full" defaultValue="score-breakdown">
+          <AccordionItem value="score-breakdown" className="border rounded-lg px-3 sm:px-4">
+            <AccordionTrigger className="text-sm sm:text-base font-medium py-3" data-testid="button-toggle-scores">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Score Breakdown
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-2 sm:space-y-3 pb-4">
+              {/* Render each scorecard section with AI explanation */}
+              {Object.entries((analysis as any).scorecard.sections).map(([sectionKey, section]: [string, any]) => {
+                const sectionIcons: Record<string, any> = {
+                  fundamentals: Brain,
+                  technicals: TrendingUp,
+                  insiderActivity: Users,
+                  newsSentiment: Newspaper,
+                  macroSector: Globe,
+                };
+                const sectionWeights: Record<string, string> = {
+                  fundamentals: "35%",
+                  technicals: "25%",
+                  insiderActivity: "20%",
+                  newsSentiment: "15%",
+                  macroSector: "5%",
+                };
+                const Icon = sectionIcons[sectionKey] || Brain;
+                const score = section?.score ?? 0;
+                const sectionScoreColor = score >= 70 
+                  ? "text-emerald-600 dark:text-emerald-400" 
+                  : score >= 50 
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-red-500/70 dark:text-red-400/70";
+                
+                const sectionExplanation = (analysis as any).sectionExplanations?.[sectionKey];
+                const outlookBadgeVariant = sectionExplanation?.outlook === 'bullish' ? 'default' 
+                  : sectionExplanation?.outlook === 'bearish' ? 'destructive' : 'secondary';
+                
+                return (
+                  <div key={sectionKey} className="p-2.5 sm:p-3 bg-muted/30 rounded-lg space-y-2">
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <span className="text-xs sm:text-sm font-medium">{section?.name || sectionKey}</span>
+                        <span className="text-[10px] text-muted-foreground">({sectionWeights[sectionKey] || ''})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {sectionExplanation?.outlook && (
+                          <Badge variant={outlookBadgeVariant} className="text-[10px] sm:text-xs capitalize h-5">
+                            {sectionExplanation.outlook}
+                          </Badge>
+                        )}
+                        <span className={`text-sm font-mono font-bold ${sectionScoreColor}`} data-testid={`text-section-score-${sectionKey}`}>
+                          {score}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* AI Explanation */}
+                    {sectionExplanation?.summary && (
+                      <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
+                        {sectionExplanation.summary}
+                      </p>
+                    )}
+                    
+                    {/* Key Factors */}
+                    {sectionExplanation?.keyFactors && sectionExplanation.keyFactors.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {sectionExplanation.keyFactors.slice(0, 3).map((factor: string, idx: number) => (
+                          <Badge key={idx} variant="outline" className="text-[9px] sm:text-[10px] px-1.5 py-0.5 font-normal">
+                            {factor}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              
+              {/* Confidence indicator */}
+              {(analysis as any).scorecard?.confidence && (
+                <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
+                  Confidence: {(analysis as any).scorecard.confidence}
+                </div>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      )}
+
+      {/* Section 3: Key Risks - Collapsible */}
+      {((analysis.redFlags && analysis.redFlags.length > 0) || 
+        (analysis.weaknesses && analysis.weaknesses.length > 0) ||
+        (analysis.risks && analysis.risks.length > 0)) && (
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="risks" className="border rounded-lg px-3 sm:px-4">
+            <AccordionTrigger className="text-sm sm:text-base font-medium py-3" data-testid="button-toggle-risks">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                Key Risks
+                <Badge variant="outline" className="text-[10px] ml-1">
+                  {(analysis.redFlags?.length || 0) + (analysis.weaknesses?.length || 0) + (analysis.risks?.length || 0)}
+                </Badge>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="space-y-2 pb-4">
+              {analysis.redFlags && analysis.redFlags.length > 0 && (
+                <div className="space-y-1">
+                  {analysis.redFlags.map((flag: string, index: number) => (
+                    <div key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2 p-2 bg-destructive/5 rounded">
+                      <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-destructive" />
+                      <span className="flex-1">{flag}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {analysis.weaknesses && analysis.weaknesses.length > 0 && (
+                <div className="space-y-1">
+                  {analysis.weaknesses.map((weakness: string, index: number) => (
+                    <div key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2 p-2 bg-muted/30 rounded">
+                      <span className="shrink-0 text-amber-500">•</span>
+                      <span className="flex-1">{weakness}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {analysis.risks && analysis.risks.length > 0 && (
+                <div className="space-y-1">
+                  {analysis.risks.map((risk: string, index: number) => (
+                    <div key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2 p-2 bg-muted/30 rounded">
+                      <span className="shrink-0">•</span>
+                      <span className="flex-1">{risk}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      )}
+
+      {/* Section 4: Advanced - For Technical Investors */}
       <Accordion type="single" collapsible className="w-full">
         <AccordionItem value="advanced">
           <AccordionTrigger className="text-sm" data-testid="button-toggle-advanced">

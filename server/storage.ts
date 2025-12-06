@@ -115,7 +115,7 @@ import {
   systemSettings,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, inArray, lt, isNull } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, lt, isNull, or } from "drizzle-orm";
 import { isStockStale, getStockAgeInDays } from "@shared/time";
 import { eventDispatcher } from "./eventDispatcher";
 

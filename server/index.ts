@@ -607,8 +607,10 @@ function startOpeninsiderFetchJob() {
       let filteredDuplicates = 0;
       const createdTickers = new Set<string>(); // Track unique tickers for AI analysis
       
-      // Get all users to create stocks for each one
-      const users = await storage.getUsers();
+      // Get only users who are eligible for data refresh based on subscription type
+      // Trial users: daily refresh only, Paid subscribers: hourly refresh
+      const users = await storage.getUsersEligibleForDataRefresh();
+      log(`[OpeninsiderFetch] ${users.length} users eligible for data refresh (trial: daily, paid: hourly)`);
       
       for (const transaction of transactions) {
         try {
@@ -740,6 +742,13 @@ function startOpeninsiderFetchJob() {
       log(`[OpeninsiderFetch] → Total Stage 2 filtered: ${filteredDuplicates + filteredMarketCap + filteredOptionsDeals + filteredNoQuote}`);
       log(`[OpeninsiderFetch] ===============================================`);
       log(`\n[OpeninsiderFetch] ✓ Successfully created ${createdCount} new recommendations (${createdTickers.size} unique tickers)\n`);
+      
+      // Update lastDataRefresh for all users who received data
+      for (const user of users) {
+        await storage.updateUserLastDataRefresh(user.id);
+      }
+      log(`[OpeninsiderFetch] Updated lastDataRefresh for ${users.length} users`);
+      
       await storage.updateOpeninsiderSyncStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

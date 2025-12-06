@@ -16,12 +16,13 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type OpeninsiderConfig } from "@shared/schema";
 import { useUser } from "@/contexts/UserContext";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { formatDistanceToNow, addHours, addDays, differenceInMinutes, differenceInHours } from "date-fns";
 
 export function FetchConfigDialog() {
   const { toast } = useToast();
   const { user } = useUser();
+  const [, setLocation] = useLocation();
 
   // Subscription-based refresh limits
   const isTrialUser = user?.subscriptionStatus === "trial" || user?.subscriptionStatus === "pending_verification";
@@ -272,18 +273,17 @@ export function FetchConfigDialog() {
                   <span className="text-muted-foreground">
                     Upgrade to get hourly insider trading alerts and never miss a signal.
                   </span>
-                  <Link href="/purchase">
-                    <Button 
-                      type="button"
-                      variant="default" 
-                      size="sm" 
-                      className="mt-2"
-                      data-testid="button-upgrade-for-hourly"
-                    >
-                      <Crown className="h-4 w-4 mr-2" />
-                      Upgrade Now
-                    </Button>
-                  </Link>
+                  <Button 
+                    type="button"
+                    variant="default" 
+                    size="sm" 
+                    className="mt-2"
+                    data-testid="button-upgrade-for-hourly"
+                    onClick={() => setLocation("/purchase")}
+                  >
+                    <Crown className="h-4 w-4 mr-2" />
+                    Upgrade Now
+                  </Button>
                 </AlertDescription>
               </Alert>
             )}

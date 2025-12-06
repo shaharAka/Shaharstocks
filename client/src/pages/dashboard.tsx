@@ -41,6 +41,9 @@ export default function Dashboard() {
 
   const { data: stocks, isLoading: stocksLoading } = useQuery<Stock[]>({
     queryKey: ["/api/stocks"],
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnWindowFocus: true, // Refresh when user returns to tab
+    refetchInterval: 60000, // Poll every 60 seconds for updates
   });
 
   const deleteMutation = useMutation({

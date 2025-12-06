@@ -512,12 +512,23 @@ function startTelegramFetchJob() {
 
 /**
  * Background job to fetch new OpenInsider data (hourly or daily based on config)
+ * Trial users: daily refresh only, Paid subscribers: hourly refresh
  */
 function startOpeninsiderFetchJob() {
   const ONE_HOUR = 60 * 60 * 1000;
   const ONE_DAY = 24 * 60 * 60 * 1000;
+  
+  // Mutex to prevent concurrent job executions
+  let isJobRunning = false;
 
   async function fetchOpeninsiderData() {
+    // Prevent concurrent executions
+    if (isJobRunning) {
+      log("[OpeninsiderFetch] Job already running, skipping this execution");
+      return;
+    }
+    isJobRunning = true;
+    
     try {
       log("[OpeninsiderFetch] Starting OpenInsider data fetch job...");
       
@@ -611,6 +622,15 @@ function startOpeninsiderFetchJob() {
       // Trial users: daily refresh only, Paid subscribers: hourly refresh
       const users = await storage.getUsersEligibleForDataRefresh();
       log(`[OpeninsiderFetch] ${users.length} users eligible for data refresh (trial: daily, paid: hourly)`);
+      
+      // IMMEDIATELY update lastDataRefresh for eligible users to prevent duplicate refreshes
+      // This happens BEFORE processing transactions to ensure eligibility is updated even if no stocks are created
+      if (users.length > 0) {
+        for (const user of users) {
+          await storage.updateUserLastDataRefresh(user.id);
+        }
+        log(`[OpeninsiderFetch] Updated lastDataRefresh for ${users.length} users at START of job`);
+      }
       
       for (const transaction of transactions) {
         try {
@@ -743,17 +763,14 @@ function startOpeninsiderFetchJob() {
       log(`[OpeninsiderFetch] ===============================================`);
       log(`\n[OpeninsiderFetch] ✓ Successfully created ${createdCount} new recommendations (${createdTickers.size} unique tickers)\n`);
       
-      // Update lastDataRefresh for all users who received data
-      for (const user of users) {
-        await storage.updateUserLastDataRefresh(user.id);
-      }
-      log(`[OpeninsiderFetch] Updated lastDataRefresh for ${users.length} users`);
-      
       await storage.updateOpeninsiderSyncStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("[OpeninsiderFetch] Error fetching OpenInsider data:", error);
       await storage.updateOpeninsiderSyncStatus(errorMessage);
+    } finally {
+      // Release mutex
+      isJobRunning = false;
     }
   }
 

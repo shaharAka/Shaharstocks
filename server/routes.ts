@@ -602,7 +602,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Send verification email
-      const baseUrl = process.env.NODE_ENV === "production" 
+      // Check for production: Replit uses REPLIT_DEPLOYMENT=1, or NODE_ENV=production
+      const isProduction = process.env.REPLIT_DEPLOYMENT === "1" || process.env.NODE_ENV === "production";
+      const baseUrl = isProduction 
         ? `https://${req.get('host')}`
         : `http://${req.get('host')}`;
       const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
@@ -733,7 +735,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateVerificationToken(user.id, verificationToken, verificationExpiry);
 
       // Send verification email
-      const baseUrl = process.env.NODE_ENV === "production" 
+      // Check for production: Replit uses REPLIT_DEPLOYMENT=1, or NODE_ENV=production
+      const isProduction = process.env.REPLIT_DEPLOYMENT === "1" || process.env.NODE_ENV === "production";
+      const baseUrl = isProduction 
         ? `https://${req.get('host')}`
         : `http://${req.get('host')}`;
       const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;

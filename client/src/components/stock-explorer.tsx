@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +63,14 @@ export function StockExplorer({
   const { user: currentUser } = useUser();
   const [insiderHistoryOpen, setInsiderHistoryOpen] = useState(false);
   const [selectedInsider, setSelectedInsider] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // Reset to overview tab when dialog opens for a new stock
+  useEffect(() => {
+    if (open && stock?.ticker) {
+      setActiveTab("overview");
+    }
+  }, [open, stock?.ticker]);
 
   const { data: comments = [] } = useQuery<StockCommentWithUser[]>({
     queryKey: ["/api/stocks", stock?.ticker, "comments"],
@@ -165,7 +173,7 @@ export function StockExplorer({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="overview" className="w-full min-w-0">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="ai">AI Analysis</TabsTrigger>
@@ -182,10 +190,17 @@ export function StockExplorer({
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            {/* AI Signal Score */}
-            <Card>
+            {/* AI Signal Score - Clickable to navigate to AI Analysis tab */}
+            <Card 
+              className="cursor-pointer hover-elevate active-elevate-2 transition-all"
+              onClick={() => setActiveTab("ai")}
+              data-testid="card-ai-signal"
+            >
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">AI Signal</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">AI Signal</CardTitle>
+                  <span className="text-xs text-muted-foreground">View details →</span>
+                </div>
               </CardHeader>
               <CardContent>
                 <CompactSignalBadge ticker={stock.ticker} showEmptyState={true} />

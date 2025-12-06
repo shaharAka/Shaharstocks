@@ -186,8 +186,8 @@ export function AppSidebar() {
                 );
               })}
               
-              {/* Following Submenu */}
-              {followedStocks.length > 0 && (() => {
+              {/* Following Submenu - Always visible */}
+              {(() => {
                 // Group stocks by stanceAlignment
                 // ACT: AI agrees with insider (strong signal)
                 // HOLD: AI conflicts with insider (weak signal)
@@ -318,6 +318,23 @@ export function AppSidebar() {
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <SidebarMenuSub>
+                          {/* Empty state when no followed stocks */}
+                          {followedStocks.length === 0 && (
+                            <SidebarMenuSubItem>
+                              <div className="px-2 py-3 text-xs text-muted-foreground">
+                                <p className="mb-2">No stocks followed yet.</p>
+                                <Link 
+                                  href="/recommendations" 
+                                  onClick={handleNavClick}
+                                  className="text-primary hover:underline"
+                                  data-testid="link-discover-stocks"
+                                >
+                                  Discover stocks →
+                                </Link>
+                              </div>
+                            </SidebarMenuSubItem>
+                          )}
+                          
                           {/* ACT stocks first (strong signals - AI agrees with insider) */}
                           {actStocks.map(renderStockItem)}
                           

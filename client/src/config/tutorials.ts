@@ -80,8 +80,13 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
       },
       {
         target: "[data-testid^='button-follow-']",
-        content: "Click the star button to follow stocks. Followed stocks appear in your 'My Watchlist' dashboard and receive daily AI briefs.",
+        content: "Click the star button to follow stocks. Followed stocks appear in the 'Following' section in the sidebar and receive daily AI briefs.",
         placement: "left",
+      },
+      {
+        target: "[data-testid='link-following']",
+        content: "The 'Following' section in the sidebar shows all your followed stocks with their AI scores and stances. Stocks are grouped by signal strength - ACT (strong signals where AI agrees with insider) appear first.",
+        placement: "right",
       },
       {
         target: "[data-testid='button-notifications']",
@@ -177,6 +182,11 @@ export const tutorials: Record<TutorialId, TutorialConfig> = {
         target: "body",
         content: "Your Watchlist dashboard shows all stocks you're following in one simple view - no hidden filters! See prices, signal scores, AI stances (BUY/SELL/HOLD), and 'Analyzing...' status for new additions.",
         placement: "center",
+      },
+      {
+        target: "[data-testid='link-following']",
+        content: "Quick access: The 'Following' section in the sidebar always shows your followed stocks. They're grouped by signal strength - ACT stocks (where AI agrees with insider) appear first, HOLD stocks are grouped together.",
+        placement: "right",
       },
       {
         target: "[data-testid^='card-watchlist-']",

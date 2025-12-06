@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import Joyride, { CallBackProps, STATUS, Step } from "react-joyride";
+import Joyride, { CallBackProps, STATUS } from "react-joyride";
 import { useUser } from "@/contexts/UserContext";
 import { tutorials, TutorialId } from "@/config/tutorials";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface TutorialProps {
   tutorialId: TutorialId;
@@ -13,73 +12,31 @@ interface TutorialProps {
 export function Tutorial({ tutorialId, run = false, onComplete }: TutorialProps) {
   const { user } = useUser();
   const [runTutorial, setRunTutorial] = useState(false);
-  const [hasSeenTutorial, setHasSeenTutorial] = useState(false);
   
   const tutorial = tutorials[tutorialId];
-
-  // Check if user has completed this tutorial
-  useEffect(() => {
-    const checkTutorialStatus = async () => {
-      if (!user) return;
-      
-      try {
-        const response = await fetch(`/api/tutorials/${tutorialId}/status`);
-        const data = await response.json();
-        setHasSeenTutorial(data.completed);
-        
-        // Auto-start tutorial if user hasn't seen it (first visit)
-        if (!data.completed) {
-          setRunTutorial(true);
-        }
-      } catch (error) {
-        console.error("Failed to check tutorial status:", error);
-      }
-    };
-
-    checkTutorialStatus();
-  }, [user, tutorialId]);
 
   // Handle tutorial completion
   const handleJoyrideCallback = async (data: CallBackProps) => {
     const { status } = data;
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
 
-    if (finishedStatuses.includes(status) && user) {
-      try {
-        // Mark tutorial as completed (uses session for user ID)
-        await apiRequest("POST", `/api/tutorials/${tutorialId}/complete`, {});
-        
-        setHasSeenTutorial(true);
-        setRunTutorial(false);
-        
-        // Invalidate queries to refresh tutorial status
-        queryClient.invalidateQueries({ queryKey: ["/api/tutorials", tutorialId, "status"] });
-        
-        if (onComplete) {
-          onComplete();
-        }
-      } catch (error) {
-        console.error("Failed to mark tutorial as completed:", error);
+    if (finishedStatuses.includes(status)) {
+      setRunTutorial(false);
+      
+      if (onComplete) {
+        onComplete();
       }
     }
   };
 
-  // Manually start tutorial (from help button or replay event)
+  // Start tutorial when run prop changes to true
   useEffect(() => {
     if (run && !runTutorial) {
       setRunTutorial(true);
+    } else if (!run && runTutorial) {
+      setRunTutorial(false);
     }
-  }, [run]);
-
-  // Listen for replay-tutorial event
-  useEffect(() => {
-    const handleReplay = () => {
-      setRunTutorial(true);
-    };
-
-    window.addEventListener('replay-tutorial', handleReplay);
-    return () => window.removeEventListener('replay-tutorial', handleReplay);
-  }, []);
+  }, [run, runTutorial]);
 
   if (!user || !tutorial) return null;
 

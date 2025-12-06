@@ -75,13 +75,10 @@ function AuthenticatedApp() {
   }, [user, isLoading, location, setLocation]);
 
   useEffect(() => {
-    // Show onboarding dialog when state is pending
-    if (experienceState === "onboarding_pending") {
-      setShowOnboarding(true);
-    }
-    // Close onboarding dialog only when state changes away from pending
-    else if (showOnboarding && experienceState !== "onboarding_pending") {
-      setShowOnboarding(false);
+    // Show onboarding dialog when state is pending, hide when complete
+    const shouldShowOnboarding = experienceState === "onboarding_pending";
+    if (shouldShowOnboarding !== showOnboarding) {
+      setShowOnboarding(shouldShowOnboarding);
     }
   }, [experienceState, showOnboarding]);
 

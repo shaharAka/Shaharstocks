@@ -45,13 +45,13 @@ export function TutorialManager() {
     };
   }, [currentTutorialId]);
 
-  // Don't render if no tutorial is available
-  if (!activeTutorialId) {
+  // Don't render tutorials during onboarding or loading, or if no tutorial available
+  if (!activeTutorialId || experienceState === "onboarding_pending" || experienceState === "loading") {
     return null;
   }
 
   // Tutorial component only runs when manualTrigger is true (set by help button)
-  // This prevents auto-triggering while still allowing manual triggers during onboarding
+  // This prevents auto-triggering and ensures onboarding completes first
   return (
     <Tutorial
       tutorialId={activeTutorialId}

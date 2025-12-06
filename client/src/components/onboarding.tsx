@@ -61,7 +61,8 @@ export function Onboarding({ open, onOpenChange, onComplete }: OnboardingProps) 
   const handleGetStarted = async () => {
     await completeOnboarding();
     setLocation("/dashboard");
-    // Dialog will auto-close when experienceState updates in parent
+    // Trigger the UI intro tour after onboarding dialog closes
+    window.dispatchEvent(new CustomEvent('start-intro-tour'));
   };
 
   const handleSkip = async () => {

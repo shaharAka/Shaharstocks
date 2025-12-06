@@ -26,7 +26,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Cache Isolation**: User-scoped cache keys and custom query functions prevent cross-user data contamination.
 
 ### Feature Specifications
-- **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for Enhanced Sector ETF Analysis) influences recommendations. Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching via backoffice settings.
+- **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for Enhanced Sector ETF Analysis) influences recommendations. Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching via backoffice settings. AI analysis now generates aligned `sectionExplanations` for each of the 5 scorecard sections (Fundamentals 35%, Technicals 25%, Insider Activity 20%, News Sentiment 15%, Macro/Sector 5%), providing per-section summaries, key factors, and outlook that users can view alongside scorecard scores in the "View Signal Components" accordion.
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
 - **Collaboration**: Multi-user system with stock-specific comment threads and recommendation filtering.
 - **Adaptive Stock Fetching**: Stock fetch limits adjust based on user onboarding and configuration, with customizable OpenInsider filters.

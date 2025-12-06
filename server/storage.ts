@@ -2535,8 +2535,18 @@ export class DatabaseStorage implements IStorage {
       twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
       const twoWeeksAgoString = twoWeeksAgo.toISOString().split('T')[0]; // Format as YYYY-MM-DD
       
-      // STEP 1: Get ALL followed stocks for this user (NO LIMIT - these must always appear)
-      const followedResults = await db
+      // STEP 1: Get ALL followed tickers for this user
+      const followedTickerRows = await db
+        .select({ ticker: followedStocks.ticker })
+        .from(followedStocks)
+        .where(eq(followedStocks.userId, userId));
+      const allFollowedTickers = followedTickerRows.map(r => r.ticker.toUpperCase());
+      const followedTickerSet = new Set(allFollowedTickers);
+      
+      console.log(`[Storage] User follows ${followedTickerSet.size} tickers`);
+      
+      // STEP 2: Get user's own stocks that are followed (tenant-isolated)
+      const userScopedFollowed = await db
         .select({
           stock: stocks,
           userStatus: userStockStatuses.status,
@@ -2568,12 +2578,69 @@ export class DatabaseStorage implements IStorage {
         )
         .orderBy(desc(stocks.insiderTradeDate));
       
-      console.log(`[Storage] Found ${followedResults.length} followed stocks (no limit)`);
+      console.log(`[Storage] Found ${userScopedFollowed.length} user-scoped followed stocks`);
       
-      // Build set of followed tickers for deduplication
-      const followedTickerSet = new Set(followedResults.map(r => r.stock.ticker.toUpperCase()));
+      // Track which followed tickers we already have
+      const foundFollowedTickers = new Set(userScopedFollowed.map(r => r.stock.ticker.toUpperCase()));
       
-      // STEP 2: Get recent NON-followed stocks (with limit, within 2 weeks)
+      // STEP 3: For orphaned follows (user follows but has no tenant copy), fall back to global stock pool
+      // Use bulk query instead of per-ticker lookups for efficiency
+      const orphanedFollowTickers = allFollowedTickers.filter(t => !foundFollowedTickers.has(t));
+      
+      type FollowedResult = typeof userScopedFollowed[0];
+      let globalFallbackResults: FollowedResult[] = [];
+      
+      if (orphanedFollowTickers.length > 0) {
+        console.log(`[Storage] Found ${orphanedFollowTickers.length} orphaned followed tickers, checking global pool`);
+        
+        // Bulk query: Get latest global stocks for all orphaned tickers in a single query
+        // Uses inArray for safe parameterized query (handles quoting automatically)
+        const globalStocksRaw = await db
+          .select({
+            stock: stocks,
+            userStatus: userStockStatuses.status,
+            userApprovedAt: userStockStatuses.approvedAt,
+            userRejectedAt: userStockStatuses.rejectedAt,
+            userDismissedAt: userStockStatuses.dismissedAt,
+          })
+          .from(stocks)
+          .leftJoin(
+            userStockStatuses,
+            and(
+              eq(stocks.ticker, userStockStatuses.ticker),
+              eq(userStockStatuses.userId, userId)
+            )
+          )
+          .where(
+            and(
+              inArray(sql`UPPER(${stocks.ticker})`, orphanedFollowTickers),
+              eq(stocks.recommendationStatus, 'pending')
+            )
+          )
+          .orderBy(stocks.ticker, desc(stocks.lastUpdated));
+        
+        // Deduplicate to get only the latest record per ticker (ordered by lastUpdated DESC)
+        const seenGlobalTickers = new Set<string>();
+        globalFallbackResults = globalStocksRaw
+          .filter(row => {
+            const normalizedTicker = row.stock.ticker.toUpperCase();
+            if (seenGlobalTickers.has(normalizedTicker)) return false;
+            seenGlobalTickers.add(normalizedTicker);
+            return true;
+          })
+          .map(row => ({
+            stock: row.stock,
+            userStatus: row.userStatus,
+            userApprovedAt: row.userApprovedAt,
+            userRejectedAt: row.userRejectedAt,
+            userDismissedAt: row.userDismissedAt,
+            isFollowing: row.stock.ticker, // Use original ticker casing from DB
+          }));
+        
+        console.log(`[Storage] Found ${globalFallbackResults.length} stocks from global fallback (bulk query)`);
+      }
+      
+      // STEP 4: Get recent NON-followed stocks from user's tenant (with limit)
       const recentNonFollowedResults = await db
         .select({
           stock: stocks,
@@ -2596,7 +2663,7 @@ export class DatabaseStorage implements IStorage {
             eq(stocks.userId, userId),
             eq(stocks.recommendationStatus, 'pending'),
             sql`${stocks.insiderTradeDate} >= ${twoWeeksAgoString}`,
-            // Exclude followed stocks (they're already in followedResults)
+            // Exclude followed stocks
             sql`NOT EXISTS (
               SELECT 1 FROM followed_stocks fs 
               WHERE fs.ticker = ${stocks.ticker} AND fs.user_id = ${userId}
@@ -2608,12 +2675,12 @@ export class DatabaseStorage implements IStorage {
       
       console.log(`[Storage] Found ${recentNonFollowedResults.length} recent non-followed stocks`);
       
-      // STEP 3: Merge results - followed stocks first, then recent non-followed
+      // STEP 5: Merge all results - followed stocks first (user-scoped + global fallback), then non-followed
       const seenTickers = new Set<string>();
-      const dedupedResults: typeof followedResults = [];
+      const dedupedResults: FollowedResult[] = [];
       
-      // Add all followed stocks first (they have priority)
-      for (const row of followedResults) {
+      // Add user-scoped followed stocks first
+      for (const row of userScopedFollowed) {
         const upperTicker = row.stock.ticker.toUpperCase();
         if (!seenTickers.has(upperTicker)) {
           seenTickers.add(upperTicker);
@@ -2621,12 +2688,21 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
-      // Add recent non-followed stocks (guaranteed not to overlap due to NOT EXISTS)
+      // Add global fallback followed stocks
+      for (const row of globalFallbackResults) {
+        const upperTicker = row.stock.ticker.toUpperCase();
+        if (!seenTickers.has(upperTicker)) {
+          seenTickers.add(upperTicker);
+          dedupedResults.push(row);
+        }
+      }
+      
+      // Add recent non-followed stocks
       for (const row of recentNonFollowedResults) {
         const upperTicker = row.stock.ticker.toUpperCase();
         if (!seenTickers.has(upperTicker)) {
           seenTickers.add(upperTicker);
-          dedupedResults.push(row as typeof followedResults[0]);
+          dedupedResults.push(row as FollowedResult);
         }
       }
       

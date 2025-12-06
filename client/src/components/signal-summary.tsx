@@ -24,6 +24,7 @@ export function SignalSummary({ ticker }: SignalSummaryProps) {
       if (!response.ok) throw new Error("Failed to fetch analysis");
       return response.json();
     },
+    staleTime: 0, // Always fetch fresh data for analysis
     refetchInterval: (query) => {
       const data = query.state.data;
       if (data && (data.status === "pending" || data.status === "analyzing")) {

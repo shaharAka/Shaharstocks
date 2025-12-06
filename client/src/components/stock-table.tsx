@@ -28,9 +28,10 @@ interface StockTableProps {
   onSelectAll?: (tickers: string[]) => void;
   onStockClick: (stock: Stock) => void;
   viewedTickers?: string[];
+  preserveOrder?: boolean;
 }
 
-type SortField = "ticker" | "price" | "change" | "insiderPrice" | "marketCap" | "recommendation" | "aiScore" | "daysFromBuy";
+type SortField = "ticker" | "price" | "change" | "insiderPrice" | "marketCap" | "recommendation" | "aiScore" | "daysFromBuy" | "none";
 type SortDirection = "asc" | "desc";
 
 export function StockTable({ 
@@ -43,9 +44,10 @@ export function StockTable({
   onToggleSelection,
   onSelectAll,
   onStockClick,
-  viewedTickers = []
+  viewedTickers = [],
+  preserveOrder = false
 }: StockTableProps) {
-  const [sortField, setSortField] = useState<SortField>("ticker");
+  const [sortField, setSortField] = useState<SortField>(preserveOrder ? "none" : "ticker");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   
   const allSelected = stocks.length > 0 && stocks.every(s => selectedTickers.has(s.ticker));
@@ -96,7 +98,7 @@ export function StockTable({
     return daysDiff;
   };
 
-  const sortedStocks = [...stocks].sort((a, b) => {
+  const sortedStocks = sortField === "none" ? stocks : [...stocks].sort((a, b) => {
     let compareA: any;
     let compareB: any;
 

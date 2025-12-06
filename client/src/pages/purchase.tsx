@@ -904,6 +904,7 @@ export default function Purchase() {
           onToggleSelection={toggleSelection}
           onSelectAll={selectAll}
           viewedTickers={viewedTickers}
+          preserveOrder={true}
           onStockClick={(stock) => {
             setExplorerStock(stock);
             setExplorerOpen(true);

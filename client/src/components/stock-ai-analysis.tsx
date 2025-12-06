@@ -375,7 +375,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
             </div>
           )}
 
-          {/* Supporting Metrics - Scorecard Section Breakdown */}
+          {/* Supporting Metrics - Scorecard Section Breakdown with AI Explanations */}
           {(analysis as any).scorecard?.sections && (
             <Accordion type="single" collapsible className="w-full">
               <AccordionItem value="metrics">
@@ -383,7 +383,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   View Signal Components
                 </AccordionTrigger>
                 <AccordionContent className="space-y-2 sm:space-y-3 pt-2">
-                  {/* Render each scorecard section */}
+                  {/* Render each scorecard section with AI explanation */}
                   {Object.entries((analysis as any).scorecard.sections).map(([sectionKey, section]: [string, any]) => {
                     const sectionIcons: Record<string, any> = {
                       fundamentals: Brain,
@@ -401,15 +401,47 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                         : "text-red-500/70 dark:text-red-400/70";
                     const statusIcon = score >= 70 ? "✓" : score >= 40 ? "~" : "✗";
                     
+                    const sectionExplanation = (analysis as any).sectionExplanations?.[sectionKey];
+                    const outlookColors: Record<string, string> = {
+                      bullish: "text-emerald-600 dark:text-emerald-400",
+                      neutral: "text-amber-600 dark:text-amber-400",
+                      bearish: "text-red-500/70 dark:text-red-400/70"
+                    };
+                    
                     return (
-                      <div key={sectionKey} className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
-                          <span className="text-xs sm:text-sm font-medium">{section?.name || sectionKey}</span>
+                      <div key={sectionKey} className="p-2 sm:p-3 bg-muted/30 rounded-lg space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Icon className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
+                            <span className="text-xs sm:text-sm font-medium">{section?.name || sectionKey}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {sectionExplanation?.outlook && (
+                              <span className={`text-[10px] sm:text-xs font-medium capitalize ${outlookColors[sectionExplanation.outlook] || ''}`}>
+                                {sectionExplanation.outlook}
+                              </span>
+                            )}
+                            <span className={`text-xs sm:text-sm font-mono font-semibold ${scoreColor}`} data-testid={`text-section-score-${sectionKey}`}>
+                              {score}/100 {statusIcon}
+                            </span>
+                          </div>
                         </div>
-                        <span className={`text-xs sm:text-sm font-mono font-semibold ${scoreColor}`} data-testid={`text-section-score-${sectionKey}`}>
-                          {score}/100 {statusIcon}
-                        </span>
+                        
+                        {sectionExplanation?.summary && (
+                          <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
+                            {sectionExplanation.summary}
+                          </p>
+                        )}
+                        
+                        {sectionExplanation?.keyFactors && sectionExplanation.keyFactors.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {sectionExplanation.keyFactors.slice(0, 3).map((factor: string, idx: number) => (
+                              <Badge key={idx} variant="outline" className="text-[9px] sm:text-[10px] px-1.5 py-0.5">
+                                {factor}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

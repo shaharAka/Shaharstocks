@@ -46,11 +46,26 @@ function stripMarkdownCodeBlocks(content: string): string {
   return cleaned;
 }
 
+export interface SectionExplanation {
+  summary: string; // 1-2 sentence explanation of why this section scored as it did
+  keyFactors: string[]; // 2-3 bullet points with specific metric values
+  outlook: "bullish" | "neutral" | "bearish"; // Directional outlook for this section
+}
+
 export interface FinancialAnalysis {
   ticker: string;
   overallRating: "strong_buy" | "buy" | "hold" | "avoid" | "strong_avoid";
   confidenceScore: number; // 0-100
   summary: string;
+  // NEW: Section-aligned explanations that map to the 5 scorecard sections
+  sectionExplanations: {
+    fundamentals: SectionExplanation;
+    technicals: SectionExplanation;
+    insiderActivity: SectionExplanation;
+    newsSentiment: SectionExplanation;
+    macroSector: SectionExplanation;
+  };
+  // Legacy fields - kept for backward compatibility
   financialHealth: {
     score: number; // 0-100
     strengths: string[];
@@ -335,7 +350,36 @@ Provide your analysis in this EXACT JSON format:
 {
   "overallRating": ${isBuy ? '"buy" or "pass"' : (isSell ? '"sell" or "avoid" or "pass"' : '"buy" or "sell" or "pass"')},
   "confidenceScore": 0-100,
-  "summary": "2-3 sentences: ${isBuy ? 'Does this insider buy have merit? What\'s the 1-2 week outlook?' : (isSell ? 'Does this insider sell signal weakness? Should investors avoid or is this routine portfolio management?' : 'Validate the insider transaction')}",
+  "summary": "2-3 sentences synthesizing all 5 sections: ${isBuy ? 'Does this insider buy have merit? What\'s the 1-2 week outlook?' : (isSell ? 'Does this insider sell signal weakness? Should investors avoid or is this routine portfolio management?' : 'Validate the insider transaction')}",
+  
+  "sectionExplanations": {
+    "fundamentals": {
+      "summary": "1-2 sentences explaining fundamental strength/weakness citing revenue growth, EPS, profit margins, FCF-to-debt, debt-to-equity",
+      "keyFactors": ["Revenue growth X%", "Profit margin Y%", "Debt-to-equity Z"],
+      "outlook": "bullish" or "neutral" or "bearish"
+    },
+    "technicals": {
+      "summary": "1-2 sentences explaining price momentum, SMA alignment, RSI, MACD signals for 1-2 week horizon",
+      "keyFactors": ["RSI at X indicates Y", "Price above/below SMA20/50", "MACD signal"],
+      "outlook": "bullish" or "neutral" or "bearish"
+    },
+    "insiderActivity": {
+      "summary": "1-2 sentences explaining insider transaction quality: who bought/sold, how much, how recently, role significance",
+      "keyFactors": ["Net buy/sell ratio", "Transaction recency (X days ago)", "Insider role (CEO/CFO/Director)"],
+      "outlook": "bullish" or "neutral" or "bearish"
+    },
+    "newsSentiment": {
+      "summary": "1-2 sentences explaining recent news flow, sentiment trend, and any upcoming catalysts",
+      "keyFactors": ["Average sentiment score", "News volume (high/medium/low)", "Key themes"],
+      "outlook": "bullish" or "neutral" or "bearish"
+    },
+    "macroSector": {
+      "summary": "1-2 sentences explaining sector performance vs SPY and macro environment for this industry",
+      "keyFactors": ["Sector ETF vs SPY performance", "Macro risk level"],
+      "outlook": "bullish" or "neutral" or "bearish"
+    }
+  },
+  
   "financialHealth": {
     "score": 0-100,
     "strengths": ["MUST cite specific metrics with actual values - e.g., 'Current ratio of 2.1 indicates strong liquidity', 'Profit margin of 18.5% shows excellent profitability'"],

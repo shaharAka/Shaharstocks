@@ -238,6 +238,9 @@ export interface IStorage {
   archiveUser(userId: string, archivedBy: string): Promise<User | undefined>;
   unarchiveUser(userId: string): Promise<User | undefined>;
   updateUserSubscriptionStatus(userId: string, status: string, endDate?: Date): Promise<User | undefined>;
+  updateUserLastDataRefresh(userId: string): Promise<User | undefined>;
+  canUserReceiveDataRefresh(user: User): boolean;
+  getUsersEligibleForDataRefresh(): Promise<User[]>;
   verifyUserEmail(userId: string): Promise<User | undefined>;
   updateVerificationToken(userId: string, token: string, expiry: Date): Promise<User | undefined>;
   purgeUnverifiedUsers(olderThanHours: number): Promise<number>;
@@ -1927,6 +1930,57 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return updatedUser;
+  }
+
+  async updateUserLastDataRefresh(userId: string): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ lastDataRefresh: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  canUserReceiveDataRefresh(user: User): boolean {
+    const ONE_HOUR = 60 * 60 * 1000;
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const now = new Date().getTime();
+
+    // Active (paid) subscribers: can refresh every hour
+    if (user.subscriptionStatus === "active") {
+      if (!user.lastDataRefresh) return true;
+      const timeSinceLastRefresh = now - new Date(user.lastDataRefresh).getTime();
+      return timeSinceLastRefresh >= ONE_HOUR;
+    }
+
+    // Trial users: can only refresh once per day
+    if (user.subscriptionStatus === "trial") {
+      if (!user.lastDataRefresh) return true;
+      const timeSinceLastRefresh = now - new Date(user.lastDataRefresh).getTime();
+      return timeSinceLastRefresh >= ONE_DAY;
+    }
+
+    // Other statuses (pending, expired, cancelled): no refresh
+    return false;
+  }
+
+  async getUsersEligibleForDataRefresh(): Promise<User[]> {
+    // Get all active users (not archived, valid subscription)
+    const allUsers = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.archived, false),
+          or(
+            eq(users.subscriptionStatus, "active"),
+            eq(users.subscriptionStatus, "trial")
+          )
+        )
+      );
+    
+    // Filter users who are eligible for refresh based on subscription type
+    return allUsers.filter(user => this.canUserReceiveDataRefresh(user));
   }
 
   // Payments

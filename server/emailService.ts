@@ -216,6 +216,108 @@ export async function notifySuperAdminsNewSignup({ adminEmails, userName, userEm
   }
 }
 
+interface BugReportParams {
+  subject: string;
+  description: string;
+  reporterName: string;
+  reporterEmail: string;
+  url: string;
+  userAgent: string;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export async function sendBugReport({ subject, description, reporterName, reporterEmail, url, userAgent }: BugReportParams): Promise<boolean> {
+  const recipientEmail = "shaharro@gmail.com";
+  
+  // Escape all user-provided content to prevent HTML injection
+  const safeSubject = escapeHtml(subject);
+  const safeDescription = escapeHtml(description);
+  const safeName = escapeHtml(reporterName);
+  const safeUrl = escapeHtml(url);
+  const safeUserAgent = escapeHtml(userAgent);
+  
+  try {
+    const { client, fromEmail } = await getUncachableResendClient();
+    
+    const { data, error } = await client.emails.send({
+      from: fromEmail,
+      to: recipientEmail,
+      replyTo: reporterEmail,
+      subject: `[Bug Report] ${subject}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f3f4f6;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 40px 0;">
+              <tr>
+                <td align="center">
+                  <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+                    <tr>
+                      <td style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <h1 style="margin: 0; color: #ffffff; font-size: 20px;">Bug Report</h1>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 30px;">
+                        <h2 style="margin: 0 0 16px; color: #111827; font-size: 18px;">${safeSubject}</h2>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px; width: 100px;">From:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px;">${safeName} (${reporterEmail})</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Page URL:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px; word-break: break-all;">${safeUrl}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Date:</td>
+                            <td style="padding: 8px 0; color: #111827; font-size: 14px;">${new Date().toLocaleString()}</td>
+                          </tr>
+                        </table>
+                        <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin-bottom: 20px;">
+                          <h3 style="margin: 0 0 8px; color: #374151; font-size: 14px; font-weight: 600;">Description:</h3>
+                          <p style="margin: 0; color: #4b5563; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${safeDescription}</p>
+                        </div>
+                        <div style="background-color: #f3f4f6; border-radius: 6px; padding: 12px; font-size: 12px; color: #6b7280;">
+                          <strong>User Agent:</strong><br>
+                          ${safeUserAgent}
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error('[EmailService] Failed to send bug report:', error);
+      return false;
+    }
+
+    console.log('[EmailService] Bug report sent:', data?.id);
+    return true;
+  } catch (error) {
+    console.error('[EmailService] Error sending bug report:', error);
+    return false;
+  }
+}
+
 interface PaymentNotificationParams {
   adminEmails: string[];
   userName: string;

@@ -18,7 +18,7 @@ import { verifyPayPalWebhook, cancelPayPalSubscription, getSubscriptionTransacti
 import { aiAnalysisService } from "./aiAnalysisService";
 import { signupLimiter, loginLimiter, resendVerificationLimiter } from "./middleware/rateLimiter";
 import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "./utils/emailValidation";
-import { sendVerificationEmail, notifySuperAdminsNewSignup, notifySuperAdminsFirstPayment } from "./emailService";
+import { sendVerificationEmail, notifySuperAdminsNewSignup, notifySuperAdminsFirstPayment, sendBugReport } from "./emailService";
 import { isGoogleConfigured, generateState, getGoogleAuthUrl, handleGoogleCallback } from "./googleAuthService";
 
 /**
@@ -760,6 +760,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Resend verification error:", error);
       res.status(500).json({ error: "Failed to resend verification email" });
+    }
+  });
+
+  // Bug report endpoint
+  app.post("/api/bug-report", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const { subject, description, url, userAgent } = req.body;
+
+      if (!description || typeof description !== 'string' || description.trim().length === 0) {
+        return res.status(400).json({ error: "Description is required" });
+      }
+
+      const emailSent = await sendBugReport({
+        subject: subject || "Bug Report",
+        description: description.trim(),
+        reporterName: user.name,
+        reporterEmail: user.email,
+        url: url || "Unknown",
+        userAgent: userAgent || "Unknown",
+      });
+
+      if (!emailSent) {
+        return res.status(500).json({ error: "Failed to send bug report" });
+      }
+
+      console.log(`[BugReport] Report sent from ${user.email}: ${subject}`);
+      res.json({ success: true, message: "Bug report sent successfully" });
+    } catch (error) {
+      console.error("Bug report error:", error);
+      res.status(500).json({ error: "Failed to send bug report" });
     }
   });
 

@@ -672,7 +672,7 @@ class QueueWorker {
         businessOverview: secFilingData?.businessOverview,
         fundamentalData: comprehensiveFundamentals,
         macroAnalysisId: macroAnalysis.id,
-        integratedScore: scorecard ? scorecard.globalScore : integratedScore, // Use scorecard global score if available
+        integratedScore: integratedScore, // Gemini's AI score is primary; scorecard is supporting metadata only
         scorecard: scorecard || undefined,
         scorecardVersion: scorecard ? scorecard.version : undefined,
         sectionExplanations: validateSectionExplanations(analysis.sectionExplanations),

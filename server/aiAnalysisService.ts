@@ -234,12 +234,17 @@ function calculateTimingMetrics(insiderTradingStrength: FinancialData['insiderTr
         timingExplanation = `Trade ${daysSinceTrade} days ago, price ${priceChangePct >= 0 ? 'up' : 'down'} ${Math.abs(priceChangePct).toFixed(1)}%. MID-MOVE timing.`;
       }
     } else {
+      // SELL/SHORT opportunity logic
       if (priceChangePct < -10) {
         timingPhase = 'late';
-        timingExplanation = `Price already down ${Math.abs(priceChangePct).toFixed(1)}% since sell ${daysSinceTrade} days ago. May be LATE to exit.`;
+        timingExplanation = `Price already down ${Math.abs(priceChangePct).toFixed(1)}% since insider sell ${daysSinceTrade} days ago. May be LATE for short entry.`;
+      } else if (priceChangePct > 5) {
+        // Price went UP after insider sold - could be early for a short
+        timingPhase = 'early';
+        timingExplanation = `Price up ${priceChangePct.toFixed(1)}% despite insider selling ${daysSinceTrade} days ago. EARLY for short - potential entry if thesis holds.`;
       } else {
         timingPhase = 'mid';
-        timingExplanation = `Sell was ${daysSinceTrade} days ago. Price ${priceChangePct >= 0 ? 'up' : 'down'} ${Math.abs(priceChangePct).toFixed(1)}%.`;
+        timingExplanation = `Insider sold ${daysSinceTrade} days ago. Price ${priceChangePct >= 0 ? 'up' : 'down'} ${Math.abs(priceChangePct).toFixed(1)}%. MID-MOVE for short opportunity.`;
       }
     }
   } else {

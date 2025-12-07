@@ -229,17 +229,34 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     );
   }
 
-  // Get the score and signal
-  const globalScore = (analysis as any).scorecard?.globalScore ?? analysis.confidenceScore ?? 50;
-  const getSignalLabel = (score: number): string => {
-    if (score >= 75) return "Strong Buy";
-    if (score >= 60) return "Moderate Buy";
-    if (score >= 45) return "Hold";
-    if (score >= 30) return "Weak";
-    return "Avoid";
+  // Get the score - Gemini's confidenceScore is PRIMARY, scorecard is just supporting data
+  const aiScore = analysis.confidenceScore ?? (analysis as any).scorecard?.globalScore ?? 50;
+  const scorecardScore = (analysis as any).scorecard?.globalScore; // Supporting metadata only
+  
+  // Determine if this is a SELL/short opportunity
+  const overallRatingLower = (analysis.overallRating ?? '').toLowerCase();
+  const recommendationLower = (analysis.recommendation ?? '').toLowerCase();
+  const isSellOpportunity = recommendationLower === 'sell' || 
+                            overallRatingLower.includes('sell') ||
+                            overallRatingLower.includes('avoid');
+  
+  const getSignalLabel = (score: number, isSell: boolean): string => {
+    if (isSell) {
+      // For short opportunities, high score = strong short signal
+      if (score >= 75) return "Strong Short";
+      if (score >= 60) return "Short Signal";
+      if (score >= 45) return "Weak Short";
+      return "No Clear Signal";
+    } else {
+      if (score >= 75) return "Strong Buy";
+      if (score >= 60) return "Moderate Buy";
+      if (score >= 45) return "Hold";
+      if (score >= 30) return "Weak";
+      return "Avoid";
+    }
   };
-  const signalLabel = getSignalLabel(globalScore);
-  const signalVariant = globalScore >= 70 ? 'default' : globalScore >= 50 ? 'secondary' : 'destructive';
+  const signalLabel = getSignalLabel(aiScore, isSellOpportunity);
+  const signalVariant = aiScore >= 70 ? 'default' : aiScore >= 50 ? 'secondary' : 'destructive';
 
   // Build evidence chips from available data with hints for tooltips
   const evidenceChips: { label: string; source: string; hint: string }[] = [];
@@ -412,13 +429,31 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
               <Badge variant={signalVariant} className="text-sm font-semibold px-3">
                 {signalLabel}
               </Badge>
-              <span className={`text-xl font-mono font-bold ${
-                globalScore >= 70 ? "text-emerald-600 dark:text-emerald-400" : 
-                globalScore >= 50 ? "text-amber-600 dark:text-amber-400" : 
-                "text-red-500 dark:text-red-400"
-              }`} data-testid="text-global-score">
-                {globalScore}/100
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={`text-xl font-mono font-bold cursor-help ${
+                    aiScore >= 70 ? "text-emerald-600 dark:text-emerald-400" : 
+                    aiScore >= 50 ? "text-amber-600 dark:text-amber-400" : 
+                    "text-red-500 dark:text-red-400"
+                  }`} data-testid="text-ai-score">
+                    {aiScore}/100
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-sm">
+                  <p className="font-medium">AI Confidence Score</p>
+                  <p className="text-muted-foreground">
+                    {isSellOpportunity 
+                      ? "How confident the AI is in the short opportunity for a 1-2 week horizon"
+                      : "How confident the AI is in the buy opportunity for a 1-2 week horizon"
+                    }
+                  </p>
+                  {scorecardScore && scorecardScore !== aiScore && (
+                    <p className="text-xs mt-1 text-muted-foreground">
+                      Rule-based scorecard: {scorecardScore}/100
+                    </p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </CardHeader>
@@ -454,7 +489,12 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
-            <span className="italic">Optimized for 1-2 week trading horizon</span>
+            <span className="italic">
+              {isSellOpportunity 
+                ? "Optimized for 1-2 week short opportunity" 
+                : "Optimized for 1-2 week trading horizon"
+              }
+            </span>
           </div>
         </CardContent>
       </Card>

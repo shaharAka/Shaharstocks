@@ -1,6 +1,7 @@
 import { Step } from "react-joyride";
 
 export type TutorialId = 
+  | "ui-intro"
   | "recommendations" 
   | "analysis" 
   | "settings" 
@@ -58,6 +59,39 @@ export function getTutorialIdFromRoute(pathname: string): TutorialId | null {
 }
 
 export const tutorials: Record<TutorialId, TutorialConfig> = {
+  "ui-intro": {
+    id: "ui-intro",
+    title: "Getting Started",
+    triggerCondition: "after-onboarding",
+    steps: [
+      {
+        target: "[data-testid='link-dashboard']",
+        content: "This is your Dashboard - it shows all the stocks you're following in one simple view. Start here to track your watchlist.",
+        placement: "right",
+        disableBeacon: true,
+      },
+      {
+        target: "[data-testid='link-opportunities']",
+        content: "Browse Opportunities to discover new stocks with insider trading activity. Each stock is scored by AI to help you find the best signals.",
+        placement: "right",
+      },
+      {
+        target: "[data-testid='link-following']",
+        content: "Your followed stocks appear here in the sidebar for quick access. They're organized by signal strength.",
+        placement: "right",
+      },
+      {
+        target: "[data-testid='button-notifications']",
+        content: "Check notifications for high-value alerts: exceptional signals (90+), stance changes on your positions, and popular stocks.",
+        placement: "bottom",
+      },
+      {
+        target: "[data-testid='button-help']",
+        content: "Click the help button anytime to replay the tutorial for the current page. Each page has its own guide to help you get the most out of signal2.",
+        placement: "bottom",
+      },
+    ],
+  },
   recommendations: {
     id: "recommendations",
     title: "Discover Opportunities",

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,13 +64,40 @@ export function StockExplorer({
   const [insiderHistoryOpen, setInsiderHistoryOpen] = useState(false);
   const [selectedInsider, setSelectedInsider] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  
+  // Track which ticker we've already marked as viewed in this dialog session
+  const markedViewedRef = useRef<string | null>(null);
 
-  // Reset to overview tab when dialog opens for a new stock
+  // Mark stock as viewed when dialog opens
+  const markViewedMutation = useMutation({
+    mutationFn: async (ticker: string) => {
+      const response = await apiRequest("POST", `/api/stocks/${ticker}/view`);
+      return response;
+    },
+    onSuccess: () => {
+      if (currentUser?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/stock-views", currentUser.id] });
+      }
+    },
+  });
+
+  // Reset to overview tab and mark as viewed when dialog opens for a new stock
   useEffect(() => {
     if (open && stock?.ticker) {
       setActiveTab("overview");
+      
+      // Mark as viewed only once per dialog open, and only if user is logged in
+      if (currentUser?.id && markedViewedRef.current !== stock.ticker) {
+        markedViewedRef.current = stock.ticker;
+        markViewedMutation.mutate(stock.ticker);
+      }
     }
-  }, [open, stock?.ticker]);
+    
+    // Reset ref when dialog closes
+    if (!open) {
+      markedViewedRef.current = null;
+    }
+  }, [open, stock?.ticker, currentUser?.id]);
 
   const { data: comments = [] } = useQuery<StockCommentWithUser[]>({
     queryKey: ["/api/stocks", stock?.ticker, "comments"],

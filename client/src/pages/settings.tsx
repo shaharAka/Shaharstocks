@@ -9,10 +9,13 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Settings as SettingsIcon, Send, Save, RefreshCw, CheckCircle2, XCircle, CreditCard, Clock, AlertTriangle, ExternalLink, Crown, Copy, ChevronDown, ChevronUp } from "lucide-react";
+import { Settings as SettingsIcon, Send, Save, RefreshCw, CheckCircle2, XCircle, CreditCard, Clock, AlertTriangle, ExternalLink, Crown, Copy, ChevronDown, ChevronUp, Lock, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type TelegramConfig, type OpeninsiderConfig } from "@shared/schema";
+import { useUser } from "@/contexts/UserContext";
+import { Link } from "wouter";
+import { formatDistanceToNow, addHours, addDays, differenceInMinutes, differenceInHours } from "date-fns";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -956,6 +959,7 @@ function DisplayPreferencesSection() {
 
 function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'openinsider', action: 'attempt' | 'success' | 'error', details: string, data?: any) => void }) {
   const { toast } = useToast();
+  const { user } = useUser();
   const [openinsiderEnabled, setOpeninsiderEnabled] = useState(false);
   const [fetchLimit, setFetchLimit] = useState(50);
   const [fetchInterval, setFetchInterval] = useState<"hourly" | "daily">("hourly");
@@ -965,6 +969,41 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
   const [fetchPreviousDayOnly, setFetchPreviousDayOnly] = useState(false);
   const [optionsDealThreshold, setOptionsDealThreshold] = useState(15);
   const [minCommunityEngagement, setMinCommunityEngagement] = useState(10);
+
+  // Subscription-based refresh limits
+  const isTrialUser = user?.subscriptionStatus === "trial" || user?.subscriptionStatus === "pending_verification";
+  const isPaidUser = user?.subscriptionStatus === "active";
+  const lastDataRefresh = user?.lastDataRefresh ? new Date(user.lastDataRefresh) : null;
+  
+  // Calculate next refresh time and status
+  const getRefreshStatus = () => {
+    if (!lastDataRefresh) {
+      return { canRefresh: true, nextRefreshTime: null, timeUntilRefresh: null };
+    }
+    
+    const now = new Date();
+    const refreshInterval = isPaidUser ? 1 : 24; // hours
+    const nextRefresh = isPaidUser ? addHours(lastDataRefresh, 1) : addDays(lastDataRefresh, 1);
+    const canRefresh = now >= nextRefresh;
+    
+    if (canRefresh) {
+      return { canRefresh: true, nextRefreshTime: null, timeUntilRefresh: null };
+    }
+    
+    const minutesRemaining = differenceInMinutes(nextRefresh, now);
+    const hoursRemaining = differenceInHours(nextRefresh, now);
+    
+    let timeUntilRefresh: string;
+    if (minutesRemaining < 60) {
+      timeUntilRefresh = `${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}`;
+    } else {
+      timeUntilRefresh = `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
+    }
+    
+    return { canRefresh: false, nextRefreshTime: nextRefresh, timeUntilRefresh };
+  };
+  
+  const refreshStatus = getRefreshStatus();
 
   const { data: config, isLoading } = useQuery<OpeninsiderConfig>({
     queryKey: ["/api/openinsider/config"],
@@ -1103,23 +1142,123 @@ function OpenInsiderConfigSection({ addLog }: { addLog: (source: 'telegram' | 'o
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="fetch-interval">Fetch Interval</Label>
-                <Select
-                  value={fetchInterval}
-                  onValueChange={(value: "hourly" | "daily") => setFetchInterval(value)}
-                  disabled={!openinsiderEnabled}
-                >
-                  <SelectTrigger id="fetch-interval" data-testid="select-fetch-interval">
-                    <SelectValue placeholder="Select interval" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hourly">Hourly</SelectItem>
-                    <SelectItem value="daily">Daily</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  How often to fetch new insider trading data
-                </p>
+                <Label htmlFor="fetch-interval" className="flex items-center gap-2">
+                  Fetch Interval
+                  {isTrialUser && (
+                    <Badge variant="secondary" className="text-xs">
+                      <Lock className="h-3 w-3 mr-1" />
+                      Paid Feature
+                    </Badge>
+                  )}
+                </Label>
+                {isTrialUser ? (
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Select value="daily" disabled>
+                        <SelectTrigger 
+                          id="fetch-interval" 
+                          data-testid="select-fetch-interval"
+                          className="opacity-60"
+                        >
+                          <SelectValue placeholder="Daily" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Alert className="bg-primary/5 border-primary/20">
+                      <Zap className="h-4 w-4 text-primary" />
+                      <AlertDescription className="ml-2">
+                        <span className="font-medium">Trial users receive daily data updates.</span>
+                        <br />
+                        <span className="text-muted-foreground">
+                          Upgrade to get hourly insider trading alerts and never miss a signal.
+                        </span>
+                        <Link href="/purchase">
+                          <Button 
+                            variant="default" 
+                            size="sm" 
+                            className="mt-2"
+                            data-testid="button-upgrade-for-hourly"
+                          >
+                            <Crown className="h-4 w-4 mr-2" />
+                            Upgrade Now
+                          </Button>
+                        </Link>
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                ) : (
+                  <>
+                    <Select
+                      value={fetchInterval}
+                      onValueChange={(value: "hourly" | "daily") => setFetchInterval(value)}
+                      disabled={!openinsiderEnabled}
+                    >
+                      <SelectTrigger id="fetch-interval" data-testid="select-fetch-interval">
+                        <SelectValue placeholder="Select interval" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hourly">Hourly</SelectItem>
+                        <SelectItem value="daily">Daily</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      How often to fetch new insider trading data
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Data Refresh Status */}
+              <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Clock className="h-4 w-4" />
+                  Data Refresh Status
+                </div>
+                <div className="grid gap-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Your Plan:</span>
+                    <Badge variant={isPaidUser ? "default" : "secondary"} data-testid="badge-subscription-type">
+                      {isPaidUser ? (
+                        <>
+                          <Crown className="h-3 w-3 mr-1" />
+                          Paid (Hourly Updates)
+                        </>
+                      ) : (
+                        <>
+                          <Clock className="h-3 w-3 mr-1" />
+                          Trial (Daily Updates)
+                        </>
+                      )}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Last Data Refresh:</span>
+                    <span className="font-medium" data-testid="text-last-refresh">
+                      {lastDataRefresh 
+                        ? formatDistanceToNow(lastDataRefresh, { addSuffix: true })
+                        : "Never"
+                      }
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Next Refresh:</span>
+                    <span className="font-medium" data-testid="text-next-refresh">
+                      {refreshStatus.canRefresh ? (
+                        <Badge variant="outline" className="text-green-600 border-green-600">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Ready Now
+                        </Badge>
+                      ) : (
+                        <span className="text-amber-600">
+                          In {refreshStatus.timeUntilRefresh}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">

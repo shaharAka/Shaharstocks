@@ -39,6 +39,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Tutorial System**: Manual-only tutorials, triggered by user interaction, with enhanced element targeting and simplified content.
 - **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language.
 - **Fetch Configuration**: Simplified dialog for data ingestion settings, defaulting to daily refresh, with display preferences managed on the Opportunities page.
+- **Subscription-Based Refresh Limits**: Trial users receive new insider trading data once per day (daily refresh), while paid subscribers receive hourly updates. Price updates for existing stocks are not affected by this limit. A `lastDataRefresh` timestamp tracks each user's last data delivery, with mutex-protected job execution to prevent race conditions.
 
 ## External Dependencies
 

@@ -606,6 +606,7 @@ export const users = pgTable("users", {
   subscriptionStartDate: timestamp("subscription_start_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
   trialEndsAt: timestamp("trial_ends_at"), // When the 30-day trial ends
+  lastDataRefresh: timestamp("last_data_refresh"), // Last time user received new stock data (for subscription-based refresh limits)
   initialDataFetched: boolean("initial_data_fetched").notNull().default(false), // Track if initial 500 OpenInsider transactions have been fetched
   hasSeenOnboarding: boolean("has_seen_onboarding").notNull().default(false), // Track if user has completed the onboarding flow
   onboardingCompletedAt: timestamp("onboarding_completed_at"), // When user completed the unified onboarding flow
@@ -626,6 +627,7 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true, 
   createdAt: true,
   archivedAt: true,
+  lastDataRefresh: true,
 });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;

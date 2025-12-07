@@ -37,7 +37,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Position Tracking with P&L Calculation**: Users can close positions with calculated P&L, displayed as total realized gains/losses on the dashboard.
 - **Onboarding Flow**: 4-step onboarding with automatic data fetching, visual feedback for fetch status, and educational content.
 - **Tutorial System**: Manual-only tutorials, triggered by user interaction, with enhanced element targeting and simplified content.
-- **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language.
+- **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language. The unified "Action Summary" section combines trading guidance, timing indicators (early/optimal/late based on insider trade date), and all key signals in one cohesive card.
 - **Fetch Configuration**: Simplified dialog for data ingestion settings, defaulting to daily refresh, with display preferences managed on the Opportunities page.
 - **Subscription-Based Refresh Limits**: Trial users receive new insider trading data once per day (daily refresh), while paid subscribers receive hourly updates. Price updates for existing stocks are not affected by this limit. A `lastDataRefresh` timestamp tracks each user's last data delivery, with mutex-protected job execution to prevent race conditions.
 

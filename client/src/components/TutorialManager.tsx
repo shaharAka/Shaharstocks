@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Tutorial } from "./tutorial";
 import { getTutorialIdFromRoute, TutorialId } from "@/config/tutorials";
@@ -9,9 +9,6 @@ export function TutorialManager() {
   const [forceTutorialId, setForceTutorialId] = useState<TutorialId | null>(null);
   const [manualTrigger, setManualTrigger] = useState(false);
   const { experienceState, completeTutorial } = useUser();
-  
-  // Track pending intro tour request (survives state transitions)
-  const pendingIntroTour = useRef(false);
 
   // Get tutorial ID from current route
   const currentTutorialId = getTutorialIdFromRoute(location);
@@ -20,15 +17,12 @@ export function TutorialManager() {
   const activeTutorialId = forceTutorialId || currentTutorialId;
 
   // Reset manual trigger on location change to prevent carryover between pages
-  // BUT: don't reset if we're running the ui-intro (it persists across navigation)
   useEffect(() => {
-    if (forceTutorialId !== "ui-intro") {
-      setManualTrigger(false);
-      setForceTutorialId(null);
-    }
-  }, [location, forceTutorialId]);
+    setManualTrigger(false);
+    setForceTutorialId(null);
+  }, [location]);
 
-  // Listen for tutorial events (manual replay via help button or post-onboarding intro)
+  // Listen for tutorial events (manual replay via help button only)
   useEffect(() => {
     const handleReplayTutorial = (event: Event) => {
       const customEvent = event as CustomEvent<{ tutorialId?: TutorialId }>;
@@ -45,31 +39,11 @@ export function TutorialManager() {
       }
     };
 
-    // Listen for post-onboarding intro tour
-    const handleStartIntroTour = () => {
-      // Mark that we want to start the intro tour
-      pendingIntroTour.current = true;
-    };
-
     window.addEventListener('replay-tutorial', handleReplayTutorial);
-    window.addEventListener('start-intro-tour', handleStartIntroTour);
     return () => {
       window.removeEventListener('replay-tutorial', handleReplayTutorial);
-      window.removeEventListener('start-intro-tour', handleStartIntroTour);
     };
   }, [currentTutorialId]);
-
-  // Start intro tour when experienceState transitions to "complete" and we have a pending request
-  useEffect(() => {
-    if (pendingIntroTour.current && experienceState === "complete") {
-      pendingIntroTour.current = false;
-      // Small delay to ensure UI elements are visible after onboarding dialog closes
-      setTimeout(() => {
-        setForceTutorialId("ui-intro");
-        setManualTrigger(true);
-      }, 500);
-    }
-  }, [experienceState]);
 
   // Don't render tutorials during onboarding or loading, or if no tutorial available
   if (!activeTutorialId || experienceState === "onboarding_pending" || experienceState === "loading") {

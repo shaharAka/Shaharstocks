@@ -377,57 +377,6 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
             </div>
           )}
 
-          {/* Supporting Metrics (Micro + Macro Breakdown) */}
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="metrics">
-              <AccordionTrigger className="text-xs sm:text-sm" data-testid="button-toggle-metrics">
-                View Signal Components
-              </AccordionTrigger>
-              <AccordionContent className="space-y-3 sm:space-y-4 pt-2">
-                {/* Micro Score (Company Analysis) */}
-                {analysis.confidenceScore != null && (
-                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
-                    <div className="flex items-center gap-2">
-                      <Brain className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs sm:text-sm font-medium">Company Analysis</span>
-                    </div>
-                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-micro-score">
-                      {analysis.confidenceScore}/100
-                    </span>
-                  </div>
-                )}
-
-                {/* Macro Factor (Market Context) */}
-                {macroAnalysis?.macroFactor != null && (
-                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs sm:text-sm font-medium">Market Context</span>
-                    </div>
-                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-macro-factor">
-                      ×{macroAnalysis.macroFactor}
-                    </span>
-                  </div>
-                )}
-
-                {/* Calculation - only show if we have integrated score and both components */}
-                {analysis.integratedScore != null && 
-                 macroAnalysis?.macroFactor != null && 
-                 analysis.confidenceScore != null && (
-                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
-                    Signal derived from Company Analysis ({analysis.confidenceScore}) adjusted by Market Context (×{macroAnalysis.macroFactor})
-                  </div>
-                )}
-                
-                {/* If only company score exists (no macro integration yet) */}
-                {analysis.integratedScore == null && analysis.confidenceScore != null && (
-                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
-                    Signal based on Company Analysis only (Market Context pending)
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
         </CardContent>
       </Card>
 

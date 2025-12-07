@@ -326,11 +326,9 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         <CardContent className="space-y-4 pt-0">
           {/* The Recommendation */}
           {analysis.recommendation && (
-            <div className="p-4 bg-muted/50 rounded-lg border-l-4 border-l-amber-500">
-              <p className="text-sm leading-relaxed font-medium" data-testid="text-recommendation">
-                {analysis.recommendation}
-              </p>
-            </div>
+            <p className="text-sm leading-relaxed text-muted-foreground" data-testid="text-recommendation">
+              {analysis.recommendation}
+            </p>
           )}
           
           <p className="text-xs text-muted-foreground italic">

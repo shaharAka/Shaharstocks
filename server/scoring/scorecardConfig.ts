@@ -217,9 +217,9 @@ export const scorecardConfig: ScorecardConfig = {
           missingDataScore: 0,
         },
         transactionSize: {
-          name: "Transaction Size",
+          name: "Transaction Size vs Float",
           weight: 20,
-          description: "Insider transaction value as % of market cap (proxy for significance)",
+          description: "Insider transaction value relative to float",
           thresholds: {
             excellent: { min: 0.5, score: 10 },
             good: { min: 0.1, max: 0.5, score: 8 },
@@ -377,18 +377,12 @@ export interface Scorecard {
 
 /**
  * Calculate section score from metric scores
- * IMPORTANT: Missing metrics are EXCLUDED from the calculation to avoid skewing scores.
- * Only metrics with actual data contribute to the weighted average.
  */
 export function calculateSectionScore(metrics: Record<string, MetricScore>): number {
   let weightedSum = 0;
   let totalWeight = 0;
 
   for (const metric of Object.values(metrics)) {
-    // Skip missing metrics - they should not contribute to the score
-    if (metric.ruleBucket === 'missing') {
-      continue;
-    }
     weightedSum += metric.score * metric.weight;
     totalWeight += metric.weight;
   }

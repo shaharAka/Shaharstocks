@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +57,7 @@ type StockWithUserStatus = Stock & {
 };
 
 type SortOption = "signal" | "daysFromTrade" | "marketCap";
-type FunnelSection = "all" | "worthExploring" | "recents" | "processing" | "communityPicks" | "rejected";
+type FunnelSection = "worthExploring" | "recents" | "processing" | "communityPicks" | "rejected";
 type ViewMode = "cards" | "table";
 
 type GroupedStock = {
@@ -96,7 +96,7 @@ export default function Purchase() {
   const [sortBy, setSortBy] = useState<SortOption>("signal");
   const [tickerSearch, setTickerSearch] = useState("");
   const [showAllOpportunities, setShowAllOpportunities] = useState(currentUser?.showAllOpportunities ?? false);
-  const [funnelSection, setFunnelSection] = useState<FunnelSection>("all");
+  const [funnelSection, setFunnelSection] = useState<FunnelSection>("worthExploring");
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
@@ -398,7 +398,6 @@ export default function Purchase() {
 
     // Categorize into funnel sections
     const sections: Record<FunnelSection, GroupedStock[]> = {
-      all: [],
       processing: [],
       worthExploring: [],
       recents: [],
@@ -419,7 +418,7 @@ export default function Purchase() {
         return;
       }
 
-      // User rejected stocks always go to rejected only
+      // User rejected stocks always go to rejected
       if (isUserRejected) {
         sections.rejected.push(group);
         return;
@@ -428,23 +427,15 @@ export default function Purchase() {
       // Check if user has recently viewed this stock
       const isRecentlyViewed = viewedTickers.includes(group.latestTransaction.ticker);
 
-      // Check if auto-rejected (low score with single transaction)
-      const isAutoRejected = score < 40 && group.transactionCount === 1;
-
-      // Auto-rejected stocks go to rejected section
-      if (isAutoRejected) {
-        sections.rejected.push(group);
-        return;
-      }
-
-      // All non-rejected stocks with scores go to "all" section
-      sections.all.push(group);
-
       // SELL opportunity logic (unified signal scale: higher = better opportunity)
       if (isSell) {
         // High Signal: Score >= 70 (high confidence SELL opportunity)
         if (score >= 70) {
           sections.worthExploring.push(group);
+        }
+        // Auto-reject: Score < 40 (low confidence, weak signal)
+        else if (score < 40 && group.transactionCount === 1) {
+          sections.rejected.push(group);
         }
         // Recently Viewed: User has viewed this stock
         else if (isRecentlyViewed) {
@@ -453,8 +444,12 @@ export default function Purchase() {
       }
       // BUY opportunity logic (unified signal scale: higher = better opportunity)
       else if (isBuy) {
+        // Auto-reject: Score < 40 (unless multiple transactions)
+        if (score < 40 && group.transactionCount === 1) {
+          sections.rejected.push(group);
+        }
         // High Signal: Score >= 70 (includes both light amber 70-89 and bold amber 90-100)
-        if (score >= 70) {
+        else if (score >= 70) {
           sections.worthExploring.push(group);
         }
         // Recently Viewed: User has viewed this stock
@@ -496,7 +491,6 @@ export default function Purchase() {
       });
     };
 
-    sections.all = sortGroupedStocks(sections.all);
     sections.processing = sortGroupedStocks(sections.processing);
     sections.worthExploring = sortGroupedStocks(sections.worthExploring);
     sections.recents = sortGroupedStocks(sections.recents);
@@ -523,6 +517,38 @@ export default function Purchase() {
     aiScore: group.highestScore,
     isFollowing: group.isFollowing,
   }));
+
+  // Auto-mark stocks as viewed when they appear in the list
+  // This ensures the "new" badge count stays accurate
+  const markedTickersRef = useRef<Set<string>>(new Set());
+  
+  useEffect(() => {
+    if (opportunities.length > 0 && currentUser?.id && !isLoading) {
+      const tickers = opportunities.map(opp => opp.ticker);
+      // Only mark non-viewed tickers that haven't been marked in this session yet
+      const newTickers = tickers.filter(
+        ticker => !viewedTickers.includes(ticker) && !markedTickersRef.current.has(ticker)
+      );
+      
+      if (newTickers.length > 0) {
+        // Mark as "being processed" to prevent re-submission
+        newTickers.forEach(ticker => markedTickersRef.current.add(ticker));
+        
+        // Call bulk-view endpoint
+        apiRequest("POST", "/api/stocks/bulk-view", { tickers: newTickers })
+          .then(() => {
+            // Invalidate viewed tickers cache to update badge
+            queryClient.invalidateQueries({ queryKey: ["/api/stock-views", currentUser.id] });
+          })
+          .catch(err => {
+            console.error("Failed to mark stocks as viewed:", err);
+            // Remove from ref on error so it can be retried
+            newTickers.forEach(ticker => markedTickersRef.current.delete(ticker));
+          });
+      }
+    }
+  }, [opportunities, currentUser?.id, isLoading, viewedTickers]);
+
 
   if (isLoading) {
     return (
@@ -670,14 +696,6 @@ export default function Purchase() {
 
       {/* Funnel Section Filters */}
       <div className="flex flex-wrap gap-2">
-        <Badge
-          variant={funnelSection === "all" ? "default" : "outline"}
-          className="cursor-pointer hover-elevate active-elevate-2"
-          onClick={() => setFunnelSection("all")}
-          data-testid="filter-all"
-        >
-          All ({funnelSections.all?.length || 0})
-        </Badge>
         <Badge
           variant={funnelSection === "worthExploring" ? "default" : "outline"}
           className="cursor-pointer hover-elevate active-elevate-2"

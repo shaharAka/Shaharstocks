@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Brain, Globe, AlertTriangle } from "lucide-react";
 import type { StockAnalysis, MacroAnalysis } from "@shared/schema";
-import { getPrimaryScore } from "@/lib/utils";
 import {
   Accordion,
   AccordionContent,
@@ -25,7 +24,6 @@ export function SignalSummary({ ticker }: SignalSummaryProps) {
       if (!response.ok) throw new Error("Failed to fetch analysis");
       return response.json();
     },
-    staleTime: 0, // Always fetch fresh data for analysis
     refetchInterval: (query) => {
       const data = query.state.data;
       if (data && (data.status === "pending" || data.status === "analyzing")) {
@@ -67,8 +65,8 @@ export function SignalSummary({ ticker }: SignalSummaryProps) {
     );
   }
 
-  // Calculate primary signal score using shared utility for consistency
-  const primaryScore = getPrimaryScore(analysis);
+  // Calculate primary signal score (null if unavailable)
+  const primaryScore = analysis.integratedScore ?? analysis.confidenceScore ?? null;
   
   // Don't render if no valid score
   if (primaryScore === null) {

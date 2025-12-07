@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { StockAnalysis } from "@shared/schema";
-import { getPrimaryScore } from "@/lib/utils";
 
 interface CompactSignalBadgeProps {
   ticker: string;
@@ -18,7 +17,6 @@ export function CompactSignalBadge({ ticker, showEmptyState = false }: CompactSi
       if (!response.ok) throw new Error("Failed to fetch AI analysis");
       return response.json();
     },
-    staleTime: 0, // Always fetch fresh data for analysis
     refetchInterval: (query) => {
       const data = query.state.data;
       if (data && (data.status === "pending" || data.status === "analyzing")) {
@@ -48,7 +46,7 @@ export function CompactSignalBadge({ ticker, showEmptyState = false }: CompactSi
     return null;
   }
 
-  const primaryScore = getPrimaryScore(analysis);
+  const primaryScore = analysis.integratedScore ?? analysis.confidenceScore ?? null;
   
   if (primaryScore === null) {
     if (showEmptyState) {

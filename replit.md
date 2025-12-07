@@ -26,7 +26,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Cache Isolation**: User-scoped cache keys and custom query functions prevent cross-user data contamination.
 
 ### Feature Specifications
-- **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for Enhanced Sector ETF Analysis) influences recommendations. Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching via backoffice settings. The UI prioritizes Gemini's natural reasoning over rule-based heuristics, displaying the AI's summary, recommendation, and key strengths with evidence chips that ground conclusions in actual data (SEC filings, P/E ratios, insider activity, news sentiment).
+- **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for Enhanced Sector ETF Analysis) influences recommendations. Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching via backoffice settings.
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
 - **Collaboration**: Multi-user system with stock-specific comment threads and recommendation filtering.
 - **Adaptive Stock Fetching**: Stock fetch limits adjust based on user onboarding and configuration, with customizable OpenInsider filters.
@@ -37,7 +37,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Position Tracking with P&L Calculation**: Users can close positions with calculated P&L, displayed as total realized gains/losses on the dashboard.
 - **Onboarding Flow**: 4-step onboarding with automatic data fetching, visual feedback for fetch status, and educational content.
 - **Tutorial System**: Manual-only tutorials, triggered by user interaction, with enhanced element targeting and simplified content.
-- **AI Analysis UX**: Narrative-first display with two main sections: (1) AI Decision card showing score, signal label, and recommendation; (2) "How This Decision Was Made" card showing AI summary, key strengths, and evidence chips with data sources (SEC filings, Fundamentals, Technicals, News, Insider activity). Risks are collapsed by default. The 5-section scorecard is hidden to let Gemini's natural reasoning drive the explanation.
+- **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language.
 - **Fetch Configuration**: Simplified dialog for data ingestion settings, defaulting to daily refresh, with display preferences managed on the Opportunities page.
 - **Subscription-Based Refresh Limits**: Trial users receive new insider trading data once per day (daily refresh), while paid subscribers receive hourly updates. Price updates for existing stocks are not affected by this limit. A `lastDataRefresh` timestamp tracks each user's last data delivery, with mutex-protected job execution to prevent race conditions.
 

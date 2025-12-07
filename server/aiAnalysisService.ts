@@ -156,6 +156,98 @@ interface FinancialData {
     totalAssets?: string;
     totalLiabilities?: string;
   };
+  // Macro/sector analysis for context
+  macroAnalysis?: {
+    industry?: string;
+    macroScore?: number;
+    macroFactor?: number;
+    marketCondition?: string;
+    sectorOutlook?: string;
+  };
+}
+
+/**
+ * Calculate timing metrics for insider trade analysis
+ */
+function calculateTimingMetrics(insiderTradingStrength: FinancialData['insiderTradingStrength']): {
+  daysSinceTrade: number;
+  priceChangePct: number;
+  timingPhase: 'early' | 'mid' | 'late' | 'unknown';
+  timingExplanation: string;
+} | null {
+  if (!insiderTradingStrength) return null;
+  
+  // Parse trade date - handle missing/invalid dates
+  const tradeDateStr = insiderTradingStrength.tradeDate;
+  if (!tradeDateStr || tradeDateStr === 'Unknown' || tradeDateStr === 'N/A') return null;
+  
+  const tradeDate = new Date(tradeDateStr);
+  if (isNaN(tradeDate.getTime())) return null;
+  
+  const now = new Date();
+  const daysSinceTrade = Math.floor((now.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Parse prices (remove $ and commas) - handle missing/unknown values
+  const insiderPriceStr = insiderTradingStrength.insiderPrice;
+  const currentPriceStr = insiderTradingStrength.currentPrice;
+  
+  // Guard against undefined, null, or "Unknown" values
+  if (!insiderPriceStr || !currentPriceStr || 
+      insiderPriceStr === 'Unknown' || currentPriceStr === 'Unknown' ||
+      insiderPriceStr === 'N/A' || currentPriceStr === 'N/A') {
+    // Return with just timing info, no price change
+    return {
+      daysSinceTrade,
+      priceChangePct: 0,
+      timingPhase: daysSinceTrade <= 5 ? 'early' : daysSinceTrade <= 14 ? 'mid' : 'late',
+      timingExplanation: `Trade was ${daysSinceTrade} days ago. Price data unavailable for change calculation.`
+    };
+  }
+  
+  const insiderPrice = parseFloat(insiderPriceStr.replace(/[$,]/g, ''));
+  const currentPrice = parseFloat(currentPriceStr.replace(/[$,]/g, ''));
+  
+  // Calculate price change
+  const priceChangePct = isNaN(insiderPrice) || isNaN(currentPrice) || insiderPrice === 0 
+    ? 0 
+    : ((currentPrice - insiderPrice) / insiderPrice) * 100;
+  
+  // Determine timing phase based on days and price movement
+  let timingPhase: 'early' | 'mid' | 'late' | 'unknown' = 'unknown';
+  let timingExplanation = '';
+  
+  const isBuy = insiderTradingStrength.direction === 'buy';
+  
+  if (daysSinceTrade <= 5) {
+    timingPhase = 'early';
+    timingExplanation = `Trade was ${daysSinceTrade} days ago. This is EARLY - the market may not have fully reacted yet.`;
+  } else if (daysSinceTrade <= 14) {
+    if (isBuy) {
+      if (priceChangePct > 10) {
+        timingPhase = 'late';
+        timingExplanation = `Price already up ${priceChangePct.toFixed(1)}% since trade ${daysSinceTrade} days ago. May be LATE to the move.`;
+      } else if (priceChangePct < -5) {
+        timingPhase = 'early';
+        timingExplanation = `Price down ${Math.abs(priceChangePct).toFixed(1)}% since trade - could be a better entry if thesis holds.`;
+      } else {
+        timingPhase = 'mid';
+        timingExplanation = `Trade ${daysSinceTrade} days ago, price ${priceChangePct >= 0 ? 'up' : 'down'} ${Math.abs(priceChangePct).toFixed(1)}%. MID-MOVE timing.`;
+      }
+    } else {
+      if (priceChangePct < -10) {
+        timingPhase = 'late';
+        timingExplanation = `Price already down ${Math.abs(priceChangePct).toFixed(1)}% since sell ${daysSinceTrade} days ago. May be LATE to exit.`;
+      } else {
+        timingPhase = 'mid';
+        timingExplanation = `Sell was ${daysSinceTrade} days ago. Price ${priceChangePct >= 0 ? 'up' : 'down'} ${Math.abs(priceChangePct).toFixed(1)}%.`;
+      }
+    }
+  } else {
+    timingPhase = 'late';
+    timingExplanation = `Trade was ${daysSinceTrade} days ago (over 2 weeks). The opportunity window may have passed.`;
+  }
+  
+  return { daysSinceTrade, priceChangePct, timingPhase, timingExplanation };
 }
 
 class AIAnalysisService {
@@ -212,6 +304,9 @@ class AIAnalysisService {
     const transactionContext = isBuy 
       ? "INSIDER BUYING" 
       : (isSell ? "INSIDER SELLING" : "INSIDER TRADING");
+    
+    // Calculate timing metrics to understand if we're early/mid/late in the move
+    const timingMetrics = calculateTimingMetrics(insiderTradingStrength);
     
     const analysisContext = isBuy
       ? "Company insiders (executives, board members) just purchased shares. Analyze if this is a strong buy signal or if there are concerns that make it a pass within the next 1-2 weeks."
@@ -325,6 +420,21 @@ PRIMARY TRANSACTION (Most Recent):
 - Current Price: ${insiderTradingStrength.currentPrice}
 - Total Value: ${insiderTradingStrength.totalValue}
 
+⏱️ TIMING ANALYSIS (CRITICAL FOR 1-2 WEEK HORIZON):
+${timingMetrics ? `
+- Days Since Trade: ${timingMetrics.daysSinceTrade} days
+- Price Change Since Trade: ${timingMetrics.priceChangePct >= 0 ? '+' : ''}${timingMetrics.priceChangePct.toFixed(1)}%
+- TIMING PHASE: ${timingMetrics.timingPhase.toUpperCase()}
+- Assessment: ${timingMetrics.timingExplanation}
+
+TIMING GUIDANCE:
+- EARLY (0-5 days): Good entry window, market may not have fully absorbed the signal
+- MID (5-14 days, modest move): Acceptable if fundamentals support
+- LATE (14+ days OR >10% move already): Opportunity may have passed, higher risk
+
+You MUST factor timing into your recommendation. If the trade is LATE, acknowledge this and adjust confidence accordingly.
+` : "Timing data unavailable - proceed with caution on timing assessment"}
+
 ALL TRANSACTIONS FOR THIS TICKER:
 ${insiderTradingStrength.allTransactions.map((t, idx) => 
   `${idx + 1}. ${t.direction.toUpperCase()} - ${t.insiderName} (${t.insiderTitle}): ${t.quantityStr} @ ${t.price} on ${t.date} (Value: ${t.value})`
@@ -402,9 +512,13 @@ Provide your analysis in this EXACT JSON format:
     "key_themes": ["2-3 key themes from recent news"]
   },
   "insiderValidation": "1-2 sentences: Does the fundamental and technical analysis support this insider ${isBuy ? "buy" : (isSell ? "sell" : "transaction")}?",
+  "timingAssessment": {
+    "phase": "early" or "mid" or "late",
+    "explanation": "1-2 sentences explaining if we are early, mid, or late in the move based on trade date and price action"
+  },
   "risks": ["List 3-5 specific risks for the 1-2 week window"],
   "opportunities": ["List 2-4 specific catalysts that could ${isBuy ? "drive price up" : (isSell ? "drive price down" : "move price")} in 1-2 weeks"],
-  "recommendation": "Clear 2-3 sentence recommendation: ${isBuy ? "BUY or PASS" : (isSell ? "SELL/AVOID or PASS" : "Action")} for 1-2 week window, and why"
+  "recommendation": "REQUIRED FORMAT: Start with 'For the 1-2 week trading window:' then give your ${isBuy ? "BUY or PASS" : (isSell ? "AVOID or PASS" : "action")} recommendation with 2-3 sentences explaining why, citing timing, fundamentals, and key evidence."
 }
 
 CRITICAL: OPPORTUNITY SCORE RUBRIC (confidenceScore: 0-100 scale)

@@ -9,7 +9,8 @@ import {
   RotateCcw,
   FileText,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Clock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -370,6 +371,22 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     });
   }
 
+  // Timing Assessment - critical for 1-2 week horizon
+  const timingAssessment = (analysis as any).timingAssessment;
+  if (timingAssessment?.phase) {
+    const phase = timingAssessment.phase.toLowerCase();
+    const timingHint = phase === 'early' 
+      ? "You're early to this opportunity - the market may not have fully reacted yet"
+      : phase === 'mid'
+      ? "Mid-move timing - acceptable entry if fundamentals support the thesis"
+      : "Late to the move - the opportunity window may have passed, higher risk";
+    evidenceChips.push({ 
+      label: `Timing: ${timingAssessment.phase.toUpperCase()} in move`, 
+      source: "Timing",
+      hint: timingAssessment.explanation || timingHint
+    });
+  }
+
   // Check for red flags / risks
   const hasWarnings = (analysis.redFlags && analysis.redFlags.length > 0) || 
                       (analysis.risks && analysis.risks.length > 0) ||
@@ -406,6 +423,28 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 pt-0">
+          {/* Timing Badge */}
+          {timingAssessment?.phase && (
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <Badge 
+                variant={
+                  timingAssessment.phase === 'early' ? 'default' : 
+                  timingAssessment.phase === 'mid' ? 'secondary' : 
+                  'destructive'
+                }
+                className="text-xs"
+              >
+                {timingAssessment.phase.toUpperCase()} in move
+              </Badge>
+              {timingAssessment.explanation && (
+                <span className="text-xs text-muted-foreground">
+                  {timingAssessment.explanation}
+                </span>
+              )}
+            </div>
+          )}
+          
           {/* The Recommendation */}
           {analysis.recommendation && (
             <p className="text-sm leading-relaxed text-muted-foreground" data-testid="text-recommendation">
@@ -413,9 +452,10 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
             </p>
           )}
           
-          <p className="text-xs text-muted-foreground italic">
-            Optimized for 1-2 week trading horizon
-          </p>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span className="italic">Optimized for 1-2 week trading horizon</span>
+          </div>
         </CardContent>
       </Card>
 

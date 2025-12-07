@@ -3111,7 +3111,7 @@ export class DatabaseStorage implements IStorage {
 
   // AI Analysis Job Queue Methods
   async enqueueAnalysisJob(ticker: string, source: string, priority: string = "normal", force: boolean = false): Promise<AiAnalysisJob> {
-    // If force=true (for re-analysis), cancel any existing pending/processing jobs
+    // If force=true (for re-analysis), cancel any existing pending/processing jobs and reset the analysis status
     if (force) {
       await db
         .update(aiAnalysisJobs)
@@ -3122,7 +3122,14 @@ export class DatabaseStorage implements IStorage {
             sql`${aiAnalysisJobs.status} IN ('pending', 'processing')`
           )
         );
-      console.log(`[Queue] Cancelled existing jobs for ${ticker} (force re-analysis)`);
+      
+      // Also reset the analysis status to "analyzing" immediately so UI shows loading state
+      await db
+        .update(stockAnalyses)
+        .set({ status: "analyzing", errorMessage: null })
+        .where(eq(stockAnalyses.ticker, ticker));
+      
+      console.log(`[Queue] Cancelled existing jobs for ${ticker} and reset analysis status (force re-analysis)`);
     } else {
       // Check if there's already a pending or processing job for this ticker
       const [existingJob] = await db

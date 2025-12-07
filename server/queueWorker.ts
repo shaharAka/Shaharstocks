@@ -29,6 +29,97 @@ import {
 } from "./scoring/scorecardDataExtractor";
 import { generateScorecard as generateRuleBasedScorecard } from "./scoring/metricCalculators";
 
+/**
+ * Parse market cap string (e.g., "1.2B", "500M", "1,234,567") to number
+ */
+function parseMarketCapToNumber(marketCap: string | null | undefined): number | undefined {
+  if (!marketCap) return undefined;
+  
+  const cleaned = marketCap.replace(/[$,\s]/g, '').toUpperCase();
+  
+  // Handle T (trillion), B (billion), M (million), K (thousand) suffixes
+  const match = cleaned.match(/^([\d.]+)([TBMK])?$/);
+  if (!match) return undefined;
+  
+  const value = parseFloat(match[1]);
+  if (isNaN(value)) return undefined;
+  
+  const multiplier = match[2];
+  switch (multiplier) {
+    case 'T': return value * 1_000_000_000_000;
+    case 'B': return value * 1_000_000_000;
+    case 'M': return value * 1_000_000;
+    case 'K': return value * 1_000;
+    default: return value;
+  }
+}
+
+/**
+ * Parse shares count string - handles plain numbers, comma-separated, and scientific notation
+ * Examples: "1234567890", "1,234,567,890", "1.23E+08", "1.23e8"
+ */
+function parseSharesCount(sharesStr: string | null | undefined): number | undefined {
+  if (!sharesStr) return undefined;
+  
+  // Remove only commas and whitespace (preserve 'e', 'E', '+', '-' for scientific notation)
+  const cleaned = sharesStr.replace(/[,\s]/g, '');
+  
+  // Use Number() which handles scientific notation properly
+  const value = Number(cleaned);
+  
+  if (isNaN(value) || value <= 0) return undefined;
+  return value;
+}
+
+/**
+ * Calculate transaction size vs float (or market cap as fallback)
+ * Returns percentage value (e.g., 0.5 = 0.5% of float)
+ * 
+ * @param insiderQuantity - Number of shares in the transaction
+ * @param sharesFloat - Total tradeable shares (from Alpha Vantage OVERVIEW)
+ * @param sharesOutstanding - Total shares outstanding (fallback)
+ * @param marketCap - Market cap string (last resort fallback, uses price to estimate shares)
+ * @param insiderPrice - Price per share (needed for market cap fallback)
+ */
+function calculateTransactionSizeVsFloat(
+  insiderQuantity: number | null | undefined,
+  sharesFloat: string | null | undefined,
+  sharesOutstanding: string | null | undefined,
+  marketCap: string | null | undefined,
+  insiderPrice: string | null | undefined
+): number | undefined {
+  if (!insiderQuantity || insiderQuantity <= 0) return undefined;
+  
+  // Try sharesFloat first (most accurate for tradeable shares)
+  const floatValue = parseSharesCount(sharesFloat);
+  if (floatValue) {
+    const ratio = (insiderQuantity / floatValue) * 100;
+    return ratio;
+  }
+  
+  // Fallback to sharesOutstanding
+  const outstandingValue = parseSharesCount(sharesOutstanding);
+  if (outstandingValue) {
+    const ratio = (insiderQuantity / outstandingValue) * 100;
+    return ratio;
+  }
+  
+  // Last resort: estimate shares from market cap / price
+  if (marketCap && insiderPrice) {
+    const price = parseFloat(insiderPrice);
+    if (!isNaN(price) && price > 0) {
+      const marketCapValue = parseMarketCapToNumber(marketCap);
+      if (marketCapValue && marketCapValue > 0) {
+        const estimatedShares = marketCapValue / price;
+        const ratio = (insiderQuantity / estimatedShares) * 100;
+        return ratio;
+      }
+    }
+  }
+  
+  return undefined;
+}
+
 class QueueWorker {
   private running = false;
   private pollInterval = 2000; // Poll every 2 seconds when queue is active
@@ -318,6 +409,9 @@ class QueueWorker {
               ? `$${(parseFloat(primaryStock.insiderPrice) * primaryStock.insiderQuantity).toFixed(2)}` 
               : "Unknown",
             confidence: primaryStock.confidenceScore?.toString() || "Medium",
+            rawInsiderQuantity: primaryStock.insiderQuantity,
+            rawInsiderPrice: primaryStock.insiderPrice,
+            rawMarketCap: primaryStock.marketCap,
             // Include all transactions for full context
             allTransactions: allStocks.map(s => ({
               direction: s.recommendation?.toLowerCase() || "unknown",
@@ -483,7 +577,13 @@ class QueueWorker {
             daysSinceLastTransaction: insiderTradingStrength.tradeDate 
               ? Math.floor((Date.now() - new Date(insiderTradingStrength.tradeDate).getTime()) / (1000 * 60 * 60 * 24))
               : undefined,
-            transactionSizeVsFloat: undefined, // Still requires float data from external source
+            transactionSizeVsFloat: calculateTransactionSizeVsFloat(
+              insiderTradingStrength.rawInsiderQuantity,
+              companyOverview?.sharesFloat,
+              companyOverview?.sharesOutstanding,
+              insiderTradingStrength.rawMarketCap || stock?.marketCap || companyOverview?.marketCap,
+              insiderTradingStrength.rawInsiderPrice
+            ),
             insiderRoles: normalizeInsiderRoles(insiderTradingStrength.insiderTitle),
           } : undefined,
           newsSentiment: newsSentiment ? {
@@ -513,6 +613,17 @@ class QueueWorker {
           macro: !!scorecardInput.macroSector,
         };
         console.log(`[QueueWorker] Scorecard data availability:`, availableMetrics);
+        
+        // Log transaction size vs float calculation details
+        if (scorecardInput.insiderActivity) {
+          console.log(`[QueueWorker] 📊 Transaction Size vs Float:`, {
+            insiderQuantity: insiderTradingStrength?.rawInsiderQuantity,
+            sharesFloat: companyOverview?.sharesFloat,
+            sharesOutstanding: companyOverview?.sharesOutstanding,
+            marketCap: companyOverview?.marketCap,
+            calculatedRatio: scorecardInput.insiderActivity.transactionSizeVsFloat,
+          });
+        }
         
         // Use pure rule-based scorecard generation (no LLM dependency, deterministic)
         scorecard = generateRuleBasedScorecard(scorecardInput);

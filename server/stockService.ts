@@ -601,6 +601,8 @@ class StockService {
       // Parse and return relevant fields including YoY growth metrics for scorecard
       return {
         marketCap: data.MarketCapitalization || null,
+        sharesOutstanding: data.SharesOutstanding || null,
+        sharesFloat: data.SharesFloat || null,
         peRatio: parseFloat(data.PERatio) || null,
         pegRatio: parseFloat(data.PEGRatio) || null,
         bookValue: parseFloat(data.BookValue) || null,
@@ -616,6 +618,8 @@ class StockService {
         quickRatio: parseFloat(data.QuickRatio) || null,
         revenueGrowthYoY: data.QuarterlyRevenueGrowthYOY ? parseFloat(data.QuarterlyRevenueGrowthYOY) * 100 : null,
         epsGrowthYoY: data.QuarterlyEarningsGrowthYOY ? parseFloat(data.QuarterlyEarningsGrowthYOY) * 100 : null,
+        sector: data.Sector || null,
+        industry: data.Industry || null,
       };
     } catch (error) {
       console.error(`[StockService] Error fetching company overview for ${symbol}:`, error);

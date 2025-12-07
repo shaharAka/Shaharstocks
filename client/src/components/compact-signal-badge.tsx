@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { StockAnalysis } from "@shared/schema";
+import { getPrimaryScore } from "@/lib/utils";
 
 interface CompactSignalBadgeProps {
   ticker: string;
@@ -47,7 +48,7 @@ export function CompactSignalBadge({ ticker, showEmptyState = false }: CompactSi
     return null;
   }
 
-  const primaryScore = analysis.integratedScore ?? analysis.confidenceScore ?? null;
+  const primaryScore = getPrimaryScore(analysis);
   
   if (primaryScore === null) {
     if (showEmptyState) {

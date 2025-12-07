@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getPrimaryScoreWithDefault } from "@/lib/utils";
 import type { StockAnalysis } from "@shared/schema";
 import {
   Accordion,
@@ -229,8 +230,8 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     );
   }
 
-  // Get the score - Gemini's confidenceScore is PRIMARY, scorecard is just supporting data
-  const aiScore = analysis.confidenceScore ?? (analysis as any).scorecard?.globalScore ?? 50;
+  // Get the score using shared utility for consistency across all components
+  const aiScore = getPrimaryScoreWithDefault(analysis, 50);
   const scorecardScore = (analysis as any).scorecard?.globalScore; // Supporting metadata only
   
   // Determine if this is a SELL/short opportunity

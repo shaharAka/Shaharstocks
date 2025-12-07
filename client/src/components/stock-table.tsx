@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { Stock, User } from "@shared/schema";
 import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 import { AnalysisPhaseIndicator } from "@/components/analysis-phase-indicator";
-import { cn } from "@/lib/utils";
+import { cn, getPrimaryScore } from "@/lib/utils";
 
 interface StockTableProps {
   stocks: Stock[];
@@ -152,8 +152,8 @@ export function StockTable({
         const analysisB = getAIAnalysis(b.ticker);
         // Treat "analyzing" status as score 0 for sorting
         // Use integrated score (micro × macro) if available, fallback to confidence score, then financial health score
-        const scoreA = analysisA?.integratedScore ?? analysisA?.confidenceScore ?? analysisA?.financialHealthScore;
-        const scoreB = analysisB?.integratedScore ?? analysisB?.confidenceScore ?? analysisB?.financialHealthScore;
+        const scoreA = getPrimaryScore(analysisA);
+        const scoreB = getPrimaryScore(analysisB);
         compareA = (analysisA?.status === "analyzing" || !scoreA) ? 0 : scoreA;
         compareB = (analysisB?.status === "analyzing" || !scoreB) ? 0 : scoreB;
         break;
@@ -427,8 +427,18 @@ export function StockTable({
                       );
                     }
                     
-                    // Use integrated score if available (micro × macro), otherwise use confidence score, fallback to financial health score
-                    const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
+                    // Use shared utility for consistent score display across all components
+                    const score = getPrimaryScore(analysis);
+                    
+                    // Handle null score case
+                    if (score === null) {
+                      return (
+                        <Badge variant="outline" className="text-[9px] sm:text-xs px-1">
+                          <span className="hidden sm:inline">Pending</span>
+                          <span className="sm:hidden">...</span>
+                        </Badge>
+                      );
+                    }
                     
                     // Signal strength gradient in amber/orange (distinct from green BUY / red SELL)
                     const isExceptional = score >= 90;

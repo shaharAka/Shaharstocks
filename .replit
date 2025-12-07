@@ -3,7 +3,7 @@ run = "npm run dev"
 
 [nix]
 channel = "stable-25_05"
-packages = ["arrow-cpp", "gifsicle", "glibcLocales", "libyaml", "pkg-config"]
+packages = ["arrow-cpp", "glibcLocales", "libyaml", "pkg-config", "gifsicle"]
 
 [[ports]]
 localPort = 5000

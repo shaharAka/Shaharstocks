@@ -36,7 +36,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Redirect } from "wouter";
 import { format } from "date-fns";
-import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle, Gift, Pencil, Settings, MailCheck } from "lucide-react";
+import { ShieldCheck, Users, Activity, DollarSign, MoreVertical, Trash2, Archive, ArchiveRestore, Key, Calendar, Receipt, Plus, Ban, CheckCircle, Gift, Pencil, Settings } from "lucide-react";
 import { useState } from "react";
 import type { Announcement } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -48,7 +48,6 @@ interface User {
   email: string;
   avatarColor: string;
   isAdmin: boolean;
-  emailVerified: boolean;
   subscriptionStatus: string;
   subscriptionStartDate?: string;
   subscriptionEndDate?: string;
@@ -850,12 +849,6 @@ export default function AdminPage() {
                             Archived
                           </Badge>
                         )}
-                        {!user.emailVerified && !user.archived && (
-                          <Badge variant="outline" className="shrink-0 text-amber-600 border-amber-600">
-                            <MailCheck className="w-3 h-3 mr-1" />
-                            Unverified
-                          </Badge>
-                        )}
                       </div>
                       <p className="text-sm text-muted-foreground truncate" data-testid={`text-email-${user.id}`}>
                         {user.email}
@@ -922,19 +915,6 @@ export default function AdminPage() {
                           >
                             <ShieldCheck className="mr-2 h-4 w-4" />
                             Make Admin
-                          </DropdownMenuItem>
-                        )}
-                        
-                        {currentUser?.isSuperAdmin && !user.emailVerified && !user.archived && (
-                          <DropdownMenuItem
-                            onClick={() => adminActionMutation.mutate({
-                              endpoint: "/api/admin/verify-email",
-                              email: user.email,
-                            })}
-                            data-testid={`menu-verify-email-${user.id}`}
-                          >
-                            <MailCheck className="mr-2 h-4 w-4" />
-                            Verify Email
                           </DropdownMenuItem>
                         )}
                         

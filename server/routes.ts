@@ -1196,46 +1196,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // SUPER ADMIN ONLY: Manually verify user email (for testing purposes)
-  app.post("/api/admin/verify-email", requireAdmin, async (req, res) => {
-    try {
-      // Require super admin access
-      const adminUser = await storage.getUser(req.session.userId!);
-      if (!adminUser?.isSuperAdmin) {
-        return res.status(403).json({ error: "Super admin access required" });
-      }
-
-      const { email } = req.body;
-      if (!email) {
-        return res.status(400).json({ error: "Email is required" });
-      }
-
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      if (user.emailVerified) {
-        return res.status(400).json({ error: "Email is already verified" });
-      }
-
-      // Verify email and start trial if pending verification
-      const updatedUser = await storage.verifyUserEmail(user.id);
-
-      res.json({
-        success: true,
-        message: "Email verified successfully",
-        user: {
-          ...updatedUser,
-          passwordHash: undefined,
-        }
-      });
-    } catch (error) {
-      console.error("Verify email error:", error);
-      res.status(500).json({ error: "Failed to verify email" });
-    }
-  });
-
   // ADMIN ONLY: Reset user password (generate secure token)
   app.post("/api/admin/reset-password", requireAdmin, async (req, res) => {
     try {

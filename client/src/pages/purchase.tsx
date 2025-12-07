@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   TrendingUp,
   TrendingDown,
+  RefreshCw,
   ExternalLink,
   Clock,
   MessageSquare,
@@ -178,6 +179,30 @@ export default function Purchase() {
     retry: false,
     meta: { ignoreError: true },
   });
+
+  // Manual fetch from OpenInsider mutation
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/openinsider/fetch", {});
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stock-analyses"] });
+      toast({
+        title: "Fetched New Opportunities",
+        description: data.message || `Found ${data.created || 0} new insider trades`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Fetch Failed",
+        description: error.message || "Unable to fetch from OpenInsider",
+        variant: "destructive",
+      });
+    },
+  });
+
 
   // Update user preference mutation
   const updatePreferenceMutation = useMutation({
@@ -628,6 +653,22 @@ export default function Purchase() {
             </TooltipTrigger>
             <TooltipContent>
               <p>Fetch Configuration</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => refreshMutation.mutate()}
+                disabled={refreshMutation.isPending}
+                data-testid="button-refresh"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Rerun Fetch</p>
             </TooltipContent>
           </Tooltip>
         </div>

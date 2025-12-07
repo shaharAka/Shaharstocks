@@ -11,52 +11,13 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Info, CheckCircle2, Clock, AlertTriangle, Lock, Crown, Zap } from "lucide-react";
+import { RefreshCw, Info, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type OpeninsiderConfig } from "@shared/schema";
-import { useUser } from "@/contexts/UserContext";
-import { useLocation } from "wouter";
-import { formatDistanceToNow, addHours, addDays, differenceInMinutes, differenceInHours } from "date-fns";
 
 export function FetchConfigDialog() {
   const { toast } = useToast();
-  const { user } = useUser();
-  const [, setLocation] = useLocation();
-
-  // Subscription-based refresh limits
-  const isTrialUser = user?.subscriptionStatus === "trial" || user?.subscriptionStatus === "pending_verification";
-  const isPaidUser = user?.subscriptionStatus === "active";
-  const lastDataRefresh = user?.lastDataRefresh ? new Date(user.lastDataRefresh) : null;
-  
-  // Calculate next refresh time and status
-  const getRefreshStatus = () => {
-    if (!lastDataRefresh) {
-      return { canRefresh: true, nextRefreshTime: null, timeUntilRefresh: null };
-    }
-    
-    const now = new Date();
-    const nextRefresh = isPaidUser ? addHours(lastDataRefresh, 1) : addDays(lastDataRefresh, 1);
-    const canRefresh = now >= nextRefresh;
-    
-    if (canRefresh) {
-      return { canRefresh: true, nextRefreshTime: null, timeUntilRefresh: null };
-    }
-    
-    const minutesRemaining = differenceInMinutes(nextRefresh, now);
-    const hoursRemaining = differenceInHours(nextRefresh, now);
-    
-    let timeUntilRefresh: string;
-    if (minutesRemaining < 60) {
-      timeUntilRefresh = `${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}`;
-    } else {
-      timeUntilRefresh = `${hoursRemaining} hour${hoursRemaining !== 1 ? 's' : ''}`;
-    }
-    
-    return { canRefresh: false, nextRefreshTime: nextRefresh, timeUntilRefresh };
-  };
-  
-  const refreshStatus = getRefreshStatus();
 
   // Fetch current configuration
   const { data: config, isLoading } = useQuery<OpeninsiderConfig>({
@@ -80,26 +41,21 @@ export function FetchConfigDialog() {
   // Sync with fetched config
   useEffect(() => {
     if (config) {
-      // Trial users are always forced to daily refresh
-      const effectiveInterval = isTrialUser ? "daily" : ((config.fetchInterval as "hourly" | "daily") || "daily");
-      setFetchInterval(effectiveInterval);
+      setFetchInterval((config.fetchInterval as "hourly" | "daily") || "daily");
       setMinMarketCap(config.minMarketCap ?? 500);
       setOptionsDealThreshold(config.optionsDealThresholdPercent ?? 15);
       setFetchLimit(config.fetchLimit || 50);
       setMinCommunityEngagement(config.minCommunityEngagement ?? 10);
     }
-  }, [config, isTrialUser]);
+  }, [config]);
 
 
   // Save configuration
   const saveConfigMutation = useMutation({
     mutationFn: async () => {
-      // Force daily for trial users
-      const effectiveInterval = isTrialUser ? "daily" : fetchInterval;
-      
       const configRes = await apiRequest("POST", "/api/openinsider/config", {
         enabled: true,
-        fetchInterval: effectiveInterval,
+        fetchInterval,
         minMarketCap,
         optionsDealThresholdPercent: optionsDealThreshold,
         fetchLimit,
@@ -208,12 +164,6 @@ export function FetchConfigDialog() {
               <div className="space-y-1 flex-1">
                 <div className="flex items-center gap-2">
                   <Label className="text-base font-medium">Refresh Frequency</Label>
-                  {isTrialUser && (
-                    <Badge variant="secondary" className="text-xs">
-                      <Lock className="h-3 w-3 mr-1" />
-                      Paid Feature
-                    </Badge>
-                  )}
                   <HoverCard>
                     <HoverCardTrigger>
                       <Info className="h-4 w-4 text-muted-foreground cursor-help" />
@@ -234,107 +184,25 @@ export function FetchConfigDialog() {
                   How often to check for new opportunities
                 </p>
               </div>
-              {isTrialUser ? (
-                <Badge variant="outline" className="opacity-60">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={fetchInterval === "hourly" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFetchInterval("hourly")}
+                >
                   <Clock className="h-3 w-3 mr-1" />
-                  Daily Only
-                </Badge>
-              ) : (
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={fetchInterval === "hourly" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setFetchInterval("hourly")}
-                  >
-                    <Clock className="h-3 w-3 mr-1" />
-                    Hourly
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={fetchInterval === "daily" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setFetchInterval("daily")}
-                  >
-                    <Clock className="h-3 w-3 mr-1" />
-                    Daily
-                  </Button>
-                </div>
-              )}
-            </div>
-            
-            {/* Upgrade prompt for trial users */}
-            {isTrialUser && (
-              <Alert className="bg-primary/5 border-primary/20">
-                <Zap className="h-4 w-4 text-primary" />
-                <AlertDescription className="ml-2">
-                  <span className="font-medium">Trial users receive daily data updates.</span>
-                  <br />
-                  <span className="text-muted-foreground">
-                    Upgrade to get hourly insider trading alerts and never miss a signal.
-                  </span>
-                  <Button 
-                    type="button"
-                    variant="default" 
-                    size="sm" 
-                    className="mt-2"
-                    data-testid="button-upgrade-for-hourly"
-                    onClick={() => setLocation("/purchase")}
-                  >
-                    <Crown className="h-4 w-4 mr-2" />
-                    Upgrade Now
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            {/* Data Refresh Status */}
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Clock className="h-4 w-4" />
-                Data Refresh Status
-              </div>
-              <div className="grid gap-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Your Plan:</span>
-                  <Badge variant={isPaidUser ? "default" : "secondary"} data-testid="badge-subscription-type">
-                    {isPaidUser ? (
-                      <>
-                        <Crown className="h-3 w-3 mr-1" />
-                        Paid (Hourly Updates)
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="h-3 w-3 mr-1" />
-                        Trial (Daily Updates)
-                      </>
-                    )}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Last Data Refresh:</span>
-                  <span className="font-medium" data-testid="text-last-refresh">
-                    {lastDataRefresh 
-                      ? formatDistanceToNow(lastDataRefresh, { addSuffix: true })
-                      : "Never"
-                    }
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Next Refresh:</span>
-                  <span className="font-medium" data-testid="text-next-refresh">
-                    {refreshStatus.canRefresh ? (
-                      <Badge variant="outline" className="text-green-600 border-green-600">
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        Ready Now
-                      </Badge>
-                    ) : (
-                      <span className="text-amber-600">
-                        In {refreshStatus.timeUntilRefresh}
-                      </span>
-                    )}
-                  </span>
-                </div>
+                  Hourly
+                </Button>
+                <Button
+                  type="button"
+                  variant={fetchInterval === "daily" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFetchInterval("daily")}
+                >
+                  <Clock className="h-3 w-3 mr-1" />
+                  Daily
+                </Button>
               </div>
             </div>
 

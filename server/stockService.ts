@@ -66,6 +66,18 @@ interface PriceNewsCorrelation {
 }
 
 /**
+ * Safely parse a float value, returning null only for undefined/null/NaN
+ * Unlike `parseFloat(x) || null`, this correctly handles 0 as a valid value
+ */
+function safeParseFloat(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = typeof value === 'number' ? value : parseFloat(value);
+  return isNaN(parsed) ? null : parsed;
+}
+
+/**
  * Wraps a promise with a timeout to prevent infinite hangs
  * @param promise The promise to wrap
  * @param timeoutMs Timeout in milliseconds  
@@ -599,25 +611,30 @@ class StockService {
       }
 
       // Parse and return relevant fields including YoY growth metrics for scorecard
+      // Use safeParseFloat to correctly handle 0 as a valid value (not null)
       return {
         marketCap: data.MarketCapitalization || null,
         sharesOutstanding: data.SharesOutstanding || null,
         sharesFloat: data.SharesFloat || null,
-        peRatio: parseFloat(data.PERatio) || null,
-        pegRatio: parseFloat(data.PEGRatio) || null,
-        bookValue: parseFloat(data.BookValue) || null,
-        dividendYield: parseFloat(data.DividendYield) || null,
-        eps: parseFloat(data.EPS) || null,
-        revenuePerShare: parseFloat(data.RevenuePerShareTTM) || null,
-        profitMargin: parseFloat(data.ProfitMargin) || null,
-        operatingMargin: parseFloat(data.OperatingMarginTTM) || null,
-        returnOnAssets: parseFloat(data.ReturnOnAssetsTTM) || null,
-        returnOnEquity: parseFloat(data.ReturnOnEquityTTM) || null,
-        debtToEquity: parseFloat(data.DebtToEquityRatio) || null,
-        currentRatio: parseFloat(data.CurrentRatio) || null,
-        quickRatio: parseFloat(data.QuickRatio) || null,
-        revenueGrowthYoY: data.QuarterlyRevenueGrowthYOY ? parseFloat(data.QuarterlyRevenueGrowthYOY) * 100 : null,
-        epsGrowthYoY: data.QuarterlyEarningsGrowthYOY ? parseFloat(data.QuarterlyEarningsGrowthYOY) * 100 : null,
+        peRatio: safeParseFloat(data.PERatio),
+        pegRatio: safeParseFloat(data.PEGRatio),
+        bookValue: safeParseFloat(data.BookValue),
+        dividendYield: safeParseFloat(data.DividendYield),
+        eps: safeParseFloat(data.EPS),
+        revenuePerShare: safeParseFloat(data.RevenuePerShareTTM),
+        profitMargin: safeParseFloat(data.ProfitMargin),
+        operatingMargin: safeParseFloat(data.OperatingMarginTTM),
+        returnOnAssets: safeParseFloat(data.ReturnOnAssetsTTM),
+        returnOnEquity: safeParseFloat(data.ReturnOnEquityTTM),
+        debtToEquity: safeParseFloat(data.DebtToEquityRatio),
+        currentRatio: safeParseFloat(data.CurrentRatio),
+        quickRatio: safeParseFloat(data.QuickRatio),
+        revenueGrowthYoY: safeParseFloat(data.QuarterlyRevenueGrowthYOY) !== null 
+          ? safeParseFloat(data.QuarterlyRevenueGrowthYOY)! * 100 
+          : null,
+        epsGrowthYoY: safeParseFloat(data.QuarterlyEarningsGrowthYOY) !== null 
+          ? safeParseFloat(data.QuarterlyEarningsGrowthYOY)! * 100 
+          : null,
         sector: data.Sector || null,
         industry: data.Industry || null,
       };

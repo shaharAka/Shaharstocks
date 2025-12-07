@@ -20,6 +20,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface StockAIAnalysisProps {
   ticker: string;
@@ -235,14 +240,18 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const signalLabel = getSignalLabel(globalScore);
   const signalVariant = globalScore >= 70 ? 'default' : globalScore >= 50 ? 'secondary' : 'destructive';
 
-  // Build evidence chips from available data
-  const evidenceChips: { label: string; source: string }[] = [];
+  // Build evidence chips from available data with hints for tooltips
+  const evidenceChips: { label: string; source: string; hint: string }[] = [];
   
   // SEC Filing evidence
   if (analysis.secFilingType && analysis.secFilingDate) {
+    const filingAge = Math.floor((Date.now() - new Date(analysis.secFilingDate).getTime()) / (1000 * 60 * 60 * 24));
     evidenceChips.push({ 
       label: `${analysis.secFilingType} filed ${analysis.secFilingDate}`, 
-      source: "SEC" 
+      source: "SEC",
+      hint: filingAge <= 30 
+        ? "Recent SEC filing provides current financial data for this analysis" 
+        : `Filing is ${filingAge} days old - newer data would strengthen confidence`
     });
   }
   
@@ -250,41 +259,114 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const fd = (analysis as any).fundamentalData;
   if (fd) {
     if (fd.peRatio != null) {
-      evidenceChips.push({ label: `P/E ${Number(fd.peRatio).toFixed(1)}`, source: "Fundamentals" });
+      const pe = Number(fd.peRatio);
+      const peHint = pe < 15 ? "Low P/E suggests undervaluation or slower growth expectations" :
+                     pe < 25 ? "Moderate P/E indicates reasonable market valuation" :
+                     pe < 40 ? "Higher P/E reflects growth expectations - riskier if growth slows" :
+                     "Very high P/E - requires strong growth to justify premium";
+      evidenceChips.push({ 
+        label: `P/E Ratio: ${pe.toFixed(1)}`, 
+        source: "Fundamentals",
+        hint: peHint
+      });
     }
     if (fd.profitMargin != null) {
-      evidenceChips.push({ label: `Profit Margin ${(Number(fd.profitMargin) * 100).toFixed(1)}%`, source: "Fundamentals" });
+      const margin = Number(fd.profitMargin) * 100;
+      const marginHint = margin > 20 ? "Strong profit margins indicate pricing power and efficiency" :
+                         margin > 10 ? "Healthy margins - company converts revenue to profit effectively" :
+                         margin > 0 ? "Thin margins - vulnerable to cost pressures or competition" :
+                         "Negative margins - company is losing money on operations";
+      evidenceChips.push({ 
+        label: `Profit Margin: ${margin.toFixed(1)}%`, 
+        source: "Fundamentals",
+        hint: marginHint
+      });
     }
     if (fd.returnOnEquity != null) {
-      evidenceChips.push({ label: `ROE ${(Number(fd.returnOnEquity) * 100).toFixed(1)}%`, source: "Fundamentals" });
+      const roe = Number(fd.returnOnEquity) * 100;
+      const roeHint = roe > 20 ? "Excellent ROE - management uses shareholder capital very effectively" :
+                      roe > 10 ? "Solid ROE - decent returns on invested capital" :
+                      roe > 0 ? "Modest ROE - limited value creation for shareholders" :
+                      "Negative ROE - company is destroying shareholder value";
+      evidenceChips.push({ 
+        label: `Return on Equity: ${roe.toFixed(1)}%`, 
+        source: "Fundamentals",
+        hint: roeHint
+      });
     }
     if (fd.currentRatio != null) {
-      evidenceChips.push({ label: `Current Ratio ${Number(fd.currentRatio).toFixed(2)}`, source: "Fundamentals" });
+      const cr = Number(fd.currentRatio);
+      const crHint = cr > 2 ? "Strong liquidity - ample assets to cover short-term obligations" :
+                     cr > 1 ? "Adequate liquidity - can meet near-term debts" :
+                     "Low liquidity - may struggle to pay short-term obligations";
+      evidenceChips.push({ 
+        label: `Current Ratio: ${cr.toFixed(2)}`, 
+        source: "Fundamentals",
+        hint: crHint
+      });
+    }
+    if (fd.debtToEquity != null) {
+      const de = Number(fd.debtToEquity);
+      const deHint = de < 0.5 ? "Low leverage - conservative capital structure, lower risk" :
+                     de < 1.5 ? "Moderate leverage - balanced use of debt financing" :
+                     "High leverage - significant debt increases financial risk";
+      evidenceChips.push({ 
+        label: `Debt/Equity: ${de.toFixed(2)}`, 
+        source: "Fundamentals",
+        hint: deHint
+      });
     }
   }
 
   // Technical signals
   if (analysis.technicalAnalysisTrend) {
+    const trend = analysis.technicalAnalysisTrend.toLowerCase();
+    const techHint = trend.includes("bullish") ? "Technical indicators suggest upward momentum - supports buy thesis" :
+                     trend.includes("bearish") ? "Technical indicators suggest downward pressure - caution advised" :
+                     "Neutral technicals - price action doesn't strongly favor either direction";
     evidenceChips.push({ 
-      label: `Technical trend: ${analysis.technicalAnalysisTrend}`, 
-      source: "Technicals" 
+      label: `Technical Trend: ${analysis.technicalAnalysisTrend}`, 
+      source: "Technicals",
+      hint: techHint
     });
   }
 
   // Sentiment
   if (analysis.sentimentAnalysisTrend) {
+    const sentiment = analysis.sentimentAnalysisTrend.toLowerCase();
+    const sentHint = sentiment.includes("positive") || sentiment.includes("bullish") 
+      ? "Positive news coverage may attract buyers and support price" :
+      sentiment.includes("negative") || sentiment.includes("bearish")
+      ? "Negative sentiment could pressure the stock in the short term" :
+      "Mixed or neutral news - no strong sentiment catalyst identified";
     evidenceChips.push({ 
-      label: `News sentiment: ${analysis.sentimentAnalysisTrend}`, 
-      source: "News" 
+      label: `News Sentiment: ${analysis.sentimentAnalysisTrend}`, 
+      source: "News",
+      hint: sentHint
     });
   }
 
   // Insider Activity - from section explanations
   const insiderExplanation = (analysis as any).sectionExplanations?.insiderActivity;
   if (insiderExplanation?.keyFactors && insiderExplanation.keyFactors.length > 0) {
+    const insiderFactor = insiderExplanation.keyFactors[0];
+    const isPositive = insiderFactor.toLowerCase().includes("buy") || insiderFactor.toLowerCase().includes("purchase");
     evidenceChips.push({ 
-      label: insiderExplanation.keyFactors[0], 
-      source: "Insider" 
+      label: `Insider Activity: ${insiderFactor}`, 
+      source: "Insider",
+      hint: isPositive 
+        ? "Insider buying signals confidence from those with deep company knowledge"
+        : "Insider selling may indicate concerns, though could be for personal reasons"
+    });
+  }
+  
+  // Macro/Sector - from section explanations
+  const macroExplanation = (analysis as any).sectionExplanations?.macroSector;
+  if (macroExplanation?.summary) {
+    evidenceChips.push({ 
+      label: `Sector: ${macroExplanation.summary.slice(0, 60)}${macroExplanation.summary.length > 60 ? '...' : ''}`, 
+      source: "Macro",
+      hint: macroExplanation.outlook || "Sector conditions influence whether broader market trends support or hinder this stock"
     });
   }
 
@@ -370,22 +452,28 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
             </div>
           )}
 
-          {/* Evidence Chips - Data grounding */}
+          {/* Evidence Chips - Data grounding with tooltips */}
           {evidenceChips.length > 0 && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Based on
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {evidenceChips.slice(0, 8).map((chip, i) => (
-                  <Badge 
-                    key={i} 
-                    variant="outline" 
-                    className="text-xs font-normal bg-background"
-                  >
-                    <span className="text-muted-foreground mr-1">{chip.source}:</span>
-                    {chip.label}
-                  </Badge>
+              <div className="flex flex-wrap gap-2">
+                {evidenceChips.slice(0, 10).map((chip, i) => (
+                  <Tooltip key={i}>
+                    <TooltipTrigger asChild>
+                      <Badge 
+                        variant="outline" 
+                        className="text-xs font-normal bg-background cursor-help py-1.5"
+                      >
+                        <span className="text-muted-foreground mr-1.5 font-medium">{chip.source}:</span>
+                        {chip.label}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs text-sm">
+                      <p>{chip.hint}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 ))}
               </div>
             </div>

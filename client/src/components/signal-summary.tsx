@@ -37,6 +37,7 @@ export function SignalSummary({ ticker }: SignalSummaryProps) {
   const { data: macroAnalysis } = useQuery<MacroAnalysis | null>({
     queryKey: ["/api/macro-analysis", analysis?.macroAnalysisId],
     enabled: analysis?.macroAnalysisId != null,
+    staleTime: 0, // Always fetch fresh macro analysis data
     queryFn: async () => {
       if (analysis?.macroAnalysisId == null) return null;
       const response = await fetch(`/api/macro-analysis/${analysis.macroAnalysisId}`);

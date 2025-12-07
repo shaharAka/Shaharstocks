@@ -117,6 +117,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const { data: macroAnalysis } = useQuery<MacroAnalysis | null>({
     queryKey: ["/api/macro-analysis", analysis?.macroAnalysisId],
     enabled: analysis?.macroAnalysisId != null,
+    staleTime: 0, // Always fetch fresh macro analysis data
     queryFn: async () => {
       if (analysis?.macroAnalysisId == null) return null;
       const response = await fetch(`/api/macro-analysis/${analysis.macroAnalysisId}`);
@@ -132,8 +133,11 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
       return await response.json();
     },
     onSuccess: (pendingAnalysis) => {
+      // Set pending analysis immediately for UI feedback
       queryClient.setQueryData(["/api/stocks", ticker, "analysis"], pendingAnalysis);
+      // Invalidate all related caches to ensure fresh data is fetched
       queryClient.invalidateQueries({ queryKey: ["/api/stock-analyses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/macro-analysis"] });
       toast({
         title: "Analysis Queued",
         description: `Re-analyzing ${ticker} with fresh data. Check back in a moment.`,

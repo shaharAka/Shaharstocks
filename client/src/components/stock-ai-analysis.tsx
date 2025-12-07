@@ -469,39 +469,52 @@ export function StockAIAnalysis({ ticker, stock }: StockAIAnalysisProps) {
             </div>
           )}
 
-          {/* Fundamental Signals */}
-          {(analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Fundamental Signals</div>
-              <ul className="space-y-1">
-                {(analysis as any).fundamentalSignals.map((signal: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <Zap className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                    <span className="flex-1">{signal}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Collapsible Details - Fundamentals & SEC Filings */}
+          {(((analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0) ||
+            ((analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0)) && (
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="details" className="border-none">
+                <AccordionTrigger className="text-xs sm:text-sm py-2 hover:no-underline" data-testid="button-toggle-details">
+                  View Supporting Details
+                </AccordionTrigger>
+                <AccordionContent className="space-y-3 pt-1">
+                  {/* Fundamental Signals */}
+                  {(analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0 && (
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <div className="text-xs sm:text-sm font-medium">Fundamental Signals</div>
+                      <ul className="space-y-1">
+                        {(analysis as any).fundamentalSignals.map((signal: string, index: number) => (
+                          <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                            <Zap className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <span className="flex-1">{signal}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
-          {/* SEC Filing Insights */}
-          {(analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="text-xs sm:text-sm font-medium">SEC Filing Insights</div>
-                {(analysis as any).secFilingType && (
-                  <Badge variant="outline" className="text-[10px] sm:text-xs">{(analysis as any).secFilingType}</Badge>
-                )}
-              </div>
-              <ul className="space-y-1">
-                {(analysis as any).secFilingInsights.map((insight: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="shrink-0">•</span>
-                    <span className="flex-1">{insight}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                  {/* SEC Filing Insights */}
+                  {(analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0 && (
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="text-xs sm:text-sm font-medium">SEC Filing Insights</div>
+                        {(analysis as any).secFilingType && (
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">{(analysis as any).secFilingType}</Badge>
+                        )}
+                      </div>
+                      <ul className="space-y-1">
+                        {(analysis as any).secFilingInsights.map((insight: string, index: number) => (
+                          <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                            <span className="shrink-0">•</span>
+                            <span className="flex-1">{insight}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
 
           {/* Time Horizon Note */}

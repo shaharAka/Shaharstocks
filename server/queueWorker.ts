@@ -593,7 +593,25 @@ class QueueWorker {
             upcomingCatalyst: undefined, // Would need catalyst detection
           } : undefined,
           macroSector: macroAnalysis ? {
-            sectorVsSpy10d: undefined, // Would need sector ETF performance data
+            sectorVsSpy10d: (() => {
+              // Use industry sector analysis weekRelativeStrength (10-day sector vs SPY)
+              const sectorAnalysis = macroAnalysis.industrySectorAnalysis as {
+                weekRelativeStrength?: number;
+                relativeStrength?: number;
+              } | null | undefined;
+              
+              // Prefer weekRelativeStrength (10-day relative) if available
+              if (sectorAnalysis?.weekRelativeStrength !== undefined && sectorAnalysis?.weekRelativeStrength !== null) {
+                return sectorAnalysis.weekRelativeStrength;
+              }
+              
+              // Fallback to 1-day relative strength extrapolated
+              if (sectorAnalysis?.relativeStrength !== undefined && sectorAnalysis?.relativeStrength !== null) {
+                return sectorAnalysis.relativeStrength * 2; // Approximate 10-day from 1-day
+              }
+              
+              return undefined;
+            })(),
             macroRiskEnvironment: macroAnalysis.macroScore !== null && macroAnalysis.macroScore !== undefined
               ? (macroAnalysis.macroScore > 70 ? 'favorable_tailwinds' as const :
                  macroAnalysis.macroScore > 50 ? 'low_risk' as const :
@@ -622,6 +640,21 @@ class QueueWorker {
             sharesOutstanding: companyOverview?.sharesOutstanding,
             marketCap: companyOverview?.marketCap,
             calculatedRatio: scorecardInput.insiderActivity.transactionSizeVsFloat,
+          });
+        }
+        
+        // Log sector vs SPY calculation details
+        if (scorecardInput.macroSector?.sectorVsSpy10d !== undefined) {
+          const sectorAnalysis = macroAnalysis.industrySectorAnalysis as {
+            etfSymbol?: string;
+            weekRelativeStrength?: number;
+            relativeStrength?: number;
+          } | null | undefined;
+          console.log(`[QueueWorker] 📈 Sector vs SPY (10d):`, {
+            etfSymbol: sectorAnalysis?.etfSymbol,
+            weekRelativeStrength: sectorAnalysis?.weekRelativeStrength,
+            relativeStrength1d: sectorAnalysis?.relativeStrength,
+            calculatedSectorVsSpy10d: scorecardInput.macroSector.sectorVsSpy10d,
           });
         }
         

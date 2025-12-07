@@ -273,7 +273,8 @@ export const macroAnalyses = pgTable("macro_analyses", {
     weekChange: number;
     monthChange: number;
     volatility: number;
-    relativeStrength: number; // vs S&P 500
+    relativeStrength: number; // 1-day vs S&P 500
+    weekRelativeStrength?: number; // 5-10 day sector vs SPY (for scorecard sectorVsSpy10d)
     momentum: number;
     sectorWeight: number; // 0-100: How much weight this sector carries in the analysis
     sectorExplanation: string; // AI explanation of sector influence

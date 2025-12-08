@@ -332,9 +332,10 @@ export function calculateFundamentalsSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.fundamentals;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
+  const opportunityType = data.opportunityType || 'BUY';
   
   // Revenue Growth
-  const revGrowth = scoreNumericMetric(data.fundamentals?.revenueGrowthYoY, 'revenueGrowth', 'fundamentals');
+  const revGrowth = scoreNumericMetric(data.fundamentals?.revenueGrowthYoY, 'revenueGrowth', 'fundamentals', opportunityType);
   if (revGrowth.ruleBucket === 'missing') missingMetrics.push('revenueGrowth');
   metrics.revenueGrowth = {
     name: sectionConfig.metrics.revenueGrowth.name,
@@ -347,7 +348,7 @@ export function calculateFundamentalsSection(data: RawStockData): SectionScore {
   };
   
   // EPS Growth
-  const epsGrowth = scoreNumericMetric(data.fundamentals?.epsGrowthYoY, 'epsGrowth', 'fundamentals');
+  const epsGrowth = scoreNumericMetric(data.fundamentals?.epsGrowthYoY, 'epsGrowth', 'fundamentals', opportunityType);
   if (epsGrowth.ruleBucket === 'missing') missingMetrics.push('epsGrowth');
   metrics.epsGrowth = {
     name: sectionConfig.metrics.epsGrowth.name,
@@ -360,7 +361,7 @@ export function calculateFundamentalsSection(data: RawStockData): SectionScore {
   };
   
   // Profit Margin Trend
-  const marginTrend = scoreConditionMetric(data.fundamentals?.profitMarginTrend, 'profitMarginTrend', 'fundamentals');
+  const marginTrend = scoreConditionMetric(data.fundamentals?.profitMarginTrend, 'profitMarginTrend', 'fundamentals', opportunityType);
   if (marginTrend.ruleBucket === 'missing') missingMetrics.push('profitMarginTrend');
   metrics.profitMarginTrend = {
     name: sectionConfig.metrics.profitMarginTrend.name,
@@ -377,7 +378,7 @@ export function calculateFundamentalsSection(data: RawStockData): SectionScore {
   if (data.fundamentals?.freeCashFlow !== undefined && data.fundamentals?.totalDebt !== undefined && data.fundamentals.totalDebt > 0) {
     fcfToDebt = data.fundamentals.freeCashFlow / data.fundamentals.totalDebt;
   }
-  const fcfScore = scoreNumericMetric(fcfToDebt, 'fcfToDebt', 'fundamentals');
+  const fcfScore = scoreNumericMetric(fcfToDebt, 'fcfToDebt', 'fundamentals', opportunityType);
   if (fcfScore.ruleBucket === 'missing') missingMetrics.push('fcfToDebt');
   metrics.fcfToDebt = {
     name: sectionConfig.metrics.fcfToDebt.name,
@@ -390,7 +391,7 @@ export function calculateFundamentalsSection(data: RawStockData): SectionScore {
   };
   
   // Debt-to-Equity
-  const debtEquity = scoreNumericMetric(data.fundamentals?.debtToEquity, 'debtToEquity', 'fundamentals');
+  const debtEquity = scoreNumericMetric(data.fundamentals?.debtToEquity, 'debtToEquity', 'fundamentals', opportunityType);
   if (debtEquity.ruleBucket === 'missing') missingMetrics.push('debtToEquity');
   metrics.debtToEquity = {
     name: sectionConfig.metrics.debtToEquity.name,
@@ -419,6 +420,7 @@ export function calculateTechnicalsSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.technicals;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
+  const opportunityType = data.opportunityType || 'BUY';
   
   // SMA Alignment
   const smaCondition = getSmaAlignment(
@@ -427,7 +429,7 @@ export function calculateTechnicalsSection(data: RawStockData): SectionScore {
     data.technicals?.sma20,
     data.technicals?.currentPrice
   );
-  const smaScore = scoreConditionMetric(smaCondition, 'smaAlignment', 'technicals');
+  const smaScore = scoreConditionMetric(smaCondition, 'smaAlignment', 'technicals', opportunityType);
   if (smaScore.ruleBucket === 'missing') missingMetrics.push('smaAlignment');
   metrics.smaAlignment = {
     name: sectionConfig.metrics.smaAlignment.name,
@@ -441,7 +443,7 @@ export function calculateTechnicalsSection(data: RawStockData): SectionScore {
   
   // RSI Momentum
   const rsiCondition = getRsiMomentumCondition(data.technicals?.rsi, data.technicals?.rsiDirection);
-  const rsiScore = scoreConditionMetric(rsiCondition, 'rsiMomentum', 'technicals');
+  const rsiScore = scoreConditionMetric(rsiCondition, 'rsiMomentum', 'technicals', opportunityType);
   if (rsiScore.ruleBucket === 'missing') missingMetrics.push('rsiMomentum');
   metrics.rsiMomentum = {
     name: sectionConfig.metrics.rsiMomentum.name,
@@ -460,7 +462,7 @@ export function calculateTechnicalsSection(data: RawStockData): SectionScore {
     data.technicals?.macdHistogram,
     data.technicals?.macdCrossover
   );
-  const macdScore = scoreConditionMetric(macdCondition, 'macdSignal', 'technicals');
+  const macdScore = scoreConditionMetric(macdCondition, 'macdSignal', 'technicals', opportunityType);
   if (macdScore.ruleBucket === 'missing') missingMetrics.push('macdSignal');
   metrics.macdSignal = {
     name: sectionConfig.metrics.macdSignal.name,
@@ -474,7 +476,7 @@ export function calculateTechnicalsSection(data: RawStockData): SectionScore {
   
   // Volume Surge
   const volCondition = getVolumeCondition(data.technicals?.volumeVsAvg, data.technicals?.priceConfirmation);
-  const volScore = scoreConditionMetric(volCondition, 'volumeSurge', 'technicals');
+  const volScore = scoreConditionMetric(volCondition, 'volumeSurge', 'technicals', opportunityType);
   if (volScore.ruleBucket === 'missing') missingMetrics.push('volumeSurge');
   metrics.volumeSurge = {
     name: sectionConfig.metrics.volumeSurge.name,
@@ -492,7 +494,7 @@ export function calculateTechnicalsSection(data: RawStockData): SectionScore {
     data.technicals?.nearSupport,
     data.technicals?.nearResistance
   );
-  const priceScore = scoreConditionMetric(priceCondition, 'priceVsResistance', 'technicals');
+  const priceScore = scoreConditionMetric(priceCondition, 'priceVsResistance', 'technicals', opportunityType);
   if (priceScore.ruleBucket === 'missing') missingMetrics.push('priceVsResistance');
   metrics.priceVsResistance = {
     name: sectionConfig.metrics.priceVsResistance.name,
@@ -521,9 +523,10 @@ export function calculateInsiderSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.insiderActivity;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
+  const opportunityType = data.opportunityType || 'BUY';
   
   // Net Buy Ratio
-  const netBuyScore = scoreNumericMetric(data.insiderActivity?.netBuyRatio30d, 'netBuyRatio', 'insiderActivity');
+  const netBuyScore = scoreNumericMetric(data.insiderActivity?.netBuyRatio30d, 'netBuyRatio', 'insiderActivity', opportunityType);
   if (netBuyScore.ruleBucket === 'missing') missingMetrics.push('netBuyRatio');
   metrics.netBuyRatio = {
     name: sectionConfig.metrics.netBuyRatio.name,
@@ -536,7 +539,7 @@ export function calculateInsiderSection(data: RawStockData): SectionScore {
   };
   
   // Transaction Recency
-  const recencyScore = scoreNumericMetric(data.insiderActivity?.daysSinceLastTransaction, 'transactionRecency', 'insiderActivity');
+  const recencyScore = scoreNumericMetric(data.insiderActivity?.daysSinceLastTransaction, 'transactionRecency', 'insiderActivity', opportunityType);
   if (recencyScore.ruleBucket === 'missing') missingMetrics.push('transactionRecency');
   metrics.transactionRecency = {
     name: sectionConfig.metrics.transactionRecency.name,
@@ -549,7 +552,7 @@ export function calculateInsiderSection(data: RawStockData): SectionScore {
   };
   
   // Transaction Size
-  const sizeScore = scoreNumericMetric(data.insiderActivity?.transactionSizeVsFloat, 'transactionSize', 'insiderActivity');
+  const sizeScore = scoreNumericMetric(data.insiderActivity?.transactionSizeVsFloat, 'transactionSize', 'insiderActivity', opportunityType);
   if (sizeScore.ruleBucket === 'missing') missingMetrics.push('transactionSize');
   metrics.transactionSize = {
     name: sectionConfig.metrics.transactionSize.name,
@@ -563,7 +566,7 @@ export function calculateInsiderSection(data: RawStockData): SectionScore {
   
   // Insider Role
   const roleCondition = getInsiderRoleCondition(data.insiderActivity?.insiderRoles);
-  const roleScore = scoreConditionMetric(roleCondition, 'insiderRole', 'insiderActivity');
+  const roleScore = scoreConditionMetric(roleCondition, 'insiderRole', 'insiderActivity', opportunityType);
   if (roleScore.ruleBucket === 'missing') missingMetrics.push('insiderRole');
   metrics.insiderRole = {
     name: sectionConfig.metrics.insiderRole.name,
@@ -592,9 +595,10 @@ export function calculateNewsSentimentSection(data: RawStockData): SectionScore 
   const sectionConfig = scorecardConfig.sections.newsSentiment;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
+  const opportunityType = data.opportunityType || 'BUY';
   
   // Average Sentiment
-  const sentimentScore = scoreNumericMetric(data.newsSentiment?.avgSentiment, 'avgSentiment', 'newsSentiment');
+  const sentimentScore = scoreNumericMetric(data.newsSentiment?.avgSentiment, 'avgSentiment', 'newsSentiment', opportunityType);
   if (sentimentScore.ruleBucket === 'missing') missingMetrics.push('avgSentiment');
   metrics.avgSentiment = {
     name: sectionConfig.metrics.avgSentiment.name,
@@ -607,7 +611,7 @@ export function calculateNewsSentimentSection(data: RawStockData): SectionScore 
   };
   
   // Sentiment Momentum
-  const momentumScore = scoreConditionMetric(data.newsSentiment?.sentimentTrend, 'sentimentMomentum', 'newsSentiment');
+  const momentumScore = scoreConditionMetric(data.newsSentiment?.sentimentTrend, 'sentimentMomentum', 'newsSentiment', opportunityType);
   if (momentumScore.ruleBucket === 'missing') missingMetrics.push('sentimentMomentum');
   metrics.sentimentMomentum = {
     name: sectionConfig.metrics.sentimentMomentum.name,
@@ -620,7 +624,7 @@ export function calculateNewsSentimentSection(data: RawStockData): SectionScore 
   };
   
   // News Volume
-  const volumeScore = scoreNumericMetric(data.newsSentiment?.newsCount7d, 'newsVolume', 'newsSentiment');
+  const volumeScore = scoreNumericMetric(data.newsSentiment?.newsCount7d, 'newsVolume', 'newsSentiment', opportunityType);
   if (volumeScore.ruleBucket === 'missing') missingMetrics.push('newsVolume');
   metrics.newsVolume = {
     name: sectionConfig.metrics.newsVolume.name,
@@ -633,7 +637,7 @@ export function calculateNewsSentimentSection(data: RawStockData): SectionScore 
   };
   
   // Catalyst Presence
-  const catalystScore = scoreConditionMetric(data.newsSentiment?.upcomingCatalyst, 'catalystPresence', 'newsSentiment');
+  const catalystScore = scoreConditionMetric(data.newsSentiment?.upcomingCatalyst, 'catalystPresence', 'newsSentiment', opportunityType);
   if (catalystScore.ruleBucket === 'missing') missingMetrics.push('catalystPresence');
   metrics.catalystPresence = {
     name: sectionConfig.metrics.catalystPresence.name,
@@ -662,9 +666,10 @@ export function calculateMacroSectorSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.macroSector;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
+  const opportunityType = data.opportunityType || 'BUY';
   
   // Sector vs SPY
-  const sectorScore = scoreNumericMetric(data.macroSector?.sectorVsSpy10d, 'sectorMomentum', 'macroSector');
+  const sectorScore = scoreNumericMetric(data.macroSector?.sectorVsSpy10d, 'sectorMomentum', 'macroSector', opportunityType);
   if (sectorScore.ruleBucket === 'missing') missingMetrics.push('sectorMomentum');
   metrics.sectorMomentum = {
     name: sectionConfig.metrics.sectorMomentum.name,
@@ -677,7 +682,7 @@ export function calculateMacroSectorSection(data: RawStockData): SectionScore {
   };
   
   // Macro Risk Flags
-  const riskScore = scoreConditionMetric(data.macroSector?.macroRiskEnvironment, 'macroRiskFlags', 'macroSector');
+  const riskScore = scoreConditionMetric(data.macroSector?.macroRiskEnvironment, 'macroRiskFlags', 'macroSector', opportunityType);
   if (riskScore.ruleBucket === 'missing') missingMetrics.push('macroRiskFlags');
   metrics.macroRiskFlags = {
     name: sectionConfig.metrics.macroRiskFlags.name,
@@ -700,6 +705,64 @@ export function calculateMacroSectorSection(data: RawStockData): SectionScore {
 }
 
 /**
+ * Calculate AI Agent evaluation section
+ */
+export function calculateAIAgentSection(data: RawStockData): SectionScore {
+  const sectionConfig = scorecardConfig.sections.aiAgent;
+  const metrics: Record<string, MetricScore> = {};
+  const missingMetrics: string[] = [];
+  const opportunityType = data.opportunityType || 'BUY';
+  
+  // Risk Assessment
+  const riskScore = scoreConditionMetric(data.aiAgentEvaluation?.riskAssessment, 'riskAssessment', 'aiAgent', opportunityType);
+  if (riskScore.ruleBucket === 'missing') missingMetrics.push('riskAssessment');
+  metrics.riskAssessment = {
+    name: sectionConfig.metrics.riskAssessment.name,
+    measurement: riskScore.measurement,
+    ruleBucket: riskScore.ruleBucket,
+    score: riskScore.score,
+    maxScore: 10,
+    weight: sectionConfig.metrics.riskAssessment.weight,
+    rationale: data.aiAgentEvaluation?.rationale?.risk || generateRationale('AI Risk Assessment', riskScore.measurement, riskScore.ruleBucket, riskScore.score)
+  };
+  
+  // Entry Timing
+  const timingScore = scoreConditionMetric(data.aiAgentEvaluation?.entryTiming, 'entryTiming', 'aiAgent', opportunityType);
+  if (timingScore.ruleBucket === 'missing') missingMetrics.push('entryTiming');
+  metrics.entryTiming = {
+    name: sectionConfig.metrics.entryTiming.name,
+    measurement: timingScore.measurement,
+    ruleBucket: timingScore.ruleBucket,
+    score: timingScore.score,
+    maxScore: 10,
+    weight: sectionConfig.metrics.entryTiming.weight,
+    rationale: data.aiAgentEvaluation?.rationale?.timing || generateRationale('AI Entry Timing', timingScore.measurement, timingScore.ruleBucket, timingScore.score)
+  };
+  
+  // Conviction
+  const convictionScore = scoreConditionMetric(data.aiAgentEvaluation?.conviction, 'conviction', 'aiAgent', opportunityType);
+  if (convictionScore.ruleBucket === 'missing') missingMetrics.push('conviction');
+  metrics.conviction = {
+    name: sectionConfig.metrics.conviction.name,
+    measurement: convictionScore.measurement,
+    ruleBucket: convictionScore.ruleBucket,
+    score: convictionScore.score,
+    maxScore: 10,
+    weight: sectionConfig.metrics.conviction.weight,
+    rationale: data.aiAgentEvaluation?.rationale?.conviction || generateRationale('AI Conviction', convictionScore.measurement, convictionScore.ruleBucket, convictionScore.score)
+  };
+  
+  return {
+    name: sectionConfig.name,
+    weight: sectionConfig.weight,
+    score: calculateSectionScore(metrics),
+    maxScore: 100,
+    metrics,
+    missingMetrics
+  };
+}
+
+/**
  * Generate complete scorecard from raw stock data
  */
 export function generateScorecard(data: RawStockData): Scorecard {
@@ -708,7 +771,8 @@ export function generateScorecard(data: RawStockData): Scorecard {
     technicals: calculateTechnicalsSection(data),
     insiderActivity: calculateInsiderSection(data),
     newsSentiment: calculateNewsSentimentSection(data),
-    macroSector: calculateMacroSectorSection(data)
+    macroSector: calculateMacroSectorSection(data),
+    aiAgent: calculateAIAgentSection(data)
   };
   
   const globalScore = calculateGlobalScore(sections);

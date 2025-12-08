@@ -129,6 +129,7 @@ export interface IStorage {
   getUserStocksForTicker(userId: string, ticker: string): Promise<Stock[]>; // Per-user: Get specific user's stocks for a ticker
   getAllStocksForTickerGlobal(ticker: string): Promise<Stock[]>; // Global: Get ALL users' stocks for a ticker (AI analysis aggregation)
   getTransactionByCompositeKey(userId: string, ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Stock | undefined>;
+  getExistingTransactionKeys(userId: string, transactions: Array<{ ticker: string; insiderTradeDate: string; insiderName: string; recommendation: string }>): Promise<Set<string>>;
   createStock(stock: InsertStock): Promise<Stock>;
   updateStock(userId: string, ticker: string, stock: Partial<Stock>): Promise<Stock | undefined>;
   deleteStock(userId: string, ticker: string): Promise<boolean>;
@@ -523,6 +524,45 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return stock;
+  }
+  
+  /**
+   * Batch check for existing transactions by composite keys
+   * Returns a Set of composite key strings for transactions that already exist
+   * This is much more efficient than checking one-by-one
+   */
+  async getExistingTransactionKeys(
+    userId: string,
+    transactions: Array<{
+      ticker: string;
+      insiderTradeDate: string;
+      insiderName: string;
+      recommendation: string;
+    }>
+  ): Promise<Set<string>> {
+    if (transactions.length === 0) return new Set();
+    
+    // Get all stocks for this user in one query
+    const userStocks = await db
+      .select({
+        ticker: stocks.ticker,
+        insiderTradeDate: stocks.insiderTradeDate,
+        insiderName: stocks.insiderName,
+        recommendation: stocks.recommendation,
+      })
+      .from(stocks)
+      .where(eq(stocks.userId, userId));
+    
+    // Create a Set of composite keys for O(1) lookup
+    const existingKeys = new Set<string>();
+    for (const stock of userStocks) {
+      if (stock.insiderTradeDate && stock.insiderName && stock.recommendation) {
+        const key = `${stock.ticker}|${stock.insiderTradeDate}|${stock.insiderName}|${stock.recommendation}`;
+        existingKeys.add(key);
+      }
+    }
+    
+    return existingKeys;
   }
 
   async createStock(stock: InsertStock): Promise<Stock> {

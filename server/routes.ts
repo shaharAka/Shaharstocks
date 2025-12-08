@@ -97,63 +97,105 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
     console.log(`[InitialDataFetch] → Returned ${transactions.length} matching transactions`);
     console.log(`[InitialDataFetch] ===================================================`);
     
-    // Convert transactions to stock recommendations
-    let createdCount = 0;
+    // ===== BATCH FILTERING (single pass instead of N+1 queries) =====
+    console.log(`[InitialDataFetch] Starting batch filtering...`);
+    
+    // Step 1: Get all existing transaction keys in ONE query
+    const existingKeys = await storage.getExistingTransactionKeys(
+      userId,
+      transactions.map(t => ({
+        ticker: t.ticker,
+        insiderTradeDate: t.filingDate,
+        insiderName: t.insiderName,
+        recommendation: t.recommendation
+      }))
+    );
+    console.log(`[InitialDataFetch] Found ${existingKeys.size} existing transactions in database`);
+    
+    // Step 2: Filter out already-existing transactions first (cheapest filter)
+    const newTransactions = transactions.filter(t => {
+      const key = `${t.ticker}|${t.filingDate}|${t.insiderName}|${t.recommendation}`;
+      return !existingKeys.has(key);
+    });
+    const filteredAlreadyExists = transactions.length - newTransactions.length;
+    console.log(`[InitialDataFetch] After duplicate filter: ${newTransactions.length} new transactions`);
+    
+    if (newTransactions.length === 0) {
+      console.log(`[InitialDataFetch] All transactions already exist, marking user data as fetched`);
+      await storage.markUserInitialDataFetched(userId);
+      return;
+    }
+    
+    // Step 3: Get unique tickers and batch fetch quotes + stock data
+    const uniqueTickers = Array.from(new Set(newTransactions.map(t => t.ticker)));
+    console.log(`[InitialDataFetch] Batch fetching data for ${uniqueTickers.length} unique tickers...`);
+    
+    // Batch fetch quotes (Alpha Vantage limits apply, but stockService handles batching internally)
+    const quotesMap = new Map<string, { price: number; previousClose?: number }>();
+    const stockDataMap = await stockService.getBatchStockData(uniqueTickers);
+    
+    // Get quotes for each ticker (stockService.getQuote is needed since getBatchStockData doesn't return live quotes)
+    // Process in batches of 5 to avoid rate limiting
+    const quoteBatchSize = 5;
+    for (let i = 0; i < uniqueTickers.length; i += quoteBatchSize) {
+      const batch = uniqueTickers.slice(i, i + quoteBatchSize);
+      const quotePromises = batch.map(async (ticker) => {
+        try {
+          const quote = await stockService.getQuote(ticker);
+          if (quote?.price) {
+            quotesMap.set(ticker, { price: quote.price, previousClose: quote.previousClose });
+          }
+        } catch (err) {
+          console.log(`[InitialDataFetch] Failed to get quote for ${ticker}`);
+        }
+      });
+      await Promise.all(quotePromises);
+    }
+    console.log(`[InitialDataFetch] Got quotes for ${quotesMap.size}/${uniqueTickers.length} tickers`);
+    
+    // Step 4: Apply all filters in a single pass
+    let filteredNoQuote = 0;
     let filteredMarketCap = 0;
     let filteredOptionsDeals = 0;
-    let filteredAlreadyExists = 0;
-    let filteredNoQuote = 0;
     
-    for (const transaction of transactions) {
+    const validTransactions = newTransactions.filter(transaction => {
+      // Filter: No quote
+      const quote = quotesMap.get(transaction.ticker);
+      if (!quote) {
+        filteredNoQuote++;
+        return false;
+      }
+      
+      // Filter: Market cap < $500M
+      const stockData = stockDataMap.get(transaction.ticker);
+      const marketCapM = stockData?.marketCap || 0;
+      if (marketCapM < 500) {
+        filteredMarketCap++;
+        return false;
+      }
+      
+      // Filter: Options deals (BUY only - insider price < 15% of market price)
+      if (transaction.recommendation === "buy") {
+        if (transaction.price < quote.price * 0.15) {
+          filteredOptionsDeals++;
+          return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    console.log(`[InitialDataFetch] After all filters: ${validTransactions.length} valid transactions`);
+    
+    // Step 5: Create valid stocks
+    let createdCount = 0;
+    for (const transaction of validTransactions) {
       try {
-        // Check if this exact transaction already exists using composite key
-        const existingTransaction = await storage.getTransactionByCompositeKey(
-          userId, // Per-user tenant isolation
-          transaction.ticker,
-          transaction.filingDate,
-          transaction.insiderName,
-          transaction.recommendation // Use actual recommendation (buy or sell)
-        );
+        const quote = quotesMap.get(transaction.ticker)!;
+        const stockData = stockDataMap.get(transaction.ticker);
         
-        if (existingTransaction) {
-          filteredAlreadyExists++;
-          continue;
-        }
-
-        // Get current market price from Alpha Vantage
-        const quote = await stockService.getQuote(transaction.ticker);
-        if (!quote || !quote.price) {
-          filteredNoQuote++;
-          console.log(`[InitialDataFetch] ${transaction.ticker} no quote available, skipping`);
-          continue;
-        }
-
-        // Fetch company profile and market cap from Alpha Vantage
-        const stockData = await stockService.getBatchStockData([transaction.ticker]);
-        const data = stockData.get(transaction.ticker);
-        
-        // Apply market cap filter (must be > $500M)
-        // Alpha Vantage getBatchStockData already returns marketCap in millions
-        const marketCapM = data?.marketCap || 0;
-        if (marketCapM < 500) {
-          filteredMarketCap++;
-          console.log(`[InitialDataFetch] ${transaction.ticker} market cap too low: $${marketCapM.toFixed(1)}M, skipping`);
-          continue;
-        }
-        
-        // Apply options deal filter ONLY to BUY transactions (insider price should be >= 15% of current price)
-        if (transaction.recommendation === "buy") {
-          const insiderPriceNum = transaction.price;
-          if (insiderPriceNum < quote.price * 0.15) {
-            filteredOptionsDeals++;
-            console.log(`[InitialDataFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum.toFixed(2)} < 15% of market: $${quote.price.toFixed(2)}), skipping`);
-            continue;
-          }
-        }
-
-        // Create stock recommendation with complete information (per-user tenant isolation)
         await storage.createStock({
-          userId, // Per-user tenant isolation - this stock belongs to this user only
+          userId,
           ticker: transaction.ticker,
           companyName: transaction.companyName || transaction.ticker,
           currentPrice: quote.price.toString(),
@@ -163,36 +205,35 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           insiderTradeDate: transaction.filingDate,
           insiderName: transaction.insiderName,
           insiderTitle: transaction.insiderTitle,
-          recommendation: transaction.recommendation, // Use actual recommendation (buy or sell)
-          opportunityType: transaction.recommendation.toLowerCase() === "sell" ? "SELL" : "BUY", // Derive from recommendation
+          recommendation: transaction.recommendation,
+          opportunityType: transaction.recommendation.toLowerCase() === "sell" ? "SELL" : "BUY",
           source: "openinsider",
           confidenceScore: transaction.confidence || 75,
           peRatio: null,
-          marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-          description: null, // Not available from Alpha Vantage
-          industry: data?.companyInfo?.industry || null,
-          country: null, // Not available from Alpha Vantage
-          webUrl: null, // Not available from Alpha Vantage
-          ipo: null, // Not available from Alpha Vantage
-          news: [], // News fetched separately during AI analysis
-          insiderSentimentMspr: null, // Will be calculated during analysis
-          insiderSentimentChange: null, // Will be calculated during analysis
+          marketCap: stockData?.marketCap ? `$${Math.round(stockData.marketCap)}M` : null,
+          description: null,
+          industry: stockData?.companyInfo?.industry || null,
+          country: null,
+          webUrl: null,
+          ipo: null,
+          news: [],
+          insiderSentimentMspr: null,
+          insiderSentimentChange: null,
           priceHistory: [],
         });
-
         createdCount++;
       } catch (err) {
-        console.error(`[InitialDataFetch] Error processing ${transaction.ticker}:`, err);
+        console.error(`[InitialDataFetch] Error creating stock ${transaction.ticker}:`, err);
       }
     }
 
-    console.log(`\n[InitialDataFetch] ======= STAGE 2: Backend Post-Processing =======`);
+    console.log(`\n[InitialDataFetch] ======= STAGE 2: Backend Batch Filtering =======`);
     console.log(`[InitialDataFetch] Starting with: ${transactions.length} transactions`);
     console.log(`[InitialDataFetch]   ⊗ Already exists: ${filteredAlreadyExists}`);
+    console.log(`[InitialDataFetch]   ⊗ No quote: ${filteredNoQuote}`);
     console.log(`[InitialDataFetch]   ⊗ Market cap < $500M: ${filteredMarketCap}`);
     console.log(`[InitialDataFetch]   ⊗ Options deals (< 15%): ${filteredOptionsDeals}`);
-    console.log(`[InitialDataFetch]   ⊗ No quote: ${filteredNoQuote}`);
-    console.log(`[InitialDataFetch] → Total Stage 2 filtered: ${filteredAlreadyExists + filteredMarketCap + filteredOptionsDeals + filteredNoQuote}`);
+    console.log(`[InitialDataFetch] → Total Stage 2 filtered: ${filteredAlreadyExists + filteredNoQuote + filteredMarketCap + filteredOptionsDeals}`);
     console.log(`[InitialDataFetch] ===================================================`);
     console.log(`\n[InitialDataFetch] ✓ Successfully created ${createdCount} new recommendations for user ${userId}\n`);
     
@@ -4296,22 +4337,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let filteredCount = 0;
       const createdTickers: string[] = []; // Track newly created tickers for AI analysis
       
-      // Step 1: Filter out existing transactions for this admin user (check composite key)
+      // Step 1: Filter out existing transactions for this admin user using BATCH query
       console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions for admin user ${req.session.userId}...`);
-      const newTransactions = [];
-      for (const transaction of transactions) {
-        const existingTransaction = await storage.getTransactionByCompositeKey(
-          req.session.userId!, // Admin user's stocks
-          transaction.ticker,
-          transaction.filingDate,
-          transaction.insiderName,
-          transaction.recommendation // Use actual recommendation (buy or sell)
-        );
-        if (!existingTransaction) {
-          newTransactions.push(transaction);
-        }
-      }
-      console.log(`[OpeninsiderFetch] ${newTransactions.length} new transactions after duplicate check`);
+      
+      const existingKeys = await storage.getExistingTransactionKeys(
+        req.session.userId!,
+        transactions.map(t => ({
+          ticker: t.ticker,
+          insiderTradeDate: t.filingDate,
+          insiderName: t.insiderName,
+          recommendation: t.recommendation
+        }))
+      );
+      
+      const newTransactions = transactions.filter(t => {
+        const key = `${t.ticker}|${t.filingDate}|${t.insiderName}|${t.recommendation}`;
+        return !existingKeys.has(key);
+      });
+      console.log(`[OpeninsiderFetch] ${newTransactions.length} new transactions after duplicate check (${existingKeys.size} existing found)`);
       console.log(`[OpeninsiderFetch] New BUY transactions: ${newTransactions.filter(t => t.recommendation === 'buy').length}`);
       console.log(`[OpeninsiderFetch] New SELL transactions: ${newTransactions.filter(t => t.recommendation === 'sell').length}`);
       

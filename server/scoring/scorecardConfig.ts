@@ -362,7 +362,7 @@ export const scorecardConfig: ScorecardConfig = {
       },
     },
 
-    aiAgentEvaluation: {
+    aiAgent: {
       name: "AI Agent Evaluation",
       weight: 10,
       description: "Gemini AI assessment of opportunity quality and timing",

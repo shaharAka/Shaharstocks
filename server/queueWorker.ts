@@ -331,46 +331,17 @@ class QueueWorker {
         progress: "3/3"
       });
 
-      // PHASE 2: Macro Analysis (happens first - get industry context)
-      await this.updateProgress(job.id, job.ticker, "macro_analysis", {
-        phase: "macro",
-        substep: "Analyzing industry/sector conditions"
-      });
-
-      // Get or create industry-specific macro analysis
-      // Prefer: 1) Stock record from DB (any user), 2) Alpha Vantage industry, 3) Alpha Vantage sector, 4) undefined
+      // Get stock info for context (no macro analysis)
       const stock = await storage.getAnyStockForTicker(job.ticker);
-      const rawIndustry = stock?.industry || companyOverview?.industry || companyOverview?.sector || undefined;
-      // Coerce "N/A" sentinel value to undefined to avoid creating useless industry buckets
-      const stockIndustry = (rawIndustry && rawIndustry !== "N/A") ? rawIndustry : undefined;
-      console.log(`[QueueWorker] Getting macro economic analysis for industry: ${stockIndustry || "General Market"}...`);
-      let macroAnalysis = await storage.getLatestMacroAnalysis(stockIndustry);
-      
-      // If no recent macro analysis exists for this industry, create one
-      if (!macroAnalysis) {
-        console.log(`[QueueWorker] No macro analysis found for ${stockIndustry || "General Market"}, creating new one...`);
-        const { runMacroAnalysis } = await import("./macroAgentService");
-        const macroData = await runMacroAnalysis(stockIndustry);
-        macroAnalysis = await storage.createMacroAnalysis(macroData);
-        console.log(`[QueueWorker] Created macro analysis for ${stockIndustry || "General Market"} with factor ${macroAnalysis.macroFactor}`);
-      } else {
-        const createdDate = macroAnalysis.createdAt ? macroAnalysis.createdAt.toISOString() : "unknown";
-        console.log(`[QueueWorker] Using existing macro analysis for ${stockIndustry || "General Market"} from ${createdDate}`);
-        console.log(`[QueueWorker] Macro factor: ${macroAnalysis.macroFactor}, Macro score: ${macroAnalysis.macroScore}/100`);
-      }
 
-      // Mark macro phase complete after obtaining/creating macro analysis
-      await storage.markStockAnalysisPhaseComplete(job.ticker, 'macro');
-      console.log(`[QueueWorker] ✅ Macro analysis phase complete for ${job.ticker}`);
-
-      // PHASE 3: Micro AI Analysis (analyze company fundamentals)
-      await this.updateProgress(job.id, job.ticker, "micro_analysis", {
-        phase: "micro",
-        substep: "Running fundamental analysis with AI"
+      // PHASE 2: Calculate Signal Score
+      await this.updateProgress(job.id, job.ticker, "calculating_score", {
+        phase: "calculating_score",
+        substep: "Calculating signal score"
       });
 
-      // Run micro AI analysis
-      console.log(`[QueueWorker] Running micro AI analysis for ${job.ticker}...`);
+      // Run AI analysis - produces signal score (1-100) + playbook directly
+      console.log(`[QueueWorker] Running AI analysis for ${job.ticker}...`);
       const analysis = await aiAnalysisService.analyzeStock({
         ticker: job.ticker,
         companyOverview,
@@ -384,24 +355,18 @@ class QueueWorker {
         secFilings,
         comprehensiveFundamentals,
       });
-      console.log(`[QueueWorker] ✅ Micro analysis complete (score: ${analysis.confidenceScore}/100)`);
       
-      // Mark micro phase complete after AI analysis finishes
-      await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
-      console.log(`[QueueWorker] ✅ Micro analysis phase complete for ${job.ticker}`);
+      // Use AI's confidence score directly as the signal score (1-100)
+      // The AI already considers all factors including macro context
+      const integratedScore = Math.max(1, Math.min(100, Math.round(analysis.confidenceScore)));
+      console.log(`[QueueWorker] ✅ Signal score calculated: ${integratedScore}/100`);
 
-      // PHASE 4: Score Integration (Simplified - AI signal score is the final score)
-      await this.updateProgress(job.id, job.ticker, "calculating_score", {
+      // PHASE 3: Generate Playbook Report
+      await this.updateProgress(job.id, job.ticker, "generating_playbook", {
         phase: "integration",
-        substep: "Processing signal score"
+        substep: "Generating playbook report"
       });
-
-      // Use AI's confidence score directly as the integrated signal score (1-100)
-      // Macro factor can optionally adjust, but AI already considers all factors
-      const macroFactor = macroAnalysis.macroFactor ? parseFloat(macroAnalysis.macroFactor) : 1.0;
-      const rawIntegratedScore = analysis.confidenceScore * macroFactor;
-      const integratedScore = Math.max(1, Math.min(100, Math.round(rawIntegratedScore)));
-      console.log(`[QueueWorker] Signal score: ${analysis.confidenceScore} (AI) × ${macroFactor} (macro) = ${integratedScore}/100`);
+      console.log(`[QueueWorker] 📝 Generating playbook report for ${job.ticker}...`);
 
       // Save analysis to database with playbook
       console.log(`[QueueWorker] 💾 Saving analysis with playbook to database...`);
@@ -436,13 +401,14 @@ class QueueWorker {
         riskFactors: secFilingData?.riskFactors,
         businessOverview: secFilingData?.businessOverview,
         fundamentalData: comprehensiveFundamentals,
-        macroAnalysisId: macroAnalysis.id,
-        integratedScore: integratedScore, // Use AI signal score directly
+        integratedScore: integratedScore, // AI signal score directly
       });
 
-      // Set combined flag after integrated score is saved
+      // Mark all phases complete (for backward compatibility with UI)
+      await storage.markStockAnalysisPhaseComplete(job.ticker, 'macro');
+      await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'combined');
-      console.log(`[QueueWorker] ✅ All analysis phases complete for ${job.ticker}`);
+      console.log(`[QueueWorker] ✅ Analysis complete for ${job.ticker}`);
 
       // Create notifications for high-value opportunities (high confidence signals)
       // High score BUY: score > 70 with BUY rating (highest buy scores)

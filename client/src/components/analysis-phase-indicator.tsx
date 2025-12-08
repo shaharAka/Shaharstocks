@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, Loader2, Database, Brain, FileText } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -10,7 +10,7 @@ interface AnalysisPhaseIndicatorProps {
   microCompleted: boolean;
   macroCompleted: boolean;
   combinedCompleted: boolean;
-  currentPhase?: "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "complete" | null;
+  currentPhase?: "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "analyzing" | "complete" | null;
   stepDetails?: {
     phase?: string;
     substep?: string;
@@ -20,6 +20,16 @@ interface AnalysisPhaseIndicatorProps {
   showLabels?: boolean;
   showDetailedProgress?: boolean;
   className?: string;
+}
+
+type StepStatus = "pending" | "active" | "completed";
+
+interface Step {
+  id: number;
+  label: string;
+  shortLabel: string;
+  icon: typeof Database;
+  status: StepStatus;
 }
 
 export function AnalysisPhaseIndicator({
@@ -35,118 +45,143 @@ export function AnalysisPhaseIndicator({
 }: AnalysisPhaseIndicatorProps) {
   const iconSize = size === "sm" ? "h-3 w-3" : "h-4 w-4";
   
-  // IMPORTANT: Order matches actual execution order in queueWorker:
-  // Phase 2: Macro (industry/sector) -> Phase 3: Micro (fundamentals) -> Phase 4: Integration
-  const phases = [
-    {
-      id: "macro",
-      label: "Macro context",
-      description: "Industry/sector analysis (runs first)",
-      completed: macroCompleted,
-      active: currentPhase === "macro_analysis",
-      testId: "status-macro",
-    },
-    {
-      id: "micro",
-      label: "Micro fundamentals",
-      description: "Company fundamentals analysis (runs second)",
-      completed: microCompleted,
-      active: currentPhase === "micro_analysis",
-      testId: "status-micro",
-    },
-    {
-      id: "combined",
-      label: "Combined score",
-      description: "Integrated analysis score (final)",
-      completed: combinedCompleted,
-      active: currentPhase === "integration" || currentPhase === "calculating_score",
-      testId: "status-combined",
-    },
-  ];
+  const isComplete = microCompleted && macroCompleted && combinedCompleted;
 
-  // Get the current phase label for inline display
-  const getCurrentPhaseLabel = () => {
-    if (!currentPhase) return null;
-    
-    switch (currentPhase) {
-      case "data_fetch":
-        return "Fetching data...";
-      case "macro_analysis":
-        return "Analyzing macro factors...";
-      case "micro_analysis":
-        return "Analyzing fundamentals...";
-      case "integration":
-        return "Calculating final score...";
-      case "complete":
-        return "Analysis complete";
+  const getStepStatus = (stepNum: 1 | 2 | 3): StepStatus => {
+    if (isComplete || currentPhase === "complete") {
+      return "completed";
+    }
+
+    switch (stepNum) {
+      case 1: // Fetching stock data
+        if (currentPhase === "data_fetch") return "active";
+        if (currentPhase === "calculating_score" || currentPhase === "analyzing" || 
+            currentPhase === "micro_analysis" || currentPhase === "integration" ||
+            currentPhase === "macro_analysis") return "completed";
+        return "pending";
+        
+      case 2: // Calculating signal
+        if (currentPhase === "calculating_score" || currentPhase === "analyzing" || currentPhase === "micro_analysis") return "active";
+        if (currentPhase === "integration" || currentPhase === "macro_analysis") return "completed";
+        if (currentPhase === "data_fetch") return "pending";
+        return "pending";
+        
+      case 3: // Generating playbook
+        if (currentPhase === "integration" || currentPhase === "macro_analysis") return "active";
+        if (isComplete) return "completed";
+        return "pending";
+        
       default:
-        return null;
+        return "pending";
     }
   };
 
-  const currentPhaseLabel = getCurrentPhaseLabel();
+  const steps: Step[] = [
+    {
+      id: 1,
+      label: "Fetching stock data",
+      shortLabel: "Data",
+      icon: Database,
+      status: getStepStatus(1),
+    },
+    {
+      id: 2,
+      label: "Calculating signal",
+      shortLabel: "Signal",
+      icon: Brain,
+      status: getStepStatus(2),
+    },
+    {
+      id: 3,
+      label: "Generating playbook",
+      shortLabel: "Playbook",
+      icon: FileText,
+      status: getStepStatus(3),
+    },
+  ];
+
+  const getIconForStatus = (status: StepStatus) => {
+    if (status === "completed") return CheckCircle2;
+    if (status === "active") return Loader2;
+    return Circle;
+  };
+
+  const getIconColor = (status: StepStatus) => {
+    if (status === "completed") return "text-success";
+    if (status === "active") return "text-warning";
+    return "text-muted-foreground/40";
+  };
+
+  const activeStep = steps.find(s => s.status === "active");
+  const currentStepLabel = activeStep?.label || (isComplete ? "Analysis complete" : null);
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <div className="flex items-center gap-1.5" data-testid="analysis-phase-indicator">
-        {phases.map((phase) => {
-          const Icon = phase.completed ? CheckCircle2 : phase.active ? Loader2 : Circle;
-          const iconColor = phase.completed
-            ? "text-success"
-            : phase.active
-            ? "text-warning"
-            : "text-muted-foreground/40";
+      <div className="flex items-center gap-1" data-testid="analysis-phase-indicator">
+        {steps.map((step, index) => {
+          const StatusIcon = getIconForStatus(step.status);
+          const iconColor = getIconColor(step.status);
 
           return (
-            <Tooltip key={phase.id}>
-              <TooltipTrigger asChild>
-                <div
-                  className={cn("flex items-center", iconColor)}
-                  data-testid={`${phase.testId}`}
-                >
-                  <Icon
-                    className={cn(
-                      iconSize,
-                      phase.active && "animate-spin"
+            <div key={step.id} className="flex items-center">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div 
+                    className={cn("flex items-center gap-0.5", iconColor)} 
+                    data-testid={`status-step-${step.id}`}
+                  >
+                    <StatusIcon
+                      className={cn(
+                        iconSize,
+                        step.status === "active" && "animate-spin"
+                      )}
+                    />
+                    {size === "md" && (
+                      <span className="text-[10px] font-medium hidden sm:inline">
+                        {step.shortLabel}
+                      </span>
                     )}
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs z-50">
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-medium">{phase.label}</span>
-                  <span className="text-muted-foreground">{phase.description}</span>
-                  <span className={cn(
-                    "text-[10px]",
-                    phase.completed ? "text-success" : phase.active ? "text-warning" : "text-muted-foreground"
-                  )}>
-                    {phase.completed ? "✓ Complete" : phase.active ? "In progress..." : "Pending"}
-                  </span>
-                </div>
-              </TooltipContent>
-            </Tooltip>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs z-50">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-medium">Step {step.id}: {step.label}</span>
+                    <span className={cn(
+                      "text-[10px]",
+                      step.status === "completed" ? "text-success" : 
+                      step.status === "active" ? "text-warning" : "text-muted-foreground"
+                    )}>
+                      {step.status === "completed" ? "Complete" : 
+                       step.status === "active" ? "In progress..." : "Pending"}
+                    </span>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+              
+              {index < steps.length - 1 && (
+                <div className={cn(
+                  "w-2 h-px mx-0.5",
+                  step.status === "completed" ? "bg-success" : "bg-muted-foreground/20"
+                )} />
+              )}
+            </div>
           );
         })}
+        
+        {showLabels && currentStepLabel && (
+          <span className={cn(
+            "text-[10px] font-medium ml-1",
+            isComplete ? "text-success" : "text-warning"
+          )}>
+            {currentStepLabel}
+          </span>
+        )}
       </div>
 
-      {showLabels && currentPhaseLabel && (
-        <span className="text-[10px] text-muted-foreground">
-          {currentPhaseLabel}
-        </span>
-      )}
-
-      {showDetailedProgress && stepDetails && (stepDetails.substep || stepDetails.progress) && (
-        <div className="flex flex-col gap-0.5 mt-1">
-          {stepDetails.substep && (
-            <span className="text-[10px] text-muted-foreground italic">
-              {stepDetails.substep}
-            </span>
-          )}
-          {stepDetails.progress && (
-            <span className="text-[10px] font-mono text-muted-foreground">
-              {stepDetails.progress}
-            </span>
-          )}
+      {showDetailedProgress && stepDetails && (
+        <div className="text-[10px] text-muted-foreground pl-4">
+          {stepDetails.substep || stepDetails.phase}
+          {stepDetails.progress && ` (${stepDetails.progress})`}
         </div>
       )}
     </div>

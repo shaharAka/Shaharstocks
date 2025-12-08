@@ -8,7 +8,6 @@ import {
   AlertTriangle, 
   TrendingUp, 
   AlertCircle, 
-  Globe,
   Target,
   Eye,
   Zap,
@@ -17,7 +16,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { StockAnalysis, MacroAnalysis } from "@shared/schema";
+import type { StockAnalysis } from "@shared/schema";
 import {
   Accordion,
   AccordionContent,
@@ -25,7 +24,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { TermTooltip } from "@/components/term-tooltip";
-import { ScorecardDisplay } from "@/components/scorecard-display";
 
 interface StockAIAnalysisProps {
   ticker: string;
@@ -111,18 +109,6 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         return 3000;
       }
       return false;
-    },
-  });
-
-  const { data: macroAnalysis } = useQuery<MacroAnalysis | null>({
-    queryKey: ["/api/macro-analysis", analysis?.macroAnalysisId],
-    enabled: analysis?.macroAnalysisId != null,
-    queryFn: async () => {
-      if (analysis?.macroAnalysisId == null) return null;
-      const response = await fetch(`/api/macro-analysis/${analysis.macroAnalysisId}`);
-      if (response.status === 404) return null;
-      if (!response.ok) throw new Error("Failed to fetch macro analysis");
-      return response.json();
     },
   });
 
@@ -373,69 +359,8 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
             </div>
           )}
 
-          {/* Supporting Metrics (Micro + Macro Breakdown) */}
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="metrics">
-              <AccordionTrigger className="text-xs sm:text-sm" data-testid="button-toggle-metrics">
-                View Signal Components
-              </AccordionTrigger>
-              <AccordionContent className="space-y-3 sm:space-y-4 pt-2">
-                {/* Micro Score (Company Analysis) */}
-                {analysis.confidenceScore != null && (
-                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
-                    <div className="flex items-center gap-2">
-                      <Brain className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs sm:text-sm font-medium">Company Analysis</span>
-                    </div>
-                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-micro-score">
-                      {analysis.confidenceScore}/100
-                    </span>
-                  </div>
-                )}
-
-                {/* Macro Factor (Market Context) */}
-                {macroAnalysis?.macroFactor != null && (
-                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs sm:text-sm font-medium">Market Context</span>
-                    </div>
-                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-macro-factor">
-                      ×{macroAnalysis.macroFactor}
-                    </span>
-                  </div>
-                )}
-
-                {/* Calculation - only show if we have integrated score and both components */}
-                {analysis.integratedScore != null && 
-                 macroAnalysis?.macroFactor != null && 
-                 analysis.confidenceScore != null && (
-                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
-                    Signal derived from Company Analysis ({analysis.confidenceScore}) adjusted by Market Context (×{macroAnalysis.macroFactor})
-                  </div>
-                )}
-                
-                {/* If only company score exists (no macro integration yet) */}
-                {analysis.integratedScore == null && analysis.confidenceScore != null && (
-                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
-                    Signal based on Company Analysis only (Market Context pending)
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
         </CardContent>
       </Card>
-
-      {/* Scorecard Breakdown - Detailed metric-by-metric analysis */}
-      {(analysis as any).scorecard && 
-       typeof (analysis as any).scorecard === 'object' && 
-       (analysis as any).scorecard.globalScore !== undefined && (
-        <ScorecardDisplay 
-          scorecard={(analysis as any).scorecard} 
-          data-testid="scorecard-display"
-        />
-      )}
 
       {/* Section 2: Key Watchpoints - Risks and catalysts */}
       <Card>
@@ -514,93 +439,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         </CardContent>
       </Card>
 
-      {/* Section 3: Market Context - Macro factors */}
-      {macroAnalysis && (
-        <Card>
-          <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-            <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-              <Globe className="h-4 sm:h-5 w-4 sm:w-5" />
-              Market Context
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-            {macroAnalysis.summary && (
-              <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground italic">
-                {macroAnalysis.summary}
-              </p>
-            )}
-
-            {macroAnalysis.industry && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs sm:text-sm text-muted-foreground">Industry:</span>
-                <Badge variant="secondary" className="text-[10px] sm:text-xs">{macroAnalysis.industry}</Badge>
-              </div>
-            )}
-
-            {macroAnalysis.industrySectorAnalysis && (
-              <div className="space-y-2 sm:space-y-3 p-2 sm:p-3 bg-muted/30 rounded-lg">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
-                  <span className="text-xs sm:text-sm font-medium">ETF: {macroAnalysis.industrySectorAnalysis.etfSymbol}</span>
-                  <Badge variant={
-                    macroAnalysis.industrySectorAnalysis.sectorWeight > 70 ? 'default' :
-                    macroAnalysis.industrySectorAnalysis.sectorWeight > 40 ? 'secondary' : 'outline'
-                  } className="text-[10px] sm:text-xs w-fit">
-                    Influence: {macroAnalysis.industrySectorAnalysis.sectorWeight}/100
-                  </Badge>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm">
-                  <div>
-                    <div className="text-muted-foreground text-[10px] sm:text-xs">Day</div>
-                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
-                      macroAnalysis.industrySectorAnalysis.dayChange >= 0 ? 'text-success' : 'text-destructive'
-                    }`}>
-                      {macroAnalysis.industrySectorAnalysis.dayChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.dayChange.toFixed(2)}%
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground text-[10px] sm:text-xs">Week</div>
-                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
-                      macroAnalysis.industrySectorAnalysis.weekChange >= 0 ? 'text-success' : 'text-destructive'
-                    }`}>
-                      {macroAnalysis.industrySectorAnalysis.weekChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.weekChange.toFixed(2)}%
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground text-[10px] sm:text-xs">Month</div>
-                    <div className={`font-mono font-semibold text-xs sm:text-sm ${
-                      macroAnalysis.industrySectorAnalysis.monthChange >= 0 ? 'text-success' : 'text-destructive'
-                    }`}>
-                      {macroAnalysis.industrySectorAnalysis.monthChange >= 0 ? '+' : ''}{macroAnalysis.industrySectorAnalysis.monthChange.toFixed(2)}%
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[10px] sm:text-xs text-muted-foreground italic bg-background/50 p-1.5 sm:p-2 rounded">
-                  {macroAnalysis.industrySectorAnalysis.sectorExplanation}
-                </p>
-              </div>
-            )}
-
-            {macroAnalysis.marketCondition && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm">
-                <div>
-                  <span className="text-muted-foreground">Market: </span>
-                  <span className="font-medium capitalize">{macroAnalysis.marketCondition}</span>
-                </div>
-                {macroAnalysis.riskAppetite && (
-                  <div>
-                    <span className="text-muted-foreground">Risk: </span>
-                    <span className="font-medium capitalize">{macroAnalysis.riskAppetite}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Section 4: 2-Week Execution Notes */}
+      {/* Section 3: 2-Week Execution Notes */}
       <Card>
         <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
           <CardTitle className="flex items-center gap-2 text-sm sm:text-base">

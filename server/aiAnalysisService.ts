@@ -347,8 +347,8 @@ Return ONLY this JSON (no markdown):
 {
   "overallRating": "${isBuy ? 'buy' : 'sell'}" or "hold" or "avoid",
   "confidenceScore": 1-100,
-  "summary": "2-3 sentence executive summary of the opportunity",
-  "playbook": "ACTION-FOCUSED playbook (3-5 sentences). Structure: 1) Is this FRESH or STALE? State timing clearly. 2) Key data supporting quick profit potential. 3) VERDICT: ACT NOW / WATCHLIST / SKIP - with specific reasoning. Be direct about whether we missed the move.",
+  "summary": "2-3 sentence executive summary: What's the insider signal, and does the data support acting on it?",
+  "playbook": "Write as an INVESTOR making a real decision (4-6 sentences). Explain your reasoning: 1) TIMING: Is this fresh or stale? Days since trade + price move. 2) VALIDATION: Do technicals, sentiment, and fundamentals SUPPORT or CONTRADICT the insider signal? Cite specific data. 3) DECISION: As an investor optimizing for quick turnaround - would YOU enter now? Why or why not? Be honest about risks. 4) VERDICT: ACT NOW (enter) / WATCHLIST (wait for trigger) / SKIP (move on to next opportunity).",
   "entryTiming": {
     "status": "early" or "optimal" or "late" or "missed",
     "priceMoveSinceInsider": "+X% or -X% since insider bought/sold",
@@ -380,10 +380,10 @@ Return ONLY this JSON (no markdown):
   },
   "risks": ["List 2-4 specific risks with data backing"],
   "opportunities": ["List 2-3 potential catalysts"],
-  "recommendation": "${isBuy ? 'BUY NOW / WATCH / AVOID' : 'SHORT NOW / WATCH / AVOID'} - Clear 2-sentence action with reasoning"
+  "recommendation": "${isBuy ? 'BUY NOW / WATCH / AVOID' : 'SHORT NOW / WATCH / AVOID'} - 2-sentence action. State your position as an investor and WHY based on the data."
 }
 
-BE DIRECT. This is for real money decisions. Reference actual data points in your analysis.`;
+REMEMBER: You are an investor putting real money on the line. Explain your thinking. Reference actual numbers. Be honest about what the data says - don't sugarcoat weak signals. If you wouldn't personally take this trade for a 1-2 week quick turnaround, say so clearly.`;
 
     try {
       const provider = this.getProvider();

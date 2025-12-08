@@ -217,6 +217,18 @@ TRADING PHILOSOPHY:
 - We don't hold losers hoping they'll recover
 - Speed and conviction matter more than perfection
 
+CRITICAL - MULTI-FACTOR VALIDATION REQUIRED:
+Insider signals alone are NOT enough to act. You MUST validate with:
+1. TECHNICALS: RSI, MACD, trend direction - is momentum confirming the insider's bet?
+2. SENTIMENT: Is news coverage supporting or contradicting the trade thesis?
+3. FUNDAMENTALS: Is the company financially healthy enough to support the move?
+
+SCORING RULE: If ANY of these factors strongly contradict the insider signal, score LOW (under 50).
+- Insider buying but RSI overbought + bearish trend = SKIP
+- Insider buying but negative sentiment flood = SKIP  
+- Insider buying but weak financials / high debt = SKIP
+Only score 70+ when insider signal + technicals + sentiment + fundamentals ALL align.
+
 Evaluate this ${transactionContext} signal:
 
 === OPPORTUNITY OVERVIEW ===

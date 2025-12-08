@@ -164,6 +164,7 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           insiderName: transaction.insiderName,
           insiderTitle: transaction.insiderTitle,
           recommendation: transaction.recommendation, // Use actual recommendation (buy or sell)
+          opportunityType: transaction.recommendation.toLowerCase() === "sell" ? "SELL" : "BUY", // Derive from recommendation
           source: "openinsider",
           confidenceScore: transaction.confidence || 75,
           peRatio: null,
@@ -4396,6 +4397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             insiderName: transaction.insiderName,
             insiderTitle: transaction.insiderTitle,
             recommendation: transaction.recommendation || "buy",
+            opportunityType: (transaction.recommendation || "buy").toLowerCase() === "sell" ? "SELL" : "BUY",
             source: "openinsider",
             confidenceScore: transaction.confidence || 75,
             peRatio: null,

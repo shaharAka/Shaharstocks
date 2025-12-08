@@ -693,6 +693,7 @@ function startOpeninsiderFetchJob() {
               insiderName: transaction.insiderName,
               insiderTitle: transaction.insiderTitle,
               recommendation: transaction.recommendation,
+              opportunityType: transaction.recommendation.toLowerCase() === "sell" ? "SELL" : "BUY",
               source: "openinsider",
               confidenceScore: transaction.confidence || 75,
               peRatio: null,

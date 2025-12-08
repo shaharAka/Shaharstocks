@@ -4,6 +4,20 @@ import { NewMessage } from "telegram/events/index.js";
 import { storage } from "./storage";
 import { telegramNotificationService } from "./telegramNotificationService";
 
+/**
+ * Derive opportunity type from insider recommendation
+ * Maps: "buy" → "BUY", "sell" → "SELL"
+ * Future: Could detect options from transaction codes (P-Call, P-Put, etc.)
+ */
+function deriveOpportunityType(recommendation: string): "BUY" | "SELL" | "OPTIONS_CALL" | "OPTIONS_PUT" {
+  const rec = recommendation.toLowerCase();
+  if (rec === "sell" || rec === "s") {
+    return "SELL";
+  }
+  // Default to BUY for purchases (P, B, U codes)
+  return "BUY";
+}
+
 class TelegramService {
   private client: TelegramClient | null = null;
   private isConnected = false;
@@ -229,12 +243,8 @@ class TelegramService {
         return;
       }
 
-      // Skip all sell messages - we only care about buy recommendations
-      if (isSale) {
-        return;
-      }
-
       const recommendation = isBuy ? "buy" : "sell";
+      const opportunityType = deriveOpportunityType(recommendation);
 
       // Extract ticker (uppercase letters after the action)
       const tickerMatch = firstLine.match(/[A-Z]{1,5}$/);
@@ -315,6 +325,7 @@ class TelegramService {
         marketCap: "N/A",
         peRatio: "0",
         recommendation,
+        opportunityType, // BUY or SELL derived from insider action
         source: "telegram",
         confidenceScore,
         priceHistory: [],

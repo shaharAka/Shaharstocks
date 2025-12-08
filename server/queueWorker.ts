@@ -499,6 +499,7 @@ class QueueWorker {
 
       // PHASE 3.5: Generate Rule-Based Scorecard (parallel to integration, non-blocking)
       let scorecard: any = null;
+      let scorecardInputForLogging: any = null; // For error logging
       try {
         console.log(`[QueueWorker] 📊 Generating rule-based scorecard for ${job.ticker}...`);
         
@@ -534,7 +535,7 @@ class QueueWorker {
             : undefined;
         
         // Build comprehensive scorecard input with all available data
-        const scorecardInput = {
+        scorecardInputForLogging = {
           ticker: job.ticker,
           fundamentals: comprehensiveFundamentals ? {
             revenueGrowthYoY: comprehensiveFundamentals.revenueGrowthYoY,
@@ -622,29 +623,29 @@ class QueueWorker {
         
         // Log data availability for debugging
         const availableMetrics = {
-          fundamentals: !!scorecardInput.fundamentals,
-          technicals: !!scorecardInput.technicals?.currentPrice,
-          smas: !!(scorecardInput.technicals?.sma5 && scorecardInput.technicals?.sma10),
-          volume: !!scorecardInput.technicals?.volumeVsAvg,
-          insider: !!scorecardInput.insiderActivity,
-          news: !!scorecardInput.newsSentiment,
-          macro: !!scorecardInput.macroSector,
+          fundamentals: !!scorecardInputForLogging.fundamentals,
+          technicals: !!scorecardInputForLogging.technicals?.currentPrice,
+          smas: !!(scorecardInputForLogging.technicals?.sma5 && scorecardInputForLogging.technicals?.sma10),
+          volume: !!scorecardInputForLogging.technicals?.volumeVsAvg,
+          insider: !!scorecardInputForLogging.insiderActivity,
+          news: !!scorecardInputForLogging.newsSentiment,
+          macro: !!scorecardInputForLogging.macroSector,
         };
         console.log(`[QueueWorker] Scorecard data availability:`, availableMetrics);
         
         // Log transaction size vs float calculation details
-        if (scorecardInput.insiderActivity) {
+        if (scorecardInputForLogging.insiderActivity) {
           console.log(`[QueueWorker] 📊 Transaction Size vs Float:`, {
             insiderQuantity: insiderTradingStrength?.rawInsiderQuantity,
             sharesFloat: companyOverview?.sharesFloat,
             sharesOutstanding: companyOverview?.sharesOutstanding,
             marketCap: companyOverview?.marketCap,
-            calculatedRatio: scorecardInput.insiderActivity.transactionSizeVsFloat,
+            calculatedRatio: scorecardInputForLogging.insiderActivity.transactionSizeVsFloat,
           });
         }
         
         // Log sector vs SPY calculation details
-        if (scorecardInput.macroSector?.sectorVsSpy10d !== undefined) {
+        if (scorecardInputForLogging.macroSector?.sectorVsSpy10d !== undefined) {
           const sectorAnalysis = macroAnalysis.industrySectorAnalysis as {
             etfSymbol?: string;
             weekRelativeStrength?: number;
@@ -654,16 +655,18 @@ class QueueWorker {
             etfSymbol: sectorAnalysis?.etfSymbol,
             weekRelativeStrength: sectorAnalysis?.weekRelativeStrength,
             relativeStrength1d: sectorAnalysis?.relativeStrength,
-            calculatedSectorVsSpy10d: scorecardInput.macroSector.sectorVsSpy10d,
+            calculatedSectorVsSpy10d: scorecardInputForLogging.macroSector.sectorVsSpy10d,
           });
         }
         
         // Use pure rule-based scorecard generation (no LLM dependency, deterministic)
-        scorecard = generateRuleBasedScorecard(scorecardInput);
+        scorecard = generateRuleBasedScorecard(scorecardInputForLogging);
         console.log(`[QueueWorker] ✅ Scorecard complete: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
       } catch (scorecardError) {
-        // Non-fatal: log and continue with analysis save
-        console.warn(`[QueueWorker] ⚠️ Scorecard generation failed for ${job.ticker}:`, scorecardError);
+        // Non-fatal: log detailed error and continue with analysis save
+        console.error(`[QueueWorker] ❌ Scorecard generation FAILED for ${job.ticker}:`, scorecardError);
+        console.error(`[QueueWorker] Error stack:`, scorecardError instanceof Error ? scorecardError.stack : 'No stack trace');
+        console.error(`[QueueWorker] Scorecard input data:`, JSON.stringify(scorecardInputForLogging, null, 2));
       }
 
       // PHASE 4: Score Integration

@@ -387,36 +387,43 @@ export function StockTable({
                 <TableCell className="text-right py-1 px-1" data-testid={`cell-ai-score-${stock.ticker}`}>
                   {(() => {
                     const analysis = getAIAnalysis(stock.ticker);
-                    if (!analysis) return <span className="text-[10px] sm:text-xs text-muted-foreground">-</span>;
+                    const jobStatus = (stock as any).analysisJob?.status;
+                    const currentStep = (stock as any).analysisJob?.currentStep;
+                    const stepDetails = (stock as any).analysisJob?.stepDetails;
                     
-                    // Check if analysis is in progress
-                    if (analysis.status === "pending" || analysis.status === "analyzing" || analysis.status === "processing") {
+                    // Check if there's an active job (pending or processing)
+                    const isJobActive = jobStatus === "pending" || jobStatus === "processing";
+                    
+                    // Also check analysis status for backward compatibility
+                    const isAnalyzing = isJobActive || analysis?.status === "pending" || analysis?.status === "analyzing" || analysis?.status === "processing";
+                    
+                    if (isAnalyzing) {
                       return (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex items-center gap-1 sm:gap-2 justify-end cursor-help">
-                              <Badge variant="outline" className="text-[9px] sm:text-xs px-1">
-                                <span className="hidden sm:inline">Analyzing...</span>
-                                <span className="sm:hidden">...</span>
-                              </Badge>
                               <AnalysisPhaseIndicator
                                 microCompleted={stock.microAnalysisCompleted}
                                 macroCompleted={stock.macroAnalysisCompleted}
                                 combinedCompleted={stock.combinedAnalysisCompleted}
-                                currentPhase={(stock as any).analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "complete" | null | undefined}
+                                currentPhase={currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "analyzing" | "complete" | null | undefined}
+                                stepDetails={stepDetails}
                                 size="sm"
+                                showDetailedProgress
                               />
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="left" className="text-xs max-w-xs">
                             <p className="font-semibold mb-1">AI Analysis in Progress</p>
                             <p className="text-muted-foreground">
-                              Our system is analyzing SEC filings, financials, and sector data to generate a signal score.
+                              {stepDetails?.substep || "Analyzing SEC filings, financials, and sector data..."}
                             </p>
                           </TooltipContent>
                         </Tooltip>
                       );
                     }
+                    
+                    if (!analysis) return <span className="text-[10px] sm:text-xs text-muted-foreground">-</span>;
                     
                     // Show error state
                     if (analysis.status === "failed") {

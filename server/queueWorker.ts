@@ -959,28 +959,23 @@ class QueueWorker {
       console.error(`[QueueWorker] ❌ Job ${job.id} failed after ${duration}s:`, errorMessage);
       console.error(`[QueueWorker] Error stack:`, errorStack);
 
-      // Determine if we should retry
-      if (job.retryCount < job.maxRetries) {
-        // Calculate exponential backoff: 1min, 5min, 30min
-        const backoffMinutes = Math.pow(5, job.retryCount); // 1, 5, 25 minutes
-        const scheduledAt = new Date(Date.now() + backoffMinutes * 60 * 1000);
-        
-        await storage.updateJobStatus(job.id, "pending", {
-          retryCount: job.retryCount + 1,
-          scheduledAt,
-          errorMessage,
-          lastError: errorMessage, // Set lastError for frontend visibility
-        });
-        
-        console.log(`[QueueWorker] Job ${job.id} will retry in ${backoffMinutes} minutes (attempt ${job.retryCount + 2}/${job.maxRetries + 1})`);
+      // Use atomic update to sync job and analysis status together
+      // This ensures consistent state between job queue and analysis records
+      const shouldRetry = job.retryCount < job.maxRetries;
+      await storage.failJobAndAnalysisAtomic(
+        job.id,
+        job.ticker,
+        errorMessage,
+        shouldRetry,
+        job.retryCount,
+        job.maxRetries
+      );
+      
+      if (shouldRetry) {
+        const backoffMinutes = Math.pow(5, job.retryCount);
+        console.log(`[QueueWorker] Job ${job.id} and analysis ${job.ticker} will retry in ${backoffMinutes} minutes (attempt ${job.retryCount + 2}/${job.maxRetries + 1})`);
       } else {
-        // Max retries exceeded, mark as failed
-        await storage.updateJobStatus(job.id, "failed", {
-          errorMessage,
-          lastError: errorMessage, // Set lastError for frontend visibility
-        });
-        
-        console.log(`[QueueWorker] Job ${job.id} failed permanently after ${job.maxRetries + 1} attempts`);
+        console.log(`[QueueWorker] Job ${job.id} and analysis ${job.ticker} failed permanently after ${job.maxRetries + 1} attempts`);
       }
     } finally {
       this.processingCount--;

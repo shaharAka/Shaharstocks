@@ -3,7 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
 import { telegramService } from "./telegram";
-import { finnhubService } from "./finnhubService";
+// finnhubService removed - using stockService for all Alpha Vantage API calls
 import { telegramNotificationService } from "./telegramNotificationService";
 import { openinsiderService } from "./openinsiderService";
 import { aiAnalysisService } from "./aiAnalysisService";
@@ -229,8 +229,8 @@ function startPriceUpdateJob() {
 
       log(`[PriceUpdate] Updating prices for ${tickers.length} unique pending tickers across all users`);
 
-      // Fetch quotes, market cap, company info, and news for all pending stocks
-      const stockData = await finnhubService.getBatchStockData(tickers);
+      // Fetch quotes, market cap, company info, and news for all pending stocks (using Alpha Vantage)
+      const stockData = await stockService.getBatchStockData(tickers);
 
       // Update each ticker globally (across all users) with shared market data
       let successCount = 0;
@@ -419,8 +419,8 @@ function startHoldingsPriceHistoryJob() {
       const tickers = Array.from(tickerSet);
       log(`[HoldingsHistory] Updating price history for ${tickers.length} tickers`);
 
-      // Fetch current prices for all tickers
-      const quotes = await finnhubService.getBatchQuotes(tickers);
+      // Fetch current prices for all tickers (using Alpha Vantage)
+      const quotes = await stockService.getBatchQuotes(tickers);
       
       // Current timestamp
       const now = new Date().toISOString();
@@ -634,16 +634,16 @@ function startOpeninsiderFetchJob() {
       
       for (const transaction of transactions) {
         try {
-          // Get current market price from Finnhub (once per transaction)
-          const quote = await finnhubService.getQuote(transaction.ticker);
-          if (!quote || !quote.currentPrice) {
+          // Get current market price from Alpha Vantage (once per transaction)
+          const quote = await stockService.getQuote(transaction.ticker);
+          if (!quote || !quote.price) {
             filteredNoQuote++;
             log(`[OpeninsiderFetch] Could not get quote for ${transaction.ticker}, skipping`);
             continue;
           }
 
-          // Fetch company profile, market cap, and news
-          const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
+          // Fetch company profile, market cap, and news (using Alpha Vantage)
+          const stockData = await stockService.getBatchStockData([transaction.ticker]);
           const data = stockData.get(transaction.ticker);
           
           // Apply market cap filter

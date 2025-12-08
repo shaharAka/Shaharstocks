@@ -773,6 +773,226 @@ class StockService {
       return null;
     }
   }
+
+  /**
+   * Get batch quotes for multiple tickers (for filtering during OpenInsider fetch)
+   * Returns Map<ticker, quote> with currentPrice for filtering
+   */
+  async getBatchQuotes(tickers: string[]): Promise<Map<string, { currentPrice: number; previousClose: number; symbol: string }>> {
+    const quotes = new Map<string, { currentPrice: number; previousClose: number; symbol: string }>();
+    
+    console.log(`[StockService] Fetching batch quotes for ${tickers.length} tickers...`);
+    
+    for (const ticker of tickers) {
+      try {
+        const quote = await this.getQuote(ticker);
+        quotes.set(ticker, {
+          symbol: quote.symbol,
+          currentPrice: quote.price,
+          previousClose: quote.previousClose,
+        });
+      } catch (error) {
+        console.error(`[StockService] Failed to fetch quote for ${ticker}, skipping`);
+      }
+    }
+    
+    console.log(`[StockService] Got ${quotes.size}/${tickers.length} quotes`);
+    return quotes;
+  }
+
+  /**
+   * Get batch stock data for multiple tickers (for filtering during OpenInsider fetch)
+   * Returns Map<ticker, data> with marketCap and company info for filtering
+   */
+  async getBatchStockData(tickers: string[]): Promise<Map<string, { 
+    marketCap?: number; 
+    companyInfo?: { industry?: string; sector?: string }; 
+  }>> {
+    const stockData = new Map<string, { 
+      marketCap?: number; 
+      companyInfo?: { industry?: string; sector?: string }; 
+    }>();
+    
+    console.log(`[StockService] Fetching batch stock data for ${tickers.length} tickers...`);
+    
+    for (const ticker of tickers) {
+      try {
+        const overview = await this.getCompanyOverview(ticker);
+        
+        if (overview) {
+          // Alpha Vantage returns marketCap as a raw number string (e.g., "50000000000")
+          // Convert to millions for consistency with the filtering logic
+          let marketCapM: number | undefined;
+          if (overview.marketCap) {
+            const rawMarketCap = parseFloat(overview.marketCap);
+            if (!isNaN(rawMarketCap)) {
+              marketCapM = rawMarketCap / 1_000_000; // Convert to millions
+            }
+          }
+          
+          stockData.set(ticker, {
+            marketCap: marketCapM,
+            companyInfo: {
+              industry: overview.industry || undefined,
+              sector: overview.sector || undefined,
+            },
+          });
+        } else {
+          stockData.set(ticker, {});
+        }
+      } catch (error) {
+        console.error(`[StockService] Failed to fetch stock data for ${ticker}, skipping`);
+        stockData.set(ticker, {});
+      }
+    }
+    
+    console.log(`[StockService] Got ${stockData.size}/${tickers.length} stock data records`);
+    return stockData;
+  }
+
+  /**
+   * Get historical price for a specific date using Alpha Vantage
+   * Used by OpenInsider service for insider trade date price lookups
+   */
+  async getHistoricalPrice(ticker: string, dateString: string): Promise<number | null> {
+    if (!this.apiKey) {
+      console.log('[StockService] API key not configured, skipping historical price fetch');
+      return null;
+    }
+
+    try {
+      // Parse DD.MM.YYYY or DD.MM.YYYY HH:MM format
+      const datePart = dateString.split(' ')[0]; // Remove time if present
+      const [day, month, year] = datePart.split('.').map(Number);
+      
+      // Format as YYYY-MM-DD for Alpha Vantage
+      const targetDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      
+      const url = `${this.baseUrl}?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${this.apiKey}`;
+      
+      const data = await this.fetchWithCache(url, `daily_${ticker}`);
+      
+      const timeSeries = data['Time Series (Daily)'];
+      if (!timeSeries) {
+        console.log(`[StockService] No time series data for ${ticker}`);
+        return null;
+      }
+      
+      // Try to find exact date first
+      if (timeSeries[targetDate]) {
+        const closingPrice = parseFloat(timeSeries[targetDate]['4. close']);
+        console.log(`[StockService] Historical price for ${ticker} on ${dateString}: $${closingPrice.toFixed(2)}`);
+        return closingPrice;
+      }
+      
+      // If exact date not found (weekend/holiday), find closest previous trading day
+      const targetDateObj = new Date(targetDate);
+      const sortedDates = Object.keys(timeSeries).sort().reverse(); // Most recent first
+      
+      for (const date of sortedDates) {
+        const dateObj = new Date(date);
+        if (dateObj <= targetDateObj) {
+          const closingPrice = parseFloat(timeSeries[date]['4. close']);
+          console.log(`[StockService] Historical price for ${ticker} on ${dateString}: $${closingPrice.toFixed(2)} (from ${date})`);
+          return closingPrice;
+        }
+      }
+      
+      console.log(`[StockService] No historical data found for ${ticker} on or before ${dateString}`);
+      return null;
+    } catch (error) {
+      console.error(`[StockService] Error fetching historical price for ${ticker} on ${dateString}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get historical daily candles using Alpha Vantage
+   * Used by backtest service for historical price data
+   */
+  async getHistoricalCandles(ticker: string, fromDate: Date | string, toDate: Date | string): Promise<Array<{ date: string; close: number }>> {
+    if (!this.apiKey) {
+      throw new Error("ALPHA_VANTAGE_API_KEY is not configured");
+    }
+
+    try {
+      // Convert to Date objects if needed
+      const fromDateObj = fromDate instanceof Date ? fromDate : new Date(fromDate);
+      const toDateObj = toDate instanceof Date ? toDate : new Date(toDate);
+
+      const url = `${this.baseUrl}?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${this.apiKey}&outputsize=full`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Alpha Vantage API request failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Check for API errors
+      if (data['Error Message'] || data['Note']) {
+        throw new Error(`Alpha Vantage API error: ${data['Error Message'] || data['Note']}`);
+      }
+      
+      const timeSeries = data['Time Series (Daily)'];
+      if (!timeSeries) {
+        console.log(`[StockService] No time series data for ${ticker}`);
+        return [];
+      }
+
+      // Filter and format the data
+      const prices: Array<{ date: string; close: number }> = [];
+      
+      for (const [dateStr, values] of Object.entries(timeSeries)) {
+        const dateObj = new Date(dateStr);
+        
+        // Only include dates within the range
+        if (dateObj >= fromDateObj && dateObj <= toDateObj) {
+          prices.push({
+            date: dateStr,
+            close: parseFloat((values as any)['4. close'])
+          });
+        }
+      }
+
+      // Sort by date ascending
+      prices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      console.log(`[StockService] Fetched ${prices.length} historical prices for ${ticker}`);
+      return prices;
+    } catch (error: any) {
+      console.error(`[StockService] Error fetching historical candles for ${ticker}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get company profile (wrapper for getCompanyOverview with market cap in millions)
+   * Returns market cap in millions for filtering compatibility
+   */
+  async getCompanyProfile(ticker: string): Promise<{ marketCap?: number; industry?: string; sector?: string } | null> {
+    try {
+      const overview = await this.getCompanyOverview(ticker);
+      if (!overview) return null;
+      
+      let marketCapM: number | undefined;
+      if (overview.marketCap) {
+        const rawMarketCap = parseFloat(overview.marketCap);
+        if (!isNaN(rawMarketCap)) {
+          marketCapM = rawMarketCap / 1_000_000; // Convert to millions
+        }
+      }
+      
+      return {
+        marketCap: marketCapM,
+        industry: overview.industry || undefined,
+        sector: overview.sector || undefined,
+      };
+    } catch (error) {
+      console.error(`[StockService] Error fetching company profile for ${ticker}:`, error);
+      return null;
+    }
+  }
 }
 
 export const stockService = new StockService();

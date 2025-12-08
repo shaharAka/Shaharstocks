@@ -339,6 +339,7 @@ export interface IStorage {
   getJobsByTicker(ticker: string): Promise<AiAnalysisJob[]>;
   updateJobStatus(jobId: string, status: string, updates?: Partial<AiAnalysisJob>): Promise<void>;
   updateJobProgress(jobId: string, currentStep: string, stepDetails: any): Promise<void>;
+  failJobAndAnalysisAtomic(jobId: string, ticker: string, errorMessage: string, shouldRetry: boolean, retryCount: number, maxRetries: number): Promise<void>;
   resetStockAnalysisPhaseFlags(ticker: string): Promise<void>;
   markStockAnalysisPhaseComplete(ticker: string, phase: 'micro' | 'macro' | 'combined'): Promise<void>;
   getStocksWithIncompleteAnalysis(): Promise<Stock[]>;
@@ -3246,9 +3247,28 @@ export class DatabaseStorage implements IStorage {
       RETURNING *
     `);
 
-    // db.execute returns an object with rows property
-    const jobs = result.rows as any[];
-    return jobs.length > 0 ? jobs[0] as AiAnalysisJob : undefined;
+    // db.execute returns snake_case columns, map to camelCase for TypeScript
+    const rows = result.rows as any[];
+    if (rows.length === 0) return undefined;
+    
+    const row = rows[0];
+    return {
+      id: row.id,
+      ticker: row.ticker,
+      opportunityType: row.opportunitytype || row.opportunityType || "BUY",
+      source: row.source,
+      priority: row.priority,
+      status: row.status,
+      retryCount: row.retry_count ?? row.retryCount ?? 0,
+      maxRetries: row.max_retries ?? row.maxRetries ?? 3,
+      scheduledAt: row.scheduled_at ?? row.scheduledAt,
+      startedAt: row.started_at ?? row.startedAt,
+      completedAt: row.completed_at ?? row.completedAt,
+      currentStep: row.current_step ?? row.currentStep,
+      stepDetails: row.step_details ?? row.stepDetails,
+      errorMessage: row.error_message ?? row.errorMessage,
+      createdAt: row.created_at ?? row.createdAt,
+    } as AiAnalysisJob;
   }
 
   async getJobById(jobId: string): Promise<AiAnalysisJob | undefined> {
@@ -3295,6 +3315,69 @@ export class DatabaseStorage implements IStorage {
         lastError: null, // Clear error on successful progress update
       })
       .where(eq(aiAnalysisJobs.id, jobId));
+  }
+
+  /**
+   * Atomically update both job and analysis status on failure
+   * This ensures consistent state between the job queue and analysis records
+   */
+  async failJobAndAnalysisAtomic(
+    jobId: string, 
+    ticker: string, 
+    errorMessage: string, 
+    shouldRetry: boolean, 
+    retryCount: number, 
+    maxRetries: number
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      if (shouldRetry && retryCount < maxRetries) {
+        // Calculate exponential backoff: 1min, 5min, 25min
+        const backoffMinutes = Math.pow(5, retryCount);
+        const scheduledAt = new Date(Date.now() + backoffMinutes * 60 * 1000);
+        
+        // Job: set to pending with retry info
+        await tx
+          .update(aiAnalysisJobs)
+          .set({
+            status: "pending",
+            retryCount: retryCount + 1,
+            scheduledAt,
+            lastError: errorMessage,
+          })
+          .where(eq(aiAnalysisJobs.id, jobId));
+        
+        // Analysis: set to pending (will be retried)
+        await tx
+          .update(stockAnalyses)
+          .set({
+            status: "pending",
+            errorMessage: `Retry ${retryCount + 1}/${maxRetries}: ${errorMessage}`,
+          })
+          .where(eq(stockAnalyses.ticker, ticker));
+        
+        console.log(`[Storage] Job ${jobId} and analysis ${ticker} set to retry in ${backoffMinutes} min (attempt ${retryCount + 2}/${maxRetries + 1})`);
+      } else {
+        // Max retries exceeded - permanently fail both
+        await tx
+          .update(aiAnalysisJobs)
+          .set({
+            status: "failed",
+            completedAt: new Date(),
+            lastError: errorMessage,
+          })
+          .where(eq(aiAnalysisJobs.id, jobId));
+        
+        await tx
+          .update(stockAnalyses)
+          .set({
+            status: "failed",
+            errorMessage: errorMessage,
+          })
+          .where(eq(stockAnalyses.ticker, ticker));
+        
+        console.log(`[Storage] Job ${jobId} and analysis ${ticker} permanently failed after ${retryCount + 1} attempts`);
+      }
+    });
   }
 
   async resetStockAnalysisPhaseFlags(ticker: string): Promise<void> {

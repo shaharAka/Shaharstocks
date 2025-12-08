@@ -11,7 +11,6 @@ import { secEdgarService } from "./secEdgarService";
 import { getIbkrService } from "./ibkrService";
 import { telegramNotificationService } from "./telegramNotificationService";
 import { backtestService } from "./backtestService";
-import { finnhubService } from "./finnhubService";
 import { openinsiderService } from "./openinsiderService";
 import { createRequireAdmin } from "./session";
 import { verifyPayPalWebhook, cancelPayPalSubscription, getSubscriptionTransactions } from "./paypalService";
@@ -121,32 +120,33 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           continue;
         }
 
-        // Get current market price from Finnhub
-        const quote = await finnhubService.getQuote(transaction.ticker);
-        if (!quote || !quote.currentPrice) {
+        // Get current market price from Alpha Vantage
+        const quote = await stockService.getQuote(transaction.ticker);
+        if (!quote || !quote.price) {
           filteredNoQuote++;
           console.log(`[InitialDataFetch] ${transaction.ticker} no quote available, skipping`);
           continue;
         }
 
-        // Fetch company profile, market cap, and news
-        const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
+        // Fetch company profile and market cap from Alpha Vantage
+        const stockData = await stockService.getBatchStockData([transaction.ticker]);
         const data = stockData.get(transaction.ticker);
         
         // Apply market cap filter (must be > $500M)
-        const marketCapValue = data?.marketCap ? data.marketCap * 1_000_000 : 0;
-        if (marketCapValue < 500_000_000) {
+        // Alpha Vantage getBatchStockData already returns marketCap in millions
+        const marketCapM = data?.marketCap || 0;
+        if (marketCapM < 500) {
           filteredMarketCap++;
-          console.log(`[InitialDataFetch] ${transaction.ticker} market cap too low: $${(marketCapValue / 1_000_000).toFixed(1)}M, skipping`);
+          console.log(`[InitialDataFetch] ${transaction.ticker} market cap too low: $${marketCapM.toFixed(1)}M, skipping`);
           continue;
         }
         
         // Apply options deal filter ONLY to BUY transactions (insider price should be >= 15% of current price)
         if (transaction.recommendation === "buy") {
           const insiderPriceNum = transaction.price;
-          if (insiderPriceNum < quote.currentPrice * 0.15) {
+          if (insiderPriceNum < quote.price * 0.15) {
             filteredOptionsDeals++;
-            console.log(`[InitialDataFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum.toFixed(2)} < 15% of market: $${quote.currentPrice.toFixed(2)}), skipping`);
+            console.log(`[InitialDataFetch] ${transaction.ticker} likely options deal (insider: $${insiderPriceNum.toFixed(2)} < 15% of market: $${quote.price.toFixed(2)}), skipping`);
             continue;
           }
         }
@@ -156,8 +156,8 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           userId, // Per-user tenant isolation - this stock belongs to this user only
           ticker: transaction.ticker,
           companyName: transaction.companyName || transaction.ticker,
-          currentPrice: quote.currentPrice.toString(),
-          previousClose: quote.previousClose?.toString() || quote.currentPrice.toString(),
+          currentPrice: quote.price.toString(),
+          previousClose: quote.previousClose?.toString() || quote.price.toString(),
           insiderPrice: transaction.price.toString(),
           insiderQuantity: transaction.quantity,
           insiderTradeDate: transaction.filingDate,
@@ -169,14 +169,14 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
           confidenceScore: transaction.confidence || 75,
           peRatio: null,
           marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-          description: data?.companyInfo?.description || null,
+          description: null, // Not available from Alpha Vantage
           industry: data?.companyInfo?.industry || null,
-          country: data?.companyInfo?.country || null,
-          webUrl: data?.companyInfo?.webUrl || null,
-          ipo: data?.companyInfo?.ipo || null,
-          news: data?.news || [],
-          insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
-          insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
+          country: null, // Not available from Alpha Vantage
+          webUrl: null, // Not available from Alpha Vantage
+          ipo: null, // Not available from Alpha Vantage
+          news: [], // News fetched separately during AI analysis
+          insiderSentimentMspr: null, // Will be calculated during analysis
+          insiderSentimentChange: null, // Will be calculated during analysis
           priceHistory: [],
         });
 
@@ -1756,12 +1756,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stocksWithStatus = await storage.getStocksWithUserStatus(req.session.userId, 100);
       
       // Filter for high signals (score >= 70) and not already followed
+      // CRITICAL: Also require scorecard to exist - incomplete analyses should not appear as high signals
       const highSignals = stocksWithStatus
         .filter(stock => {
           const hasHighScore = (stock.integratedScore ?? 0) >= 70;
           const notFollowed = !followedTickers.has(stock.ticker.toUpperCase());
           const hasCompletedAnalysis = stock.jobStatus === 'completed';
-          return hasHighScore && notFollowed && hasCompletedAnalysis;
+          const hasScorecard = stock.scorecard != null; // Require scorecard to exist
+          return hasHighScore && notFollowed && hasCompletedAnalysis && hasScorecard;
         })
         .slice(0, 12) // Limit to top 12
         .map(stock => ({
@@ -2392,12 +2394,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          // Fetch latest quote
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit: 1 req/sec
-          const quote = await finnhubService.getQuote(ticker);
-          if (quote && quote.currentPrice) {
+          // Fetch latest quote from Alpha Vantage
+          const quote = await stockService.getQuote(ticker);
+          if (quote && quote.price) {
             await storage.updateStock(req.session.userId, ticker, {
-              currentPrice: quote.currentPrice.toFixed(2),
+              currentPrice: quote.price.toFixed(2),
               previousClose: quote.previousClose?.toFixed(2) || stock.previousClose,
             });
             success++;
@@ -4325,14 +4326,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Step 2: Batch fetch all quotes and company data upfront
+      // Step 2: Batch fetch all quotes and company data upfront using Alpha Vantage
       const tickers = Array.from(new Set(newTransactions.map(t => t.ticker)));
       console.log(`[OpeninsiderFetch] Fetching data for ${tickers.length} unique tickers...`);
       
-      // Batch fetch all data at once
+      // Batch fetch all data at once using Alpha Vantage
       const [quotesMap, stockDataMap] = await Promise.all([
-        finnhubService.getBatchQuotes(tickers),
-        finnhubService.getBatchStockData(tickers)
+        stockService.getBatchQuotes(tickers),
+        stockService.getBatchStockData(tickers)
       ]);
       console.log(`[OpeninsiderFetch] Received ${quotesMap.size} quotes and ${stockDataMap.size} company profiles`);
       
@@ -4357,7 +4358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const data = stockDataMap.get(transaction.ticker);
           
           // Apply market cap filter using user-configurable threshold
-          // Note: data.marketCap is already in millions from Finnhub
+          // Note: data.marketCap is already in millions from Alpha Vantage
           if (!data?.marketCap || data.marketCap < minMarketCap) {
             filteredMarketCap++;
             console.log(`[OpeninsiderFetch] ⊗ ${transaction.ticker} market cap too low:`);
@@ -4402,14 +4403,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             confidenceScore: transaction.confidence || 75,
             peRatio: null,
             marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-            description: data?.companyInfo?.description || null,
+            description: null, // Not available from Alpha Vantage
             industry: data?.companyInfo?.industry || null,
-            country: data?.companyInfo?.country || null,
-            webUrl: data?.companyInfo?.webUrl || null,
-            ipo: data?.companyInfo?.ipo || null,
-            news: data?.news || [],
-            insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
-            insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
+            country: null, // Not available from Alpha Vantage
+            webUrl: null, // Not available from Alpha Vantage
+            ipo: null, // Not available from Alpha Vantage
+            news: [], // News fetched separately during AI analysis
+            insiderSentimentMspr: null, // Will be calculated during analysis
+            insiderSentimentChange: null, // Will be calculated during analysis
             priceHistory: [],
           });
 

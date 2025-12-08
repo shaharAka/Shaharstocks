@@ -264,6 +264,30 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const signalInfo = getSignalLabel(signalScore);
   const SignalIcon = signalInfo.icon;
 
+  // Extract new fields with fallbacks for older analysis data
+  const entryTiming = (analysis as any).entryTiming;
+  const sectorAnalysis = (analysis as any).sectorAnalysis;
+
+  // Helper for entry timing colors
+  const getTimingColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'early': return 'text-green-600 dark:text-green-400 bg-green-500/10 border-green-500/20';
+      case 'optimal': return 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20';
+      case 'late': return 'text-orange-600 dark:text-orange-400 bg-orange-500/10 border-orange-500/20';
+      case 'missed': return 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20';
+      default: return 'text-muted-foreground bg-muted/30 border-border';
+    }
+  };
+
+  // Helper for sector outlook colors
+  const getSectorColor = (outlook: string) => {
+    switch (outlook?.toLowerCase()) {
+      case 'bullish': return 'text-green-600 dark:text-green-400';
+      case 'bearish': return 'text-red-600 dark:text-red-400';
+      default: return 'text-muted-foreground';
+    }
+  };
+
   return (
     <div className="space-y-3 sm:space-y-4">
       {/* Section 1: Signal Score - Hero display */}
@@ -310,7 +334,101 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         </CardContent>
       </Card>
 
-      {/* Section 2: AI Playbook - The main recommendation */}
+      {/* Section 2: Context Bar - Entry Timing, Sector, Sentiment */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+        {/* Entry Timing */}
+        <div className={`p-3 rounded-lg border ${entryTiming?.status ? getTimingColor(entryTiming.status) : 'bg-muted/30 border-border'}`}>
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-4 w-4" />
+            <span className="text-xs font-medium uppercase">Entry Timing</span>
+          </div>
+          {entryTiming ? (
+            <>
+              <div className="text-sm font-semibold capitalize" data-testid="text-entry-timing">
+                {entryTiming.status || 'Unknown'}
+              </div>
+              {entryTiming.priceMoveSinceInsider && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {entryTiming.priceMoveSinceInsider}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-sm text-muted-foreground">Not assessed</div>
+          )}
+        </div>
+
+        {/* Sector Analysis */}
+        <div className="p-3 rounded-lg border bg-muted/30 border-border">
+          <div className="flex items-center gap-2 mb-1">
+            <Zap className="h-4 w-4" />
+            <span className="text-xs font-medium uppercase">Sector</span>
+          </div>
+          {sectorAnalysis ? (
+            <>
+              <div className="text-sm font-semibold" data-testid="text-sector">
+                {sectorAnalysis.sector || 'Unknown'}
+              </div>
+              <div className={`text-xs mt-1 capitalize ${getSectorColor(sectorAnalysis.sectorOutlook)}`}>
+                {sectorAnalysis.sectorOutlook || 'Neutral'} outlook
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-muted-foreground">Not analyzed</div>
+          )}
+        </div>
+
+        {/* News Sentiment */}
+        <div className="p-3 rounded-lg border bg-muted/30 border-border">
+          <div className="flex items-center gap-2 mb-1">
+            <Eye className="h-4 w-4" />
+            <span className="text-xs font-medium uppercase">News Sentiment</span>
+          </div>
+          {analysis.sentimentAnalysisScore != null ? (
+            <>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-semibold ${
+                  analysis.sentimentAnalysisScore >= 60 ? 'text-green-600 dark:text-green-400' :
+                  analysis.sentimentAnalysisScore >= 40 ? 'text-amber-600 dark:text-amber-400' :
+                  'text-red-600 dark:text-red-400'
+                }`} data-testid="text-sentiment-score">
+                  {analysis.sentimentAnalysisScore}/100
+                </span>
+                <Badge variant="outline" className="text-[10px] capitalize">
+                  {analysis.sentimentAnalysisTrend || 'neutral'}
+                </Badge>
+              </div>
+              {analysis.sentimentAnalysisNewsVolume && (
+                <div className="text-xs text-muted-foreground mt-1 capitalize">
+                  {analysis.sentimentAnalysisNewsVolume} news volume
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-sm text-muted-foreground">No data</div>
+          )}
+        </div>
+      </div>
+
+      {/* Entry Timing Assessment (if available) */}
+      {entryTiming?.assessment && (
+        <div className={`p-3 rounded-lg border ${getTimingColor(entryTiming.status)}`}>
+          <p className="text-xs sm:text-sm" data-testid="text-timing-assessment">
+            <strong>Timing:</strong> {entryTiming.assessment}
+          </p>
+        </div>
+      )}
+
+      {/* Sector Note (if available) */}
+      {sectorAnalysis?.sectorNote && (
+        <div className="p-3 rounded-lg border bg-muted/30 border-border">
+          <p className="text-xs sm:text-sm" data-testid="text-sector-note">
+            <strong>Sector Context:</strong> {sectorAnalysis.sectorNote}
+          </p>
+        </div>
+      )}
+
+      {/* Section 3: AI Playbook - The main recommendation */}
       <Card>
         <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
           <CardTitle className="flex items-center gap-2 text-sm sm:text-base">

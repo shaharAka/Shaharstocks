@@ -323,6 +323,16 @@ Return ONLY this JSON (no markdown):
   "confidenceScore": 1-100,
   "summary": "2-3 sentence executive summary of the opportunity",
   "playbook": "DETAILED playbook (3-5 sentences) with specific data references. Structure: 1) What the signal tells us, 2) Key supporting/concerning data points, 3) Clear action recommendation (ENTER/WATCH/AVOID)",
+  "entryTiming": {
+    "status": "early" or "optimal" or "late" or "missed",
+    "priceMoveSinceInsider": "Price moved X% since insider trade",
+    "assessment": "1 sentence on timing - is this still a good entry or has the move already happened?"
+  },
+  "sectorAnalysis": {
+    "sector": "Sector name",
+    "sectorOutlook": "bullish" or "bearish" or "neutral",
+    "sectorNote": "1 sentence on how sector conditions affect this trade"
+  },
   "financialHealth": {
     "score": 0-100,
     "strengths": ["List 2-3 specific strengths with data values"],

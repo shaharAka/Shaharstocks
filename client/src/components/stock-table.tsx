@@ -150,12 +150,11 @@ export function StockTable({
       case "aiScore":
         const analysisA = getAIAnalysis(a.ticker);
         const analysisB = getAIAnalysis(b.ticker);
-        // Treat "analyzing" status as score 0 for sorting
-        // Use integrated score (micro × macro) if available, fallback to confidence score, then financial health score
-        const scoreA = analysisA?.integratedScore ?? analysisA?.confidenceScore ?? analysisA?.financialHealthScore;
-        const scoreB = analysisB?.integratedScore ?? analysisB?.confidenceScore ?? analysisB?.financialHealthScore;
-        compareA = (analysisA?.status === "analyzing" || !scoreA) ? 0 : scoreA;
-        compareB = (analysisB?.status === "analyzing" || !scoreB) ? 0 : scoreB;
+        // Use stock's integratedScore first (most reliable), then analysis data
+        const scoreA = (a as any).integratedScore ?? analysisA?.integratedScore ?? analysisA?.confidenceScore ?? analysisA?.financialHealthScore ?? 0;
+        const scoreB = (b as any).integratedScore ?? analysisB?.integratedScore ?? analysisB?.confidenceScore ?? analysisB?.financialHealthScore ?? 0;
+        compareA = scoreA;
+        compareB = scoreB;
         break;
       case "daysFromBuy":
         compareA = getDaysFromBuy(a.insiderTradeDate);
@@ -391,11 +390,16 @@ export function StockTable({
                     const currentStep = (stock as any).analysisJob?.currentStep;
                     const stepDetails = (stock as any).analysisJob?.stepDetails;
                     
+                    // Check if stock already has a score (from stock data or analysis)
+                    const stockScore = (stock as any).integratedScore ?? analysis?.integratedScore ?? analysis?.confidenceScore ?? analysis?.financialHealthScore;
+                    const hasScore = stockScore != null && stockScore > 0;
+                    
                     // Check if there's an active job (pending or processing)
                     const isJobActive = jobStatus === "pending" || jobStatus === "processing";
                     
-                    // Also check analysis status for backward compatibility
-                    const isAnalyzing = isJobActive || analysis?.status === "pending" || analysis?.status === "analyzing" || analysis?.status === "processing";
+                    // Only show analyzing state if job is active AND we don't have a score yet
+                    // Having a score means analysis completed, regardless of what status says
+                    const isAnalyzing = isJobActive && !hasScore;
                     
                     if (isAnalyzing) {
                       return (
@@ -406,7 +410,7 @@ export function StockTable({
                                 microCompleted={stock.microAnalysisCompleted}
                                 macroCompleted={stock.macroAnalysisCompleted}
                                 combinedCompleted={stock.combinedAnalysisCompleted}
-                                currentPhase={currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "analyzing" | "complete" | null | undefined}
+                                currentPhase={currentStep as string | null | undefined}
                                 stepDetails={stepDetails}
                                 size="sm"
                                 showDetailedProgress
@@ -423,10 +427,8 @@ export function StockTable({
                       );
                     }
                     
-                    if (!analysis) return <span className="text-[10px] sm:text-xs text-muted-foreground">-</span>;
-                    
-                    // Show error state
-                    if (analysis.status === "failed") {
+                    // Show error state if job failed
+                    if (jobStatus === "failed" || analysis?.status === "failed") {
                       return (
                         <Badge variant="destructive" className="text-[9px] sm:text-xs px-1">
                           Err
@@ -434,13 +436,13 @@ export function StockTable({
                       );
                     }
                     
-                    // Use integrated score if available (micro × macro), otherwise use confidence score, fallback to financial health score
-                    const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
+                    // If no score available (and not analyzing), show dash
+                    if (!hasScore) return <span className="text-[10px] sm:text-xs text-muted-foreground">-</span>;
                     
                     // Signal strength gradient in amber/orange (distinct from green BUY / red SELL)
-                    const isExceptional = score >= 90;
-                    const isStrong = score >= 70 && score < 90;
-                    const isModerate = score >= 50 && score < 70;
+                    const isExceptional = stockScore >= 90;
+                    const isStrong = stockScore >= 70 && stockScore < 90;
+                    const isModerate = stockScore >= 50 && stockScore < 70;
                     
                     return (
                       <Tooltip>
@@ -455,12 +457,12 @@ export function StockTable({
                             )}
                             data-testid={`badge-signal-${stock.ticker}`}
                           >
-                            <span className="hidden sm:inline">{score}/100</span>
-                            <span className="sm:hidden">{score}</span>
+                            <span className="hidden sm:inline">{stockScore}/100</span>
+                            <span className="sm:hidden">{stockScore}</span>
                           </Badge>
                         </TooltipTrigger>
                         <TooltipContent side="left" className="text-xs">
-                          {getSignalTooltip(score, stock.recommendation || "")}
+                          {getSignalTooltip(stockScore, stock.recommendation || "")}
                         </TooltipContent>
                       </Tooltip>
                     );

@@ -279,6 +279,25 @@ class QueueWorker {
         stockService.getDailyPrices(job.ticker, 60),
       ]);
 
+      // CRITICAL: dailyPrices is REQUIRED for analysis - abort early if empty
+      // This catches edge cases where API returns empty array without throwing
+      if (!dailyPrices || dailyPrices.length === 0) {
+        throw new Error(`No price data available for ${job.ticker} from Alpha Vantage API. Cannot proceed with analysis.`);
+      }
+      
+      console.log(`[QueueWorker] ✅ Fetched ${dailyPrices.length} days of price data for ${job.ticker}`);
+      console.log(`[QueueWorker] Latest price: $${dailyPrices[dailyPrices.length - 1]?.close} on ${dailyPrices[dailyPrices.length - 1]?.date}`);
+
+      // Save dailyPrices to stockCandlesticks table for trend lines and other UI components
+      console.log(`[QueueWorker] 💾 Saving daily prices to stockCandlesticks for ${job.ticker}...`);
+      try {
+        await storage.upsertCandlesticks(job.ticker, dailyPrices);
+        console.log(`[QueueWorker] ✅ Saved candlestick data for ${job.ticker}`);
+      } catch (candlestickError) {
+        // Non-blocking - log but continue with analysis
+        console.warn(`[QueueWorker] ⚠️ Failed to save candlestick data for ${job.ticker}:`, candlestickError);
+      }
+
       await this.updateProgress(job.id, job.ticker, "fetching_data", {
         phase: "data_fetch",
         substep: "Fetching technical indicators and news",
@@ -484,23 +503,50 @@ class QueueWorker {
       try {
         console.log(`[QueueWorker] 📊 Generating rule-based scorecard for ${job.ticker}...`);
         
-        // Fetch candlestick data for enhanced technical metrics
-        const candlestickRecord = await storage.getCandlesticksByTicker(job.ticker);
-        const candlestickData = candlestickRecord?.candlestickData || [];
+        // dailyPrices is GUARANTEED to have data here (early validation at line 287 throws if empty)
+        // Extract technicals directly from the freshly fetched API data
+        const dailyPricesAsCandlesticks = dailyPrices.map(p => ({
+          date: p.date,
+          open: p.open,
+          high: p.high,
+          low: p.low,
+          close: p.close,
+          volume: p.volume
+        }));
+        const extractedFromDailyPrices = extractTechnicalsFromCandlesticks(dailyPricesAsCandlesticks);
         
-        // Extract additional technicals from candlestick data (5/10-day SMAs, volume)
-        const extractedTechnicals = extractTechnicalsFromCandlesticks(candlestickData);
+        // FALLBACK: If extraction somehow failed, try DB cached candlesticks (for resilience)
+        let extractedFromDb: ReturnType<typeof extractTechnicalsFromCandlesticks> | undefined = undefined;
+        if (!extractedFromDailyPrices?.currentPrice) {
+          console.log(`[QueueWorker] ⚠️ Extraction failed for ${job.ticker}, checking database fallback...`);
+          const candlestickRecord = await storage.getCandlesticksByTicker(job.ticker);
+          const candlestickData = candlestickRecord?.candlestickData || [];
+          if (candlestickData.length > 0) {
+            extractedFromDb = extractTechnicalsFromCandlesticks(candlestickData);
+            console.log(`[QueueWorker] ✅ Using DB fallback: currentPrice=${extractedFromDb?.currentPrice}`);
+          }
+        }
+        
+        // Final fallback: stock record currentPrice
+        const stockCurrentPrice = stock?.currentPrice ? parseFloat(stock.currentPrice) : undefined;
+        
+        // Combine with fallback chain: dailyPrices API > DB candlesticks > stock record
+        const extractedTechnicals = extractedFromDailyPrices || extractedFromDb;
+        const currentPriceValue = extractedFromDailyPrices?.currentPrice || extractedFromDb?.currentPrice || stockCurrentPrice;
+        
+        // Log price data source for debugging
+        const priceSource = extractedFromDailyPrices?.currentPrice ? 'dailyPrices (API)' 
+          : extractedFromDb?.currentPrice ? 'candlesticks (DB)' 
+          : stockCurrentPrice ? 'stock record (DB)' 
+          : 'NONE';
+        console.log(`[QueueWorker] Price data for ${job.ticker}: $${currentPriceValue} from ${priceSource}`);
         
         // Determine RSI direction from signal
         const rsiDirection: 'rising' | 'falling' | 'flat' = 
           technicalIndicators?.rsi?.signal === 'oversold' ? 'rising' : 
           technicalIndicators?.rsi?.signal === 'overbought' ? 'falling' : 'flat';
         
-        // Get fallback current price from stock record if not available from candlesticks
-        const fallbackCurrentPrice = stock?.currentPrice ? parseFloat(stock.currentPrice) : undefined;
-        const currentPriceValue = extractedTechnicals?.currentPrice || fallbackCurrentPrice;
-        
-        // Safely determine SMA alignment (guards for undefined values)
+        // Use SMAs from dailyPrices with fallback to API technicalIndicators for SMA20
         const safeCurrentPrice = currentPriceValue;
         const safeSma5 = extractedTechnicals?.sma5;
         const safeSma10 = extractedTechnicals?.sma10;
@@ -768,7 +814,7 @@ class QueueWorker {
         const aiMetrics = aiAgentSection.metrics;
         // FIXED: metrics is a Record<string, MetricScore>, not an array - use Object.values()
         // FIXED: property is 'ruleBucket', not 'bucket'
-        const allMissing = Object.values(aiMetrics).every((m) => m.ruleBucket === 'missing');
+        const allMissing = Object.values(aiMetrics).every((m: any) => m.ruleBucket === 'missing');
         if (allMissing) {
           console.error(`[QueueWorker] ❌ CRITICAL: aiAgent section has all metrics missing for ${job.ticker}`);
           console.error(`[QueueWorker] aiAgentEvaluation was:`, JSON.stringify(scorecardInputForLogging.aiAgentEvaluation, null, 2));

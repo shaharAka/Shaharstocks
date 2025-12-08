@@ -213,3 +213,57 @@ Return ONLY the JSON object, no other text.`;
 }
 
 export const geminiAgentService = new GeminiAgentService();
+
+/**
+ * Check if an AIAgentEvaluation is a fallback/stub response
+ * This centralized helper detects any result that should trigger a job retry
+ */
+export function isFallbackEvaluation(evaluation: AIAgentEvaluation): { isFallback: boolean; reason: string } {
+  // Check 1: Default categorical triple (indicates Gemini error/parse failure)
+  const isDefaultTriple = 
+    evaluation.riskAssessment === 'moderate_risk' &&
+    evaluation.entryTiming === 'mid_way_through_move' &&
+    evaluation.conviction === 'moderate_conviction';
+  
+  // Check 2: Known stub patterns in rationale text
+  const stubPatterns = [
+    'Unable to',
+    'No risk rationale',
+    'No timing rationale',
+    'No conviction rationale',
+    'could not be assessed',
+    'AI service error',
+    'parse error',
+    'limited data',
+  ];
+  
+  const hasStubRationale = stubPatterns.some(pattern => 
+    evaluation.rationale.risk.toLowerCase().includes(pattern.toLowerCase()) ||
+    evaluation.rationale.timing.toLowerCase().includes(pattern.toLowerCase()) ||
+    evaluation.rationale.conviction.toLowerCase().includes(pattern.toLowerCase())
+  );
+  
+  // Check 3: Empty or very short rationale (indicates AI failure to generate substantive content)
+  const hasEmptyRationale = 
+    !evaluation.rationale.risk || evaluation.rationale.risk.trim().length < 10 ||
+    !evaluation.rationale.timing || evaluation.rationale.timing.trim().length < 10 ||
+    !evaluation.rationale.conviction || evaluation.rationale.conviction.trim().length < 10;
+  
+  if (isDefaultTriple && hasStubRationale) {
+    return { isFallback: true, reason: 'Default triple with stub rationale (complete fallback)' };
+  }
+  
+  if (isDefaultTriple) {
+    return { isFallback: true, reason: 'Default categorical triple (likely fallback even without stub text)' };
+  }
+  
+  if (hasStubRationale) {
+    return { isFallback: true, reason: 'Stub rationale detected (partial failure)' };
+  }
+  
+  if (hasEmptyRationale) {
+    return { isFallback: true, reason: 'Empty or too short rationale (AI failed to generate substantive content)' };
+  }
+  
+  return { isFallback: false, reason: '' };
+}

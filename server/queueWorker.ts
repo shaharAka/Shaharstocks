@@ -14,6 +14,7 @@ import { storage } from "./storage";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
 import { aiAnalysisService } from "./aiAnalysisService";
+import { geminiAgentService, isFallbackEvaluation, type StockContext, type AIAgentEvaluation } from "./geminiAgentService";
 import type { AiAnalysisJob } from "@shared/schema";
 import {
   extractTechnicalsFromCandlesticks,
@@ -659,17 +660,141 @@ class QueueWorker {
           });
         }
         
+        // PHASE 3.5: AI Agent Evaluation (REQUIRED for scorecard)
+        // The aiAgent section is mandatory - must call Gemini to populate it
+        console.log(`[QueueWorker] 🤖 Calling Gemini AI Agent for ${job.ticker} evaluation...`);
+        
+        // Use already-computed values from scorecardInputForLogging
+        const technicalsData = scorecardInputForLogging.technicals;
+        const fundamentalsData = scorecardInputForLogging.fundamentals;
+        const insiderData = scorecardInputForLogging.insiderActivity;
+        const newsData = scorecardInputForLogging.newsSentiment;
+        const macroData = scorecardInputForLogging.macroSector;
+        
+        // VALIDATION: Current price is REQUIRED for AI evaluation
+        const validatedCurrentPrice = technicalsData?.currentPrice;
+        if (!validatedCurrentPrice || validatedCurrentPrice <= 0) {
+          throw new Error(`Missing or invalid current price for ${job.ticker}: ${validatedCurrentPrice}. Cannot proceed with AI evaluation.`);
+        }
+        
+        // Only calculate priceChangePercent when both values are present and valid
+        let priceChangePercent: number | undefined = undefined;
+        if (validatedCurrentPrice && technicalsData?.sma5 && technicalsData.sma5 > 0) {
+          priceChangePercent = ((validatedCurrentPrice - technicalsData.sma5) / technicalsData.sma5) * 100;
+        }
+        
+        const stockContext: StockContext = {
+          ticker: job.ticker,
+          companyName: stock?.name || job.ticker,
+          currentPrice: validatedCurrentPrice,
+          opportunityType: (job.opportunityType === 'SELL' ? 'SELL' : 'BUY') as 'BUY' | 'SELL',
+          
+          // Technical data (from already-computed scorecardInputForLogging)
+          sma5: technicalsData?.sma5,
+          sma10: technicalsData?.sma10,
+          sma20: technicalsData?.sma20,
+          rsi: technicalsData?.rsi,
+          macdHistogram: technicalsData?.macdHistogram,
+          priceChangePercent,
+          
+          // Fundamental data (from already-computed scorecardInputForLogging)
+          revenueGrowthYoY: fundamentalsData?.revenueGrowthYoY,
+          epsGrowthYoY: fundamentalsData?.epsGrowthYoY,
+          debtToEquity: fundamentalsData?.debtToEquity,
+          
+          // Insider context (from already-computed scorecardInputForLogging)
+          daysSinceInsiderTrade: insiderData?.daysSinceLastTransaction,
+          insiderPrice: stock?.transactionPrice ? parseFloat(stock.transactionPrice) : undefined,
+          
+          // News/Sentiment (from already-computed scorecardInputForLogging)
+          avgSentiment: newsData?.avgSentiment,
+          newsCount: newsData?.newsCount7d,
+          
+          // Sector context (from already-computed scorecardInputForLogging)
+          sectorVsSpy10d: macroData?.sectorVsSpy10d,
+          
+          // Rule-based scores (from previous phase if available)
+          fundamentalsScore: undefined, // Will be calculated by scorecard
+          technicalsScore: undefined,
+          insiderScore: undefined,
+          newsScore: undefined,
+          macroScore: macroAnalysis.macroScore ?? undefined,
+        };
+        
+        const aiAgentEvaluation = await geminiAgentService.evaluateStock(stockContext);
+        
+        // Use centralized fallback detection helper from geminiAgentService
+        // This catches: default triple, stub rationale patterns, empty/short rationale
+        const fallbackCheck = isFallbackEvaluation(aiAgentEvaluation);
+        
+        if (fallbackCheck.isFallback) {
+          // CRITICAL: Treat fallback/stub as a failure - job should retry
+          console.error(`[QueueWorker] ❌ CRITICAL: Gemini returned fallback for ${job.ticker}`);
+          console.error(`[QueueWorker] Fallback reason: ${fallbackCheck.reason}`);
+          console.error(`[QueueWorker] Evaluation:`, JSON.stringify(aiAgentEvaluation, null, 2));
+          console.error(`[QueueWorker] Context sent to Gemini:`, JSON.stringify(stockContext, null, 2));
+          throw new Error(`Gemini AI evaluation failed for ${job.ticker}: ${fallbackCheck.reason}`);
+        }
+        
+        console.log(`[QueueWorker] ✅ AI Agent Evaluation complete:`, {
+          riskAssessment: aiAgentEvaluation.riskAssessment,
+          entryTiming: aiAgentEvaluation.entryTiming,
+          conviction: aiAgentEvaluation.conviction,
+        });
+        
+        // Add AI evaluation to scorecard input
+        scorecardInputForLogging.aiAgentEvaluation = aiAgentEvaluation;
+        
+        // ASSERTION: Verify aiAgentEvaluation is attached before scorecard generation
+        if (!scorecardInputForLogging.aiAgentEvaluation) {
+          throw new Error(`aiAgentEvaluation not attached to scorecardInputForLogging for ${job.ticker} - this should not happen`);
+        }
+        console.log(`[QueueWorker] ✅ aiAgentEvaluation attached - proceeding with scorecard generation`);
+        
         // Use pure rule-based scorecard generation (no LLM dependency, deterministic)
         // CRITICAL: Pass opportunityType to drive BUY vs SELL inversion logic
         const oppType = (job.opportunityType === 'SELL' ? 'SELL' : 'BUY') as 'BUY' | 'SELL';
         scorecard = generateRuleBasedScorecard(scorecardInputForLogging, oppType);
         console.log(`[QueueWorker] ✅ Scorecard complete (${job.opportunityType}): ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
       } catch (scorecardError) {
-        // Non-fatal: log detailed error and continue with analysis save
-        console.error(`[QueueWorker] ❌ Scorecard generation FAILED for ${job.ticker}:`, scorecardError);
+        // CRITICAL: Scorecard generation is REQUIRED - fail the job so it gets retried
+        console.error(`[QueueWorker] ❌ CRITICAL: Scorecard generation FAILED for ${job.ticker}:`, scorecardError);
         console.error(`[QueueWorker] Error stack:`, scorecardError instanceof Error ? scorecardError.stack : 'No stack trace');
         console.error(`[QueueWorker] Scorecard input data:`, JSON.stringify(scorecardInputForLogging, null, 2));
+        
+        // Re-throw to fail the job - analysis without scorecard is incomplete
+        throw new Error(`Scorecard generation failed for ${job.ticker}: ${scorecardError instanceof Error ? scorecardError.message : 'Unknown error'}`);
       }
+      
+      // VALIDATION: Ensure scorecard was generated successfully with all 6 sections
+      if (!scorecard) {
+        console.error(`[QueueWorker] ❌ CRITICAL: Scorecard is null after generation for ${job.ticker}`);
+        throw new Error(`Scorecard is null after generation for ${job.ticker} - this should not happen`);
+      }
+      
+      // Validate all 6 required sections are present in the scorecard
+      // Section names match those in metricCalculators.ts generateScorecard()
+      const requiredSections = ['fundamentals', 'technicals', 'insiderActivity', 'newsSentiment', 'macroSector', 'aiAgent'] as const;
+      const missingSections = requiredSections.filter(section => !scorecard.sections[section]);
+      if (missingSections.length > 0) {
+        console.error(`[QueueWorker] ❌ CRITICAL: Scorecard missing sections for ${job.ticker}: ${missingSections.join(', ')}`);
+        console.error(`[QueueWorker] Scorecard sections present:`, Object.keys(scorecard.sections));
+        throw new Error(`Scorecard incomplete for ${job.ticker}: missing sections [${missingSections.join(', ')}]`);
+      }
+      
+      // Additional validation: Ensure aiAgent section has valid data (not all missing)
+      const aiAgentSection = scorecard.sections.aiAgent;
+      if (aiAgentSection) {
+        const aiMetrics = aiAgentSection.metrics;
+        const allMissing = aiMetrics.every((m: { bucket: string }) => m.bucket === 'missing');
+        if (allMissing) {
+          console.error(`[QueueWorker] ❌ CRITICAL: aiAgent section has all metrics missing for ${job.ticker}`);
+          console.error(`[QueueWorker] aiAgentEvaluation was:`, JSON.stringify(scorecardInputForLogging.aiAgentEvaluation, null, 2));
+          throw new Error(`aiAgent section has all metrics missing for ${job.ticker} - AI evaluation data not properly integrated`);
+        }
+      }
+      
+      console.log(`[QueueWorker] ✅ Scorecard validation passed - all 6 sections present with valid data for ${job.ticker}`);
 
       // PHASE 4: Score Integration
       await this.updateProgress(job.id, job.ticker, "calculating_score", {

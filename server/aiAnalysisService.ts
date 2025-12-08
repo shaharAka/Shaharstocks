@@ -140,8 +140,6 @@ interface FinancialData {
     totalAssets?: string;
     totalLiabilities?: string;
   };
-  // Pre-calculated scorecard (passed from queueWorker after scorecard phase)
-  scorecard?: Scorecard;
 }
 
 class AIAnalysisService {
@@ -184,8 +182,7 @@ class AIAnalysisService {
       priceNewsCorrelation,
       insiderTradingStrength,
       secFilings,
-      comprehensiveFundamentals,
-      scorecard
+      comprehensiveFundamentals
     } = financialData;
 
     // Prepare the financial data summary for AI (with null checks for graceful degradation)
@@ -286,16 +283,16 @@ YOUR TASK: Analyze these fundamentals to identify:
 === TECHNICAL & SENTIMENT ===
 ${technicalIndicators ? `
 Technical Indicators:
-- RSI: ${technicalIndicators.rsi?.value != null ? technicalIndicators.rsi.value.toFixed(2) : 'N/A'} (${technicalIndicators.rsi?.signal || 'N/A'})
-- MACD Trend: ${technicalIndicators.macd?.trend || 'N/A'}
-- Price vs Moving Averages: SMA20 $${technicalIndicators.sma20 != null ? technicalIndicators.sma20.toFixed(2) : 'N/A'}, SMA50 $${technicalIndicators.sma50 != null ? technicalIndicators.sma50.toFixed(2) : 'N/A'}
-- Volatility (ATR): ${technicalIndicators.atr != null ? technicalIndicators.atr.toFixed(2) : 'N/A'}
+- RSI: ${technicalIndicators.rsi.value.toFixed(2)} (${technicalIndicators.rsi.signal})
+- MACD Trend: ${technicalIndicators.macd.trend}
+- Price vs Moving Averages: SMA20 $${technicalIndicators.sma20.toFixed(2)}, SMA50 $${technicalIndicators.sma50.toFixed(2)}
+- Volatility (ATR): ${technicalIndicators.atr.toFixed(2)}
 ` : ""}
 
 ${newsSentiment ? `
-Recent News Sentiment: ${newsSentiment.aggregateSentiment != null ? newsSentiment.aggregateSentiment.toFixed(2) : 'N/A'} (${newsSentiment.sentimentTrend || 'N/A'})
-News Volume: ${newsSentiment.newsVolume ?? 'N/A'} articles
-Top Headlines: ${newsSentiment.articles?.slice(0, 3).map(a => a.title).join(' | ') || 'No headlines'}
+Recent News Sentiment: ${newsSentiment.aggregateSentiment.toFixed(2)} (${newsSentiment.sentimentTrend})
+News Volume: ${newsSentiment.newsVolume} articles
+Top Headlines: ${newsSentiment.articles.slice(0, 3).map(a => a.title).join(' | ')}
 ` : ""}
 
 === INSIDER TRADE VALIDATION ===
@@ -326,34 +323,6 @@ ${isBuy && insiderTradingStrength.sellCount === 0
       ? `⚠️  MIXED SIGNALS: Both buying (${insiderTradingStrength.buyCount}) and selling (${insiderTradingStrength.sellCount}) detected. Analyze which signal is more recent and credible. Consider if different insiders have different outlooks, or if some are routine portfolio management.`
       : ""))}
 ` : "Insider transaction detected - validate this signal"}
-
-=== PRE-CALCULATED SCORECARD (Use as grounding for your analysis) ===
-${scorecard ? `
-GLOBAL SCORE: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)
-OPPORTUNITY TYPE: ${isBuy ? 'BUY' : (isSell ? 'SELL' : 'MIXED')}
-
-SECTION SCORES:
-${Object.entries(scorecard.sections).map(([sectionName, section]: [string, any]) => 
-  `- ${section.name}: ${section.score}/100 (weight: ${section.weight})`
-).join('\n')}
-
-KEY METRICS BY SECTION:
-${Object.entries(scorecard.sections).map(([sectionName, section]: [string, any]) => {
-  // section.metrics is a Record<string, MetricScore>, not an array - use Object.values()
-  const metricsArray = section.metrics ? Object.values(section.metrics) : [];
-  const topMetrics = metricsArray
-    .filter((m: any) => m && m.bucket !== 'missing')
-    .slice(0, 3)
-    .map((m: any) => `  • ${m.name}: ${m.measurement || 'N/A'} → ${m.bucket} (${m.score}/${m.maxScore})`)
-    .join('\n');
-  return `[${section.name}]\n${topMetrics || '  • No data available'}`;
-}).join('\n\n')}
-
-YOUR TASK: Use this scorecard as the factual basis for your recommendation.
-- Reference the specific section scores and metrics when explaining your analysis
-- Your recommendation should align with the global score direction
-- Explain WHY the scores support your ${isBuy ? 'BUY/PASS' : (isSell ? 'SELL/PASS' : 'recommendation')} decision
-` : "Scorecard not available - rely on raw data analysis"}
 
 === ANALYSIS REQUIREMENTS ===
 ${isBuy 
@@ -419,7 +388,7 @@ HIGH SCORE = STRONG SELL OPPORTUNITY (weak company + insiders selling = strong b
 - 30-49: PASS - Fundamentals don't support signal
 - 0-29: IGNORE - Red flags contradict signal`)}
 
-NOTE: This AI confidence score is one of 6 sections in the overall scorecard. The final score integrates fundamentals, technicals, insider activity, news sentiment, macro/sector conditions, and this AI evaluation.
+NOTE: This micro score will be adjusted by a separate MACRO analysis that considers market-wide and sector conditions.
 
 Focus on actionable insights. Be direct. This is for real money decisions.`;
 
@@ -475,7 +444,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       overallRating: string; 
       summary: string; 
       recommendation?: string; // Full AI recommendation text from playbook
-      integratedScore?: number; // Scorecard globalScore (0-100)
+      integratedScore?: number; // Combined micro+macro score (0-100)
       confidenceScore?: number; // MICRO AGENT confidence (0-100)
       technicalAnalysis?: {
         trend?: string;
@@ -585,10 +554,8 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
   }> {
     const { ticker, currentPrice, previousPrice, opportunityType, userOwnsPosition, recentNews, previousAnalysis } = params;
     
-    const priceChange = (currentPrice != null && previousPrice != null) ? currentPrice - previousPrice : 0;
-    const priceChangePercent = (previousPrice != null && previousPrice !== 0) 
-      ? ((priceChange / previousPrice) * 100).toFixed(2) 
-      : '0.00';
+    const priceChange = currentPrice - previousPrice;
+    const priceChangePercent = ((priceChange / previousPrice) * 100).toFixed(2);
     
     const isBuyOpportunity = opportunityType === "buy";
     const isSellOpportunity = opportunityType === "sell";
@@ -611,7 +578,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     let aiPlaybookContext = "";
     
     if (previousAnalysis) {
-      // Use integrated score if available (scorecard globalScore)
+      // Use integrated score if available (combines micro + macro agents)
       signalScore = previousAnalysis.integratedScore ?? previousAnalysis.confidenceScore ?? 50;
       
       // Build technical analysis context
@@ -832,9 +799,9 @@ ${positionContext}
 OPPORTUNITY TYPE: ${opportunityContext}
 
 CURRENT STATUS:
-- Current Price: $${currentPrice != null ? currentPrice.toFixed(2) : 'N/A'}
-- Previous Close: $${previousPrice != null ? previousPrice.toFixed(2) : 'N/A'}  
-- Change: ${priceChange >= 0 ? '+' : ''}$${priceChange != null ? priceChange.toFixed(2) : 'N/A'} (${priceChangePercent}%)
+- Current Price: $${currentPrice.toFixed(2)}
+- Previous Close: $${previousPrice.toFixed(2)}  
+- Change: ${priceChange >= 0 ? '+' : ''}$${priceChange.toFixed(2)} (${priceChangePercent}%)
 
 ${aiPlaybookContext}
 
@@ -1067,12 +1034,12 @@ REMEMBER: This is a 1-2 WEEK trading horizon. Weight short-term catalysts and mo
     if (params.fundamentals) {
       const f = params.fundamentals;
       sections.push(`FUNDAMENTALS:
-- Revenue Growth YoY: ${f.revenueGrowthYoY != null ? f.revenueGrowthYoY + '%' : 'N/A'}
-- EPS Growth YoY: ${f.epsGrowthYoY != null ? f.epsGrowthYoY + '%' : 'N/A'}
+- Revenue Growth YoY: ${f.revenueGrowthYoY !== undefined ? f.revenueGrowthYoY + '%' : 'N/A'}
+- EPS Growth YoY: ${f.epsGrowthYoY !== undefined ? f.epsGrowthYoY + '%' : 'N/A'}
 - Profit Margin Trend: ${f.profitMarginTrend || 'N/A'}
-- Free Cash Flow: ${f.freeCashFlow != null ? '$' + f.freeCashFlow.toLocaleString() : 'N/A'}
-- Total Debt: ${f.totalDebt != null ? '$' + f.totalDebt.toLocaleString() : 'N/A'}
-- Debt-to-Equity: ${f.debtToEquity != null ? f.debtToEquity.toFixed(2) : 'N/A'}`);
+- Free Cash Flow: ${f.freeCashFlow !== undefined ? '$' + f.freeCashFlow.toLocaleString() : 'N/A'}
+- Total Debt: ${f.totalDebt !== undefined ? '$' + f.totalDebt.toLocaleString() : 'N/A'}
+- Debt-to-Equity: ${f.debtToEquity !== undefined ? f.debtToEquity.toFixed(2) : 'N/A'}`);
     } else {
       sections.push('FUNDAMENTALS: No data available');
     }
@@ -1081,16 +1048,16 @@ REMEMBER: This is a 1-2 WEEK trading horizon. Weight short-term catalysts and mo
     if (params.technicals) {
       const t = params.technicals;
       sections.push(`TECHNICALS:
-- Current Price: ${t.currentPrice != null ? '$' + t.currentPrice.toFixed(2) : 'N/A'}
-- SMA5: ${t.sma5 != null ? '$' + t.sma5.toFixed(2) : 'N/A'}
-- SMA10: ${t.sma10 != null ? '$' + t.sma10.toFixed(2) : 'N/A'}
-- SMA20: ${t.sma20 != null ? '$' + t.sma20.toFixed(2) : 'N/A'}
-- RSI (14): ${t.rsi != null ? t.rsi.toFixed(1) : 'N/A'} ${t.rsiDirection ? '(' + t.rsiDirection + ')' : ''}
-- MACD Line: ${t.macdLine != null ? t.macdLine.toFixed(4) : 'N/A'}
-- MACD Signal: ${t.macdSignal != null ? t.macdSignal.toFixed(4) : 'N/A'}
-- MACD Histogram: ${t.macdHistogram != null ? t.macdHistogram.toFixed(4) : 'N/A'}
-- Volume vs 10-day Avg: ${t.volumeVsAvg != null ? t.volumeVsAvg.toFixed(2) + 'x' : 'N/A'}
-- Price Confirmation: ${t.priceConfirmation != null ? (t.priceConfirmation ? 'Yes' : 'No') : 'N/A'}`);
+- Current Price: ${t.currentPrice !== undefined ? '$' + t.currentPrice.toFixed(2) : 'N/A'}
+- SMA5: ${t.sma5 !== undefined ? '$' + t.sma5.toFixed(2) : 'N/A'}
+- SMA10: ${t.sma10 !== undefined ? '$' + t.sma10.toFixed(2) : 'N/A'}
+- SMA20: ${t.sma20 !== undefined ? '$' + t.sma20.toFixed(2) : 'N/A'}
+- RSI (14): ${t.rsi !== undefined ? t.rsi.toFixed(1) : 'N/A'} ${t.rsiDirection ? '(' + t.rsiDirection + ')' : ''}
+- MACD Line: ${t.macdLine !== undefined ? t.macdLine.toFixed(4) : 'N/A'}
+- MACD Signal: ${t.macdSignal !== undefined ? t.macdSignal.toFixed(4) : 'N/A'}
+- MACD Histogram: ${t.macdHistogram !== undefined ? t.macdHistogram.toFixed(4) : 'N/A'}
+- Volume vs 10-day Avg: ${t.volumeVsAvg !== undefined ? t.volumeVsAvg.toFixed(2) + 'x' : 'N/A'}
+- Price Confirmation: ${t.priceConfirmation !== undefined ? (t.priceConfirmation ? 'Yes' : 'No') : 'N/A'}`);
     } else {
       sections.push('TECHNICALS: No data available');
     }
@@ -1099,9 +1066,9 @@ REMEMBER: This is a 1-2 WEEK trading horizon. Weight short-term catalysts and mo
     if (params.insiderActivity) {
       const i = params.insiderActivity;
       sections.push(`INSIDER ACTIVITY:
-- Net Buy Ratio (30d): ${i.netBuyRatio30d != null ? i.netBuyRatio30d + '%' : 'N/A'}
-- Days Since Last Transaction: ${i.daysSinceLastTransaction != null ? i.daysSinceLastTransaction : 'N/A'}
-- Transaction Size vs Float: ${i.transactionSizeVsFloat != null ? i.transactionSizeVsFloat + '%' : 'N/A'}
+- Net Buy Ratio (30d): ${i.netBuyRatio30d !== undefined ? i.netBuyRatio30d + '%' : 'N/A'}
+- Days Since Last Transaction: ${i.daysSinceLastTransaction !== undefined ? i.daysSinceLastTransaction : 'N/A'}
+- Transaction Size vs Float: ${i.transactionSizeVsFloat !== undefined ? i.transactionSizeVsFloat + '%' : 'N/A'}
 - Insider Roles: ${i.insiderRoles && i.insiderRoles.length > 0 ? i.insiderRoles.join(', ') : 'N/A'}`);
     } else {
       sections.push('INSIDER ACTIVITY: No data available');
@@ -1111,9 +1078,9 @@ REMEMBER: This is a 1-2 WEEK trading horizon. Weight short-term catalysts and mo
     if (params.newsSentiment) {
       const n = params.newsSentiment;
       sections.push(`NEWS SENTIMENT:
-- Average Sentiment: ${n.avgSentiment != null ? n.avgSentiment.toFixed(2) : 'N/A'}
+- Average Sentiment: ${n.avgSentiment !== undefined ? n.avgSentiment.toFixed(2) : 'N/A'}
 - Sentiment Trend: ${n.sentimentTrend || 'N/A'}
-- News Count (7d): ${n.newsCount7d != null ? n.newsCount7d : 'N/A'}
+- News Count (7d): ${n.newsCount7d !== undefined ? n.newsCount7d : 'N/A'}
 - Upcoming Catalyst: ${n.upcomingCatalyst || 'N/A'}`);
     } else {
       sections.push('NEWS SENTIMENT: No data available');
@@ -1123,7 +1090,7 @@ REMEMBER: This is a 1-2 WEEK trading horizon. Weight short-term catalysts and mo
     if (params.macroSector) {
       const m = params.macroSector;
       sections.push(`MACRO/SECTOR:
-- Sector vs SPY (10d): ${m.sectorVsSpy10d != null ? (m.sectorVsSpy10d >= 0 ? '+' : '') + m.sectorVsSpy10d + '%' : 'N/A'}
+- Sector vs SPY (10d): ${m.sectorVsSpy10d !== undefined ? (m.sectorVsSpy10d >= 0 ? '+' : '') + m.sectorVsSpy10d + '%' : 'N/A'}
 - Macro Risk Environment: ${m.macroRiskEnvironment || 'N/A'}`);
     } else {
       sections.push('MACRO/SECTOR: No data available');

@@ -3,22 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Brain,
+  Brain, 
   Loader2, 
   AlertTriangle, 
   TrendingUp, 
-  TrendingDown,
   AlertCircle, 
   Globe,
   Target,
   Eye,
   Zap,
   Clock,
-  RotateCcw,
-  Play,
-  CheckCircle,
-  XCircle,
-  Timer
+  RotateCcw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -32,74 +27,9 @@ import {
 import { TermTooltip } from "@/components/term-tooltip";
 import { ScorecardDisplay } from "@/components/scorecard-display";
 
-interface StockData {
-  insiderTradeDate?: string | null;
-  insiderPrice?: string | number | null;
-  currentPrice?: string | number | null;
-  recommendation?: string | null;
-}
-
 interface StockAIAnalysisProps {
   ticker: string;
-  stock?: StockData;
 }
-
-type TradeTimingStatus = 'early' | 'optimal' | 'late' | 'unknown';
-
-const getTradeTimingStatus = (insiderTradeDate?: string | null): { status: TradeTimingStatus; daysSince: number | null; message: string } => {
-  if (!insiderTradeDate) {
-    return { status: 'unknown', daysSince: null, message: 'Timing unavailable' };
-  }
-  
-  const tradeDate = new Date(insiderTradeDate);
-  if (isNaN(tradeDate.getTime())) {
-    return { status: 'unknown', daysSince: null, message: 'Timing unavailable' };
-  }
-  
-  const now = new Date();
-  const diffTime = now.getTime() - tradeDate.getTime();
-  const daysSince = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (isNaN(daysSince) || daysSince < 0) {
-    return { status: 'unknown', daysSince: null, message: 'Timing unavailable' };
-  }
-  
-  if (daysSince <= 3) {
-    return { status: 'early', daysSince, message: `Day ${daysSince} of ~14 day window - Early entry` };
-  } else if (daysSince <= 10) {
-    return { status: 'optimal', daysSince, message: `Day ${daysSince} of ~14 day window - Optimal timing` };
-  } else if (daysSince <= 14) {
-    return { status: 'late', daysSince, message: `Day ${daysSince} of ~14 day window - Window closing` };
-  } else {
-    return { status: 'late', daysSince, message: `Day ${daysSince} - Past 2-week window` };
-  }
-};
-
-const getTimingBadgeStyle = (status: TradeTimingStatus) => {
-  switch (status) {
-    case 'early':
-      return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
-    case 'optimal':
-      return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
-    case 'late':
-      return 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30';
-    default:
-      return 'bg-muted text-muted-foreground';
-  }
-};
-
-const getTimingIcon = (status: TradeTimingStatus) => {
-  switch (status) {
-    case 'early':
-      return Play;
-    case 'optimal':
-      return Timer;
-    case 'late':
-      return Clock;
-    default:
-      return Clock;
-  }
-};
 
 // Helper to safely parse number (returns null for missing/invalid data)
 const safeNumber = (value: any): number | null => {
@@ -163,11 +93,8 @@ const assessGrowth = (data: any): string => {
   return "Weak";
 };
 
-export function StockAIAnalysis({ ticker, stock }: StockAIAnalysisProps) {
+export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const { toast } = useToast();
-  
-  const tradeTiming = getTradeTimingStatus(stock?.insiderTradeDate);
-  const TimingIcon = getTimingIcon(tradeTiming.status);
 
   const { data: analysis, isLoading: isLoadingExisting } = useQuery<StockAnalysis | null>({
     queryKey: ["/api/stocks", ticker, "analysis"],
@@ -190,7 +117,6 @@ export function StockAIAnalysis({ ticker, stock }: StockAIAnalysisProps) {
   const { data: macroAnalysis } = useQuery<MacroAnalysis | null>({
     queryKey: ["/api/macro-analysis", analysis?.macroAnalysisId],
     enabled: analysis?.macroAnalysisId != null,
-    staleTime: 0, // Always fetch fresh macro analysis data
     queryFn: async () => {
       if (analysis?.macroAnalysisId == null) return null;
       const response = await fetch(`/api/macro-analysis/${analysis.macroAnalysisId}`);
@@ -206,12 +132,8 @@ export function StockAIAnalysis({ ticker, stock }: StockAIAnalysisProps) {
       return await response.json();
     },
     onSuccess: (pendingAnalysis) => {
-      // Set pending analysis immediately for UI feedback
       queryClient.setQueryData(["/api/stocks", ticker, "analysis"], pendingAnalysis);
-      // Invalidate the specific stock's analysis cache AND list caches
-      queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "analysis"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-analyses"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/macro-analysis"] });
       toast({
         title: "Analysis Queued",
         description: `Re-analyzing ${ticker} with fresh data. Check back in a moment.`,
@@ -386,63 +308,21 @@ export function StockAIAnalysis({ ticker, stock }: StockAIAnalysisProps) {
   // Render completed AI Playbook
   return (
     <div className="space-y-3 sm:space-y-4">
-      {/* Section 1: Action Summary - Unified trading guidance */}
+      {/* Section 1: Signal Drivers - Why this score */}
       <Card>
         <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-          <CardTitle className="flex items-center justify-between gap-2 text-sm sm:text-base">
-            <div className="flex items-center gap-2">
-              <Target className="h-4 sm:h-5 w-4 sm:w-5" />
-              Action Summary
-            </div>
-            {stock?.insiderTradeDate && tradeTiming.status !== 'unknown' && (
-              <Badge variant="outline" className={`text-[10px] sm:text-xs ${getTimingBadgeStyle(tradeTiming.status)}`}>
-                <TimingIcon className="h-3 w-3 mr-1" />
-                {tradeTiming.message}
-              </Badge>
-            )}
+          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+            <Target className="h-4 sm:h-5 w-4 sm:w-5" />
+            Signal Drivers
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-          {/* Primary Action Recommendation */}
-          {analysis.recommendation && (
-            <div className="p-3 sm:p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-amber-500/5 border border-amber-500/20">
-              <div className="flex items-start gap-2">
-                {(analysis as any).scorecard?.globalScore >= 70 ? (
-                  <CheckCircle className="h-4 w-4 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                ) : (analysis as any).scorecard?.globalScore >= 50 ? (
-                  <TrendingUp className="h-4 w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                ) : (analysis as any).scorecard?.globalScore >= 30 ? (
-                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
-                ) : (
-                  <XCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
-                )}
-                <div className="flex-1">
-                  <p className="text-xs sm:text-sm font-medium leading-relaxed" data-testid="text-action-recommendation">
-                    {analysis.recommendation}
-                  </p>
-                  {tradeTiming.status === 'early' && (
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
-                      Early in the typical 2-week window - good timing for entry if fundamentals align.
-                    </p>
-                  )}
-                  {tradeTiming.status === 'late' && tradeTiming.daysSince && tradeTiming.daysSince > 14 && (
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
-                      Past the typical 2-week window - consider waiting for fresh insider signals.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* AI Summary */}
           {analysis.summary && (
-            <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground" data-testid="text-signal-drivers">
+            <p className="text-xs sm:text-sm leading-relaxed" data-testid="text-signal-drivers">
               {analysis.summary}
             </p>
           )}
 
-          {/* Key Strengths */}
           {analysis.strengths && analysis.strengths.length > 0 && (
             <div className="space-y-1.5 sm:space-y-2">
               <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400">
@@ -460,72 +340,90 @@ export function StockAIAnalysis({ ticker, stock }: StockAIAnalysisProps) {
             </div>
           )}
 
-          {/* Insider Trade Context */}
-          {(analysis as any).insiderValidation && (
-            <div className="space-y-1.5 sm:space-y-2 p-2 sm:p-3 bg-muted/30 rounded-lg">
-              <div className="text-xs sm:text-sm font-medium">Insider Trade Context</div>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {(analysis as any).insiderValidation}
-              </p>
+          {(analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0 && (
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="text-xs sm:text-sm font-medium">Fundamental Signals</div>
+              <ul className="space-y-1">
+                {(analysis as any).fundamentalSignals.map((signal: string, index: number) => (
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                    <Zap className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <span className="flex-1">{signal}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
-          {/* Collapsible Details - Fundamentals & SEC Filings */}
-          {(((analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0) ||
-            ((analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0)) && (
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="details" className="border-none">
-                <AccordionTrigger className="text-xs sm:text-sm py-2 hover:no-underline" data-testid="button-toggle-details">
-                  View Supporting Details
-                </AccordionTrigger>
-                <AccordionContent className="space-y-3 pt-1">
-                  {/* Fundamental Signals */}
-                  {(analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0 && (
-                    <div className="space-y-1.5 sm:space-y-2">
-                      <div className="text-xs sm:text-sm font-medium">Fundamental Signals</div>
-                      <ul className="space-y-1">
-                        {(analysis as any).fundamentalSignals.map((signal: string, index: number) => (
-                          <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                            <Zap className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                            <span className="flex-1">{signal}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* SEC Filing Insights */}
-                  {(analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0 && (
-                    <div className="space-y-1.5 sm:space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="text-xs sm:text-sm font-medium">SEC Filing Insights</div>
-                        {(analysis as any).secFilingType && (
-                          <Badge variant="outline" className="text-[10px] sm:text-xs">{(analysis as any).secFilingType}</Badge>
-                        )}
-                      </div>
-                      <ul className="space-y-1">
-                        {(analysis as any).secFilingInsights.map((insight: string, index: number) => (
-                          <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                            <span className="shrink-0">•</span>
-                            <span className="flex-1">{insight}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+          {(analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0 && (
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-xs sm:text-sm font-medium">SEC Filing Insights</div>
+                {(analysis as any).secFilingType && (
+                  <Badge variant="outline" className="text-[10px] sm:text-xs">{(analysis as any).secFilingType}</Badge>
+                )}
+              </div>
+              <ul className="space-y-1">
+                {(analysis as any).secFilingInsights.map((insight: string, index: number) => (
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                    <span className="shrink-0">•</span>
+                    <span className="flex-1">{insight}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
-          {/* Time Horizon Note */}
-          <div className="p-2 sm:p-3 bg-muted/30 border border-border/50 rounded-lg">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              <Clock className="h-3 w-3 inline mr-1" />
-              <strong>2-Week Window:</strong> Analysis optimized for short-term trades. Monitor daily briefs for updates.
-            </p>
-          </div>
+          {/* Supporting Metrics (Micro + Macro Breakdown) */}
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="metrics">
+              <AccordionTrigger className="text-xs sm:text-sm" data-testid="button-toggle-metrics">
+                View Signal Components
+              </AccordionTrigger>
+              <AccordionContent className="space-y-3 sm:space-y-4 pt-2">
+                {/* Micro Score (Company Analysis) */}
+                {analysis.confidenceScore != null && (
+                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
+                    <div className="flex items-center gap-2">
+                      <Brain className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs sm:text-sm font-medium">Company Analysis</span>
+                    </div>
+                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-micro-score">
+                      {analysis.confidenceScore}/100
+                    </span>
+                  </div>
+                )}
 
+                {/* Macro Factor (Market Context) */}
+                {macroAnalysis?.macroFactor != null && (
+                  <div className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-lg gap-2">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs sm:text-sm font-medium">Market Context</span>
+                    </div>
+                    <span className="text-xs sm:text-sm font-mono font-semibold" data-testid="text-macro-factor">
+                      ×{macroAnalysis.macroFactor}
+                    </span>
+                  </div>
+                )}
+
+                {/* Calculation - only show if we have integrated score and both components */}
+                {analysis.integratedScore != null && 
+                 macroAnalysis?.macroFactor != null && 
+                 analysis.confidenceScore != null && (
+                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
+                    Signal derived from Company Analysis ({analysis.confidenceScore}) adjusted by Market Context (×{macroAnalysis.macroFactor})
+                  </div>
+                )}
+                
+                {/* If only company score exists (no macro integration yet) */}
+                {analysis.integratedScore == null && analysis.confidenceScore != null && (
+                  <div className="text-[10px] sm:text-xs text-center text-muted-foreground pt-2 border-t">
+                    Signal based on Company Analysis only (Market Context pending)
+                  </div>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </CardContent>
       </Card>
 
@@ -701,6 +599,42 @@ export function StockAIAnalysis({ ticker, stock }: StockAIAnalysisProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Section 4: 2-Week Execution Notes */}
+      <Card>
+        <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+            <Clock className="h-4 sm:h-5 w-4 sm:w-5" />
+            2-Week Execution Notes
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
+          {analysis.recommendation && (
+            <div className="space-y-1.5 sm:space-y-2">
+              <div className="text-xs sm:text-sm font-medium">Recommended Action</div>
+              <p className="text-xs sm:text-sm leading-relaxed">
+                {analysis.recommendation}
+              </p>
+            </div>
+          )}
+
+          {(analysis as any).insiderValidation && (
+            <div className="space-y-1.5 sm:space-y-2 p-2 sm:p-3 bg-muted/30 rounded-lg">
+              <div className="text-xs sm:text-sm font-medium">Insider Trade Context</div>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {(analysis as any).insiderValidation}
+              </p>
+            </div>
+          )}
+
+          <div className="p-2 sm:p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              <strong>Time Horizon:</strong> This analysis is optimized for a 2-week trading window. 
+              Monitor daily briefs for position updates and changing market conditions.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Advanced Section - For Technical Investors */}
       <Accordion type="single" collapsible className="w-full">

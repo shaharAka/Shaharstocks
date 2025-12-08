@@ -258,7 +258,7 @@ export function ScorecardDisplay({ scorecard, className }: ScorecardDisplayProps
           </p>
         )}
         {sections.length > 0 ? (
-          <Accordion type="multiple" className="space-y-0" defaultValue={[]}>
+          <Accordion type="multiple" className="space-y-0" defaultValue={["fundamentals"]}>
             {sections.map(([key, section]) => (
               <SectionCard key={key} sectionKey={key} section={section} />
             ))}

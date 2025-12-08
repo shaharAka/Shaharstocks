@@ -22,7 +22,6 @@ export const stocks = pgTable("stocks", {
   marketCap: text("market_cap"),
   peRatio: decimal("pe_ratio", { precision: 10, scale: 2 }),
   recommendation: text("recommendation").notNull(), // "buy", "sell" (insider transaction type) - required for uniqueness
-  opportunityType: text("opportunityType").notNull().default("BUY"), // "BUY", "SELL", "OPTIONS_CALL", "OPTIONS_PUT" - scorecard evaluation type
   recommendationStatus: text("recommendation_status").default("pending"), // "pending", "approved", "rejected" - user review status
   source: text("source"), // "telegram" or "openinsider" - data source
   confidenceScore: integer("confidence_score"), // 0-100 data quality score - measures reliability of the data source
@@ -63,8 +62,6 @@ export const stocks = pgTable("stocks", {
   ),
   // Index on userId for efficient per-tenant queries
   userIdIdx: index("stocks_user_id_idx").on(table.userId),
-  // Index on ticker for global ticker lookups (AI analysis aggregation, price updates)
-  tickerIdx: index("stocks_ticker_idx").on(table.ticker),
 }));
 
 export const stockSchema = createSelectSchema(stocks);
@@ -75,7 +72,7 @@ export type Stock = typeof stocks.$inferSelect;
 // User-specific stock recommendation statuses
 export const userStockStatuses = pgTable("user_stock_statuses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // FK with cascade delete
+  userId: varchar("user_id").notNull(),
   ticker: text("ticker").notNull(),
   status: text("status").notNull().default("pending"), // "pending", "approved", "rejected", "dismissed"
   approvedAt: timestamp("approved_at"),
@@ -276,8 +273,7 @@ export const macroAnalyses = pgTable("macro_analyses", {
     weekChange: number;
     monthChange: number;
     volatility: number;
-    relativeStrength: number; // 1-day vs S&P 500
-    weekRelativeStrength?: number; // 5-10 day sector vs SPY (for scorecard sectorVsSpy10d)
+    relativeStrength: number; // vs S&P 500
     momentum: number;
     sectorWeight: number; // 0-100: How much weight this sector carries in the analysis
     sectorExplanation: string; // AI explanation of sector influence
@@ -323,7 +319,6 @@ export type StockCandlesticks = typeof stockCandlesticks.$inferSelect;
 export const aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticker: text("ticker").notNull(),
-  opportunityType: text("opportunityType").notNull().default("BUY"), // "BUY", "SELL", "OPTIONS_CALL", "OPTIONS_PUT"
   source: text("source").notNull(), // "user_manual", "background_job", "bulk_import", etc.
   priority: text("priority").notNull().default("normal"), // "high", "normal", "low"
   status: text("status").notNull().default("pending"), // "pending", "processing", "completed", "failed", "cancelled"
@@ -347,8 +342,6 @@ export const aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   // Only one pending OR processing job allowed per ticker at a time
   activeJobUnique: uniqueIndex("active_job_unique_idx").on(table.ticker)
     .where(sql`status IN ('pending', 'processing')`),
-  // Performance index for job queue polling
-  statusScheduledIdx: index("ai_jobs_status_scheduled_idx").on(table.status, table.scheduledAt),
 }));
 
 export const insertAiAnalysisJobSchema = createInsertSchema(aiAnalysisJobs).omit({ 
@@ -491,10 +484,9 @@ export const insertRuleConditionSchema = createInsertSchema(ruleConditions).omit
 export type InsertRuleCondition = z.infer<typeof insertRuleConditionSchema>;
 export type RuleCondition = typeof ruleConditions.$inferSelect;
 
-// Rule actions - actions linked to rules (and optionally to specific condition groups)
+// Rule actions - actions linked to specific condition groups
 export const ruleActions = pgTable("rule_actions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  ruleId: varchar("rule_id").notNull().references(() => tradingRules.id, { onDelete: "cascade" }), // Direct link to rule for easier querying
   groupId: varchar("group_id").notNull().references(() => ruleConditionGroups.id, { onDelete: "cascade" }),
   actionOrder: integer("action_order").notNull(), // Order of execution within the group
   // Action types: "sell_percentage", "sell_quantity", "sell_all", "notify"
@@ -702,12 +694,10 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 // User tutorials - track which tutorials each user has completed
 export const userTutorials = pgTable("user_tutorials", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // FK with cascade delete
+  userId: varchar("user_id").notNull(),
   tutorialId: text("tutorial_id").notNull(), // "dashboard", "purchase", "management", "history", "rules", "backtesting", "settings", "stocks", "simulation"
   completedAt: timestamp("completed_at").defaultNow(),
-}, (table) => ({
-  userIdIdx: index("user_tutorials_user_id_idx").on(table.userId),
-}));
+});
 
 export const insertUserTutorialSchema = createInsertSchema(userTutorials).omit({ 
   id: true, 
@@ -1080,7 +1070,7 @@ export type AdminNotification = typeof adminNotifications.$inferSelect;
 // Followed Stocks - tracks which stocks users are following
 export const followedStocks = pgTable("followed_stocks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // FK with cascade delete
+  userId: varchar("user_id").notNull(),
   ticker: text("ticker").notNull(),
   followedAt: timestamp("followed_at").notNull().defaultNow(),
   hasEnteredPosition: boolean("has_entered_position").default(false).notNull(), // Track if user entered position
@@ -1091,7 +1081,6 @@ export const followedStocks = pgTable("followed_stocks", {
   pnl: decimal("pnl", { precision: 12, scale: 2 }), // Profit/Loss: (sellPrice - entryPrice) * quantity
 }, (table) => ({
   userTickerFollowUnique: uniqueIndex("user_ticker_follow_unique_idx").on(table.userId, table.ticker),
-  userIdIdx: index("followed_stocks_user_id_idx").on(table.userId),
 }));
 
 export const insertFollowedStockSchema = createInsertSchema(followedStocks).omit({ id: true, followedAt: true, hasEnteredPosition: true, entryPrice: true, sellPrice: true, sellDate: true, pnl: true, quantity: true });

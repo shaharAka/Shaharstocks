@@ -1,7 +1,7 @@
 import { storage } from "./storage";
 import { telegramService } from "./telegram";
 import { openinsiderService } from "./openinsiderService";
-import { stockService } from "./stockService";
+import { finnhubService } from "./finnhubService";
 import type { BacktestJob } from "@shared/schema";
 import OpenAI from "openai";
 import { getAIProvider, type AIProviderConfig, type ChatMessage } from "./aiProvider";
@@ -37,7 +37,7 @@ class BacktestService {
   async fetchHistoricalPrices(ticker: string, startDate: Date, endDate: Date): Promise<DailyPrice[]> {
     try {
       // Use Alpha Vantage to fetch historical candles (Premium: 75 calls/min)
-      const prices = await stockService.getHistoricalCandles(ticker, startDate, endDate);
+      const prices = await finnhubService.getHistoricalCandlesAlphaVantage(ticker, startDate, endDate);
       
       if (prices.length === 0) {
         throw new Error(`No historical data available for ${ticker}`);
@@ -373,17 +373,16 @@ class BacktestService {
       // Try to get stock from database first (any user's record for metadata)
       let stock = await storage.getAnyStockForTicker(ticker);
       
-      // If not in database, fetch from Alpha Vantage
+      // If not in database, fetch from Finnhub
       if (!stock) {
         try {
-          const quote = await stockService.getQuote(ticker);
-          if (!quote || !quote.price || quote.price <= 0) {
+          const quote = await finnhubService.getQuote(ticker);
+          if (!quote || !quote.currentPrice || quote.currentPrice <= 0) {
             console.log(`[BacktestFilter] No valid quote for ${ticker}, skipping`);
             continue;
           }
 
-          // stockService.getCompanyProfile returns marketCap already in millions
-          const profile = await stockService.getCompanyProfile(ticker);
+          const profile = await finnhubService.getCompanyProfile(ticker);
           const marketCapValue = profile?.marketCap ? profile.marketCap * 1_000_000 : 0;
           
           // Check market cap (must be > $500M)

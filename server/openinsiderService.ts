@@ -8,7 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createHash } from "crypto";
 import { existsSync } from "fs";
-import { stockService } from "./stockService.js";
+import { finnhubService } from "./finnhubService.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -378,7 +378,7 @@ class OpenInsiderService {
       const alphaVantageDateStr = `${day}.${month}.${year}`;
 
       // Use Alpha Vantage to fetch historical price
-      const price = await stockService.getHistoricalPrice(ticker, alphaVantageDateStr);
+      const price = await finnhubService.getHistoricalPrice(ticker, alphaVantageDateStr);
       
       if (price !== null) {
         // Cache the result

@@ -18,8 +18,6 @@ import {
 
 export interface RawStockData {
   ticker: string;
-  opportunityType?: 'BUY' | 'SELL';  // Controls threshold inversion for polarized metrics
-  
   // Fundamentals (from Alpha Vantage / SEC filings)
   fundamentals?: {
     revenueGrowthYoY?: number;      // YoY revenue growth %
@@ -66,33 +64,15 @@ export interface RawStockData {
     sectorVsSpy10d?: number;        // Sector ETF vs SPY performance (%)
     macroRiskEnvironment?: 'favorable_tailwinds' | 'low_risk' | 'neutral' | 'some_headwinds' | 'severe_macro_risks';
   };
-  // AI Agent Evaluation (from Gemini)
-  aiAgentEvaluation?: {
-    riskAssessment?: 'minimal_risk' | 'manageable_risk' | 'moderate_risk' | 'elevated_risk' | 'high_risk';
-    entryTiming?: 'early_before_profit' | 'optimal_entry_window' | 'mid_way_through_move' | 'late_entry' | 'missed_opportunity';
-    conviction?: 'very_high_conviction' | 'high_conviction' | 'moderate_conviction' | 'low_conviction' | 'no_conviction';
-    rationale?: {
-      risk?: string;
-      timing?: string;
-      conviction?: string;
-    };
-  };
 }
 
 /**
  * Score a numeric metric based on threshold ranges
- * Supports threshold inversion for SELL opportunities based on polarity
- * 
- * Inversion strategy:
- * - Symmetric metrics: no inversion (same thresholds for BUY/SELL)
- * - Bullish metrics + SELL: invert bucket order (excellent ← poor, good ← weak)
- * - Bearish metrics + SELL: keep bucket order (already inverted by nature)
  */
 function scoreNumericMetric(
   value: number | undefined | null,
   metricKey: string,
-  sectionKey: string,
-  opportunityType: 'BUY' | 'SELL' = 'BUY'
+  sectionKey: string
 ): { score: number; ruleBucket: MetricScore['ruleBucket']; measurement: number | null } {
   if (value === undefined || value === null || isNaN(value)) {
     return { score: 0, ruleBucket: 'missing', measurement: null };
@@ -104,7 +84,6 @@ function scoreNumericMetric(
   }
 
   const thresholds = metricConfig.thresholds;
-  const polarity = metricConfig.polarity;
   
   // Check thresholds in order: excellent → good → neutral → weak → poor
   for (const bucket of ['excellent', 'good', 'neutral', 'weak', 'poor'] as const) {
@@ -112,39 +91,23 @@ function scoreNumericMetric(
     const min = config.min;
     const max = config.max;
     
-    let matches = false;
+    let matches = true;
+    if (min !== undefined && value < min) matches = false;
+    if (max !== undefined && value >= max) matches = false;
     
-    // Check if value matches this bucket's range
-    if (min !== undefined && max === undefined) {
-      matches = value >= min;
-    } else if (max !== undefined && min === undefined) {
-      matches = value < max;
-    } else if (min !== undefined && max !== undefined) {
-      matches = value >= min && value < max;
+    // Special case: if only min is defined (no max), check >= min
+    if (min !== undefined && max === undefined && value >= min) {
+      return { score: config.score, ruleBucket: bucket, measurement: value };
     }
     
-    if (matches) {
-      // Determine final score based on polarity and opportunity type
-      // CRITICAL: Keep the original score from the matched bucket
-      const originalScore = config.score;
-      let finalBucket = bucket;
-      
-      // Invert bucket LABEL for SELL + bullish metrics (excellent becomes poor, etc.)
-      // But keep the original score (e.g., excellent→10 stays 10, just labeled as "poor")
-      if (opportunityType === 'SELL' && polarity === 'bullish') {
-        const bucketInversion: Record<typeof bucket, typeof bucket> = {
-          'excellent': 'poor',
-          'good': 'weak',
-          'neutral': 'neutral',
-          'weak': 'good',
-          'poor': 'excellent'
-        };
-        finalBucket = bucketInversion[bucket];
-      }
-      // Bearish metrics are naturally inverted, so SELL uses them as-is
-      // Symmetric metrics always use the same bucket
-      
-      return { score: originalScore, ruleBucket: finalBucket, measurement: value };
+    // Special case: if only max is defined (no min), check < max
+    if (max !== undefined && min === undefined && value < max) {
+      return { score: config.score, ruleBucket: bucket, measurement: value };
+    }
+    
+    // Both defined: check range
+    if (min !== undefined && max !== undefined && value >= min && value < max) {
+      return { score: config.score, ruleBucket: bucket, measurement: value };
     }
   }
   
@@ -154,18 +117,11 @@ function scoreNumericMetric(
 
 /**
  * Score a categorical/condition-based metric
- * Supports condition inversion for SELL opportunities based on polarity
- * 
- * Inversion strategy:
- * - Symmetric metrics: no inversion
- * - Bullish metrics + SELL: invert bucket order (bullish → poor, bearish → excellent)
- * - Bearish metrics + SELL: keep bucket order
  */
 function scoreConditionMetric(
   condition: string | undefined | null,
   metricKey: string,
-  sectionKey: string,
-  opportunityType: 'BUY' | 'SELL' = 'BUY'
+  sectionKey: string
 ): { score: number; ruleBucket: MetricScore['ruleBucket']; measurement: string | null } {
   if (!condition) {
     return { score: 0, ruleBucket: 'missing', measurement: null };
@@ -177,34 +133,13 @@ function scoreConditionMetric(
   }
 
   const thresholds = metricConfig.thresholds;
-  const polarity = metricConfig.polarity;
   const normalizedCondition = condition.toLowerCase().replace(/\s+/g, '_');
   
   // Check each bucket for matching condition
   for (const bucket of ['excellent', 'good', 'neutral', 'weak', 'poor'] as const) {
     const config = thresholds[bucket] as any;
     if (config.condition && config.condition.toLowerCase() === normalizedCondition) {
-      // Determine final score based on polarity and opportunity type
-      // CRITICAL: Keep the original score from the matched bucket
-      const originalScore = config.score;
-      let finalBucket = bucket;
-      
-      // Invert bucket LABEL for SELL + bullish metrics
-      // But keep the original score (e.g., excellent→10 stays 10, just labeled as "poor")
-      if (opportunityType === 'SELL' && polarity === 'bullish') {
-        const bucketInversion: Record<typeof bucket, typeof bucket> = {
-          'excellent': 'poor',
-          'good': 'weak',
-          'neutral': 'neutral',
-          'weak': 'good',
-          'poor': 'excellent'
-        };
-        finalBucket = bucketInversion[bucket];
-      }
-      // Bearish metrics are naturally inverted, so SELL uses them as-is
-      // Symmetric metrics always use the same bucket
-      
-      return { score: originalScore, ruleBucket: finalBucket, measurement: condition };
+      return { score: config.score, ruleBucket: bucket, measurement: condition };
     }
   }
   
@@ -332,13 +267,13 @@ function generateRationale(
 /**
  * Calculate all metrics for a section and return section score
  */
-export function calculateFundamentalsSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
+export function calculateFundamentalsSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.fundamentals;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
   
   // Revenue Growth
-  const revGrowth = scoreNumericMetric(data.fundamentals?.revenueGrowthYoY, 'revenueGrowth', 'fundamentals', opportunityType);
+  const revGrowth = scoreNumericMetric(data.fundamentals?.revenueGrowthYoY, 'revenueGrowth', 'fundamentals');
   if (revGrowth.ruleBucket === 'missing') missingMetrics.push('revenueGrowth');
   metrics.revenueGrowth = {
     name: sectionConfig.metrics.revenueGrowth.name,
@@ -351,7 +286,7 @@ export function calculateFundamentalsSection(data: RawStockData, opportunityType
   };
   
   // EPS Growth
-  const epsGrowth = scoreNumericMetric(data.fundamentals?.epsGrowthYoY, 'epsGrowth', 'fundamentals', opportunityType);
+  const epsGrowth = scoreNumericMetric(data.fundamentals?.epsGrowthYoY, 'epsGrowth', 'fundamentals');
   if (epsGrowth.ruleBucket === 'missing') missingMetrics.push('epsGrowth');
   metrics.epsGrowth = {
     name: sectionConfig.metrics.epsGrowth.name,
@@ -364,7 +299,7 @@ export function calculateFundamentalsSection(data: RawStockData, opportunityType
   };
   
   // Profit Margin Trend
-  const marginTrend = scoreConditionMetric(data.fundamentals?.profitMarginTrend, 'profitMarginTrend', 'fundamentals', opportunityType);
+  const marginTrend = scoreConditionMetric(data.fundamentals?.profitMarginTrend, 'profitMarginTrend', 'fundamentals');
   if (marginTrend.ruleBucket === 'missing') missingMetrics.push('profitMarginTrend');
   metrics.profitMarginTrend = {
     name: sectionConfig.metrics.profitMarginTrend.name,
@@ -381,7 +316,7 @@ export function calculateFundamentalsSection(data: RawStockData, opportunityType
   if (data.fundamentals?.freeCashFlow !== undefined && data.fundamentals?.totalDebt !== undefined && data.fundamentals.totalDebt > 0) {
     fcfToDebt = data.fundamentals.freeCashFlow / data.fundamentals.totalDebt;
   }
-  const fcfScore = scoreNumericMetric(fcfToDebt, 'fcfToDebt', 'fundamentals', opportunityType);
+  const fcfScore = scoreNumericMetric(fcfToDebt, 'fcfToDebt', 'fundamentals');
   if (fcfScore.ruleBucket === 'missing') missingMetrics.push('fcfToDebt');
   metrics.fcfToDebt = {
     name: sectionConfig.metrics.fcfToDebt.name,
@@ -394,7 +329,7 @@ export function calculateFundamentalsSection(data: RawStockData, opportunityType
   };
   
   // Debt-to-Equity
-  const debtEquity = scoreNumericMetric(data.fundamentals?.debtToEquity, 'debtToEquity', 'fundamentals', opportunityType);
+  const debtEquity = scoreNumericMetric(data.fundamentals?.debtToEquity, 'debtToEquity', 'fundamentals');
   if (debtEquity.ruleBucket === 'missing') missingMetrics.push('debtToEquity');
   metrics.debtToEquity = {
     name: sectionConfig.metrics.debtToEquity.name,
@@ -419,7 +354,7 @@ export function calculateFundamentalsSection(data: RawStockData, opportunityType
 /**
  * Calculate technicals section
  */
-export function calculateTechnicalsSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
+export function calculateTechnicalsSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.technicals;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
@@ -431,7 +366,7 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
     data.technicals?.sma20,
     data.technicals?.currentPrice
   );
-  const smaScore = scoreConditionMetric(smaCondition, 'smaAlignment', 'technicals', opportunityType);
+  const smaScore = scoreConditionMetric(smaCondition, 'smaAlignment', 'technicals');
   if (smaScore.ruleBucket === 'missing') missingMetrics.push('smaAlignment');
   metrics.smaAlignment = {
     name: sectionConfig.metrics.smaAlignment.name,
@@ -445,18 +380,16 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
   
   // RSI Momentum
   const rsiCondition = getRsiMomentumCondition(data.technicals?.rsi, data.technicals?.rsiDirection);
-  const rsiScore = scoreConditionMetric(rsiCondition, 'rsiMomentum', 'technicals', opportunityType);
+  const rsiScore = scoreConditionMetric(rsiCondition, 'rsiMomentum', 'technicals');
   if (rsiScore.ruleBucket === 'missing') missingMetrics.push('rsiMomentum');
-  const rsiValue = data.technicals?.rsi;
-  const rsiDisplay = (rsiValue != null && typeof rsiValue === 'number') ? rsiValue.toFixed(1) : '?';
   metrics.rsiMomentum = {
     name: sectionConfig.metrics.rsiMomentum.name,
-    measurement: rsiCondition === 'missing' ? null : `RSI: ${rsiDisplay} (${rsiCondition})`,
+    measurement: rsiCondition === 'missing' ? null : `RSI: ${data.technicals?.rsi?.toFixed(1) || '?'} (${rsiCondition})`,
     ruleBucket: rsiScore.ruleBucket,
     score: rsiScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.rsiMomentum.weight,
-    rationale: generateRationale('RSI Momentum', rsiCondition === 'missing' ? null : `${rsiDisplay} ${data.technicals?.rsiDirection || ''}`, rsiScore.ruleBucket, rsiScore.score)
+    rationale: generateRationale('RSI Momentum', rsiCondition === 'missing' ? null : `${data.technicals?.rsi?.toFixed(1)} ${data.technicals?.rsiDirection || ''}`, rsiScore.ruleBucket, rsiScore.score)
   };
   
   // MACD Signal
@@ -466,7 +399,7 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
     data.technicals?.macdHistogram,
     data.technicals?.macdCrossover
   );
-  const macdScore = scoreConditionMetric(macdCondition, 'macdSignal', 'technicals', opportunityType);
+  const macdScore = scoreConditionMetric(macdCondition, 'macdSignal', 'technicals');
   if (macdScore.ruleBucket === 'missing') missingMetrics.push('macdSignal');
   metrics.macdSignal = {
     name: sectionConfig.metrics.macdSignal.name,
@@ -480,18 +413,16 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
   
   // Volume Surge
   const volCondition = getVolumeCondition(data.technicals?.volumeVsAvg, data.technicals?.priceConfirmation);
-  const volScore = scoreConditionMetric(volCondition, 'volumeSurge', 'technicals', opportunityType);
+  const volScore = scoreConditionMetric(volCondition, 'volumeSurge', 'technicals');
   if (volScore.ruleBucket === 'missing') missingMetrics.push('volumeSurge');
-  const volumeVal = data.technicals?.volumeVsAvg;
-  const volumeDisplay = (volumeVal != null && typeof volumeVal === 'number') ? volumeVal.toFixed(2) : null;
   metrics.volumeSurge = {
     name: sectionConfig.metrics.volumeSurge.name,
-    measurement: volumeDisplay ? `${volumeDisplay}x avg` : null,
+    measurement: data.technicals?.volumeVsAvg !== undefined ? `${data.technicals.volumeVsAvg.toFixed(2)}x avg` : null,
     ruleBucket: volScore.ruleBucket,
     score: volScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.volumeSurge.weight,
-    rationale: generateRationale('Volume vs Avg', volumeDisplay ? `${volumeDisplay}x` : null, volScore.ruleBucket, volScore.score)
+    rationale: generateRationale('Volume vs Avg', data.technicals?.volumeVsAvg !== undefined ? `${data.technicals.volumeVsAvg.toFixed(2)}x` : null, volScore.ruleBucket, volScore.score)
   };
   
   // Price vs Key Levels
@@ -500,7 +431,7 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
     data.technicals?.nearSupport,
     data.technicals?.nearResistance
   );
-  const priceScore = scoreConditionMetric(priceCondition, 'priceVsResistance', 'technicals', opportunityType);
+  const priceScore = scoreConditionMetric(priceCondition, 'priceVsResistance', 'technicals');
   if (priceScore.ruleBucket === 'missing') missingMetrics.push('priceVsResistance');
   metrics.priceVsResistance = {
     name: sectionConfig.metrics.priceVsResistance.name,
@@ -525,13 +456,13 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
 /**
  * Calculate insider activity section
  */
-export function calculateInsiderSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
+export function calculateInsiderSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.insiderActivity;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
   
   // Net Buy Ratio
-  const netBuyScore = scoreNumericMetric(data.insiderActivity?.netBuyRatio30d, 'netBuyRatio', 'insiderActivity', opportunityType);
+  const netBuyScore = scoreNumericMetric(data.insiderActivity?.netBuyRatio30d, 'netBuyRatio', 'insiderActivity');
   if (netBuyScore.ruleBucket === 'missing') missingMetrics.push('netBuyRatio');
   metrics.netBuyRatio = {
     name: sectionConfig.metrics.netBuyRatio.name,
@@ -544,7 +475,7 @@ export function calculateInsiderSection(data: RawStockData, opportunityType: 'BU
   };
   
   // Transaction Recency
-  const recencyScore = scoreNumericMetric(data.insiderActivity?.daysSinceLastTransaction, 'transactionRecency', 'insiderActivity', opportunityType);
+  const recencyScore = scoreNumericMetric(data.insiderActivity?.daysSinceLastTransaction, 'transactionRecency', 'insiderActivity');
   if (recencyScore.ruleBucket === 'missing') missingMetrics.push('transactionRecency');
   metrics.transactionRecency = {
     name: sectionConfig.metrics.transactionRecency.name,
@@ -557,23 +488,21 @@ export function calculateInsiderSection(data: RawStockData, opportunityType: 'BU
   };
   
   // Transaction Size
-  const sizeScore = scoreNumericMetric(data.insiderActivity?.transactionSizeVsFloat, 'transactionSize', 'insiderActivity', opportunityType);
+  const sizeScore = scoreNumericMetric(data.insiderActivity?.transactionSizeVsFloat, 'transactionSize', 'insiderActivity');
   if (sizeScore.ruleBucket === 'missing') missingMetrics.push('transactionSize');
-  const sizeVal = sizeScore.measurement;
-  const sizeDisplay = (sizeVal != null && typeof sizeVal === 'number') ? sizeVal.toFixed(3) : null;
   metrics.transactionSize = {
     name: sectionConfig.metrics.transactionSize.name,
-    measurement: sizeDisplay ? `${sizeDisplay}%` : null,
+    measurement: sizeScore.measurement !== null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null,
     ruleBucket: sizeScore.ruleBucket,
     score: sizeScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.transactionSize.weight,
-    rationale: generateRationale('Size vs Float', sizeDisplay ? `${sizeDisplay}%` : null, sizeScore.ruleBucket, sizeScore.score)
+    rationale: generateRationale('Size vs Float', sizeScore.measurement !== null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null, sizeScore.ruleBucket, sizeScore.score)
   };
   
   // Insider Role
   const roleCondition = getInsiderRoleCondition(data.insiderActivity?.insiderRoles);
-  const roleScore = scoreConditionMetric(roleCondition, 'insiderRole', 'insiderActivity', opportunityType);
+  const roleScore = scoreConditionMetric(roleCondition, 'insiderRole', 'insiderActivity');
   if (roleScore.ruleBucket === 'missing') missingMetrics.push('insiderRole');
   metrics.insiderRole = {
     name: sectionConfig.metrics.insiderRole.name,
@@ -598,13 +527,13 @@ export function calculateInsiderSection(data: RawStockData, opportunityType: 'BU
 /**
  * Calculate news sentiment section
  */
-export function calculateNewsSentimentSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
+export function calculateNewsSentimentSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.newsSentiment;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
   
   // Average Sentiment
-  const sentimentScore = scoreNumericMetric(data.newsSentiment?.avgSentiment, 'avgSentiment', 'newsSentiment', opportunityType);
+  const sentimentScore = scoreNumericMetric(data.newsSentiment?.avgSentiment, 'avgSentiment', 'newsSentiment');
   if (sentimentScore.ruleBucket === 'missing') missingMetrics.push('avgSentiment');
   metrics.avgSentiment = {
     name: sectionConfig.metrics.avgSentiment.name,
@@ -617,7 +546,7 @@ export function calculateNewsSentimentSection(data: RawStockData, opportunityTyp
   };
   
   // Sentiment Momentum
-  const momentumScore = scoreConditionMetric(data.newsSentiment?.sentimentTrend, 'sentimentMomentum', 'newsSentiment', opportunityType);
+  const momentumScore = scoreConditionMetric(data.newsSentiment?.sentimentTrend, 'sentimentMomentum', 'newsSentiment');
   if (momentumScore.ruleBucket === 'missing') missingMetrics.push('sentimentMomentum');
   metrics.sentimentMomentum = {
     name: sectionConfig.metrics.sentimentMomentum.name,
@@ -630,7 +559,7 @@ export function calculateNewsSentimentSection(data: RawStockData, opportunityTyp
   };
   
   // News Volume
-  const volumeScore = scoreNumericMetric(data.newsSentiment?.newsCount7d, 'newsVolume', 'newsSentiment', opportunityType);
+  const volumeScore = scoreNumericMetric(data.newsSentiment?.newsCount7d, 'newsVolume', 'newsSentiment');
   if (volumeScore.ruleBucket === 'missing') missingMetrics.push('newsVolume');
   metrics.newsVolume = {
     name: sectionConfig.metrics.newsVolume.name,
@@ -643,7 +572,7 @@ export function calculateNewsSentimentSection(data: RawStockData, opportunityTyp
   };
   
   // Catalyst Presence
-  const catalystScore = scoreConditionMetric(data.newsSentiment?.upcomingCatalyst, 'catalystPresence', 'newsSentiment', opportunityType);
+  const catalystScore = scoreConditionMetric(data.newsSentiment?.upcomingCatalyst, 'catalystPresence', 'newsSentiment');
   if (catalystScore.ruleBucket === 'missing') missingMetrics.push('catalystPresence');
   metrics.catalystPresence = {
     name: sectionConfig.metrics.catalystPresence.name,
@@ -668,13 +597,13 @@ export function calculateNewsSentimentSection(data: RawStockData, opportunityTyp
 /**
  * Calculate macro/sector section
  */
-export function calculateMacroSectorSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
+export function calculateMacroSectorSection(data: RawStockData): SectionScore {
   const sectionConfig = scorecardConfig.sections.macroSector;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
   
   // Sector vs SPY
-  const sectorScore = scoreNumericMetric(data.macroSector?.sectorVsSpy10d, 'sectorMomentum', 'macroSector', opportunityType);
+  const sectorScore = scoreNumericMetric(data.macroSector?.sectorVsSpy10d, 'sectorMomentum', 'macroSector');
   if (sectorScore.ruleBucket === 'missing') missingMetrics.push('sectorMomentum');
   metrics.sectorMomentum = {
     name: sectionConfig.metrics.sectorMomentum.name,
@@ -687,7 +616,7 @@ export function calculateMacroSectorSection(data: RawStockData, opportunityType:
   };
   
   // Macro Risk Flags
-  const riskScore = scoreConditionMetric(data.macroSector?.macroRiskEnvironment, 'macroRiskFlags', 'macroSector', opportunityType);
+  const riskScore = scoreConditionMetric(data.macroSector?.macroRiskEnvironment, 'macroRiskFlags', 'macroSector');
   if (riskScore.ruleBucket === 'missing') missingMetrics.push('macroRiskFlags');
   metrics.macroRiskFlags = {
     name: sectionConfig.metrics.macroRiskFlags.name,
@@ -710,75 +639,15 @@ export function calculateMacroSectorSection(data: RawStockData, opportunityType:
 }
 
 /**
- * Calculate AI Agent evaluation section
- */
-export function calculateAIAgentSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
-  const sectionConfig = scorecardConfig.sections.aiAgent;
-  const metrics: Record<string, MetricScore> = {};
-  const missingMetrics: string[] = [];
-  
-  // Risk Assessment
-  const riskScore = scoreConditionMetric(data.aiAgentEvaluation?.riskAssessment, 'riskAssessment', 'aiAgent', opportunityType);
-  if (riskScore.ruleBucket === 'missing') missingMetrics.push('riskAssessment');
-  metrics.riskAssessment = {
-    name: sectionConfig.metrics.riskAssessment.name,
-    measurement: riskScore.measurement,
-    ruleBucket: riskScore.ruleBucket,
-    score: riskScore.score,
-    maxScore: 10,
-    weight: sectionConfig.metrics.riskAssessment.weight,
-    rationale: data.aiAgentEvaluation?.rationale?.risk || generateRationale('AI Risk Assessment', riskScore.measurement, riskScore.ruleBucket, riskScore.score)
-  };
-  
-  // Entry Timing
-  const timingScore = scoreConditionMetric(data.aiAgentEvaluation?.entryTiming, 'entryTiming', 'aiAgent', opportunityType);
-  if (timingScore.ruleBucket === 'missing') missingMetrics.push('entryTiming');
-  metrics.entryTiming = {
-    name: sectionConfig.metrics.entryTiming.name,
-    measurement: timingScore.measurement,
-    ruleBucket: timingScore.ruleBucket,
-    score: timingScore.score,
-    maxScore: 10,
-    weight: sectionConfig.metrics.entryTiming.weight,
-    rationale: data.aiAgentEvaluation?.rationale?.timing || generateRationale('AI Entry Timing', timingScore.measurement, timingScore.ruleBucket, timingScore.score)
-  };
-  
-  // Conviction
-  const convictionScore = scoreConditionMetric(data.aiAgentEvaluation?.conviction, 'conviction', 'aiAgent', opportunityType);
-  if (convictionScore.ruleBucket === 'missing') missingMetrics.push('conviction');
-  metrics.conviction = {
-    name: sectionConfig.metrics.conviction.name,
-    measurement: convictionScore.measurement,
-    ruleBucket: convictionScore.ruleBucket,
-    score: convictionScore.score,
-    maxScore: 10,
-    weight: sectionConfig.metrics.conviction.weight,
-    rationale: data.aiAgentEvaluation?.rationale?.conviction || generateRationale('AI Conviction', convictionScore.measurement, convictionScore.ruleBucket, convictionScore.score)
-  };
-  
-  return {
-    name: sectionConfig.name,
-    weight: sectionConfig.weight,
-    score: calculateSectionScore(metrics),
-    maxScore: 100,
-    metrics,
-    missingMetrics
-  };
-}
-
-/**
  * Generate complete scorecard from raw stock data
- * @param data - Raw stock data for all metrics
- * @param opportunityType - BUY or SELL opportunity (drives polarity-aware inversion)
  */
-export function generateScorecard(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): Scorecard {
+export function generateScorecard(data: RawStockData): Scorecard {
   const sections: Record<string, SectionScore> = {
-    fundamentals: calculateFundamentalsSection(data, opportunityType),
-    technicals: calculateTechnicalsSection(data, opportunityType),
-    insiderActivity: calculateInsiderSection(data, opportunityType),
-    newsSentiment: calculateNewsSentimentSection(data, opportunityType),
-    macroSector: calculateMacroSectorSection(data, opportunityType),
-    aiAgent: calculateAIAgentSection(data, opportunityType)
+    fundamentals: calculateFundamentalsSection(data),
+    technicals: calculateTechnicalsSection(data),
+    insiderActivity: calculateInsiderSection(data),
+    newsSentiment: calculateNewsSentimentSection(data),
+    macroSector: calculateMacroSectorSection(data)
   };
   
   const globalScore = calculateGlobalScore(sections);

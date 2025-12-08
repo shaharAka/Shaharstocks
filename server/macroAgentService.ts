@@ -134,11 +134,11 @@ async function fetchEconomicIndicators(): Promise<MarketData['economicIndicators
   }
 }
 
-async function fetchMarketIndices(): Promise<MarketData & { sp500WeekChange?: number; sp500TenDayChange?: number }> {
+async function fetchMarketIndices(): Promise<MarketData> {
   console.log("[MacroAgent] Fetching market indices...");
   
   try {
-    // Fetch S&P 500 daily quote (using SPY as proxy)
+    // Fetch S&P 500 data (using SPY as proxy)
     const sp500Response = await fetch(
       `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey=${ALPHA_VANTAGE_API_KEY}`
     );
@@ -147,36 +147,6 @@ async function fetchMarketIndices(): Promise<MarketData & { sp500WeekChange?: nu
     const sp500Data = await sp500Response.json();
     const sp500Price = parseFloat(sp500Data["Global Quote"]?.["05. price"] || "0");
     const sp500Change = parseFloat(sp500Data["Global Quote"]?.["10. change percent"]?.replace("%", "") || "0");
-    
-    // Fetch SPY time series for multi-day performance calculations
-    let sp500WeekChange: number | undefined = undefined;
-    let sp500TenDayChange: number | undefined = undefined;
-    try {
-      const spyTimeSeriesResponse = await fetch(
-        `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&apikey=${ALPHA_VANTAGE_API_KEY}&outputsize=compact`
-      );
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limiting
-      
-      const spyTimeSeriesData = await spyTimeSeriesResponse.json();
-      const spyTimeSeries = spyTimeSeriesData["Time Series (Daily)"];
-      
-      if (spyTimeSeries) {
-        const dates = Object.keys(spyTimeSeries).sort().reverse();
-        if (dates.length >= 11) {
-          const prices = dates.map(date => parseFloat(spyTimeSeries[date]["4. close"]));
-          const currentPrice = prices[0];
-          const weekAgoPrice = prices[5] || currentPrice;
-          const tenDayAgoPrice = prices[10] || currentPrice;
-          
-          sp500WeekChange = ((currentPrice - weekAgoPrice) / weekAgoPrice) * 100;
-          sp500TenDayChange = ((currentPrice - tenDayAgoPrice) / tenDayAgoPrice) * 100;
-          
-          console.log(`[MacroAgent] SPY multi-day performance: 5-day ${sp500WeekChange.toFixed(2)}%, 10-day ${sp500TenDayChange.toFixed(2)}%`);
-        }
-      }
-    } catch (error) {
-      console.warn("[MacroAgent] Could not fetch SPY time series for multi-day calculation:", error);
-    }
     
     // Fetch VIX data
     const vixResponse = await fetch(
@@ -231,8 +201,6 @@ async function fetchMarketIndices(): Promise<MarketData & { sp500WeekChange?: nu
         change: sp500Change,
         trend: sp500Change > 1 ? "bullish" : sp500Change < -1 ? "bearish" : "neutral",
       },
-      sp500WeekChange,
-      sp500TenDayChange,
       vix: {
         level: vixLevel,
         interpretation: vixLevel < 15 ? "low_fear" : vixLevel < 20 ? "moderate_fear" : vixLevel < 30 ? "high_fear" : "extreme_fear",
@@ -325,14 +293,13 @@ function calculateStdDev(values: number[]): number {
 }
 
 // Fetch detailed ETF performance data with historical metrics
-async function fetchDetailedETFData(etfSymbol: string, sp500Change: number, sp500WeekChange?: number): Promise<{
+async function fetchDetailedETFData(etfSymbol: string, sp500Change: number): Promise<{
   currentPrice: number;
   dayChange: number;
   weekChange: number;
   monthChange: number;
   volatility: number;
   relativeStrength: number;
-  weekRelativeStrength: number; // 5-10 day sector vs SPY
   momentum: number;
 } | null> {
   try {
@@ -363,13 +330,11 @@ async function fetchDetailedETFData(etfSymbol: string, sp500Change: number, sp50
     const prices = dates.map(date => parseFloat(timeSeries[date]["4. close"]));
     const currentPrice = prices[0];
     const weekAgoPrice = prices[5] || prices[prices.length - 1]; // ~5 trading days ago
-    const tenDayAgoPrice = prices[10] || prices[prices.length - 1]; // ~10 trading days ago
     const monthAgoPrice = prices[21] || prices[prices.length - 1]; // ~21 trading days ago
     
     // Calculate percentage changes
     const dayChange = ((currentPrice - prices[1]) / prices[1]) * 100;
     const weekChange = ((currentPrice - weekAgoPrice) / weekAgoPrice) * 100;
-    const tenDayChange = ((currentPrice - tenDayAgoPrice) / tenDayAgoPrice) * 100;
     const monthChange = ((currentPrice - monthAgoPrice) / monthAgoPrice) * 100;
     
     // Calculate daily returns for last 21 days
@@ -384,12 +349,6 @@ async function fetchDetailedETFData(etfSymbol: string, sp500Change: number, sp50
     // Relative strength vs S&P 500 (ETF performance - SPY performance)
     const relativeStrength = dayChange - sp500Change;
     
-    // 10-day relative strength vs S&P 500
-    // sp500WeekChange here is actually the 10-day SPY change passed from fetchMarketIndices
-    const weekRelativeStrength = sp500WeekChange !== undefined 
-      ? tenDayChange - sp500WeekChange // True 10-day sector vs 10-day SPY
-      : relativeStrength * 2; // Fallback: extrapolate 1-day relative to ~10 days
-    
     // Momentum = average of last 5 day returns
     const recentReturns = returns.slice(0, 5);
     const momentum = recentReturns.reduce((sum, r) => sum + r, 0) / recentReturns.length;
@@ -401,7 +360,6 @@ async function fetchDetailedETFData(etfSymbol: string, sp500Change: number, sp50
       monthChange,
       volatility,
       relativeStrength,
-      weekRelativeStrength,
       momentum,
     };
   } catch (error) {
@@ -427,7 +385,7 @@ export async function runMacroAnalysis(industry?: string): Promise<InsertMacroAn
       const etfSymbol = INDUSTRY_ETF_MAP[normalizedIndustry];
       console.log(`[MacroAgent] Fetching detailed sector data for ${industry} → ${normalizedIndustry} (${etfSymbol})...`);
       
-      const detailedData = await fetchDetailedETFData(etfSymbol, marketData.sp500.change, marketData.sp500TenDayChange);
+      const detailedData = await fetchDetailedETFData(etfSymbol, marketData.sp500.change);
       
       if (detailedData) {
         // Calculate sector weight based on relative strength and momentum
@@ -476,7 +434,6 @@ export async function runMacroAnalysis(industry?: string): Promise<InsertMacroAn
           monthChange: detailedData.monthChange,
           volatility: detailedData.volatility,
           relativeStrength: detailedData.relativeStrength,
-          weekRelativeStrength: detailedData.weekRelativeStrength, // 5-10 day sector vs SPY
           momentum: detailedData.momentum,
           sectorWeight,
           sectorExplanation,
@@ -755,4 +712,20 @@ Respond in JSON format:
       errorMessage: error instanceof Error ? error.message : "Unknown error during macro analysis",
     };
   }
+}
+
+export function integrateScores(microScore: number, macroFactor: number): { integratedScore: number; adjustment: string } {
+  const integrated = Math.round(microScore * macroFactor);
+  const clamped = Math.max(0, Math.min(100, integrated));
+  
+  let adjustment = "";
+  if (macroFactor < 0.9) {
+    adjustment = `Score reduced from ${microScore} to ${clamped} due to challenging macro conditions (${macroFactor}x factor)`;
+  } else if (macroFactor > 1.1) {
+    adjustment = `Score boosted from ${microScore} to ${clamped} due to favorable macro conditions (${macroFactor}x factor)`;
+  } else {
+    adjustment = `Score maintained at ${clamped} (neutral macro environment, ${macroFactor}x factor)`;
+  }
+  
+  return { integratedScore: clamped, adjustment };
 }

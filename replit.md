@@ -16,29 +16,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Session Security & Data Isolation**: Full page reloads on authentication state changes prevent cross-user data contamination.
 - **WebSocket Push Notification System**: Replaces aggressive polling with real-time, event-driven WebSocket communication for instant UI updates.
 - **Database-Level Race Prevention**: Utilizes partial unique indexes on `aiAnalysisJobs(ticker)` where status is 'pending' or 'processing' to prevent duplicate AI analysis jobs.
-- **Candlestick Data Architecture**: Candlestick data is stored once per ticker in a shared `stockCandlesticks` table and populated via daily background jobs, immediate fire-and-forget fetches on new stock follows, and on-demand frontend API requests. The `getAllUniqueTickersNeedingData()` method uses LEFT JOIN with `stockCandlesticks` to find tickers missing OHLCV data.
-- **Batch Filtering Optimization**: Transaction ingestion uses single-pass filtering with `getExistingTransactionKeys()` to detect duplicates in one DB query instead of N+1 queries. Quotes and stock data are batch-fetched for unique tickers, then all filters (market cap, options deals) are applied in memory.
-- **Compound Trading Rules Architecture**: Actions are stored per-group (each condition group can have its own actions). The `ruleActions` table has both `ruleId` (for efficient rule-level queries) and `groupId` (for per-group action retrieval). All compound rule CRUD methods in storage.ts respect this per-group architecture.
-
-### Security & Data Isolation
-
-#### Storage Method Scoping
-- **User-Scoped Methods** (require userId parameter): `getStocks(userId)`, `createStock(userId, data)`, `getFollowedStocks(userId)`, `getDailyBriefs(userId, ticker)`, etc. These are safe for route handlers.
-- **Global Methods** (internal/background use only): `getAllStocksForTickerGlobal(ticker)`, `updateStocksByTickerGlobally(ticker, updates)`, `getAllUniquePendingTickers()`, `getAllUniqueTickersNeedingData()`. These are used by background workers (queueWorker.ts, index.ts) for shared data updates, NOT exposed via routes.
-- **Shared Data Tables** (intentionally global): `stockAnalyses`, `stockCandlesticks`, `macroAnalyses`, `insiderProfiles` - one record per ticker/entity, computed once and reused across all users.
-
-#### Foreign Key Enforcement
-All per-user tables enforce FK constraints to `users.id` with `ON DELETE CASCADE`:
-- `stocks`, `portfolioHoldings`, `trades`, `payments`, `userStockStatuses`, `userTutorials`, `followedStocks`, `dailyBriefs`, `notifications`, `stockComments`, `stockViews`, `featureSuggestions`, `featureVotes`, `announcementReads`
-
-#### Middleware Stack
-- `requireUser` - Basic authentication check (session.userId exists)
-- `requireAdmin` - Admin-only access (user.isAdmin = true)
-- `requireActiveSubscription` - Trial/active subscription required, auto-expires trials
-- `requireInternalContext` - Background job endpoints only (x-internal-token header)
-
-#### Subscription Status Flow
-`pending_verification` → `trial` (30 days) → `active` (paid) or `expired` (trial ended)
+- **Candlestick Data Architecture**: Candlestick data is stored once per ticker in a shared `stockCandlesticks` table and populated via daily background jobs, immediate fire-and-forget fetches on new stock follows, and on-demand frontend API requests.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (with optimistic updates and user-scoped cache keys), React Hook Form with Zod for validation.
@@ -48,14 +26,7 @@ All per-user tables enforce FK constraints to `users.id` with `ON DELETE CASCADE
 - **Cache Isolation**: User-scoped cache keys and custom query functions prevent cross-user data contamination.
 
 ### Feature Specifications
-- **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for Enhanced Sector ETF Analysis) influences recommendations. Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching via backoffice settings. **NEW: Scorecard-grounded AI reports** - The AI report now receives the pre-calculated scorecard, enabling the recommendation to reference specific scores and metrics for better grounding.
-- **Analysis Pipeline Phases** (as of Dec 2024):
-  1. **Data Collection**: Fetch fundamentals, technicals, news, SEC filings, insider data, and macro/industry context
-  2. **Scorecard Generation**: Calculate 6-section rule-based scorecard (fundamentals, technicals, insider, news, macro, aiAgent) with Gemini AI evaluation
-  3. **AI Report Generation**: Generate investment recommendation grounded by the completed scorecard
-  4. **Finalization**: Save analysis with scorecard globalScore as the integrated score (no legacy micro*macro calculation)
-  Phase flags: `macroCompleted` (after data collection), `microCompleted` (after scorecard), `combinedCompleted` (after save)
-- **Scorecard as Primary Score**: The scorecard's `globalScore` (0-100) is now the authoritative score for all stock analyses. The legacy micro*macro multiplier calculation has been removed. Macro sector data is still collected and contributes to the scorecard's macroSector section.
+- **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for Enhanced Sector ETF Analysis) influences recommendations. Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching via backoffice settings.
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
 - **Collaboration**: Multi-user system with stock-specific comment threads and recommendation filtering.
 - **Adaptive Stock Fetching**: Stock fetch limits adjust based on user onboarding and configuration, with customizable OpenInsider filters.
@@ -66,7 +37,7 @@ All per-user tables enforce FK constraints to `users.id` with `ON DELETE CASCADE
 - **Position Tracking with P&L Calculation**: Users can close positions with calculated P&L, displayed as total realized gains/losses on the dashboard.
 - **Onboarding Flow**: 4-step onboarding with automatic data fetching, visual feedback for fetch status, and educational content.
 - **Tutorial System**: Manual-only tutorials, triggered by user interaction, with enhanced element targeting and simplified content.
-- **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language. The unified "Action Summary" section combines trading guidance, timing indicators (early/optimal/late based on insider trade date), and all key signals in one cohesive card.
+- **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language.
 - **Fetch Configuration**: Simplified dialog for data ingestion settings, defaulting to daily refresh, with display preferences managed on the Opportunities page.
 - **Subscription-Based Refresh Limits**: Trial users receive new insider trading data once per day (daily refresh), while paid subscribers receive hourly updates. Price updates for existing stocks are not affected by this limit. A `lastDataRefresh` timestamp tracks each user's last data delivery, with mutex-protected job execution to prevent race conditions.
 

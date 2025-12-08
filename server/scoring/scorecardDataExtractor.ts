@@ -208,7 +208,7 @@ export function determineVolumeCondition(
   }
   
   // Return numeric ratio for threshold matching
-  return (volumeVsAvg != null && typeof volumeVsAvg === 'number') ? volumeVsAvg.toFixed(2) : undefined;
+  return volumeVsAvg.toFixed(2);
 }
 
 /**

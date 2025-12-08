@@ -129,7 +129,6 @@ export interface IStorage {
   getUserStocksForTicker(userId: string, ticker: string): Promise<Stock[]>; // Per-user: Get specific user's stocks for a ticker
   getAllStocksForTickerGlobal(ticker: string): Promise<Stock[]>; // Global: Get ALL users' stocks for a ticker (AI analysis aggregation)
   getTransactionByCompositeKey(userId: string, ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Stock | undefined>;
-  getExistingTransactionKeys(userId: string, transactions: Array<{ ticker: string; insiderTradeDate: string; insiderName: string; recommendation: string }>): Promise<Set<string>>;
   createStock(stock: InsertStock): Promise<Stock>;
   updateStock(userId: string, ticker: string, stock: Partial<Stock>): Promise<Stock | undefined>;
   deleteStock(userId: string, ticker: string): Promise<boolean>;
@@ -340,7 +339,6 @@ export interface IStorage {
   getJobsByTicker(ticker: string): Promise<AiAnalysisJob[]>;
   updateJobStatus(jobId: string, status: string, updates?: Partial<AiAnalysisJob>): Promise<void>;
   updateJobProgress(jobId: string, currentStep: string, stepDetails: any): Promise<void>;
-  failJobAndAnalysisAtomic(jobId: string, ticker: string, errorMessage: string, shouldRetry: boolean, retryCount: number, maxRetries: number): Promise<void>;
   resetStockAnalysisPhaseFlags(ticker: string): Promise<void>;
   markStockAnalysisPhaseComplete(ticker: string, phase: 'micro' | 'macro' | 'combined'): Promise<void>;
   getStocksWithIncompleteAnalysis(): Promise<Stock[]>;
@@ -524,45 +522,6 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return stock;
-  }
-  
-  /**
-   * Batch check for existing transactions by composite keys
-   * Returns a Set of composite key strings for transactions that already exist
-   * This is much more efficient than checking one-by-one
-   */
-  async getExistingTransactionKeys(
-    userId: string,
-    transactions: Array<{
-      ticker: string;
-      insiderTradeDate: string;
-      insiderName: string;
-      recommendation: string;
-    }>
-  ): Promise<Set<string>> {
-    if (transactions.length === 0) return new Set();
-    
-    // Get all stocks for this user in one query
-    const userStocks = await db
-      .select({
-        ticker: stocks.ticker,
-        insiderTradeDate: stocks.insiderTradeDate,
-        insiderName: stocks.insiderName,
-        recommendation: stocks.recommendation,
-      })
-      .from(stocks)
-      .where(eq(stocks.userId, userId));
-    
-    // Create a Set of composite keys for O(1) lookup
-    const existingKeys = new Set<string>();
-    for (const stock of userStocks) {
-      if (stock.insiderTradeDate && stock.insiderName && stock.recommendation) {
-        const key = `${stock.ticker}|${stock.insiderTradeDate}|${stock.insiderName}|${stock.recommendation}`;
-        existingKeys.add(key);
-      }
-    }
-    
-    return existingKeys;
   }
 
   async createStock(stock: InsertStock): Promise<Stock> {
@@ -872,16 +831,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllUniqueTickersNeedingData(): Promise<string[]> {
-    // Get tickers that are pending OR don't have candlestick data in the shared stockCandlesticks table
     const result = await db
       .selectDistinct({ ticker: stocks.ticker })
       .from(stocks)
-      .leftJoin(stockCandlesticks, eq(stocks.ticker, stockCandlesticks.ticker))
       .where(
         or(
           eq(stocks.recommendationStatus, 'pending'),
-          isNull(stockCandlesticks.ticker),
-          sql`jsonb_array_length(${stockCandlesticks.candlestickData}) = 0`
+          sql`${stocks.candlesticks} IS NULL`,
+          sql`jsonb_array_length(${stocks.candlesticks}) = 0`
         )
       );
     return result.map(r => r.ticker);
@@ -907,7 +864,6 @@ export class DatabaseStorage implements IStorage {
     const result = await db.transaction(async (tx) => {
       // 1. Find candidate stocks (older than cutoff + NOT followed by any user)
       // insiderTradeDate is stored as text (YYYY-MM-DD), so compare with string
-      // Note: Cannot use FOR UPDATE with LEFT JOIN, so we do two-phase delete
       const candidates = await tx
         .select({ ticker: stocks.ticker })
         .from(stocks)
@@ -915,7 +871,8 @@ export class DatabaseStorage implements IStorage {
         .where(and(
           lt(stocks.insiderTradeDate, cutoffDateString),
           sql`${followedStocks.ticker} IS NULL` // Not followed by anyone
-        ));
+        ))
+        .for('update'); // Lock rows for deletion
       
       if (candidates.length === 0) {
         console.log('[CLEANUP] No old non-followed stocks found');
@@ -1272,7 +1229,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Compound Rules (multi-condition rules)
-  // NOTE: Actions are per-group (each group can have its own actions)
   async getCompoundRules(): Promise<CompoundRule[]> {
     const allRules = await db.select().from(tradingRules).orderBy(tradingRules.priority);
     
@@ -1284,21 +1240,27 @@ export class DatabaseStorage implements IStorage {
         .where(eq(ruleConditionGroups.ruleId, rule.id))
         .orderBy(ruleConditionGroups.groupOrder);
       
-      // Fetch conditions AND actions for each group
-      const groupsWithConditionsAndActions = await Promise.all(
+      const groupsWithConditions = await Promise.all(
         groups.map(async (group) => {
-          const [conditions, actions] = await Promise.all([
-            db.select().from(ruleConditions).where(eq(ruleConditions.groupId, group.id)),
-            db.select().from(ruleActions).where(eq(ruleActions.groupId, group.id)).orderBy(ruleActions.actionOrder)
-          ]);
+          const conditions = await db
+            .select()
+            .from(ruleConditions)
+            .where(eq(ruleConditions.groupId, group.id));
           
-          return { ...group, conditions, actions };
+          return { ...group, conditions };
         })
       );
       
+      const actions = await db
+        .select()
+        .from(ruleActions)
+        .where(eq(ruleActions.ruleId, rule.id))
+        .orderBy(ruleActions.actionOrder);
+      
       compoundRules.push({
         ...rule,
-        groups: groupsWithConditionsAndActions,
+        groups: groupsWithConditions,
+        actions
       });
     }
     
@@ -1315,21 +1277,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(ruleConditionGroups.ruleId, id))
       .orderBy(ruleConditionGroups.groupOrder);
     
-    // Fetch conditions AND actions for each group
-    const groupsWithConditionsAndActions = await Promise.all(
+    const groupsWithConditions = await Promise.all(
       groups.map(async (group) => {
-        const [conditions, actions] = await Promise.all([
-          db.select().from(ruleConditions).where(eq(ruleConditions.groupId, group.id)),
-          db.select().from(ruleActions).where(eq(ruleActions.groupId, group.id)).orderBy(ruleActions.actionOrder)
-        ]);
+        const conditions = await db
+          .select()
+          .from(ruleConditions)
+          .where(eq(ruleConditions.groupId, group.id));
         
-        return { ...group, conditions, actions };
+        return { ...group, conditions };
       })
     );
     
+    const actions = await db
+      .select()
+      .from(ruleActions)
+      .where(eq(ruleActions.ruleId, id))
+      .orderBy(ruleActions.actionOrder);
+    
     return {
       ...rule,
-      groups: groupsWithConditionsAndActions,
+      groups: groupsWithConditions,
+      actions
     };
   }
 
@@ -1345,8 +1313,8 @@ export class DatabaseStorage implements IStorage {
         priority: ruleData.priority,
       }).returning();
       
-      // Create condition groups with their conditions AND actions (per-group architecture)
-      const groupsWithConditionsAndActions: (RuleConditionGroup & { conditions: RuleCondition[]; actions: RuleAction[] })[] = [];
+      // Create condition groups and their conditions
+      const groupsWithConditions: (RuleConditionGroup & { conditions: RuleCondition[] })[] = [];
       for (const groupData of ruleData.groups) {
         const [group] = await tx.insert(ruleConditionGroups).values({
           ruleId: rule.id,
@@ -1355,7 +1323,6 @@ export class DatabaseStorage implements IStorage {
           description: groupData.description,
         }).returning();
         
-        // Create conditions for this group
         const conditions: RuleCondition[] = [];
         for (const conditionData of groupData.conditions) {
           const [condition] = await tx.insert(ruleConditions).values({
@@ -1371,29 +1338,29 @@ export class DatabaseStorage implements IStorage {
           conditions.push(condition);
         }
         
-        // Create actions for this group (per-group architecture)
-        const actions: RuleAction[] = [];
-        for (const actionData of groupData.actions) {
-          const [action] = await tx.insert(ruleActions).values({
-            ruleId: rule.id,
-            groupId: group.id,
-            actionOrder: actionData.actionOrder,
-            actionType: actionData.actionType,
-            quantity: actionData.quantity,
-            percentage: actionData.percentage,
-            allowRepeat: actionData.allowRepeat,
-            cooldownMinutes: actionData.cooldownMinutes,
-          }).returning();
-          
-          actions.push(action);
-        }
+        groupsWithConditions.push({ ...group, conditions });
+      }
+      
+      // Create actions
+      const actions: RuleAction[] = [];
+      for (const actionData of ruleData.actions) {
+        const [action] = await tx.insert(ruleActions).values({
+          ruleId: rule.id,
+          actionOrder: actionData.actionOrder,
+          actionType: actionData.actionType,
+          quantity: actionData.quantity,
+          percentage: actionData.percentage,
+          allowRepeat: actionData.allowRepeat,
+          cooldownMinutes: actionData.cooldownMinutes,
+        }).returning();
         
-        groupsWithConditionsAndActions.push({ ...group, conditions, actions });
+        actions.push(action);
       }
       
       return {
         ...rule,
-        groups: groupsWithConditionsAndActions,
+        groups: groupsWithConditions,
+        actions
       };
     });
     
@@ -1405,9 +1372,9 @@ export class DatabaseStorage implements IStorage {
     if (!existing) return undefined;
     
     // Use a transaction to update all related records
-    await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // Update rule header
-      await tx
+      const [rule] = await tx
         .update(tradingRules)
         .set({
           name: ruleData.name ?? existing.name,
@@ -1420,12 +1387,13 @@ export class DatabaseStorage implements IStorage {
         .where(eq(tradingRules.id, id))
         .returning();
       
-      // If groups are provided, delete old ones and create new ones (actions are per-group)
+      // If groups or actions are provided, delete old ones and create new ones
       if (ruleData.groups) {
-        // Delete old groups (cascade will delete conditions AND actions via groupId FK)
+        // Delete old groups (cascade will delete conditions)
         await tx.delete(ruleConditionGroups).where(eq(ruleConditionGroups.ruleId, id));
         
-        // Create new groups with their conditions AND actions (per-group architecture)
+        // Create new groups and conditions
+        const groupsWithConditions: (RuleConditionGroup & { conditions: RuleCondition[] })[] = [];
         for (const groupData of ruleData.groups) {
           const [group] = await tx.insert(ruleConditionGroups).values({
             ruleId: id,
@@ -1434,9 +1402,9 @@ export class DatabaseStorage implements IStorage {
             description: groupData.description,
           }).returning();
           
-          // Create conditions for this group
+          const conditions: RuleCondition[] = [];
           for (const conditionData of groupData.conditions) {
-            await tx.insert(ruleConditions).values({
+            const [condition] = await tx.insert(ruleConditions).values({
               groupId: group.id,
               metric: conditionData.metric,
               comparator: conditionData.comparator,
@@ -1444,24 +1412,34 @@ export class DatabaseStorage implements IStorage {
               timeframeValue: conditionData.timeframeValue,
               timeframeUnit: conditionData.timeframeUnit,
               metadata: conditionData.metadata,
-            });
+            }).returning();
+            
+            conditions.push(condition);
           }
           
-          // Create actions for this group (per-group architecture)
-          for (const actionData of groupData.actions) {
-            await tx.insert(ruleActions).values({
-              ruleId: id,
-              groupId: group.id,
-              actionOrder: actionData.actionOrder,
-              actionType: actionData.actionType,
-              quantity: actionData.quantity,
-              percentage: actionData.percentage,
-              allowRepeat: actionData.allowRepeat,
-              cooldownMinutes: actionData.cooldownMinutes,
-            });
-          }
+          groupsWithConditions.push({ ...group, conditions });
         }
       }
+      
+      if (ruleData.actions) {
+        // Delete old actions
+        await tx.delete(ruleActions).where(eq(ruleActions.ruleId, id));
+        
+        // Create new actions
+        for (const actionData of ruleData.actions) {
+          await tx.insert(ruleActions).values({
+            ruleId: id,
+            actionOrder: actionData.actionOrder,
+            actionType: actionData.actionType,
+            quantity: actionData.quantity,
+            percentage: actionData.percentage,
+            allowRepeat: actionData.allowRepeat,
+            cooldownMinutes: actionData.cooldownMinutes,
+          });
+        }
+      }
+      
+      return rule;
     });
     
     // Fetch the complete updated rule
@@ -2442,7 +2420,7 @@ export class DatabaseStorage implements IStorage {
       const owningStance = normalizeStance(latestBrief?.owningStance);
       const aiScore = latestBrief?.watchingConfidence ?? null;
       
-      // Get integrated score from stock analysis (scorecard globalScore)
+      // Get integrated score from stock analysis (comprehensive micro + macro score)
       const analyses = await db
         .select()
         .from(stockAnalyses)
@@ -3181,18 +3159,11 @@ export class DatabaseStorage implements IStorage {
 
       // Create or update analysis record with "analyzing" status
       // This ensures the frontend can show the analyzing state immediately
+      // But DON'T overwrite completed analysis with integrated scores
       const existingAnalysis = await this.getStockAnalysis(ticker);
       if (existingAnalysis) {
-        // When force=true (re-analysis), ALWAYS reset to analyzing state and clear scorecard
-        // This allows regeneration of missing/stale scorecards
-        if (force) {
-          await this.updateStockAnalysis(ticker, { 
-            status: "analyzing", 
-            errorMessage: null,
-            scorecard: null,  // Clear old scorecard so it's regenerated
-          });
-          console.log(`[Queue] Force re-analysis: reset ${ticker} to analyzing status, cleared scorecard`);
-        } else if (existingAnalysis.status !== "completed" || !existingAnalysis.integratedScore) {
+        // Only set to "analyzing" if not already completed with an integrated score
+        if (existingAnalysis.status !== "completed" || !existingAnalysis.integratedScore) {
           await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
         }
       } else {
@@ -3268,28 +3239,9 @@ export class DatabaseStorage implements IStorage {
       RETURNING *
     `);
 
-    // db.execute returns snake_case columns, map to camelCase for TypeScript
-    const rows = result.rows as any[];
-    if (rows.length === 0) return undefined;
-    
-    const row = rows[0];
-    return {
-      id: row.id,
-      ticker: row.ticker,
-      opportunityType: row.opportunitytype || row.opportunityType || "BUY",
-      source: row.source,
-      priority: row.priority,
-      status: row.status,
-      retryCount: row.retry_count ?? row.retryCount ?? 0,
-      maxRetries: row.max_retries ?? row.maxRetries ?? 3,
-      scheduledAt: row.scheduled_at ?? row.scheduledAt,
-      startedAt: row.started_at ?? row.startedAt,
-      completedAt: row.completed_at ?? row.completedAt,
-      currentStep: row.current_step ?? row.currentStep,
-      stepDetails: row.step_details ?? row.stepDetails,
-      errorMessage: row.error_message ?? row.errorMessage,
-      createdAt: row.created_at ?? row.createdAt,
-    } as AiAnalysisJob;
+    // db.execute returns an object with rows property
+    const jobs = result.rows as any[];
+    return jobs.length > 0 ? jobs[0] as AiAnalysisJob : undefined;
   }
 
   async getJobById(jobId: string): Promise<AiAnalysisJob | undefined> {
@@ -3336,69 +3288,6 @@ export class DatabaseStorage implements IStorage {
         lastError: null, // Clear error on successful progress update
       })
       .where(eq(aiAnalysisJobs.id, jobId));
-  }
-
-  /**
-   * Atomically update both job and analysis status on failure
-   * This ensures consistent state between the job queue and analysis records
-   */
-  async failJobAndAnalysisAtomic(
-    jobId: string, 
-    ticker: string, 
-    errorMessage: string, 
-    shouldRetry: boolean, 
-    retryCount: number, 
-    maxRetries: number
-  ): Promise<void> {
-    await db.transaction(async (tx) => {
-      if (shouldRetry && retryCount < maxRetries) {
-        // Calculate exponential backoff: 1min, 5min, 25min
-        const backoffMinutes = Math.pow(5, retryCount);
-        const scheduledAt = new Date(Date.now() + backoffMinutes * 60 * 1000);
-        
-        // Job: set to pending with retry info
-        await tx
-          .update(aiAnalysisJobs)
-          .set({
-            status: "pending",
-            retryCount: retryCount + 1,
-            scheduledAt,
-            lastError: errorMessage,
-          })
-          .where(eq(aiAnalysisJobs.id, jobId));
-        
-        // Analysis: set to pending (will be retried)
-        await tx
-          .update(stockAnalyses)
-          .set({
-            status: "pending",
-            errorMessage: `Retry ${retryCount + 1}/${maxRetries}: ${errorMessage}`,
-          })
-          .where(eq(stockAnalyses.ticker, ticker));
-        
-        console.log(`[Storage] Job ${jobId} and analysis ${ticker} set to retry in ${backoffMinutes} min (attempt ${retryCount + 2}/${maxRetries + 1})`);
-      } else {
-        // Max retries exceeded - permanently fail both
-        await tx
-          .update(aiAnalysisJobs)
-          .set({
-            status: "failed",
-            completedAt: new Date(),
-            lastError: errorMessage,
-          })
-          .where(eq(aiAnalysisJobs.id, jobId));
-        
-        await tx
-          .update(stockAnalyses)
-          .set({
-            status: "failed",
-            errorMessage: errorMessage,
-          })
-          .where(eq(stockAnalyses.ticker, ticker));
-        
-        console.log(`[Storage] Job ${jobId} and analysis ${ticker} permanently failed after ${retryCount + 1} attempts`);
-      }
-    });
   }
 
   async resetStockAnalysisPhaseFlags(ticker: string): Promise<void> {

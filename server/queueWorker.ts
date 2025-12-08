@@ -14,7 +14,6 @@ import { storage } from "./storage";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
 import { aiAnalysisService } from "./aiAnalysisService";
-import { geminiAgentService, isFallbackEvaluation, type StockContext, type AIAgentEvaluation } from "./geminiAgentService";
 import type { AiAnalysisJob } from "@shared/schema";
 import {
   extractTechnicalsFromCandlesticks,
@@ -29,97 +28,6 @@ import {
   normalizeSentimentTrend,
 } from "./scoring/scorecardDataExtractor";
 import { generateScorecard as generateRuleBasedScorecard } from "./scoring/metricCalculators";
-
-/**
- * Parse market cap string (e.g., "1.2B", "500M", "1,234,567") to number
- */
-function parseMarketCapToNumber(marketCap: string | null | undefined): number | undefined {
-  if (!marketCap) return undefined;
-  
-  const cleaned = marketCap.replace(/[$,\s]/g, '').toUpperCase();
-  
-  // Handle T (trillion), B (billion), M (million), K (thousand) suffixes
-  const match = cleaned.match(/^([\d.]+)([TBMK])?$/);
-  if (!match) return undefined;
-  
-  const value = parseFloat(match[1]);
-  if (isNaN(value)) return undefined;
-  
-  const multiplier = match[2];
-  switch (multiplier) {
-    case 'T': return value * 1_000_000_000_000;
-    case 'B': return value * 1_000_000_000;
-    case 'M': return value * 1_000_000;
-    case 'K': return value * 1_000;
-    default: return value;
-  }
-}
-
-/**
- * Parse shares count string - handles plain numbers, comma-separated, and scientific notation
- * Examples: "1234567890", "1,234,567,890", "1.23E+08", "1.23e8"
- */
-function parseSharesCount(sharesStr: string | null | undefined): number | undefined {
-  if (!sharesStr) return undefined;
-  
-  // Remove only commas and whitespace (preserve 'e', 'E', '+', '-' for scientific notation)
-  const cleaned = sharesStr.replace(/[,\s]/g, '');
-  
-  // Use Number() which handles scientific notation properly
-  const value = Number(cleaned);
-  
-  if (isNaN(value) || value <= 0) return undefined;
-  return value;
-}
-
-/**
- * Calculate transaction size vs float (or market cap as fallback)
- * Returns percentage value (e.g., 0.5 = 0.5% of float)
- * 
- * @param insiderQuantity - Number of shares in the transaction
- * @param sharesFloat - Total tradeable shares (from Alpha Vantage OVERVIEW)
- * @param sharesOutstanding - Total shares outstanding (fallback)
- * @param marketCap - Market cap string (last resort fallback, uses price to estimate shares)
- * @param insiderPrice - Price per share (needed for market cap fallback)
- */
-function calculateTransactionSizeVsFloat(
-  insiderQuantity: number | null | undefined,
-  sharesFloat: string | null | undefined,
-  sharesOutstanding: string | null | undefined,
-  marketCap: string | null | undefined,
-  insiderPrice: string | null | undefined
-): number | undefined {
-  if (!insiderQuantity || insiderQuantity <= 0) return undefined;
-  
-  // Try sharesFloat first (most accurate for tradeable shares)
-  const floatValue = parseSharesCount(sharesFloat);
-  if (floatValue) {
-    const ratio = (insiderQuantity / floatValue) * 100;
-    return ratio;
-  }
-  
-  // Fallback to sharesOutstanding
-  const outstandingValue = parseSharesCount(sharesOutstanding);
-  if (outstandingValue) {
-    const ratio = (insiderQuantity / outstandingValue) * 100;
-    return ratio;
-  }
-  
-  // Last resort: estimate shares from market cap / price
-  if (marketCap && insiderPrice) {
-    const price = parseFloat(insiderPrice);
-    if (!isNaN(price) && price > 0) {
-      const marketCapValue = parseMarketCapToNumber(marketCap);
-      if (marketCapValue && marketCapValue > 0) {
-        const estimatedShares = marketCapValue / price;
-        const ratio = (insiderQuantity / estimatedShares) * 100;
-        return ratio;
-      }
-    }
-  }
-  
-  return undefined;
-}
 
 class QueueWorker {
   private running = false;
@@ -279,25 +187,6 @@ class QueueWorker {
         stockService.getDailyPrices(job.ticker, 60),
       ]);
 
-      // CRITICAL: dailyPrices is REQUIRED for analysis - abort early if empty
-      // This catches edge cases where API returns empty array without throwing
-      if (!dailyPrices || dailyPrices.length === 0) {
-        throw new Error(`No price data available for ${job.ticker} from Alpha Vantage API. Cannot proceed with analysis.`);
-      }
-      
-      console.log(`[QueueWorker] ✅ Fetched ${dailyPrices.length} days of price data for ${job.ticker}`);
-      console.log(`[QueueWorker] Latest price: $${dailyPrices[dailyPrices.length - 1]?.close} on ${dailyPrices[dailyPrices.length - 1]?.date}`);
-
-      // Save dailyPrices to stockCandlesticks table for trend lines and other UI components
-      console.log(`[QueueWorker] 💾 Saving daily prices to stockCandlesticks for ${job.ticker}...`);
-      try {
-        await storage.upsertCandlesticks(job.ticker, dailyPrices);
-        console.log(`[QueueWorker] ✅ Saved candlestick data for ${job.ticker}`);
-      } catch (candlestickError) {
-        // Non-blocking - log but continue with analysis
-        console.warn(`[QueueWorker] ⚠️ Failed to save candlestick data for ${job.ticker}:`, candlestickError);
-      }
-
       await this.updateProgress(job.id, job.ticker, "fetching_data", {
         phase: "data_fetch",
         substep: "Fetching technical indicators and news",
@@ -429,9 +318,6 @@ class QueueWorker {
               ? `$${(parseFloat(primaryStock.insiderPrice) * primaryStock.insiderQuantity).toFixed(2)}` 
               : "Unknown",
             confidence: primaryStock.confidenceScore?.toString() || "Medium",
-            rawInsiderQuantity: primaryStock.insiderQuantity,
-            rawInsiderPrice: primaryStock.insiderPrice,
-            rawMarketCap: primaryStock.marketCap,
             // Include all transactions for full context
             allTransactions: allStocks.map(s => ({
               direction: s.recommendation?.toLowerCase() || "unknown",
@@ -479,74 +365,66 @@ class QueueWorker {
         const { runMacroAnalysis } = await import("./macroAgentService");
         const macroData = await runMacroAnalysis(stockIndustry);
         macroAnalysis = await storage.createMacroAnalysis(macroData);
-        console.log(`[QueueWorker] Created macro analysis for ${stockIndustry || "General Market"} (score: ${macroAnalysis.macroScore}/100)`);
+        console.log(`[QueueWorker] Created macro analysis for ${stockIndustry || "General Market"} with factor ${macroAnalysis.macroFactor}`);
       } else {
         const createdDate = macroAnalysis.createdAt ? macroAnalysis.createdAt.toISOString() : "unknown";
         console.log(`[QueueWorker] Using existing macro analysis for ${stockIndustry || "General Market"} from ${createdDate}`);
-        console.log(`[QueueWorker] Macro score: ${macroAnalysis.macroScore}/100 (used for scorecard sector analysis)`);
+        console.log(`[QueueWorker] Macro factor: ${macroAnalysis.macroFactor}, Macro score: ${macroAnalysis.macroScore}/100`);
       }
 
-      // Mark data collection phase complete (macro is part of data collection now)
+      // Mark macro phase complete after obtaining/creating macro analysis
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'macro');
-      console.log(`[QueueWorker] ✅ Data collection phase complete for ${job.ticker}`);
+      console.log(`[QueueWorker] ✅ Macro analysis phase complete for ${job.ticker}`);
 
-      // PHASE 2: Calculate Scorecard (including Gemini AI agent evaluation)
-      // This MUST happen before AI report generation so the report can reference the scores
-      await this.updateProgress(job.id, job.ticker, "calculating_score", {
-        phase: "scoring",
-        substep: "Calculating scorecard with AI evaluation"
+      // PHASE 3: Micro AI Analysis (analyze company fundamentals)
+      await this.updateProgress(job.id, job.ticker, "micro_analysis", {
+        phase: "micro",
+        substep: "Running fundamental analysis with AI"
       });
 
-      // SCORECARD GENERATION BLOCK (moved from PHASE 3.5 to PHASE 2)
+      // Run micro AI analysis
+      console.log(`[QueueWorker] Running micro AI analysis for ${job.ticker}...`);
+      const analysis = await aiAnalysisService.analyzeStock({
+        ticker: job.ticker,
+        companyOverview,
+        balanceSheet,
+        incomeStatement,
+        cashFlow,
+        technicalIndicators,
+        newsSentiment,
+        priceNewsCorrelation,
+        insiderTradingStrength,
+        secFilings,
+        comprehensiveFundamentals,
+      });
+      console.log(`[QueueWorker] ✅ Micro analysis complete (score: ${analysis.confidenceScore}/100)`);
+      
+      // Mark micro phase complete after AI analysis finishes
+      await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
+      console.log(`[QueueWorker] ✅ Micro analysis phase complete for ${job.ticker}`);
+
+      // PHASE 3.5: Generate Rule-Based Scorecard (parallel to integration, non-blocking)
       let scorecard: any = null;
-      let scorecardInputForLogging: any = null; // For error logging
       try {
         console.log(`[QueueWorker] 📊 Generating rule-based scorecard for ${job.ticker}...`);
         
-        // dailyPrices is GUARANTEED to have data here (early validation at line 287 throws if empty)
-        // Extract technicals directly from the freshly fetched API data
-        const dailyPricesAsCandlesticks = dailyPrices.map(p => ({
-          date: p.date,
-          open: p.open,
-          high: p.high,
-          low: p.low,
-          close: p.close,
-          volume: p.volume
-        }));
-        const extractedFromDailyPrices = extractTechnicalsFromCandlesticks(dailyPricesAsCandlesticks);
+        // Fetch candlestick data for enhanced technical metrics
+        const candlestickRecord = await storage.getCandlesticksByTicker(job.ticker);
+        const candlestickData = candlestickRecord?.candlestickData || [];
         
-        // FALLBACK: If extraction somehow failed, try DB cached candlesticks (for resilience)
-        let extractedFromDb: ReturnType<typeof extractTechnicalsFromCandlesticks> | undefined = undefined;
-        if (!extractedFromDailyPrices?.currentPrice) {
-          console.log(`[QueueWorker] ⚠️ Extraction failed for ${job.ticker}, checking database fallback...`);
-          const candlestickRecord = await storage.getCandlesticksByTicker(job.ticker);
-          const candlestickData = candlestickRecord?.candlestickData || [];
-          if (candlestickData.length > 0) {
-            extractedFromDb = extractTechnicalsFromCandlesticks(candlestickData);
-            console.log(`[QueueWorker] ✅ Using DB fallback: currentPrice=${extractedFromDb?.currentPrice}`);
-          }
-        }
-        
-        // Final fallback: stock record currentPrice
-        const stockCurrentPrice = stock?.currentPrice ? parseFloat(stock.currentPrice) : undefined;
-        
-        // Combine with fallback chain: dailyPrices API > DB candlesticks > stock record
-        const extractedTechnicals = extractedFromDailyPrices || extractedFromDb;
-        const currentPriceValue = extractedFromDailyPrices?.currentPrice || extractedFromDb?.currentPrice || stockCurrentPrice;
-        
-        // Log price data source for debugging
-        const priceSource = extractedFromDailyPrices?.currentPrice ? 'dailyPrices (API)' 
-          : extractedFromDb?.currentPrice ? 'candlesticks (DB)' 
-          : stockCurrentPrice ? 'stock record (DB)' 
-          : 'NONE';
-        console.log(`[QueueWorker] Price data for ${job.ticker}: $${currentPriceValue} from ${priceSource}`);
+        // Extract additional technicals from candlestick data (5/10-day SMAs, volume)
+        const extractedTechnicals = extractTechnicalsFromCandlesticks(candlestickData);
         
         // Determine RSI direction from signal
         const rsiDirection: 'rising' | 'falling' | 'flat' = 
           technicalIndicators?.rsi?.signal === 'oversold' ? 'rising' : 
           technicalIndicators?.rsi?.signal === 'overbought' ? 'falling' : 'flat';
         
-        // Use SMAs from dailyPrices with fallback to API technicalIndicators for SMA20
+        // Get fallback current price from stock record if not available from candlesticks
+        const fallbackCurrentPrice = stock?.currentPrice ? parseFloat(stock.currentPrice) : undefined;
+        const currentPriceValue = extractedTechnicals?.currentPrice || fallbackCurrentPrice;
+        
+        // Safely determine SMA alignment (guards for undefined values)
         const safeCurrentPrice = currentPriceValue;
         const safeSma5 = extractedTechnicals?.sma5;
         const safeSma10 = extractedTechnicals?.sma10;
@@ -562,7 +440,7 @@ class QueueWorker {
             : undefined;
         
         // Build comprehensive scorecard input with all available data
-        scorecardInputForLogging = {
+        const scorecardInput = {
           ticker: job.ticker,
           fundamentals: comprehensiveFundamentals ? {
             revenueGrowthYoY: comprehensiveFundamentals.revenueGrowthYoY,
@@ -605,13 +483,7 @@ class QueueWorker {
             daysSinceLastTransaction: insiderTradingStrength.tradeDate 
               ? Math.floor((Date.now() - new Date(insiderTradingStrength.tradeDate).getTime()) / (1000 * 60 * 60 * 24))
               : undefined,
-            transactionSizeVsFloat: calculateTransactionSizeVsFloat(
-              insiderTradingStrength.rawInsiderQuantity,
-              companyOverview?.sharesFloat,
-              companyOverview?.sharesOutstanding,
-              insiderTradingStrength.rawMarketCap || stock?.marketCap || companyOverview?.marketCap,
-              insiderTradingStrength.rawInsiderPrice
-            ),
+            transactionSizeVsFloat: undefined, // Still requires float data from external source
             insiderRoles: normalizeInsiderRoles(insiderTradingStrength.insiderTitle),
           } : undefined,
           newsSentiment: newsSentiment ? {
@@ -621,25 +493,7 @@ class QueueWorker {
             upcomingCatalyst: undefined, // Would need catalyst detection
           } : undefined,
           macroSector: macroAnalysis ? {
-            sectorVsSpy10d: (() => {
-              // Use industry sector analysis weekRelativeStrength (10-day sector vs SPY)
-              const sectorAnalysis = macroAnalysis.industrySectorAnalysis as {
-                weekRelativeStrength?: number;
-                relativeStrength?: number;
-              } | null | undefined;
-              
-              // Prefer weekRelativeStrength (10-day relative) if available
-              if (sectorAnalysis?.weekRelativeStrength !== undefined && sectorAnalysis?.weekRelativeStrength !== null) {
-                return sectorAnalysis.weekRelativeStrength;
-              }
-              
-              // Fallback to 1-day relative strength extrapolated
-              if (sectorAnalysis?.relativeStrength !== undefined && sectorAnalysis?.relativeStrength !== null) {
-                return sectorAnalysis.relativeStrength * 2; // Approximate 10-day from 1-day
-              }
-              
-              return undefined;
-            })(),
+            sectorVsSpy10d: undefined, // Would need sector ETF performance data
             macroRiskEnvironment: macroAnalysis.macroScore !== null && macroAnalysis.macroScore !== undefined
               ? (macroAnalysis.macroScore > 70 ? 'favorable_tailwinds' as const :
                  macroAnalysis.macroScore > 50 ? 'low_risk' as const :
@@ -650,222 +504,35 @@ class QueueWorker {
         
         // Log data availability for debugging
         const availableMetrics = {
-          fundamentals: !!scorecardInputForLogging.fundamentals,
-          technicals: !!scorecardInputForLogging.technicals?.currentPrice,
-          smas: !!(scorecardInputForLogging.technicals?.sma5 && scorecardInputForLogging.technicals?.sma10),
-          volume: !!scorecardInputForLogging.technicals?.volumeVsAvg,
-          insider: !!scorecardInputForLogging.insiderActivity,
-          news: !!scorecardInputForLogging.newsSentiment,
-          macro: !!scorecardInputForLogging.macroSector,
+          fundamentals: !!scorecardInput.fundamentals,
+          technicals: !!scorecardInput.technicals?.currentPrice,
+          smas: !!(scorecardInput.technicals?.sma5 && scorecardInput.technicals?.sma10),
+          volume: !!scorecardInput.technicals?.volumeVsAvg,
+          insider: !!scorecardInput.insiderActivity,
+          news: !!scorecardInput.newsSentiment,
+          macro: !!scorecardInput.macroSector,
         };
         console.log(`[QueueWorker] Scorecard data availability:`, availableMetrics);
         
-        // Log transaction size vs float calculation details
-        if (scorecardInputForLogging.insiderActivity) {
-          console.log(`[QueueWorker] 📊 Transaction Size vs Float:`, {
-            insiderQuantity: insiderTradingStrength?.rawInsiderQuantity,
-            sharesFloat: companyOverview?.sharesFloat,
-            sharesOutstanding: companyOverview?.sharesOutstanding,
-            marketCap: companyOverview?.marketCap,
-            calculatedRatio: scorecardInputForLogging.insiderActivity.transactionSizeVsFloat,
-          });
-        }
-        
-        // Log sector vs SPY calculation details
-        if (scorecardInputForLogging.macroSector?.sectorVsSpy10d !== undefined) {
-          const sectorAnalysis = macroAnalysis.industrySectorAnalysis as {
-            etfSymbol?: string;
-            weekRelativeStrength?: number;
-            relativeStrength?: number;
-          } | null | undefined;
-          console.log(`[QueueWorker] 📈 Sector vs SPY (10d):`, {
-            etfSymbol: sectorAnalysis?.etfSymbol,
-            weekRelativeStrength: sectorAnalysis?.weekRelativeStrength,
-            relativeStrength1d: sectorAnalysis?.relativeStrength,
-            calculatedSectorVsSpy10d: scorecardInputForLogging.macroSector.sectorVsSpy10d,
-          });
-        }
-        
-        // PHASE 3.5: AI Agent Evaluation (REQUIRED for scorecard)
-        // The aiAgent section is mandatory - must call Gemini to populate it
-        console.log(`[QueueWorker] 🤖 Calling Gemini AI Agent for ${job.ticker} evaluation...`);
-        
-        // Use already-computed values from scorecardInputForLogging
-        const technicalsData = scorecardInputForLogging.technicals;
-        const fundamentalsData = scorecardInputForLogging.fundamentals;
-        const insiderData = scorecardInputForLogging.insiderActivity;
-        const newsData = scorecardInputForLogging.newsSentiment;
-        const macroData = scorecardInputForLogging.macroSector;
-        
-        // VALIDATION: Current price is REQUIRED for AI evaluation
-        const validatedCurrentPrice = technicalsData?.currentPrice;
-        if (!validatedCurrentPrice || validatedCurrentPrice <= 0) {
-          throw new Error(`Missing or invalid current price for ${job.ticker}: ${validatedCurrentPrice}. Cannot proceed with AI evaluation.`);
-        }
-        
-        // Only calculate priceChangePercent when both values are present and valid
-        let priceChangePercent: number | undefined = undefined;
-        if (validatedCurrentPrice && technicalsData?.sma5 && technicalsData.sma5 > 0) {
-          priceChangePercent = ((validatedCurrentPrice - technicalsData.sma5) / technicalsData.sma5) * 100;
-        }
-        
-        const stockContext: StockContext = {
-          ticker: job.ticker,
-          companyName: stock?.companyName || job.ticker,
-          currentPrice: validatedCurrentPrice,
-          opportunityType: (job.opportunityType === 'SELL' ? 'SELL' : 'BUY') as 'BUY' | 'SELL',
-          
-          // Technical data (from already-computed scorecardInputForLogging)
-          sma5: technicalsData?.sma5,
-          sma10: technicalsData?.sma10,
-          sma20: technicalsData?.sma20,
-          rsi: technicalsData?.rsi,
-          macdHistogram: technicalsData?.macdHistogram,
-          priceChangePercent,
-          
-          // Fundamental data (from already-computed scorecardInputForLogging)
-          revenueGrowthYoY: fundamentalsData?.revenueGrowthYoY,
-          epsGrowthYoY: fundamentalsData?.epsGrowthYoY,
-          debtToEquity: fundamentalsData?.debtToEquity,
-          
-          // Insider context (from already-computed scorecardInputForLogging)
-          daysSinceInsiderTrade: insiderData?.daysSinceLastTransaction,
-          insiderPrice: stock?.insiderPrice ? parseFloat(stock.insiderPrice) : undefined,
-          
-          // News/Sentiment (from already-computed scorecardInputForLogging)
-          avgSentiment: newsData?.avgSentiment,
-          newsCount: newsData?.newsCount7d,
-          
-          // Sector context (from already-computed scorecardInputForLogging)
-          sectorVsSpy10d: macroData?.sectorVsSpy10d,
-          
-          // Rule-based scores (from previous phase if available)
-          fundamentalsScore: undefined, // Will be calculated by scorecard
-          technicalsScore: undefined,
-          insiderScore: undefined,
-          newsScore: undefined,
-          macroScore: macroAnalysis.macroScore ?? undefined,
-        };
-        
-        const aiAgentEvaluation = await geminiAgentService.evaluateStock(stockContext);
-        
-        // Use centralized fallback detection helper from geminiAgentService
-        // This catches: default triple, stub rationale patterns, empty/short rationale
-        const fallbackCheck = isFallbackEvaluation(aiAgentEvaluation);
-        
-        if (fallbackCheck.isFallback) {
-          // CRITICAL: Treat fallback/stub as a failure - job should retry
-          console.error(`[QueueWorker] ❌ CRITICAL: Gemini returned fallback for ${job.ticker}`);
-          console.error(`[QueueWorker] Fallback reason: ${fallbackCheck.reason}`);
-          console.error(`[QueueWorker] Evaluation:`, JSON.stringify(aiAgentEvaluation, null, 2));
-          console.error(`[QueueWorker] Context sent to Gemini:`, JSON.stringify(stockContext, null, 2));
-          throw new Error(`Gemini AI evaluation failed for ${job.ticker}: ${fallbackCheck.reason}`);
-        }
-        
-        console.log(`[QueueWorker] ✅ AI Agent Evaluation complete:`, {
-          riskAssessment: aiAgentEvaluation.riskAssessment,
-          entryTiming: aiAgentEvaluation.entryTiming,
-          conviction: aiAgentEvaluation.conviction,
-        });
-        
-        // Add AI evaluation to scorecard input
-        scorecardInputForLogging.aiAgentEvaluation = aiAgentEvaluation;
-        
-        // ASSERTION: Verify aiAgentEvaluation is attached before scorecard generation
-        if (!scorecardInputForLogging.aiAgentEvaluation) {
-          throw new Error(`aiAgentEvaluation not attached to scorecardInputForLogging for ${job.ticker} - this should not happen`);
-        }
-        console.log(`[QueueWorker] ✅ aiAgentEvaluation attached - proceeding with scorecard generation`);
-        
         // Use pure rule-based scorecard generation (no LLM dependency, deterministic)
-        // CRITICAL: Pass opportunityType to drive BUY vs SELL inversion logic
-        const oppType = (job.opportunityType === 'SELL' ? 'SELL' : 'BUY') as 'BUY' | 'SELL';
-        scorecard = generateRuleBasedScorecard(scorecardInputForLogging, oppType);
-        console.log(`[QueueWorker] ✅ Scorecard complete (${job.opportunityType}): ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
+        scorecard = generateRuleBasedScorecard(scorecardInput);
+        console.log(`[QueueWorker] ✅ Scorecard complete: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
       } catch (scorecardError) {
-        // CRITICAL: Scorecard generation is REQUIRED - fail the job so it gets retried
-        console.error(`[QueueWorker] ❌ CRITICAL: Scorecard generation FAILED for ${job.ticker}:`, scorecardError);
-        console.error(`[QueueWorker] Error stack:`, scorecardError instanceof Error ? scorecardError.stack : 'No stack trace');
-        console.error(`[QueueWorker] Scorecard input data:`, JSON.stringify(scorecardInputForLogging, null, 2));
-        
-        // Re-throw to fail the job - analysis without scorecard is incomplete
-        throw new Error(`Scorecard generation failed for ${job.ticker}: ${scorecardError instanceof Error ? scorecardError.message : 'Unknown error'}`);
+        // Non-fatal: log and continue with analysis save
+        console.warn(`[QueueWorker] ⚠️ Scorecard generation failed for ${job.ticker}:`, scorecardError);
       }
-      
-      // VALIDATION: Ensure scorecard was generated successfully with all 6 sections
-      if (!scorecard) {
-        console.error(`[QueueWorker] ❌ CRITICAL: Scorecard is null after generation for ${job.ticker}`);
-        throw new Error(`Scorecard is null after generation for ${job.ticker} - this should not happen`);
-      }
-      
-      // Validate all 6 required sections are present in the scorecard
-      // Section names match those in metricCalculators.ts generateScorecard()
-      const requiredSections = ['fundamentals', 'technicals', 'insiderActivity', 'newsSentiment', 'macroSector', 'aiAgent'] as const;
-      const missingSections = requiredSections.filter(section => !scorecard.sections[section]);
-      if (missingSections.length > 0) {
-        console.error(`[QueueWorker] ❌ CRITICAL: Scorecard missing sections for ${job.ticker}: ${missingSections.join(', ')}`);
-        console.error(`[QueueWorker] Scorecard sections present:`, Object.keys(scorecard.sections));
-        throw new Error(`Scorecard incomplete for ${job.ticker}: missing sections [${missingSections.join(', ')}]`);
-      }
-      
-      // Additional validation: Ensure aiAgent section has valid data (not all missing)
-      const aiAgentSection = scorecard.sections.aiAgent;
-      if (aiAgentSection) {
-        const aiMetrics = aiAgentSection.metrics;
-        // FIXED: metrics is a Record<string, MetricScore>, not an array - use Object.values()
-        // FIXED: property is 'ruleBucket', not 'bucket'
-        const allMissing = Object.values(aiMetrics).every((m: any) => m.ruleBucket === 'missing');
-        if (allMissing) {
-          console.error(`[QueueWorker] ❌ CRITICAL: aiAgent section has all metrics missing for ${job.ticker}`);
-          console.error(`[QueueWorker] aiAgentEvaluation was:`, JSON.stringify(scorecardInputForLogging.aiAgentEvaluation, null, 2));
-          throw new Error(`aiAgent section has all metrics missing for ${job.ticker} - AI evaluation data not properly integrated`);
-        }
-      }
-      
-      console.log(`[QueueWorker] ✅ Scorecard validation passed - all 6 sections present with valid data for ${job.ticker}`);
 
-      // Mark scorecard phase complete (reusing 'micro' flag for backward compatibility)
-      await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
-      console.log(`[QueueWorker] ✅ Scorecard phase complete for ${job.ticker}`);
-
-      // PHASE 3: Generate AI Report (using scorecard for grounding)
-      // The AI now has access to the completed scorecard and can reference its scores in recommendations
-      await this.updateProgress(job.id, job.ticker, "generating_report", {
-        phase: "report",
-        substep: "Generating AI investment report"
-      });
-
-      console.log(`[QueueWorker] 📝 Generating AI report for ${job.ticker} (grounded by scorecard)...`);
-      const analysis = await aiAnalysisService.analyzeStock({
-        ticker: job.ticker,
-        companyOverview,
-        balanceSheet,
-        incomeStatement,
-        cashFlow,
-        technicalIndicators,
-        newsSentiment,
-        priceNewsCorrelation,
-        insiderTradingStrength,
-        secFilings,
-        comprehensiveFundamentals,
-        scorecard, // Pass the completed scorecard for grounding
-      });
-      console.log(`[QueueWorker] ✅ AI report complete (rating: ${analysis.overallRating}, confidence: ${analysis.confidenceScore}/100)`);
-
-      // PHASE 4: Save Analysis
+      // PHASE 4: Score Integration
       await this.updateProgress(job.id, job.ticker, "calculating_score", {
-        phase: "saving",
-        substep: "Saving analysis with scorecard"
+        phase: "integration",
+        substep: "Calculating integrated score (micro × macro)"
       });
 
-      // Use scorecard globalScore as the integrated score (replaces legacy micro*macro calculation)
-      // SAFETY: scorecard is guaranteed to be non-null at this point due to validation above,
-      // but we add explicit guard for extra safety and to satisfy type checker
-      if (!scorecard || typeof scorecard.globalScore !== 'number') {
-        throw new Error(`Scorecard validation failed at save point for ${job.ticker} - this should not happen`);
-      }
-      const integratedScore = scorecard.globalScore;
-      console.log(`[QueueWorker] Using scorecard globalScore: ${integratedScore}/100 (confidence: ${scorecard.confidence})`);
+      // Calculate integrated score (micro score × macro factor), clamped to 0-100
+      const macroFactor = macroAnalysis.macroFactor ? parseFloat(macroAnalysis.macroFactor) : 1.0;
+      const rawIntegratedScore = analysis.confidenceScore * macroFactor;
+      const integratedScore = Math.max(0, Math.min(100, Math.round(rawIntegratedScore)));
+      console.log(`[QueueWorker] Score integration: Micro ${analysis.confidenceScore} × Macro ${macroFactor} = ${rawIntegratedScore.toFixed(1)} → Clamped to ${integratedScore}/100`);
 
       // Save analysis to database with macro integration
       console.log(`[QueueWorker] 💾 Saving integrated analysis to database...`);
@@ -901,9 +568,9 @@ class QueueWorker {
         businessOverview: secFilingData?.businessOverview,
         fundamentalData: comprehensiveFundamentals,
         macroAnalysisId: macroAnalysis.id,
-        integratedScore: integratedScore, // Direct scorecard globalScore
-        scorecard: scorecard,
-        scorecardVersion: scorecard.version,
+        integratedScore: scorecard ? scorecard.globalScore : integratedScore, // Use scorecard global score if available
+        scorecard: scorecard || undefined,
+        scorecardVersion: scorecard ? scorecard.version : undefined,
       });
 
       // Set combined flag after integrated score is saved
@@ -1001,7 +668,7 @@ class QueueWorker {
       await storage.updateJobStatus(job.id, "completed");
       
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.log(`[QueueWorker] ✅ Job ${job.id} completed successfully in ${duration}s (${job.ticker}: ${analysis.overallRating}, scorecard: ${integratedScore}/100)`);
+      console.log(`[QueueWorker] ✅ Job ${job.id} completed successfully in ${duration}s (${job.ticker}: ${analysis.overallRating}, integrated score: ${integratedScore}/100)`);
 
     } catch (error) {
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -1010,23 +677,28 @@ class QueueWorker {
       console.error(`[QueueWorker] ❌ Job ${job.id} failed after ${duration}s:`, errorMessage);
       console.error(`[QueueWorker] Error stack:`, errorStack);
 
-      // Use atomic update to sync job and analysis status together
-      // This ensures consistent state between job queue and analysis records
-      const shouldRetry = job.retryCount < job.maxRetries;
-      await storage.failJobAndAnalysisAtomic(
-        job.id,
-        job.ticker,
-        errorMessage,
-        shouldRetry,
-        job.retryCount,
-        job.maxRetries
-      );
-      
-      if (shouldRetry) {
-        const backoffMinutes = Math.pow(5, job.retryCount);
-        console.log(`[QueueWorker] Job ${job.id} and analysis ${job.ticker} will retry in ${backoffMinutes} minutes (attempt ${job.retryCount + 2}/${job.maxRetries + 1})`);
+      // Determine if we should retry
+      if (job.retryCount < job.maxRetries) {
+        // Calculate exponential backoff: 1min, 5min, 30min
+        const backoffMinutes = Math.pow(5, job.retryCount); // 1, 5, 25 minutes
+        const scheduledAt = new Date(Date.now() + backoffMinutes * 60 * 1000);
+        
+        await storage.updateJobStatus(job.id, "pending", {
+          retryCount: job.retryCount + 1,
+          scheduledAt,
+          errorMessage,
+          lastError: errorMessage, // Set lastError for frontend visibility
+        });
+        
+        console.log(`[QueueWorker] Job ${job.id} will retry in ${backoffMinutes} minutes (attempt ${job.retryCount + 2}/${job.maxRetries + 1})`);
       } else {
-        console.log(`[QueueWorker] Job ${job.id} and analysis ${job.ticker} failed permanently after ${job.maxRetries + 1} attempts`);
+        // Max retries exceeded, mark as failed
+        await storage.updateJobStatus(job.id, "failed", {
+          errorMessage,
+          lastError: errorMessage, // Set lastError for frontend visibility
+        });
+        
+        console.log(`[QueueWorker] Job ${job.id} failed permanently after ${job.maxRetries + 1} attempts`);
       }
     } finally {
       this.processingCount--;

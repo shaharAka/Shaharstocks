@@ -508,7 +508,7 @@ export function StockExplorer({
 
           <TabsContent value="ai" className="w-full max-w-full min-w-0 overflow-hidden">
             <div className="w-full max-w-full min-w-0">
-              <StockAIAnalysis ticker={stock.ticker} stock={stock} />
+              <StockAIAnalysis ticker={stock.ticker} />
             </div>
           </TabsContent>
 

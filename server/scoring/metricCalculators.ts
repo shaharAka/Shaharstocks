@@ -482,12 +482,12 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
   if (volScore.ruleBucket === 'missing') missingMetrics.push('volumeSurge');
   metrics.volumeSurge = {
     name: sectionConfig.metrics.volumeSurge.name,
-    measurement: data.technicals?.volumeVsAvg !== undefined ? `${data.technicals.volumeVsAvg.toFixed(2)}x avg` : null,
+    measurement: data.technicals?.volumeVsAvg != null ? `${data.technicals.volumeVsAvg.toFixed(2)}x avg` : null,
     ruleBucket: volScore.ruleBucket,
     score: volScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.volumeSurge.weight,
-    rationale: generateRationale('Volume vs Avg', data.technicals?.volumeVsAvg !== undefined ? `${data.technicals.volumeVsAvg.toFixed(2)}x` : null, volScore.ruleBucket, volScore.score)
+    rationale: generateRationale('Volume vs Avg', data.technicals?.volumeVsAvg != null ? `${data.technicals.volumeVsAvg.toFixed(2)}x` : null, volScore.ruleBucket, volScore.score)
   };
   
   // Price vs Key Levels
@@ -557,12 +557,12 @@ export function calculateInsiderSection(data: RawStockData, opportunityType: 'BU
   if (sizeScore.ruleBucket === 'missing') missingMetrics.push('transactionSize');
   metrics.transactionSize = {
     name: sectionConfig.metrics.transactionSize.name,
-    measurement: sizeScore.measurement !== null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null,
+    measurement: sizeScore.measurement != null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null,
     ruleBucket: sizeScore.ruleBucket,
     score: sizeScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.transactionSize.weight,
-    rationale: generateRationale('Size vs Float', sizeScore.measurement !== null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null, sizeScore.ruleBucket, sizeScore.score)
+    rationale: generateRationale('Size vs Float', sizeScore.measurement != null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null, sizeScore.ruleBucket, sizeScore.score)
   };
   
   // Insider Role

@@ -766,7 +766,9 @@ class QueueWorker {
       const aiAgentSection = scorecard.sections.aiAgent;
       if (aiAgentSection) {
         const aiMetrics = aiAgentSection.metrics;
-        const allMissing = aiMetrics.every((m: { bucket: string }) => m.bucket === 'missing');
+        // FIXED: metrics is a Record<string, MetricScore>, not an array - use Object.values()
+        // FIXED: property is 'ruleBucket', not 'bucket'
+        const allMissing = Object.values(aiMetrics).every((m) => m.ruleBucket === 'missing');
         if (allMissing) {
           console.error(`[QueueWorker] ❌ CRITICAL: aiAgent section has all metrics missing for ${job.ticker}`);
           console.error(`[QueueWorker] aiAgentEvaluation was:`, JSON.stringify(scorecardInputForLogging.aiAgentEvaluation, null, 2));

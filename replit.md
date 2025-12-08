@@ -16,8 +16,9 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Session Security & Data Isolation**: Full page reloads on authentication state changes prevent cross-user data contamination.
 - **WebSocket Push Notification System**: Replaces aggressive polling with real-time, event-driven WebSocket communication for instant UI updates.
 - **Database-Level Race Prevention**: Utilizes partial unique indexes on `aiAnalysisJobs(ticker)` where status is 'pending' or 'processing' to prevent duplicate AI analysis jobs.
-- **Candlestick Data Architecture**: Candlestick data is stored once per ticker in a shared `stockCandlesticks` table and populated via daily background jobs, immediate fire-and-forget fetches on new stock follows, and on-demand frontend API requests.
+- **Candlestick Data Architecture**: Candlestick data is stored once per ticker in a shared `stockCandlesticks` table and populated via daily background jobs, immediate fire-and-forget fetches on new stock follows, and on-demand frontend API requests. The `getAllUniqueTickersNeedingData()` method uses LEFT JOIN with `stockCandlesticks` to find tickers missing OHLCV data.
 - **Batch Filtering Optimization**: Transaction ingestion uses single-pass filtering with `getExistingTransactionKeys()` to detect duplicates in one DB query instead of N+1 queries. Quotes and stock data are batch-fetched for unique tickers, then all filters (market cap, options deals) are applied in memory.
+- **Compound Trading Rules Architecture**: Actions are stored per-group (each condition group can have its own actions). The `ruleActions` table has both `ruleId` (for efficient rule-level queries) and `groupId` (for per-group action retrieval). All compound rule CRUD methods in storage.ts respect this per-group architecture.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (with optimistic updates and user-scoped cache keys), React Hook Form with Zod for validation.

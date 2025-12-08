@@ -487,9 +487,10 @@ export const insertRuleConditionSchema = createInsertSchema(ruleConditions).omit
 export type InsertRuleCondition = z.infer<typeof insertRuleConditionSchema>;
 export type RuleCondition = typeof ruleConditions.$inferSelect;
 
-// Rule actions - actions linked to specific condition groups
+// Rule actions - actions linked to rules (and optionally to specific condition groups)
 export const ruleActions = pgTable("rule_actions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ruleId: varchar("rule_id").notNull().references(() => tradingRules.id, { onDelete: "cascade" }), // Direct link to rule for easier querying
   groupId: varchar("group_id").notNull().references(() => ruleConditionGroups.id, { onDelete: "cascade" }),
   actionOrder: integer("action_order").notNull(), // Order of execution within the group
   // Action types: "sell_percentage", "sell_quantity", "sell_all", "notify"

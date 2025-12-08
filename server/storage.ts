@@ -872,14 +872,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllUniqueTickersNeedingData(): Promise<string[]> {
+    // Get tickers that are pending OR don't have candlestick data in the shared stockCandlesticks table
     const result = await db
       .selectDistinct({ ticker: stocks.ticker })
       .from(stocks)
+      .leftJoin(stockCandlesticks, eq(stocks.ticker, stockCandlesticks.ticker))
       .where(
         or(
           eq(stocks.recommendationStatus, 'pending'),
-          sql`${stocks.candlesticks} IS NULL`,
-          sql`jsonb_array_length(${stocks.candlesticks}) = 0`
+          isNull(stockCandlesticks.ticker),
+          sql`jsonb_array_length(${stockCandlesticks.candlestickData}) = 0`
         )
       );
     return result.map(r => r.ticker);
@@ -1270,6 +1272,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Compound Rules (multi-condition rules)
+  // NOTE: Actions are per-group (each group can have its own actions)
   async getCompoundRules(): Promise<CompoundRule[]> {
     const allRules = await db.select().from(tradingRules).orderBy(tradingRules.priority);
     
@@ -1281,27 +1284,21 @@ export class DatabaseStorage implements IStorage {
         .where(eq(ruleConditionGroups.ruleId, rule.id))
         .orderBy(ruleConditionGroups.groupOrder);
       
-      const groupsWithConditions = await Promise.all(
+      // Fetch conditions AND actions for each group
+      const groupsWithConditionsAndActions = await Promise.all(
         groups.map(async (group) => {
-          const conditions = await db
-            .select()
-            .from(ruleConditions)
-            .where(eq(ruleConditions.groupId, group.id));
+          const [conditions, actions] = await Promise.all([
+            db.select().from(ruleConditions).where(eq(ruleConditions.groupId, group.id)),
+            db.select().from(ruleActions).where(eq(ruleActions.groupId, group.id)).orderBy(ruleActions.actionOrder)
+          ]);
           
-          return { ...group, conditions };
+          return { ...group, conditions, actions };
         })
       );
       
-      const actions = await db
-        .select()
-        .from(ruleActions)
-        .where(eq(ruleActions.ruleId, rule.id))
-        .orderBy(ruleActions.actionOrder);
-      
       compoundRules.push({
         ...rule,
-        groups: groupsWithConditions,
-        actions
+        groups: groupsWithConditionsAndActions,
       });
     }
     
@@ -1318,27 +1315,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(ruleConditionGroups.ruleId, id))
       .orderBy(ruleConditionGroups.groupOrder);
     
-    const groupsWithConditions = await Promise.all(
+    // Fetch conditions AND actions for each group
+    const groupsWithConditionsAndActions = await Promise.all(
       groups.map(async (group) => {
-        const conditions = await db
-          .select()
-          .from(ruleConditions)
-          .where(eq(ruleConditions.groupId, group.id));
+        const [conditions, actions] = await Promise.all([
+          db.select().from(ruleConditions).where(eq(ruleConditions.groupId, group.id)),
+          db.select().from(ruleActions).where(eq(ruleActions.groupId, group.id)).orderBy(ruleActions.actionOrder)
+        ]);
         
-        return { ...group, conditions };
+        return { ...group, conditions, actions };
       })
     );
     
-    const actions = await db
-      .select()
-      .from(ruleActions)
-      .where(eq(ruleActions.ruleId, id))
-      .orderBy(ruleActions.actionOrder);
-    
     return {
       ...rule,
-      groups: groupsWithConditions,
-      actions
+      groups: groupsWithConditionsAndActions,
     };
   }
 
@@ -1354,8 +1345,8 @@ export class DatabaseStorage implements IStorage {
         priority: ruleData.priority,
       }).returning();
       
-      // Create condition groups and their conditions
-      const groupsWithConditions: (RuleConditionGroup & { conditions: RuleCondition[] })[] = [];
+      // Create condition groups with their conditions AND actions (per-group architecture)
+      const groupsWithConditionsAndActions: (RuleConditionGroup & { conditions: RuleCondition[]; actions: RuleAction[] })[] = [];
       for (const groupData of ruleData.groups) {
         const [group] = await tx.insert(ruleConditionGroups).values({
           ruleId: rule.id,
@@ -1364,6 +1355,7 @@ export class DatabaseStorage implements IStorage {
           description: groupData.description,
         }).returning();
         
+        // Create conditions for this group
         const conditions: RuleCondition[] = [];
         for (const conditionData of groupData.conditions) {
           const [condition] = await tx.insert(ruleConditions).values({
@@ -1379,29 +1371,29 @@ export class DatabaseStorage implements IStorage {
           conditions.push(condition);
         }
         
-        groupsWithConditions.push({ ...group, conditions });
-      }
-      
-      // Create actions
-      const actions: RuleAction[] = [];
-      for (const actionData of ruleData.actions) {
-        const [action] = await tx.insert(ruleActions).values({
-          ruleId: rule.id,
-          actionOrder: actionData.actionOrder,
-          actionType: actionData.actionType,
-          quantity: actionData.quantity,
-          percentage: actionData.percentage,
-          allowRepeat: actionData.allowRepeat,
-          cooldownMinutes: actionData.cooldownMinutes,
-        }).returning();
+        // Create actions for this group (per-group architecture)
+        const actions: RuleAction[] = [];
+        for (const actionData of groupData.actions) {
+          const [action] = await tx.insert(ruleActions).values({
+            ruleId: rule.id,
+            groupId: group.id,
+            actionOrder: actionData.actionOrder,
+            actionType: actionData.actionType,
+            quantity: actionData.quantity,
+            percentage: actionData.percentage,
+            allowRepeat: actionData.allowRepeat,
+            cooldownMinutes: actionData.cooldownMinutes,
+          }).returning();
+          
+          actions.push(action);
+        }
         
-        actions.push(action);
+        groupsWithConditionsAndActions.push({ ...group, conditions, actions });
       }
       
       return {
         ...rule,
-        groups: groupsWithConditions,
-        actions
+        groups: groupsWithConditionsAndActions,
       };
     });
     
@@ -1413,9 +1405,9 @@ export class DatabaseStorage implements IStorage {
     if (!existing) return undefined;
     
     // Use a transaction to update all related records
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       // Update rule header
-      const [rule] = await tx
+      await tx
         .update(tradingRules)
         .set({
           name: ruleData.name ?? existing.name,
@@ -1428,13 +1420,12 @@ export class DatabaseStorage implements IStorage {
         .where(eq(tradingRules.id, id))
         .returning();
       
-      // If groups or actions are provided, delete old ones and create new ones
+      // If groups are provided, delete old ones and create new ones (actions are per-group)
       if (ruleData.groups) {
-        // Delete old groups (cascade will delete conditions)
+        // Delete old groups (cascade will delete conditions AND actions via groupId FK)
         await tx.delete(ruleConditionGroups).where(eq(ruleConditionGroups.ruleId, id));
         
-        // Create new groups and conditions
-        const groupsWithConditions: (RuleConditionGroup & { conditions: RuleCondition[] })[] = [];
+        // Create new groups with their conditions AND actions (per-group architecture)
         for (const groupData of ruleData.groups) {
           const [group] = await tx.insert(ruleConditionGroups).values({
             ruleId: id,
@@ -1443,9 +1434,9 @@ export class DatabaseStorage implements IStorage {
             description: groupData.description,
           }).returning();
           
-          const conditions: RuleCondition[] = [];
+          // Create conditions for this group
           for (const conditionData of groupData.conditions) {
-            const [condition] = await tx.insert(ruleConditions).values({
+            await tx.insert(ruleConditions).values({
               groupId: group.id,
               metric: conditionData.metric,
               comparator: conditionData.comparator,
@@ -1453,34 +1444,24 @@ export class DatabaseStorage implements IStorage {
               timeframeValue: conditionData.timeframeValue,
               timeframeUnit: conditionData.timeframeUnit,
               metadata: conditionData.metadata,
-            }).returning();
-            
-            conditions.push(condition);
+            });
           }
           
-          groupsWithConditions.push({ ...group, conditions });
+          // Create actions for this group (per-group architecture)
+          for (const actionData of groupData.actions) {
+            await tx.insert(ruleActions).values({
+              ruleId: id,
+              groupId: group.id,
+              actionOrder: actionData.actionOrder,
+              actionType: actionData.actionType,
+              quantity: actionData.quantity,
+              percentage: actionData.percentage,
+              allowRepeat: actionData.allowRepeat,
+              cooldownMinutes: actionData.cooldownMinutes,
+            });
+          }
         }
       }
-      
-      if (ruleData.actions) {
-        // Delete old actions
-        await tx.delete(ruleActions).where(eq(ruleActions.ruleId, id));
-        
-        // Create new actions
-        for (const actionData of ruleData.actions) {
-          await tx.insert(ruleActions).values({
-            ruleId: id,
-            actionOrder: actionData.actionOrder,
-            actionType: actionData.actionType,
-            quantity: actionData.quantity,
-            percentage: actionData.percentage,
-            allowRepeat: actionData.allowRepeat,
-            cooldownMinutes: actionData.cooldownMinutes,
-          });
-        }
-      }
-      
-      return rule;
     });
     
     // Fetch the complete updated rule

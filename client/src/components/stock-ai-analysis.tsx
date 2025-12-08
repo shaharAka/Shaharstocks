@@ -27,7 +27,43 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { TermTooltip } from "@/components/term-tooltip";
+
+const FINANCIAL_TERMS: Record<string, string> = {
+  "RSI": "Relative Strength Index - measures momentum on a 0-100 scale. Above 70 is overbought, below 30 is oversold.",
+  "MACD": "Moving Average Convergence Divergence - a trend-following momentum indicator showing the relationship between two moving averages.",
+  "SMA": "Simple Moving Average - average price over a specific period, used to identify trends.",
+  "SMA50": "50-day Simple Moving Average - average closing price over last 50 trading days.",
+  "SMA200": "200-day Simple Moving Average - long-term trend indicator. Price above = bullish, below = bearish.",
+  "EMA": "Exponential Moving Average - weighted average giving more importance to recent prices.",
+  "P/E": "Price-to-Earnings Ratio - stock price divided by earnings per share. Lower may indicate undervaluation.",
+  "PE": "Price-to-Earnings Ratio - stock price divided by earnings per share.",
+  "PEG": "Price/Earnings to Growth - P/E ratio divided by earnings growth rate. Below 1 may indicate undervaluation.",
+  "ROE": "Return on Equity - measures profitability relative to shareholders' equity. Higher is better.",
+  "EPS": "Earnings Per Share - company profit divided by outstanding shares.",
+  "EBITDA": "Earnings Before Interest, Taxes, Depreciation, and Amortization - measures operating performance.",
+  "D/E": "Debt-to-Equity Ratio - total debt divided by shareholders' equity. Lower indicates less financial risk.",
+  "52-week": "The highest and lowest stock prices over the past year.",
+  "ATH": "All-Time High - the highest price a stock has ever reached.",
+  "ATL": "All-Time Low - the lowest price a stock has ever reached.",
+  "Volume": "Number of shares traded in a given period. High volume confirms price moves.",
+  "Insider": "Company executives, directors, or shareholders with >10% ownership who must report trades.",
+  "Form 4": "SEC filing that insiders must submit within 2 days of trading company stock.",
+  "10-K": "Annual report filed with SEC containing audited financial statements.",
+  "10-Q": "Quarterly report filed with SEC containing unaudited financial statements.",
+  "8-K": "Report filed with SEC for major events like acquisitions or executive changes.",
+  "SEC": "Securities and Exchange Commission - U.S. agency regulating securities markets.",
+  "Market Cap": "Total market value of a company's outstanding shares (price × shares).",
+  "Float": "Number of shares available for public trading (excludes insider holdings).",
+  "Short Interest": "Percentage of shares currently sold short, betting on price decline.",
+  "Bullish": "Expecting prices to rise. Positive market sentiment.",
+  "Bearish": "Expecting prices to fall. Negative market sentiment.",
+};
 
 interface StockAIAnalysisProps {
   ticker: string;
@@ -59,6 +95,43 @@ function getSignalDescription(score: number): string {
   if (score >= 50) return "Moderate signal - monitor for better entry point";
   if (score >= 30) return "Weak signal - significant concerns present";
   return "Poor opportunity - risk outweighs potential reward";
+}
+
+function HighlightedText({ text }: { text: string }) {
+  const termPattern = Object.keys(FINANCIAL_TERMS)
+    .sort((a, b) => b.length - a.length)
+    .map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  
+  const regex = new RegExp(`\\b(${termPattern})\\b`, 'gi');
+  const parts = text.split(regex);
+  
+  return (
+    <>
+      {parts.map((part, index) => {
+        const upperPart = part.toUpperCase();
+        const matchedKey = Object.keys(FINANCIAL_TERMS).find(
+          key => key.toUpperCase() === upperPart
+        );
+        
+        if (matchedKey && FINANCIAL_TERMS[matchedKey]) {
+          return (
+            <Tooltip key={index}>
+              <TooltipTrigger asChild>
+                <span className="underline decoration-dotted decoration-muted-foreground underline-offset-4 cursor-help">
+                  {part}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-xs">{FINANCIAL_TERMS[matchedKey]}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </>
+  );
 }
 
 export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
@@ -345,71 +418,85 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         </CardContent>
       </Card>
 
-      {/* Section 2: Context Bar - Entry Timing, Sector, Sentiment */}
+      {/* Section 2: Context Bar - Entry Timing, Sector, Sentiment (neutral styling, hints on hover) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-        {/* Entry Timing */}
-        <div className={`p-3 rounded-lg border ${entryTiming?.status ? getTimingColor(entryTiming.status) : 'bg-muted/30 border-border'}`}>
-          <div className="flex items-center gap-2 mb-1">
-            <Clock className="h-4 w-4" />
-            <span className="text-xs font-medium uppercase">Entry Timing</span>
-          </div>
-          {entryTiming ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold capitalize" data-testid="text-entry-timing">
-                  {entryTiming.status || 'Unknown'}
-                </span>
-                {entryTiming.daysOld != null && (
-                  <Badge variant="outline" className="text-[10px]">
-                    {entryTiming.daysOld}d ago
-                  </Badge>
-                )}
+        {/* Entry Timing - with tooltip for assessment */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="p-3 rounded-lg border bg-muted/30 border-border cursor-help">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium uppercase text-muted-foreground">Entry Timing</span>
               </div>
-              {entryTiming.priceMoveSinceInsider && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  {entryTiming.priceMoveSinceInsider}
-                </div>
+              {entryTiming ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold capitalize" data-testid="text-entry-timing">
+                      {entryTiming.status || 'Unknown'}
+                    </span>
+                    {entryTiming.daysOld != null && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {entryTiming.daysOld}d ago
+                      </Badge>
+                    )}
+                  </div>
+                  {entryTiming.priceMoveSinceInsider && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {entryTiming.priceMoveSinceInsider}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground">Not assessed</div>
               )}
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">Not assessed</div>
+            </div>
+          </TooltipTrigger>
+          {entryTiming?.assessment && (
+            <TooltipContent className="max-w-xs">
+              <p className="text-xs">{entryTiming.assessment}</p>
+            </TooltipContent>
           )}
-        </div>
+        </Tooltip>
 
-        {/* Sector Analysis */}
-        <div className="p-3 rounded-lg border bg-muted/30 border-border">
-          <div className="flex items-center gap-2 mb-1">
-            <Zap className="h-4 w-4" />
-            <span className="text-xs font-medium uppercase">Sector</span>
-          </div>
-          {sectorAnalysis ? (
-            <>
-              <div className="text-sm font-semibold" data-testid="text-sector">
-                {sectorAnalysis.sector || 'Unknown'}
+        {/* Sector Analysis - with tooltip for sector note */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="p-3 rounded-lg border bg-muted/30 border-border cursor-help">
+              <div className="flex items-center gap-2 mb-1">
+                <Zap className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium uppercase text-muted-foreground">Sector</span>
               </div>
-              <div className={`text-xs mt-1 capitalize ${getSectorColor(sectorAnalysis.sectorOutlook || 'neutral')}`}>
-                {sectorAnalysis.sectorOutlook || 'Neutral'} outlook
-              </div>
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">Not analyzed</div>
+              {sectorAnalysis ? (
+                <>
+                  <div className="text-sm font-semibold" data-testid="text-sector">
+                    {sectorAnalysis.sector || 'Unknown'}
+                  </div>
+                  <div className="text-xs mt-1 capitalize text-muted-foreground">
+                    {sectorAnalysis.sectorOutlook || 'Neutral'} outlook
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground">Not analyzed</div>
+              )}
+            </div>
+          </TooltipTrigger>
+          {sectorAnalysis?.sectorNote && (
+            <TooltipContent className="max-w-xs">
+              <p className="text-xs">{sectorAnalysis.sectorNote}</p>
+            </TooltipContent>
           )}
-        </div>
+        </Tooltip>
 
         {/* News Sentiment */}
         <div className="p-3 rounded-lg border bg-muted/30 border-border">
           <div className="flex items-center gap-2 mb-1">
-            <Eye className="h-4 w-4" />
-            <span className="text-xs font-medium uppercase">News Sentiment</span>
+            <Eye className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-medium uppercase text-muted-foreground">News Sentiment</span>
           </div>
           {analysis.sentimentAnalysisScore != null ? (
             <>
               <div className="flex items-center gap-2">
-                <span className={`text-sm font-semibold ${
-                  analysis.sentimentAnalysisScore >= 60 ? 'text-green-600 dark:text-green-400' :
-                  analysis.sentimentAnalysisScore >= 40 ? 'text-amber-600 dark:text-amber-400' :
-                  'text-red-600 dark:text-red-400'
-                }`} data-testid="text-sentiment-score">
+                <span className="text-sm font-semibold" data-testid="text-sentiment-score">
                   {analysis.sentimentAnalysisScore}/100
                 </span>
                 <Badge variant="outline" className="text-[10px] capitalize">
@@ -428,24 +515,6 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         </div>
       </div>
 
-      {/* Entry Timing Assessment (if available) */}
-      {entryTiming?.assessment && (
-        <div className={`p-3 rounded-lg border ${getTimingColor(entryTiming.status)}`}>
-          <p className="text-xs sm:text-sm" data-testid="text-timing-assessment">
-            <strong>Timing:</strong> {entryTiming.assessment}
-          </p>
-        </div>
-      )}
-
-      {/* Sector Note (if available) */}
-      {sectorAnalysis?.sectorNote && (
-        <div className="p-3 rounded-lg border bg-muted/30 border-border">
-          <p className="text-xs sm:text-sm" data-testid="text-sector-note">
-            <strong>Sector Context:</strong> {sectorAnalysis.sectorNote}
-          </p>
-        </div>
-      )}
-
       {/* Section 3: AI Playbook - The main recommendation */}
       <Card>
         <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
@@ -455,11 +524,11 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3 sm:p-6 pt-0">
-          {/* Main Playbook/Recommendation */}
+          {/* Main Playbook/Recommendation - with financial term highlighting */}
           {analysis.recommendation && (
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <p className="text-sm sm:text-base leading-relaxed whitespace-pre-line" data-testid="text-playbook">
-                {analysis.recommendation}
+                <HighlightedText text={analysis.recommendation} />
               </p>
             </div>
           )}
@@ -468,7 +537,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           {!analysis.recommendation && analysis.summary && (
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <p className="text-sm sm:text-base leading-relaxed" data-testid="text-summary">
-                {analysis.summary}
+                <HighlightedText text={analysis.summary} />
               </p>
             </div>
           )}

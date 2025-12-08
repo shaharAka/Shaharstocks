@@ -18,6 +18,8 @@ import {
 
 export interface RawStockData {
   ticker: string;
+  opportunityType?: 'BUY' | 'SELL';  // Controls threshold inversion for polarized metrics
+  
   // Fundamentals (from Alpha Vantage / SEC filings)
   fundamentals?: {
     revenueGrowthYoY?: number;      // YoY revenue growth %
@@ -64,15 +66,33 @@ export interface RawStockData {
     sectorVsSpy10d?: number;        // Sector ETF vs SPY performance (%)
     macroRiskEnvironment?: 'favorable_tailwinds' | 'low_risk' | 'neutral' | 'some_headwinds' | 'severe_macro_risks';
   };
+  // AI Agent Evaluation (from Gemini)
+  aiAgentEvaluation?: {
+    riskAssessment?: 'minimal_risk' | 'manageable_risk' | 'moderate_risk' | 'elevated_risk' | 'high_risk';
+    entryTiming?: 'early_before_profit' | 'optimal_entry_window' | 'mid_way_through_move' | 'late_entry' | 'missed_opportunity';
+    conviction?: 'very_high_conviction' | 'high_conviction' | 'moderate_conviction' | 'low_conviction' | 'no_conviction';
+    rationale?: {
+      risk?: string;
+      timing?: string;
+      conviction?: string;
+    };
+  };
 }
 
 /**
  * Score a numeric metric based on threshold ranges
+ * Supports threshold inversion for SELL opportunities based on polarity
+ * 
+ * Inversion strategy:
+ * - Symmetric metrics: no inversion (same thresholds for BUY/SELL)
+ * - Bullish metrics + SELL: invert bucket order (excellent ← poor, good ← weak)
+ * - Bearish metrics + SELL: keep bucket order (already inverted by nature)
  */
 function scoreNumericMetric(
   value: number | undefined | null,
   metricKey: string,
-  sectionKey: string
+  sectionKey: string,
+  opportunityType: 'BUY' | 'SELL' = 'BUY'
 ): { score: number; ruleBucket: MetricScore['ruleBucket']; measurement: number | null } {
   if (value === undefined || value === null || isNaN(value)) {
     return { score: 0, ruleBucket: 'missing', measurement: null };
@@ -84,6 +104,7 @@ function scoreNumericMetric(
   }
 
   const thresholds = metricConfig.thresholds;
+  const polarity = metricConfig.polarity;
   
   // Check thresholds in order: excellent → good → neutral → weak → poor
   for (const bucket of ['excellent', 'good', 'neutral', 'weak', 'poor'] as const) {
@@ -91,23 +112,38 @@ function scoreNumericMetric(
     const min = config.min;
     const max = config.max;
     
-    let matches = true;
-    if (min !== undefined && value < min) matches = false;
-    if (max !== undefined && value >= max) matches = false;
+    let matches = false;
     
-    // Special case: if only min is defined (no max), check >= min
-    if (min !== undefined && max === undefined && value >= min) {
-      return { score: config.score, ruleBucket: bucket, measurement: value };
+    // Check if value matches this bucket's range
+    if (min !== undefined && max === undefined) {
+      matches = value >= min;
+    } else if (max !== undefined && min === undefined) {
+      matches = value < max;
+    } else if (min !== undefined && max !== undefined) {
+      matches = value >= min && value < max;
     }
     
-    // Special case: if only max is defined (no min), check < max
-    if (max !== undefined && min === undefined && value < max) {
-      return { score: config.score, ruleBucket: bucket, measurement: value };
-    }
-    
-    // Both defined: check range
-    if (min !== undefined && max !== undefined && value >= min && value < max) {
-      return { score: config.score, ruleBucket: bucket, measurement: value };
+    if (matches) {
+      // Determine final score based on polarity and opportunity type
+      let finalScore = config.score;
+      let finalBucket = bucket;
+      
+      // Invert bucket for SELL + bullish metrics (excellent becomes poor, etc.)
+      if (opportunityType === 'SELL' && polarity === 'bullish') {
+        const bucketInversion: Record<typeof bucket, typeof bucket> = {
+          'excellent': 'poor',
+          'good': 'weak',
+          'neutral': 'neutral',
+          'weak': 'good',
+          'poor': 'excellent'
+        };
+        finalBucket = bucketInversion[bucket];
+        finalScore = thresholds[finalBucket].score;
+      }
+      // Bearish metrics are naturally inverted, so SELL uses them as-is
+      // Symmetric metrics always use the same bucket
+      
+      return { score: finalScore, ruleBucket: finalBucket, measurement: value };
     }
   }
   
@@ -117,11 +153,18 @@ function scoreNumericMetric(
 
 /**
  * Score a categorical/condition-based metric
+ * Supports condition inversion for SELL opportunities based on polarity
+ * 
+ * Inversion strategy:
+ * - Symmetric metrics: no inversion
+ * - Bullish metrics + SELL: invert bucket order (bullish → poor, bearish → excellent)
+ * - Bearish metrics + SELL: keep bucket order
  */
 function scoreConditionMetric(
   condition: string | undefined | null,
   metricKey: string,
-  sectionKey: string
+  sectionKey: string,
+  opportunityType: 'BUY' | 'SELL' = 'BUY'
 ): { score: number; ruleBucket: MetricScore['ruleBucket']; measurement: string | null } {
   if (!condition) {
     return { score: 0, ruleBucket: 'missing', measurement: null };
@@ -133,13 +176,31 @@ function scoreConditionMetric(
   }
 
   const thresholds = metricConfig.thresholds;
+  const polarity = metricConfig.polarity;
   const normalizedCondition = condition.toLowerCase().replace(/\s+/g, '_');
   
   // Check each bucket for matching condition
   for (const bucket of ['excellent', 'good', 'neutral', 'weak', 'poor'] as const) {
     const config = thresholds[bucket] as any;
     if (config.condition && config.condition.toLowerCase() === normalizedCondition) {
-      return { score: config.score, ruleBucket: bucket, measurement: condition };
+      // Determine final score based on polarity and opportunity type
+      let finalScore = config.score;
+      let finalBucket = bucket;
+      
+      // Invert bucket for SELL + bullish metrics
+      if (opportunityType === 'SELL' && polarity === 'bullish') {
+        const bucketInversion: Record<typeof bucket, typeof bucket> = {
+          'excellent': 'poor',
+          'good': 'weak',
+          'neutral': 'neutral',
+          'weak': 'good',
+          'poor': 'excellent'
+        };
+        finalBucket = bucketInversion[bucket];
+        finalScore = thresholds[finalBucket].score;
+      }
+      
+      return { score: finalScore, ruleBucket: finalBucket, measurement: condition };
     }
   }
   

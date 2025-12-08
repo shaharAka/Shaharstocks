@@ -8,10 +8,13 @@
 
 export const SCORECARD_VERSION = "1.0";
 
+export type MetricPolarity = "bullish" | "bearish" | "symmetric";
+
 export interface MetricConfig {
   name: string;
   weight: number;
   description: string;
+  polarity: MetricPolarity; // bullish = good for BUY, bearish = good for SELL, symmetric = same for both
   thresholds: {
     excellent: { min?: number; max?: number; condition?: string; score: 10 };
     good: { min?: number; max?: number; condition?: string; score: 8 };
@@ -48,6 +51,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "YoY Revenue Growth",
           weight: 25,
           description: "Year-over-year revenue growth percentage",
+          polarity: "bullish", // Growth is bullish for BUY, bearish for SELL
           thresholds: {
             excellent: { min: 25, score: 10 },
             good: { min: 10, max: 25, score: 8 },
@@ -61,6 +65,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "YoY EPS Growth",
           weight: 25,
           description: "Year-over-year earnings per share growth",
+          polarity: "bullish", // Growth is bullish for BUY, bearish for SELL
           thresholds: {
             excellent: { min: 30, score: 10 },
             good: { min: 15, max: 30, score: 8 },
@@ -74,6 +79,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Profit Margin Trend",
           weight: 20,
           description: "Direction of profit margins over recent quarters",
+          polarity: "bullish", // Improving margins bullish for BUY, bearish for SELL
           thresholds: {
             excellent: { condition: "strong_growth", score: 10 },
             good: { condition: "improving", score: 8 },
@@ -87,6 +93,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "FCF-to-Debt Ratio",
           weight: 15,
           description: "Free cash flow relative to total debt",
+          polarity: "bullish", // Strong FCF is bullish for BUY, bearish for SELL
           thresholds: {
             excellent: { min: 0.4, score: 10 },
             good: { min: 0.2, max: 0.4, score: 8 },
@@ -100,6 +107,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Debt-to-Equity Ratio",
           weight: 15,
           description: "Total debt relative to shareholder equity (lower is better)",
+          polarity: "bearish", // High debt is bearish for BUY, bullish for SELL
           thresholds: {
             excellent: { max: 0.5, score: 10 },
             good: { min: 0.5, max: 1.0, score: 8 },
@@ -121,6 +129,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Short-Term SMA Alignment",
           weight: 25,
           description: "5/10/20 day SMA alignment for short-term trend",
+          polarity: "bullish", // Uptrend is bullish for BUY, bearish for SELL
           thresholds: {
             excellent: { condition: "5>10>20_bullish", score: 10 },
             good: { condition: "mixed_bullish", score: 8 },
@@ -134,6 +143,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "RSI Momentum (14-day)",
           weight: 25,
           description: "Relative Strength Index position and direction",
+          polarity: "symmetric", // RSI extremes are bad for both BUY/SELL - symmetric scoring
           thresholds: {
             excellent: { condition: "40-60_rising", score: 10 },
             good: { condition: "30-70_favorable", score: 8 },
@@ -147,6 +157,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "MACD Momentum",
           weight: 20,
           description: "MACD line vs signal line crossover and histogram",
+          polarity: "bullish", // Bullish MACD good for BUY, bearish for SELL
           thresholds: {
             excellent: { condition: "strong_bullish_crossover", score: 10 },
             good: { condition: "bullish_momentum", score: 8 },
@@ -160,6 +171,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Volume vs 10-Day Average",
           weight: 15,
           description: "Recent volume compared to short-term average",
+          polarity: "symmetric", // Volume surge is important for both BUY/SELL
           thresholds: {
             excellent: { condition: "2x+_with_price_confirmation", score: 10 },
             good: { min: 1.2, max: 2.0, score: 8 },
@@ -173,6 +185,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Price vs Key Levels",
           weight: 15,
           description: "Price position relative to support/resistance levels",
+          polarity: "bullish", // Breakout above resistance good for BUY, breakdown for SELL
           thresholds: {
             excellent: { condition: "breakout_above_resistance", score: 10 },
             good: { condition: "near_support_bouncing", score: 8 },
@@ -194,6 +207,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Net Buy Ratio (30-day)",
           weight: 30,
           description: "Net insider buying vs selling in last 30 days",
+          polarity: "bullish", // Buying is bullish for BUY, selling for SELL
           thresholds: {
             excellent: { min: 50, score: 10 },
             good: { min: 10, max: 50, score: 8 },
@@ -207,6 +221,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Most Recent Transaction",
           weight: 30,
           description: "Days since last insider transaction (fresher = better)",
+          polarity: "symmetric", // Recency matters equally for BUY/SELL
           thresholds: {
             excellent: { max: 7, score: 10 },
             good: { min: 7, max: 14, score: 8 },
@@ -220,6 +235,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Transaction Size vs Float",
           weight: 20,
           description: "Insider transaction value relative to float",
+          polarity: "symmetric", // Large transactions matter for both BUY/SELL
           thresholds: {
             excellent: { min: 0.5, score: 10 },
             good: { min: 0.1, max: 0.5, score: 8 },
@@ -233,6 +249,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Insider Role Weight",
           weight: 20,
           description: "Seniority of insiders making transactions (CEO/CFO > Directors)",
+          polarity: "symmetric", // C-suite transactions matter for both BUY/SELL
           thresholds: {
             excellent: { condition: "c_suite_buying", score: 10 },
             good: { condition: "vp_or_director_buying", score: 8 },
@@ -254,6 +271,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Average Sentiment Score",
           weight: 35,
           description: "Mean sentiment of recent news articles (-1 to 1)",
+          polarity: "bullish", // Positive sentiment good for BUY, negative for SELL
           thresholds: {
             excellent: { min: 0.5, score: 10 },
             good: { min: 0.2, max: 0.5, score: 8 },
@@ -267,6 +285,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Sentiment Trend (7-day)",
           weight: 30,
           description: "Direction of sentiment change over last week",
+          polarity: "bullish", // Improving sentiment good for BUY, worsening for SELL
           thresholds: {
             excellent: { condition: "strong_positive_shift", score: 10 },
             good: { condition: "improving", score: 8 },
@@ -280,6 +299,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "News Volume (7-day)",
           weight: 20,
           description: "Number of relevant news articles in last week",
+          polarity: "symmetric", // High news volume matters for both BUY/SELL
           thresholds: {
             excellent: { min: 10, score: 10 },
             good: { min: 6, max: 10, score: 8 },
@@ -293,6 +313,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Upcoming Catalyst",
           weight: 15,
           description: "Presence of near-term catalysts (earnings, FDA, etc.)",
+          polarity: "bullish", // Positive catalysts good for BUY, negative for SELL
           thresholds: {
             excellent: { condition: "positive_catalyst_within_2_weeks", score: 10 },
             good: { condition: "neutral_catalyst_upcoming", score: 8 },
@@ -314,6 +335,7 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Sector vs SPY (10-day)",
           weight: 50,
           description: "Sector ETF performance relative to SPY over 10 days",
+          polarity: "bullish", // Sector outperformance good for BUY, underperformance for SELL
           thresholds: {
             excellent: { min: 5, score: 10 },
             good: { min: 2, max: 5, score: 8 },
@@ -327,12 +349,63 @@ export const scorecardConfig: ScorecardConfig = {
           name: "Macro Risk Environment",
           weight: 50,
           description: "Overall macro risk assessment for the sector",
+          polarity: "bullish", // Favorable conditions good for BUY, risks for SELL
           thresholds: {
             excellent: { condition: "favorable_tailwinds", score: 10 },
             good: { condition: "low_risk", score: 8 },
             neutral: { condition: "neutral", score: 5 },
             weak: { condition: "some_headwinds", score: 2 },
             poor: { condition: "severe_macro_risks", score: 0 },
+          },
+          missingDataScore: 0,
+        },
+      },
+    },
+
+    aiAgentEvaluation: {
+      name: "AI Agent Evaluation",
+      weight: 10,
+      description: "Gemini AI assessment of opportunity quality and timing",
+      metrics: {
+        riskAssessment: {
+          name: "Downside Risk Analysis",
+          weight: 35,
+          description: "AI-evaluated downside risk and volatility concerns",
+          polarity: "symmetric", // Risk matters for both BUY/SELL
+          thresholds: {
+            excellent: { condition: "minimal_risk", score: 10 },
+            good: { condition: "manageable_risk", score: 8 },
+            neutral: { condition: "moderate_risk", score: 5 },
+            weak: { condition: "elevated_risk", score: 2 },
+            poor: { condition: "high_risk", score: 0 },
+          },
+          missingDataScore: 0,
+        },
+        entryTiming: {
+          name: "Entry Timing (Trend Analysis)",
+          weight: 35,
+          description: "AI analysis of whether we're early, mid-way, or late to the profit opportunity based on trend, opportunity type, and playbook",
+          polarity: "symmetric", // Timing matters for both BUY/SELL
+          thresholds: {
+            excellent: { condition: "early_before_profit", score: 10 },
+            good: { condition: "optimal_entry_window", score: 8 },
+            neutral: { condition: "mid_way_through_move", score: 5 },
+            weak: { condition: "late_entry", score: 2 },
+            poor: { condition: "missed_opportunity", score: 0 },
+          },
+          missingDataScore: 0,
+        },
+        conviction: {
+          name: "AI Conviction Level",
+          weight: 30,
+          description: "Gemini's confidence in the trade thesis and directional bias",
+          polarity: "symmetric", // Conviction matters for both BUY/SELL
+          thresholds: {
+            excellent: { condition: "very_high_conviction", score: 10 },
+            good: { condition: "high_conviction", score: 8 },
+            neutral: { condition: "moderate_conviction", score: 5 },
+            weak: { condition: "low_conviction", score: 2 },
+            poor: { condition: "no_conviction", score: 0 },
           },
           missingDataScore: 0,
         },

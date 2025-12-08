@@ -20,10 +20,6 @@ export function useWebSocket() {
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
   const connect = useCallback(() => {
-    // TEMPORARILY DISABLED - WebSocket causing crashes
-    console.log('[WebSocket] Disabled - using polling instead');
-    return;
-    
     if (!user || wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }

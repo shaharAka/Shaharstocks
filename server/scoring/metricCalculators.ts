@@ -125,10 +125,12 @@ function scoreNumericMetric(
     
     if (matches) {
       // Determine final score based on polarity and opportunity type
-      let finalScore = config.score;
+      // CRITICAL: Keep the original score from the matched bucket
+      const originalScore = config.score;
       let finalBucket = bucket;
       
-      // Invert bucket for SELL + bullish metrics (excellent becomes poor, etc.)
+      // Invert bucket LABEL for SELL + bullish metrics (excellent becomes poor, etc.)
+      // But keep the original score (e.g., excellent→10 stays 10, just labeled as "poor")
       if (opportunityType === 'SELL' && polarity === 'bullish') {
         const bucketInversion: Record<typeof bucket, typeof bucket> = {
           'excellent': 'poor',
@@ -138,12 +140,11 @@ function scoreNumericMetric(
           'poor': 'excellent'
         };
         finalBucket = bucketInversion[bucket];
-        finalScore = thresholds[finalBucket].score;
       }
       // Bearish metrics are naturally inverted, so SELL uses them as-is
       // Symmetric metrics always use the same bucket
       
-      return { score: finalScore, ruleBucket: finalBucket, measurement: value };
+      return { score: originalScore, ruleBucket: finalBucket, measurement: value };
     }
   }
   
@@ -184,10 +185,12 @@ function scoreConditionMetric(
     const config = thresholds[bucket] as any;
     if (config.condition && config.condition.toLowerCase() === normalizedCondition) {
       // Determine final score based on polarity and opportunity type
-      let finalScore = config.score;
+      // CRITICAL: Keep the original score from the matched bucket
+      const originalScore = config.score;
       let finalBucket = bucket;
       
-      // Invert bucket for SELL + bullish metrics
+      // Invert bucket LABEL for SELL + bullish metrics
+      // But keep the original score (e.g., excellent→10 stays 10, just labeled as "poor")
       if (opportunityType === 'SELL' && polarity === 'bullish') {
         const bucketInversion: Record<typeof bucket, typeof bucket> = {
           'excellent': 'poor',
@@ -197,10 +200,11 @@ function scoreConditionMetric(
           'poor': 'excellent'
         };
         finalBucket = bucketInversion[bucket];
-        finalScore = thresholds[finalBucket].score;
       }
+      // Bearish metrics are naturally inverted, so SELL uses them as-is
+      // Symmetric metrics always use the same bucket
       
-      return { score: finalScore, ruleBucket: finalBucket, measurement: condition };
+      return { score: originalScore, ruleBucket: finalBucket, measurement: condition };
     }
   }
   

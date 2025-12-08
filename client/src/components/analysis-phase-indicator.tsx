@@ -10,7 +10,7 @@ interface AnalysisPhaseIndicatorProps {
   microCompleted: boolean;
   macroCompleted: boolean;
   combinedCompleted: boolean;
-  currentPhase?: string | null;
+  currentPhase?: "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "analyzing" | "complete" | null;
   stepDetails?: {
     phase?: string;
     substep?: string;
@@ -48,27 +48,26 @@ export function AnalysisPhaseIndicator({
   const isComplete = microCompleted && macroCompleted && combinedCompleted;
 
   const getStepStatus = (stepNum: 1 | 2 | 3): StepStatus => {
-    if (isComplete || currentPhase === "complete" || currentPhase === "completed") {
+    if (isComplete || currentPhase === "complete") {
       return "completed";
     }
 
-    const phase = stepDetails?.phase || currentPhase;
-
     switch (stepNum) {
       case 1: // Fetching stock data
-        if (currentPhase === "fetching_data" || phase === "data_fetch") return "active";
-        if (currentPhase === "calculating_score" || currentPhase === "generating_playbook" ||
-            phase === "calculating_score" || phase === "integration") return "completed";
+        if (currentPhase === "data_fetch") return "active";
+        if (currentPhase === "calculating_score" || currentPhase === "analyzing" || 
+            currentPhase === "micro_analysis" || currentPhase === "integration" ||
+            currentPhase === "macro_analysis") return "completed";
         return "pending";
         
       case 2: // Calculating signal
-        if (currentPhase === "calculating_score" || phase === "calculating_score") return "active";
-        if (currentPhase === "generating_playbook" || phase === "integration") return "completed";
-        if (currentPhase === "fetching_data" || phase === "data_fetch") return "pending";
+        if (currentPhase === "calculating_score" || currentPhase === "analyzing" || currentPhase === "micro_analysis") return "active";
+        if (currentPhase === "integration" || currentPhase === "macro_analysis") return "completed";
+        if (currentPhase === "data_fetch") return "pending";
         return "pending";
         
       case 3: // Generating playbook
-        if (currentPhase === "generating_playbook" || phase === "integration") return "active";
+        if (currentPhase === "integration" || currentPhase === "macro_analysis") return "active";
         if (isComplete) return "completed";
         return "pending";
         

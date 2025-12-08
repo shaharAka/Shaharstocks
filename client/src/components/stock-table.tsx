@@ -150,11 +150,12 @@ export function StockTable({
       case "aiScore":
         const analysisA = getAIAnalysis(a.ticker);
         const analysisB = getAIAnalysis(b.ticker);
-        // Use stock's integratedScore first (most reliable), then analysis data
-        const scoreA = (a as any).integratedScore ?? analysisA?.integratedScore ?? analysisA?.confidenceScore ?? analysisA?.financialHealthScore ?? 0;
-        const scoreB = (b as any).integratedScore ?? analysisB?.integratedScore ?? analysisB?.confidenceScore ?? analysisB?.financialHealthScore ?? 0;
-        compareA = scoreA;
-        compareB = scoreB;
+        // Treat "analyzing" status as score 0 for sorting
+        // Use integrated score (micro × macro) if available, fallback to confidence score, then financial health score
+        const scoreA = analysisA?.integratedScore ?? analysisA?.confidenceScore ?? analysisA?.financialHealthScore;
+        const scoreB = analysisB?.integratedScore ?? analysisB?.confidenceScore ?? analysisB?.financialHealthScore;
+        compareA = (analysisA?.status === "analyzing" || !scoreA) ? 0 : scoreA;
+        compareB = (analysisB?.status === "analyzing" || !scoreB) ? 0 : scoreB;
         break;
       case "daysFromBuy":
         compareA = getDaysFromBuy(a.insiderTradeDate);
@@ -386,49 +387,39 @@ export function StockTable({
                 <TableCell className="text-right py-1 px-1" data-testid={`cell-ai-score-${stock.ticker}`}>
                   {(() => {
                     const analysis = getAIAnalysis(stock.ticker);
-                    const jobStatus = (stock as any).analysisJob?.status;
-                    const currentStep = (stock as any).analysisJob?.currentStep;
-                    const stepDetails = (stock as any).analysisJob?.stepDetails;
+                    if (!analysis) return <span className="text-[10px] sm:text-xs text-muted-foreground">-</span>;
                     
-                    // Check if stock already has a score (from stock data or analysis)
-                    const stockScore = (stock as any).integratedScore ?? analysis?.integratedScore ?? analysis?.confidenceScore ?? analysis?.financialHealthScore;
-                    const hasScore = stockScore != null && stockScore > 0;
-                    
-                    // Check if there's an active job (pending or processing)
-                    const isJobActive = jobStatus === "pending" || jobStatus === "processing";
-                    
-                    // Only show analyzing state if job is active AND we don't have a score yet
-                    // Having a score means analysis completed, regardless of what status says
-                    const isAnalyzing = isJobActive && !hasScore;
-                    
-                    if (isAnalyzing) {
+                    // Check if analysis is in progress
+                    if (analysis.status === "pending" || analysis.status === "analyzing" || analysis.status === "processing") {
                       return (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex items-center gap-1 sm:gap-2 justify-end cursor-help">
+                              <Badge variant="outline" className="text-[9px] sm:text-xs px-1">
+                                <span className="hidden sm:inline">Analyzing...</span>
+                                <span className="sm:hidden">...</span>
+                              </Badge>
                               <AnalysisPhaseIndicator
                                 microCompleted={stock.microAnalysisCompleted}
                                 macroCompleted={stock.macroAnalysisCompleted}
                                 combinedCompleted={stock.combinedAnalysisCompleted}
-                                currentPhase={currentStep as string | null | undefined}
-                                stepDetails={stepDetails}
+                                currentPhase={(stock as any).analysisJob?.currentStep as "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "complete" | null | undefined}
                                 size="sm"
-                                showDetailedProgress
                               />
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="left" className="text-xs max-w-xs">
                             <p className="font-semibold mb-1">AI Analysis in Progress</p>
                             <p className="text-muted-foreground">
-                              {stepDetails?.substep || "Analyzing SEC filings, financials, and sector data..."}
+                              Our system is analyzing SEC filings, financials, and sector data to generate a signal score.
                             </p>
                           </TooltipContent>
                         </Tooltip>
                       );
                     }
                     
-                    // Show error state if job failed
-                    if (jobStatus === "failed" || analysis?.status === "failed") {
+                    // Show error state
+                    if (analysis.status === "failed") {
                       return (
                         <Badge variant="destructive" className="text-[9px] sm:text-xs px-1">
                           Err
@@ -436,13 +427,13 @@ export function StockTable({
                       );
                     }
                     
-                    // If no score available (and not analyzing), show dash
-                    if (!hasScore) return <span className="text-[10px] sm:text-xs text-muted-foreground">-</span>;
+                    // Use integrated score if available (micro × macro), otherwise use confidence score, fallback to financial health score
+                    const score = analysis.integratedScore ?? analysis.confidenceScore ?? analysis.financialHealthScore;
                     
                     // Signal strength gradient in amber/orange (distinct from green BUY / red SELL)
-                    const isExceptional = stockScore >= 90;
-                    const isStrong = stockScore >= 70 && stockScore < 90;
-                    const isModerate = stockScore >= 50 && stockScore < 70;
+                    const isExceptional = score >= 90;
+                    const isStrong = score >= 70 && score < 90;
+                    const isModerate = score >= 50 && score < 70;
                     
                     return (
                       <Tooltip>
@@ -457,12 +448,12 @@ export function StockTable({
                             )}
                             data-testid={`badge-signal-${stock.ticker}`}
                           >
-                            <span className="hidden sm:inline">{stockScore}/100</span>
-                            <span className="sm:hidden">{stockScore}</span>
+                            <span className="hidden sm:inline">{score}/100</span>
+                            <span className="sm:hidden">{score}</span>
                           </Badge>
                         </TooltipTrigger>
                         <TooltipContent side="left" className="text-xs">
-                          {getSignalTooltip(stockScore, stock.recommendation || "")}
+                          {getSignalTooltip(score, stock.recommendation || "")}
                         </TooltipContent>
                       </Tooltip>
                     );

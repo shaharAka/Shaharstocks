@@ -9,7 +9,7 @@
  * SELL-aware: Adapts prompts based on opportunity type (BUY vs SELL)
  */
 
-import { GoogleGenerativeAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 export interface AIAgentEvaluation {
   riskAssessment: "minimal_risk" | "manageable_risk" | "moderate_risk" | "elevated_risk" | "high_risk";
@@ -62,16 +62,15 @@ export interface StockContext {
 }
 
 class GeminiAgentService {
-  private genAI: GoogleGenerativeAI;
-  private model: any;
+  private genAI: GoogleGenAI;
+  private model: string = "gemini-1.5-flash";
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.warn("[GeminiAgentService] GEMINI_API_KEY not found - AI evaluation will be disabled");
     }
-    this.genAI = new GoogleGenerativeAI(apiKey || "");
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    this.genAI = new GoogleGenAI({ apiKey: apiKey || "" });
   }
 
   /**
@@ -81,9 +80,19 @@ class GeminiAgentService {
     const prompt = this.buildEvaluationPrompt(context);
     
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = result.response.text();
-      return this.parseEvaluationResponse(response);
+      const response = await this.genAI.models.generateContent({
+        model: this.model,
+        contents: prompt,
+      });
+      
+      // Extract text from response properly
+      const candidate = response.candidates?.[0];
+      let responseText = "";
+      if (candidate?.content?.parts) {
+        responseText = candidate.content.parts.map((p: any) => p.text || "").join("");
+      }
+      
+      return this.parseEvaluationResponse(responseText);
     } catch (error) {
       console.error("[GeminiAgentService] Error evaluating stock:", error);
       // Return neutral assessment on error

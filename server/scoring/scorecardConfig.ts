@@ -41,7 +41,7 @@ export const scorecardConfig: ScorecardConfig = {
   sections: {
     fundamentals: {
       name: "Fundamentals",
-      weight: 35,
+      weight: 30,
       description: "Financial health and growth metrics",
       metrics: {
         revenueGrowth: {
@@ -114,7 +114,7 @@ export const scorecardConfig: ScorecardConfig = {
 
     technicals: {
       name: "Technicals",
-      weight: 25,
+      weight: 20,
       description: "Price action and momentum indicators (tuned for 1-2 week horizon)",
       metrics: {
         smaAlignment: {
@@ -187,7 +187,7 @@ export const scorecardConfig: ScorecardConfig = {
 
     insiderActivity: {
       name: "Insider Activity",
-      weight: 20,
+      weight: 15,
       description: "Insider trading signals (critical for 1-2 week setups)",
       metrics: {
         netBuyRatio: {
@@ -307,7 +307,7 @@ export const scorecardConfig: ScorecardConfig = {
 
     macroSector: {
       name: "Macro/Sector",
-      weight: 5,
+      weight: 10,
       description: "Industry and macro context",
       metrics: {
         sectorMomentum: {

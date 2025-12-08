@@ -208,7 +208,16 @@ class AIAnalysisService {
     }
 
     // Build comprehensive prompt with ALL available data
-    const prompt = `You are an expert trader analyzing insider trading opportunities. Your job is to evaluate whether this ${transactionContext} signal is worth acting on for a 1-2 WEEK trading window.
+    const prompt = `You are a momentum trader analyzing insider trading signals. Your goal: CAPITALIZE QUICKLY and MOVE ON. 
+
+TRADING PHILOSOPHY:
+- 1-2 WEEK maximum holding period
+- Get in fast, take profits, rotate to next opportunity
+- If timing is late or the move already happened → SKIP IT, find fresh signals
+- We don't hold losers hoping they'll recover
+- Speed and conviction matter more than perfection
+
+Evaluate this ${transactionContext} signal:
 
 === OPPORTUNITY OVERVIEW ===
 Stock: ${ticker}
@@ -304,29 +313,35 @@ Evaluate this opportunity and provide:
 
 2. PLAYBOOK: Clear, actionable guidance with data references
 
-SCORING GUIDE:
+SCORING GUIDE (remember: quick trades, quick profits):
 ${isBuy ? `
 For INSIDER BUYING:
-- 70-100: STRONG BUY - Early opportunity, good fundamentals, favorable trend → ENTER position
-- 40-69: MODERATE - Some merit but mixed signals → Watch closely, consider small position
-- 1-39: WEAK/LATE - Poor timing, weak fundamentals, or already priced in → AVOID
+- 70-100: FRESH SIGNAL, ACT NOW - Early timing, strong momentum, clear upside → ENTER immediately
+- 40-69: WATCHLIST - Decent setup but wait for better entry or confirmation → Set alerts, be ready
+- 1-39: STALE/MISSED - Move already happened, timing is late, or weak setup → SKIP, find next opportunity
 ` : `
 For INSIDER SELLING:
-- 70-100: STRONG SHORT - Valid bearish signal, weak fundamentals → Consider SHORT
-- 40-69: MODERATE - Some weakness but not conclusive → Watch for breakdown
-- 1-39: IGNORE - Routine selling, strong fundamentals → False alarm, PASS
+- 70-100: FRESH SHORT - Valid bearish signal, breakdown imminent → SHORT or exit longs
+- 40-69: CAUTION - Weakness showing but not confirmed → Watch for breakdown trigger
+- 1-39: FALSE ALARM - Routine selling, strong stock → IGNORE, move on
 `}
+
+TIMING IS CRITICAL:
+- Trade date >7 days old with >10% price move = likely MISSED (score low)
+- Trade date <3 days old with minimal move = EARLY/OPTIMAL (score higher)
+- Stale signals waste our time - be ruthless about freshness
 
 Return ONLY this JSON (no markdown):
 {
   "overallRating": "${isBuy ? 'buy' : 'sell'}" or "hold" or "avoid",
   "confidenceScore": 1-100,
   "summary": "2-3 sentence executive summary of the opportunity",
-  "playbook": "DETAILED playbook (3-5 sentences) with specific data references. Structure: 1) What the signal tells us, 2) Key supporting/concerning data points, 3) Clear action recommendation (ENTER/WATCH/AVOID)",
+  "playbook": "ACTION-FOCUSED playbook (3-5 sentences). Structure: 1) Is this FRESH or STALE? State timing clearly. 2) Key data supporting quick profit potential. 3) VERDICT: ACT NOW / WATCHLIST / SKIP - with specific reasoning. Be direct about whether we missed the move.",
   "entryTiming": {
     "status": "early" or "optimal" or "late" or "missed",
-    "priceMoveSinceInsider": "Price moved X% since insider trade",
-    "assessment": "1 sentence on timing - is this still a good entry or has the move already happened?"
+    "priceMoveSinceInsider": "+X% or -X% since insider bought/sold",
+    "daysOld": number of days since insider trade,
+    "assessment": "1 decisive sentence: Are we EARLY (good) or did we MISS IT (move on)?"
   },
   "sectorAnalysis": {
     "sector": "Sector name",

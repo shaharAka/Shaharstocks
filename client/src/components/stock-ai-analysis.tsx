@@ -344,8 +344,15 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           </div>
           {entryTiming ? (
             <>
-              <div className="text-sm font-semibold capitalize" data-testid="text-entry-timing">
-                {entryTiming.status || 'Unknown'}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold capitalize" data-testid="text-entry-timing">
+                  {entryTiming.status || 'Unknown'}
+                </span>
+                {entryTiming.daysOld != null && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {entryTiming.daysOld}d ago
+                  </Badge>
+                )}
               </div>
               {entryTiming.priceMoveSinceInsider && (
                 <div className="text-xs text-muted-foreground mt-1">

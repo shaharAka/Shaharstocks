@@ -3159,11 +3159,18 @@ export class DatabaseStorage implements IStorage {
 
       // Create or update analysis record with "analyzing" status
       // This ensures the frontend can show the analyzing state immediately
-      // But DON'T overwrite completed analysis with integrated scores
       const existingAnalysis = await this.getStockAnalysis(ticker);
       if (existingAnalysis) {
-        // Only set to "analyzing" if not already completed with an integrated score
-        if (existingAnalysis.status !== "completed" || !existingAnalysis.integratedScore) {
+        // When force=true (re-analysis), ALWAYS reset to analyzing state and clear scorecard
+        // This allows regeneration of missing/stale scorecards
+        if (force) {
+          await this.updateStockAnalysis(ticker, { 
+            status: "analyzing", 
+            errorMessage: null,
+            scorecard: null,  // Clear old scorecard so it's regenerated
+          });
+          console.log(`[Queue] Force re-analysis: reset ${ticker} to analyzing status, cleared scorecard`);
+        } else if (existingAnalysis.status !== "completed" || !existingAnalysis.integratedScore) {
           await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
         }
       } else {

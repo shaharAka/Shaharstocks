@@ -208,7 +208,8 @@ export function StockAIAnalysis({ ticker, stock }: StockAIAnalysisProps) {
     onSuccess: (pendingAnalysis) => {
       // Set pending analysis immediately for UI feedback
       queryClient.setQueryData(["/api/stocks", ticker, "analysis"], pendingAnalysis);
-      // Invalidate all related caches to ensure fresh data is fetched
+      // Invalidate the specific stock's analysis cache AND list caches
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "analysis"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-analyses"] });
       queryClient.invalidateQueries({ queryKey: ["/api/macro-analysis"] });
       toast({

@@ -12,7 +12,7 @@ import { getIbkrService } from "./ibkrService";
 import { telegramNotificationService } from "./telegramNotificationService";
 import { backtestService } from "./backtestService";
 import { openinsiderService } from "./openinsiderService";
-import { createRequireAdmin } from "./session";
+import { createRequireAdmin, createRequireActiveSubscription, createRequireInternalContext } from "./session";
 import { verifyPayPalWebhook, cancelPayPalSubscription, getSubscriptionTransactions } from "./paypalService";
 import { aiAnalysisService } from "./aiAnalysisService";
 import { signupLimiter, loginLimiter, resendVerificationLimiter } from "./middleware/rateLimiter";
@@ -247,8 +247,10 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Create admin middleware with storage dependency
+  // Create middleware with storage dependency
   const requireAdmin = createRequireAdmin(storage);
+  const requireActiveSubscription = createRequireActiveSubscription(storage);
+  const requireInternalContext = createRequireInternalContext();
   
   // Feature flags endpoint
   app.get("/api/feature-flags", async (req, res) => {
@@ -2463,7 +2465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/stocks/bulk-analyze", async (req, res) => {
+  app.post("/api/stocks/bulk-analyze", requireActiveSubscription, async (req, res) => {
     try {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
@@ -2499,8 +2501,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI Analysis endpoint
-  app.post("/api/stocks/:ticker/analyze", async (req, res) => {
+  // AI Analysis endpoint - requires active subscription
+  app.post("/api/stocks/:ticker/analyze", requireActiveSubscription, async (req, res) => {
     try {
       const ticker = req.params.ticker.toUpperCase();
       const { force } = req.body;
@@ -2801,8 +2803,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Bulk analyze all pending stocks for current user
-  app.post("/api/stocks/analyze-all", async (req, res) => {
+  // Bulk analyze all pending stocks for current user - requires active subscription
+  app.post("/api/stocks/analyze-all", requireActiveSubscription, async (req, res) => {
     try {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });

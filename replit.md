@@ -20,6 +20,26 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Batch Filtering Optimization**: Transaction ingestion uses single-pass filtering with `getExistingTransactionKeys()` to detect duplicates in one DB query instead of N+1 queries. Quotes and stock data are batch-fetched for unique tickers, then all filters (market cap, options deals) are applied in memory.
 - **Compound Trading Rules Architecture**: Actions are stored per-group (each condition group can have its own actions). The `ruleActions` table has both `ruleId` (for efficient rule-level queries) and `groupId` (for per-group action retrieval). All compound rule CRUD methods in storage.ts respect this per-group architecture.
 
+### Security & Data Isolation
+
+#### Storage Method Scoping
+- **User-Scoped Methods** (require userId parameter): `getStocks(userId)`, `createStock(userId, data)`, `getFollowedStocks(userId)`, `getDailyBriefs(userId, ticker)`, etc. These are safe for route handlers.
+- **Global Methods** (internal/background use only): `getAllStocksForTickerGlobal(ticker)`, `updateStocksByTickerGlobally(ticker, updates)`, `getAllUniquePendingTickers()`, `getAllUniqueTickersNeedingData()`. These are used by background workers (queueWorker.ts, index.ts) for shared data updates, NOT exposed via routes.
+- **Shared Data Tables** (intentionally global): `stockAnalyses`, `stockCandlesticks`, `macroAnalyses`, `insiderProfiles` - one record per ticker/entity, computed once and reused across all users.
+
+#### Foreign Key Enforcement
+All per-user tables enforce FK constraints to `users.id` with `ON DELETE CASCADE`:
+- `stocks`, `portfolioHoldings`, `trades`, `payments`, `userStockStatuses`, `userTutorials`, `followedStocks`, `dailyBriefs`, `notifications`, `stockComments`, `stockViews`, `featureSuggestions`, `featureVotes`, `announcementReads`
+
+#### Middleware Stack
+- `requireUser` - Basic authentication check (session.userId exists)
+- `requireAdmin` - Admin-only access (user.isAdmin = true)
+- `requireActiveSubscription` - Trial/active subscription required, auto-expires trials
+- `requireInternalContext` - Background job endpoints only (x-internal-token header)
+
+#### Subscription Status Flow
+`pending_verification` → `trial` (30 days) → `active` (paid) or `expired` (trial ended)
+
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (with optimistic updates and user-scoped cache keys), React Hook Form with Zod for validation.
 - **Backend**: Express.js with TypeScript, RESTful API design, JSON body parsing, Zod schema validation.

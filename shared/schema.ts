@@ -148,6 +148,15 @@ export const stockAnalyses = pgTable("stock_analyses", {
   recommendation: text("recommendation"),
   analyzedAt: timestamp("analyzed_at"),
   errorMessage: text("error_message"), // Error message if analysis failed
+  // Entry Timing Assessment (quick turnaround optimization)
+  entryTimingStatus: text("entry_timing_status"), // "early", "optimal", "late", "missed"
+  entryTimingPriceMove: text("entry_timing_price_move"), // "+X% or -X% since insider trade"
+  entryTimingDaysOld: integer("entry_timing_days_old"), // Days since insider trade
+  entryTimingAssessment: text("entry_timing_assessment"), // 1-sentence timing verdict
+  // Sector Analysis
+  sectorName: text("sector_name"), // Sector name
+  sectorOutlook: text("sector_outlook"), // "bullish", "bearish", "neutral"
+  sectorNote: text("sector_note"), // 1-sentence sector context
   // SEC EDGAR Filing Data
   secFilingUrl: text("sec_filing_url"), // URL to latest 10-K or 10-Q filing
   secFilingType: text("sec_filing_type"), // "10-K", "10-Q", "8-K"

@@ -264,9 +264,20 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const signalInfo = getSignalLabel(signalScore);
   const SignalIcon = signalInfo.icon;
 
-  // Extract new fields with fallbacks for older analysis data
-  const entryTiming = (analysis as any).entryTiming;
-  const sectorAnalysis = (analysis as any).sectorAnalysis;
+  // Construct entry timing from flat database fields
+  const entryTiming = analysis.entryTimingStatus ? {
+    status: analysis.entryTimingStatus,
+    priceMoveSinceInsider: analysis.entryTimingPriceMove,
+    daysOld: analysis.entryTimingDaysOld,
+    assessment: analysis.entryTimingAssessment,
+  } : null;
+  
+  // Construct sector analysis from flat database fields
+  const sectorAnalysis = analysis.sectorName ? {
+    sector: analysis.sectorName,
+    sectorOutlook: analysis.sectorOutlook,
+    sectorNote: analysis.sectorNote,
+  } : null;
 
   // Helper for entry timing colors
   const getTimingColor = (status: string) => {
@@ -376,7 +387,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
               <div className="text-sm font-semibold" data-testid="text-sector">
                 {sectorAnalysis.sector || 'Unknown'}
               </div>
-              <div className={`text-xs mt-1 capitalize ${getSectorColor(sectorAnalysis.sectorOutlook)}`}>
+              <div className={`text-xs mt-1 capitalize ${getSectorColor(sectorAnalysis.sectorOutlook || 'neutral')}`}>
                 {sectorAnalysis.sectorOutlook || 'Neutral'} outlook
               </div>
             </>

@@ -402,6 +402,15 @@ class QueueWorker {
         businessOverview: secFilingData?.businessOverview,
         fundamentalData: comprehensiveFundamentals,
         integratedScore: integratedScore, // AI signal score directly
+        // Entry Timing Assessment
+        entryTimingStatus: analysis.entryTiming?.status,
+        entryTimingPriceMove: analysis.entryTiming?.priceMoveSinceInsider,
+        entryTimingDaysOld: analysis.entryTiming?.daysOld,
+        entryTimingAssessment: analysis.entryTiming?.assessment,
+        // Sector Analysis
+        sectorName: analysis.sectorAnalysis?.sector,
+        sectorOutlook: analysis.sectorAnalysis?.sectorOutlook,
+        sectorNote: analysis.sectorAnalysis?.sectorNote,
       });
 
       // Mark all phases complete (for backward compatibility with UI)

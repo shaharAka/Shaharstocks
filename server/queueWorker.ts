@@ -467,38 +467,18 @@ class QueueWorker {
         console.log(`[QueueWorker] Macro factor: ${macroAnalysis.macroFactor}, Macro score: ${macroAnalysis.macroScore}/100`);
       }
 
-      // Mark macro phase complete after obtaining/creating macro analysis
+      // Mark data collection phase complete (macro is part of data collection now)
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'macro');
-      console.log(`[QueueWorker] ✅ Macro analysis phase complete for ${job.ticker}`);
+      console.log(`[QueueWorker] ✅ Data collection phase complete for ${job.ticker}`);
 
-      // PHASE 3: Micro AI Analysis (analyze company fundamentals)
-      await this.updateProgress(job.id, job.ticker, "micro_analysis", {
-        phase: "micro",
-        substep: "Running fundamental analysis with AI"
+      // PHASE 2: Calculate Scorecard (including Gemini AI agent evaluation)
+      // This MUST happen before AI report generation so the report can reference the scores
+      await this.updateProgress(job.id, job.ticker, "calculating_score", {
+        phase: "scoring",
+        substep: "Calculating scorecard with AI evaluation"
       });
 
-      // Run micro AI analysis
-      console.log(`[QueueWorker] Running micro AI analysis for ${job.ticker}...`);
-      const analysis = await aiAnalysisService.analyzeStock({
-        ticker: job.ticker,
-        companyOverview,
-        balanceSheet,
-        incomeStatement,
-        cashFlow,
-        technicalIndicators,
-        newsSentiment,
-        priceNewsCorrelation,
-        insiderTradingStrength,
-        secFilings,
-        comprehensiveFundamentals,
-      });
-      console.log(`[QueueWorker] ✅ Micro analysis complete (score: ${analysis.confidenceScore}/100)`);
-      
-      // Mark micro phase complete after AI analysis finishes
-      await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
-      console.log(`[QueueWorker] ✅ Micro analysis phase complete for ${job.ticker}`);
-
-      // PHASE 3.5: Generate Rule-Based Scorecard (parallel to integration, non-blocking)
+      // SCORECARD GENERATION BLOCK (moved from PHASE 3.5 to PHASE 2)
       let scorecard: any = null;
       let scorecardInputForLogging: any = null; // For error logging
       try {
@@ -685,7 +665,7 @@ class QueueWorker {
         
         const stockContext: StockContext = {
           ticker: job.ticker,
-          companyName: stock?.name || job.ticker,
+          companyName: stock?.companyName || job.ticker,
           currentPrice: validatedCurrentPrice,
           opportunityType: (job.opportunityType === 'SELL' ? 'SELL' : 'BUY') as 'BUY' | 'SELL',
           
@@ -704,7 +684,7 @@ class QueueWorker {
           
           // Insider context (from already-computed scorecardInputForLogging)
           daysSinceInsiderTrade: insiderData?.daysSinceLastTransaction,
-          insiderPrice: stock?.transactionPrice ? parseFloat(stock.transactionPrice) : undefined,
+          insiderPrice: stock?.insiderPrice ? parseFloat(stock.insiderPrice) : undefined,
           
           // News/Sentiment (from already-computed scorecardInputForLogging)
           avgSentiment: newsData?.avgSentiment,
@@ -796,7 +776,35 @@ class QueueWorker {
       
       console.log(`[QueueWorker] ✅ Scorecard validation passed - all 6 sections present with valid data for ${job.ticker}`);
 
-      // PHASE 4: Score Integration
+      // Mark scorecard phase complete (reusing 'micro' flag for backward compatibility)
+      await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
+      console.log(`[QueueWorker] ✅ Scorecard phase complete for ${job.ticker}`);
+
+      // PHASE 3: Generate AI Report (using scorecard for grounding)
+      // The AI now has access to the completed scorecard and can reference its scores in recommendations
+      await this.updateProgress(job.id, job.ticker, "generating_report", {
+        phase: "report",
+        substep: "Generating AI investment report"
+      });
+
+      console.log(`[QueueWorker] 📝 Generating AI report for ${job.ticker} (grounded by scorecard)...`);
+      const analysis = await aiAnalysisService.analyzeStock({
+        ticker: job.ticker,
+        companyOverview,
+        balanceSheet,
+        incomeStatement,
+        cashFlow,
+        technicalIndicators,
+        newsSentiment,
+        priceNewsCorrelation,
+        insiderTradingStrength,
+        secFilings,
+        comprehensiveFundamentals,
+        scorecard, // Pass the completed scorecard for grounding
+      });
+      console.log(`[QueueWorker] ✅ AI report complete (rating: ${analysis.overallRating}, confidence: ${analysis.confidenceScore}/100)`);
+
+      // PHASE 4: Score Integration & Save
       await this.updateProgress(job.id, job.ticker, "calculating_score", {
         phase: "integration",
         substep: "Calculating integrated score (micro × macro)"

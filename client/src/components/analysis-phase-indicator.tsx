@@ -10,7 +10,7 @@ interface AnalysisPhaseIndicatorProps {
   microCompleted: boolean;
   macroCompleted: boolean;
   combinedCompleted: boolean;
-  currentPhase?: "data_fetch" | "macro_analysis" | "micro_analysis" | "integration" | "calculating_score" | "complete" | null;
+  currentPhase?: "data_fetch" | "macro_analysis" | "micro_analysis" | "calculating_score" | "generating_report" | "integration" | "complete" | null;
   stepDetails?: {
     phase?: string;
     substep?: string;
@@ -36,30 +36,30 @@ export function AnalysisPhaseIndicator({
   const iconSize = size === "sm" ? "h-3 w-3" : "h-4 w-4";
   
   // IMPORTANT: Order matches actual execution order in queueWorker:
-  // Phase 2: Macro (industry/sector) -> Phase 3: Micro (fundamentals) -> Phase 4: Integration
+  // Phase 1: Data Collection (fetch all data + macro) -> Phase 2: Scorecard (calculate scores) -> Phase 3: AI Report
   const phases = [
     {
-      id: "macro",
-      label: "Macro context",
-      description: "Industry/sector analysis (runs first)",
+      id: "data",
+      label: "Data collection",
+      description: "Fetching market data and industry context",
       completed: macroCompleted,
-      active: currentPhase === "macro_analysis",
+      active: currentPhase === "data_fetch" || currentPhase === "macro_analysis",
       testId: "status-macro",
     },
     {
-      id: "micro",
-      label: "Micro fundamentals",
-      description: "Company fundamentals analysis (runs second)",
-      completed: microCompleted,
-      active: currentPhase === "micro_analysis",
+      id: "scoring",
+      label: "Scorecard",
+      description: "Calculating rule-based scores with AI evaluation",
+      completed: microCompleted && macroCompleted,
+      active: currentPhase === "calculating_score",
       testId: "status-micro",
     },
     {
-      id: "combined",
-      label: "Combined score",
-      description: "Integrated analysis score (final)",
+      id: "report",
+      label: "AI Report",
+      description: "Generating investment recommendation",
       completed: combinedCompleted,
-      active: currentPhase === "integration" || currentPhase === "calculating_score",
+      active: currentPhase === "generating_report" || currentPhase === "integration",
       testId: "status-combined",
     },
   ];
@@ -70,13 +70,15 @@ export function AnalysisPhaseIndicator({
     
     switch (currentPhase) {
       case "data_fetch":
-        return "Fetching data...";
+        return "Gathering market data...";
       case "macro_analysis":
-        return "Analyzing macro factors...";
-      case "micro_analysis":
-        return "Analyzing fundamentals...";
+        return "Collecting industry context...";
+      case "calculating_score":
+        return "Calculating scorecard...";
+      case "generating_report":
+        return "Generating AI report...";
       case "integration":
-        return "Calculating final score...";
+        return "Finalizing analysis...";
       case "complete":
         return "Analysis complete";
       default:

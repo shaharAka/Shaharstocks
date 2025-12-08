@@ -26,7 +26,13 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Cache Isolation**: User-scoped cache keys and custom query functions prevent cross-user data contamination.
 
 ### Feature Specifications
-- **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for Enhanced Sector ETF Analysis) influences recommendations. Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching via backoffice settings.
+- **AI-Powered Analysis**: A dual-agent system (Micro Agent for SEC EDGAR/Alpha Vantage fundamentals, Macro Agent for Enhanced Sector ETF Analysis) influences recommendations. Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching via backoffice settings. **NEW: Scorecard-grounded AI reports** - The AI report now receives the pre-calculated scorecard, enabling the recommendation to reference specific scores and metrics for better grounding.
+- **Analysis Pipeline Phases** (as of Dec 2024):
+  1. **Data Collection**: Fetch fundamentals, technicals, news, SEC filings, insider data, and macro/industry context
+  2. **Scorecard Generation**: Calculate 6-section rule-based scorecard (fundamentals, technicals, insider, news, macro, aiAgent) with Gemini AI evaluation
+  3. **AI Report Generation**: Generate investment recommendation grounded by the completed scorecard
+  4. **Finalization**: Save analysis atomically with integrated scores
+  Phase flags: `macroCompleted` (after data collection), `microCompleted` (after scorecard), `combinedCompleted` (after save)
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
 - **Collaboration**: Multi-user system with stock-specific comment threads and recommendation filtering.
 - **Adaptive Stock Fetching**: Stock fetch limits adjust based on user onboarding and configuration, with customizable OpenInsider filters.

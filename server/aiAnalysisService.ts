@@ -140,6 +140,8 @@ interface FinancialData {
     totalAssets?: string;
     totalLiabilities?: string;
   };
+  // Pre-calculated scorecard (passed from queueWorker after scorecard phase)
+  scorecard?: Scorecard;
 }
 
 class AIAnalysisService {
@@ -182,7 +184,8 @@ class AIAnalysisService {
       priceNewsCorrelation,
       insiderTradingStrength,
       secFilings,
-      comprehensiveFundamentals
+      comprehensiveFundamentals,
+      scorecard
     } = financialData;
 
     // Prepare the financial data summary for AI (with null checks for graceful degradation)
@@ -323,6 +326,32 @@ ${isBuy && insiderTradingStrength.sellCount === 0
       ? `⚠️  MIXED SIGNALS: Both buying (${insiderTradingStrength.buyCount}) and selling (${insiderTradingStrength.sellCount}) detected. Analyze which signal is more recent and credible. Consider if different insiders have different outlooks, or if some are routine portfolio management.`
       : ""))}
 ` : "Insider transaction detected - validate this signal"}
+
+=== PRE-CALCULATED SCORECARD (Use as grounding for your analysis) ===
+${scorecard ? `
+GLOBAL SCORE: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)
+OPPORTUNITY TYPE: ${isBuy ? 'BUY' : (isSell ? 'SELL' : 'MIXED')}
+
+SECTION SCORES:
+${Object.entries(scorecard.sections).map(([sectionName, section]: [string, any]) => 
+  `- ${section.name}: ${section.score}/100 (weight: ${section.weight})`
+).join('\n')}
+
+KEY METRICS BY SECTION:
+${Object.entries(scorecard.sections).map(([sectionName, section]: [string, any]) => {
+  const topMetrics = section.metrics
+    .filter((m: any) => m.bucket !== 'missing')
+    .slice(0, 3)
+    .map((m: any) => `  • ${m.name}: ${m.measurement || 'N/A'} → ${m.bucket} (${m.score}/${m.maxScore})`)
+    .join('\n');
+  return `[${section.name}]\n${topMetrics || '  • No data available'}`;
+}).join('\n\n')}
+
+YOUR TASK: Use this scorecard as the factual basis for your recommendation.
+- Reference the specific section scores and metrics when explaining your analysis
+- Your recommendation should align with the global score direction
+- Explain WHY the scores support your ${isBuy ? 'BUY/PASS' : (isSell ? 'SELL/PASS' : 'recommendation')} decision
+` : "Scorecard not available - rely on raw data analysis"}
 
 === ANALYSIS REQUIREMENTS ===
 ${isBuy 

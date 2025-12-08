@@ -103,20 +103,15 @@ class QueueWorker {
   }
 
   private async processLoop() {
-    console.log("[QueueWorker] ✅ Process loop started, running =", this.running);
+    console.log("[QueueWorker] ✅ Process loop started");
     
-    let iterationCount = 0;
     while (this.running) {
-      iterationCount++;
-      console.log(`[QueueWorker] 🔄 Loop iteration ${iterationCount}, processingCount = ${this.processingCount}`);
-      
       try {
         // Periodically clean up stuck processing jobs
         await this.cleanupStuckJobs();
         
         // Check if we can process more jobs
         if (this.processingCount < this.maxConcurrent) {
-          console.log("[QueueWorker] 📥 Polling for jobs...");
           const job = await storage.dequeueNextJob();
           
           if (job) {
@@ -129,18 +124,15 @@ class QueueWorker {
             // If we got a job, check for more immediately
             await this.sleep(100);
           } else {
-            console.log(`[QueueWorker] 💤 No pending jobs, sleeping for ${this.idleInterval}ms`);
             // Queue is empty, wait longer before checking again
             await this.sleep(this.idleInterval);
           }
         } else {
-          console.log(`[QueueWorker] ⏸️  Max concurrent jobs (${this.maxConcurrent}) reached, waiting...`);
           // Max concurrent jobs reached, wait a bit
           await this.sleep(this.pollInterval);
         }
       } catch (error) {
         console.error("[QueueWorker] ❌ Error in process loop:", error);
-        console.error("[QueueWorker] Stack trace:", error instanceof Error ? error.stack : "N/A");
         await this.sleep(this.pollInterval);
       }
     }

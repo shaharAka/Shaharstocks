@@ -22,6 +22,7 @@ export const stocks = pgTable("stocks", {
   marketCap: text("market_cap"),
   peRatio: decimal("pe_ratio", { precision: 10, scale: 2 }),
   recommendation: text("recommendation").notNull(), // "buy", "sell" (insider transaction type) - required for uniqueness
+  opportunityType: text("opportunity_type").notNull().default("BUY"), // "BUY", "SELL", "OPTIONS_CALL", "OPTIONS_PUT" - scorecard evaluation type
   recommendationStatus: text("recommendation_status").default("pending"), // "pending", "approved", "rejected" - user review status
   source: text("source"), // "telegram" or "openinsider" - data source
   confidenceScore: integer("confidence_score"), // 0-100 data quality score - measures reliability of the data source
@@ -320,6 +321,7 @@ export type StockCandlesticks = typeof stockCandlesticks.$inferSelect;
 export const aiAnalysisJobs = pgTable("ai_analysis_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticker: text("ticker").notNull(),
+  opportunityType: text("opportunity_type").notNull().default("BUY"), // "BUY", "SELL", "OPTIONS_CALL", "OPTIONS_PUT"
   source: text("source").notNull(), // "user_manual", "background_job", "bulk_import", etc.
   priority: text("priority").notNull().default("normal"), // "high", "normal", "low"
   status: text("status").notNull().default("pending"), // "pending", "processing", "completed", "failed", "cancelled"

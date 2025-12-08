@@ -7,12 +7,16 @@ import {
   Loader2, 
   AlertTriangle, 
   TrendingUp, 
+  TrendingDown,
   AlertCircle, 
   Target,
   Eye,
   Zap,
   Clock,
-  RotateCcw
+  RotateCcw,
+  CheckCircle,
+  XCircle,
+  Pause
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -29,67 +33,33 @@ interface StockAIAnalysisProps {
   ticker: string;
 }
 
-// Helper to safely parse number (returns null for missing/invalid data)
-const safeNumber = (value: any): number | null => {
-  if (value == null) return null;
-  const num = typeof value === 'string' ? parseFloat(value) : Number(value);
-  return isNaN(num) ? null : num;
-};
+function getSignalColor(score: number): string {
+  if (score >= 70) return "text-green-600 dark:text-green-400";
+  if (score >= 50) return "text-amber-600 dark:text-amber-400";
+  if (score >= 30) return "text-orange-600 dark:text-orange-400";
+  return "text-red-600 dark:text-red-400";
+}
 
-// Helper function to assess profitability from fundamental data
-const assessProfitability = (data: any): string => {
-  const profitMargin = safeNumber(data?.profitMargin);
-  const roe = safeNumber(data?.returnOnEquity);
-  
-  // No data available
-  if (profitMargin == null && roe == null) return "Unknown";
-  
-  // Data is stored as decimals (e.g., 0.162 = 16.2%)
-  // Strong: >15% margin OR >15% ROE
-  if ((profitMargin != null && profitMargin >= 0.15) || (roe != null && roe >= 0.15)) return "Strong";
-  // Moderate: >8% margin OR >10% ROE
-  if ((profitMargin != null && profitMargin >= 0.08) || (roe != null && roe >= 0.10)) return "Moderate";
-  // Weak: positive but below thresholds OR negative (losses)
-  return "Weak";
-};
+function getSignalBgColor(score: number): string {
+  if (score >= 70) return "bg-green-500/10 border-green-500/20";
+  if (score >= 50) return "bg-amber-500/10 border-amber-500/20";
+  if (score >= 30) return "bg-orange-500/10 border-orange-500/20";
+  return "bg-red-500/10 border-red-500/20";
+}
 
-// Helper function to assess liquidity
-const assessLiquidity = (data: any): string => {
-  const currentRatio = safeNumber(data?.currentRatio);
-  
-  if (currentRatio == null) return "Unknown";
-  if (currentRatio >= 2.0) return "Strong";
-  if (currentRatio >= 1.0) return "Moderate";
-  return "Weak";
-};
+function getSignalLabel(score: number): { label: string; icon: typeof CheckCircle } {
+  if (score >= 70) return { label: "ENTER", icon: CheckCircle };
+  if (score >= 50) return { label: "WATCH", icon: Eye };
+  if (score >= 30) return { label: "CAUTION", icon: Pause };
+  return { label: "AVOID", icon: XCircle };
+}
 
-// Helper function to assess debt level (leverage)
-const assessDebtLevel = (data: any): string => {
-  const debtToEquity = safeNumber(data?.debtToEquity);
-  
-  if (debtToEquity == null) return "Unknown";
-  // Zero debt is excellent (net-cash businesses)
-  if (debtToEquity === 0) return "Minimal";
-  if (debtToEquity < 0.5) return "Conservative";
-  if (debtToEquity < 1.5) return "Moderate";
-  return "High";
-};
-
-// Helper function to assess growth
-const assessGrowth = (data: any): string => {
-  const peRatio = safeNumber(data?.peRatio);
-  const eps = safeNumber(data?.eps);
-  
-  // No data available
-  if (peRatio == null && eps == null) return "Unknown";
-  
-  // Strong growth: attractive P/E (15-30) OR high EPS (>$3)
-  if ((peRatio != null && peRatio >= 15 && peRatio <= 30) || (eps != null && eps >= 3)) return "Strong";
-  // Moderate: reasonable P/E (10-15) OR decent EPS (>$1)
-  if ((peRatio != null && peRatio >= 10 && peRatio < 15) || (eps != null && eps >= 1)) return "Moderate";
-  // Has data but doesn't meet thresholds (or negative EPS)
-  return "Weak";
-};
+function getSignalDescription(score: number): string {
+  if (score >= 70) return "Strong insider signal with favorable conditions for entry";
+  if (score >= 50) return "Moderate signal - monitor for better entry point";
+  if (score >= 30) return "Weak signal - significant concerns present";
+  return "Poor opportunity - risk outweighs potential reward";
+}
 
 export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const { toast } = useToast();
@@ -102,7 +72,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
       if (!response.ok) throw new Error("Failed to fetch analysis");
       return response.json();
     },
-    staleTime: 0, // Always fetch fresh data for analysis
+    staleTime: 0,
     refetchInterval: (query) => {
       const data = query.state.data;
       if (data && (data.status === "pending" || data.status === "analyzing")) {
@@ -199,7 +169,6 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     );
   }
 
-  // Show analyzing status
   if (analysis.status === "pending" || analysis.status === "analyzing") {
     return (
       <Card>
@@ -238,7 +207,6 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     );
   }
 
-  // Show error status
   if (analysis.status === "failed") {
     return (
       <Card>
@@ -291,203 +259,180 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     );
   }
 
-  // Render completed AI Playbook
+  // Get signal score (use integratedScore or confidenceScore)
+  const signalScore = analysis.integratedScore ?? analysis.confidenceScore ?? 50;
+  const signalInfo = getSignalLabel(signalScore);
+  const SignalIcon = signalInfo.icon;
+
   return (
     <div className="space-y-3 sm:space-y-4">
-      {/* Section 1: Signal Drivers - Why this score */}
-      <Card>
-        <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-            <Target className="h-4 sm:h-5 w-4 sm:w-5" />
-            Signal Drivers
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-          {analysis.summary && (
-            <p className="text-xs sm:text-sm leading-relaxed" data-testid="text-signal-drivers">
-              {analysis.summary}
-            </p>
-          )}
-
-          {analysis.strengths && analysis.strengths.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400">
-                <TrendingUp className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
-                <span>Key Strengths</span>
+      {/* Section 1: Signal Score - Hero display */}
+      <Card className={`border ${getSignalBgColor(signalScore)}`}>
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+            {/* Score Circle */}
+            <div className="flex flex-col items-center">
+              <div className={`text-4xl sm:text-5xl font-bold ${getSignalColor(signalScore)}`} data-testid="text-signal-score">
+                {signalScore}
               </div>
-              <ul className="space-y-1">
-                {analysis.strengths.map((strength: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="text-amber-600 dark:text-amber-400 shrink-0">•</span>
-                    <span className="flex-1">{strength}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="text-xs text-muted-foreground mt-1">Signal Score</div>
             </div>
-          )}
-
-          {(analysis as any).fundamentalSignals && (analysis as any).fundamentalSignals.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Fundamental Signals</div>
-              <ul className="space-y-1">
-                {(analysis as any).fundamentalSignals.map((signal: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <Zap className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                    <span className="flex-1">{signal}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {(analysis as any).secFilingInsights && (analysis as any).secFilingInsights.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="text-xs sm:text-sm font-medium">SEC Filing Insights</div>
-                {(analysis as any).secFilingType && (
-                  <Badge variant="outline" className="text-[10px] sm:text-xs">{(analysis as any).secFilingType}</Badge>
-                )}
+            
+            {/* Verdict */}
+            <div className="flex-1 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
+                <SignalIcon className={`h-5 w-5 ${getSignalColor(signalScore)}`} />
+                <span className={`text-lg sm:text-xl font-semibold ${getSignalColor(signalScore)}`}>
+                  {signalInfo.label}
+                </span>
               </div>
-              <ul className="space-y-1">
-                {(analysis as any).secFilingInsights.map((insight: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="shrink-0">•</span>
-                    <span className="flex-1">{insight}</span>
-                  </li>
-                ))}
-              </ul>
+              <p className="text-sm text-muted-foreground">
+                {getSignalDescription(signalScore)}
+              </p>
             </div>
-          )}
 
+            {/* Refresh Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => analyzeMutation.mutate()}
+              disabled={analyzeMutation.isPending}
+              data-testid={`button-refresh-analysis-${ticker}`}
+              className="shrink-0"
+            >
+              {analyzeMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Section 2: Key Watchpoints - Risks and catalysts */}
+      {/* Section 2: AI Playbook - The main recommendation */}
       <Card>
         <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
           <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-            <Eye className="h-4 sm:h-5 w-4 sm:w-5" />
-            Key Watchpoints
+            <Target className="h-4 sm:h-5 w-4 sm:w-5 text-amber-600 dark:text-amber-400" />
+            AI Playbook
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-          {analysis.redFlags && analysis.redFlags.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-destructive">
-                <AlertTriangle className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
-                <span>Risk Factors</span>
-              </div>
-              <ul className="space-y-1">
-                {analysis.redFlags.map((flag: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <AlertCircle className="h-3.5 sm:h-4 w-3.5 sm:w-4 mt-0.5 shrink-0 text-destructive" />
-                    <span className="flex-1">{flag}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {analysis.weaknesses && analysis.weaknesses.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Weaknesses to Monitor</div>
-              <ul className="space-y-1">
-                {analysis.weaknesses.map((weakness: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="shrink-0">•</span>
-                    <span className="flex-1">{weakness}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {analysis.risks && analysis.risks.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Additional Risks</div>
-              <ul className="space-y-1">
-                {analysis.risks.map((risk: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <AlertTriangle className="h-3 sm:h-3.5 w-3 sm:w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                    <span className="flex-1">{risk}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {analysis.opportunities && analysis.opportunities.length > 0 && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium text-amber-600 dark:text-amber-400">Potential Catalysts</div>
-              <ul className="space-y-1">
-                {analysis.opportunities.map((opportunity: string, index: number) => (
-                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="text-amber-600 dark:text-amber-400 shrink-0">↗</span>
-                    <span className="flex-1">{opportunity}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {(!analysis.redFlags || analysis.redFlags.length === 0) && 
-           (!analysis.weaknesses || analysis.weaknesses.length === 0) &&
-           (!analysis.risks || analysis.risks.length === 0) &&
-           (!analysis.opportunities || analysis.opportunities.length === 0) && (
-            <p className="text-xs sm:text-sm text-muted-foreground italic">No significant watchpoints identified</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Section 3: 2-Week Execution Notes */}
-      <Card>
-        <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-            <Clock className="h-4 sm:h-5 w-4 sm:w-5" />
-            2-Week Execution Notes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
+        <CardContent className="p-3 sm:p-6 pt-0">
+          {/* Main Playbook/Recommendation */}
           {analysis.recommendation && (
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="text-xs sm:text-sm font-medium">Recommended Action</div>
-              <p className="text-xs sm:text-sm leading-relaxed">
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <p className="text-sm sm:text-base leading-relaxed whitespace-pre-line" data-testid="text-playbook">
                 {analysis.recommendation}
               </p>
             </div>
           )}
 
-          {(analysis as any).insiderValidation && (
-            <div className="space-y-1.5 sm:space-y-2 p-2 sm:p-3 bg-muted/30 rounded-lg">
-              <div className="text-xs sm:text-sm font-medium">Insider Trade Context</div>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {(analysis as any).insiderValidation}
+          {/* Summary if no playbook but has summary */}
+          {!analysis.recommendation && analysis.summary && (
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <p className="text-sm sm:text-base leading-relaxed" data-testid="text-summary">
+                {analysis.summary}
               </p>
             </div>
           )}
 
-          <div className="p-2 sm:p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              <strong>Time Horizon:</strong> This analysis is optimized for a 2-week trading window. 
-              Monitor daily briefs for position updates and changing market conditions.
-            </p>
-          </div>
+          {!analysis.recommendation && !analysis.summary && (
+            <p className="text-sm text-muted-foreground italic">No playbook available</p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Advanced Section - For Technical Investors */}
+      {/* Section 3: Key Factors - Strengths & Risks */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        {/* Bullish Factors */}
+        <Card>
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <span className="text-green-600 dark:text-green-400">Bullish Factors</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            {analysis.strengths && analysis.strengths.length > 0 ? (
+              <ul className="space-y-1.5">
+                {analysis.strengths.slice(0, 4).map((strength: string, index: number) => (
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                    <span className="text-green-600 dark:text-green-400 shrink-0">+</span>
+                    <span className="flex-1">{strength}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : analysis.opportunities && analysis.opportunities.length > 0 ? (
+              <ul className="space-y-1.5">
+                {analysis.opportunities.slice(0, 4).map((opp: string, index: number) => (
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                    <span className="text-green-600 dark:text-green-400 shrink-0">+</span>
+                    <span className="flex-1">{opp}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No bullish factors identified</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Bearish Factors */}
+        <Card>
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+              <span className="text-red-600 dark:text-red-400">Bearish Factors</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            {(analysis.redFlags && analysis.redFlags.length > 0) || 
+             (analysis.weaknesses && analysis.weaknesses.length > 0) || 
+             (analysis.risks && analysis.risks.length > 0) ? (
+              <ul className="space-y-1.5">
+                {[
+                  ...(analysis.redFlags || []).slice(0, 2),
+                  ...(analysis.weaknesses || []).slice(0, 2),
+                  ...(analysis.risks || []).slice(0, 2)
+                ].slice(0, 4).map((risk: string, index: number) => (
+                  <li key={index} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
+                    <span className="text-red-600 dark:text-red-400 shrink-0">-</span>
+                    <span className="flex-1">{risk}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No significant risks identified</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Time Horizon Note */}
+      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+        <div className="flex items-start gap-2">
+          <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-muted-foreground">
+            <strong className="text-foreground">2-Week Horizon:</strong> This analysis is optimized for short-term trading. 
+            Monitor daily briefs for position updates.
+          </p>
+        </div>
+      </div>
+
+      {/* Advanced Section - Collapsible for technical details */}
       <Accordion type="single" collapsible className="w-full">
         <AccordionItem value="advanced">
           <AccordionTrigger className="text-sm" data-testid="button-toggle-advanced">
-            Advanced - For Technical Investors
+            Advanced Details
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pt-2">
             
-            {/* Technical Analysis - Detailed Breakdown */}
+            {/* Technical Analysis */}
             {analysis.technicalAnalysisScore != null && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center justify-between">
+                <CardHeader className="p-3 sm:p-4 pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
                     <span>Technical Indicators</span>
                     <Badge variant={
                       analysis.technicalAnalysisScore >= 70 ? 'default' :
@@ -497,30 +442,20 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p className="font-medium text-foreground">What This Means:</p>
-                    <p>
-                      Technical analysis uses price charts and mathematical indicators to predict future price movements. 
-                      {analysis.technicalAnalysisTrend === 'bullish' && " The current trend is bullish, suggesting upward momentum."}
-                      {analysis.technicalAnalysisTrend === 'bearish' && " The current trend is bearish, suggesting downward pressure."}
-                      {analysis.technicalAnalysisTrend === 'neutral' && " The current trend is neutral, suggesting consolidation or sideways movement."}
-                    </p>
-                  </div>
-
+                <CardContent className="p-3 sm:p-4 pt-0 space-y-3">
                   {analysis.technicalAnalysisTrend && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Overall Trend:</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-muted-foreground">Trend:</span>
                       <Badge variant={
                         analysis.technicalAnalysisTrend === 'bullish' ? 'default' :
                         analysis.technicalAnalysisTrend === 'bearish' ? 'destructive' : 'secondary'
-                      } className="capitalize">
+                      } className="capitalize text-xs">
                         {analysis.technicalAnalysisTrend}
                       </Badge>
                       {analysis.technicalAnalysisMomentum && (
                         <>
-                          <span className="text-sm text-muted-foreground">Momentum:</span>
-                          <Badge variant="outline" className="capitalize">
+                          <span className="text-xs text-muted-foreground">Momentum:</span>
+                          <Badge variant="outline" className="capitalize text-xs">
                             {analysis.technicalAnalysisMomentum}
                           </Badge>
                         </>
@@ -529,34 +464,25 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                   )}
 
                   {analysis.technicalAnalysisSignals && analysis.technicalAnalysisSignals.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium">Key Signals:</div>
-                      <ul className="space-y-1.5">
-                        {analysis.technicalAnalysisSignals.map((signal: string, index: number) => (
-                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2 pl-2">
-                            <span className="shrink-0 mt-1.5">•</span>
-                            <span className="flex-1">{signal}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <ul className="space-y-1">
+                      {analysis.technicalAnalysisSignals.slice(0, 3).map((signal: string, index: number) => (
+                        <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
+                          <span className="shrink-0">•</span>
+                          <span className="flex-1">{signal}</span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-
-                  <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
-                    <strong>Note for Technical Traders:</strong> Technical indicators like <TermTooltip term="RSI">RSI</TermTooltip> (overbought/oversold), 
-                    <TermTooltip term="MACD">MACD</TermTooltip> (momentum), <TermTooltip term="Bollinger Bands">Bollinger Bands</TermTooltip> (volatility), and moving averages (trend) help identify entry and exit points. 
-                    Combined with volume trends and <TermTooltip term="ATR">ATR</TermTooltip> (volatility measurement), these signals provide a quantitative view of market sentiment.
-                  </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Sentiment Analysis - Detailed Breakdown */}
+            {/* Sentiment Analysis */}
             {analysis.sentimentAnalysisScore != null && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center justify-between">
-                    <span>News Sentiment Analysis</span>
+                <CardHeader className="p-3 sm:p-4 pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>News Sentiment</span>
                     <Badge variant={
                       analysis.sentimentAnalysisScore >= 70 ? 'default' :
                       analysis.sentimentAnalysisScore >= 40 ? 'secondary' : 'destructive'
@@ -565,67 +491,48 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p className="font-medium text-foreground">What This Means:</p>
-                    <p>
-                      Sentiment analysis evaluates recent news articles to gauge market perception. 
-                      {analysis.sentimentAnalysisTrend === 'positive' && " Current coverage is predominantly positive, which may support price appreciation."}
-                      {analysis.sentimentAnalysisTrend === 'negative' && " Current coverage is predominantly negative, which may create headwinds."}
-                      {analysis.sentimentAnalysisTrend === 'neutral' && " Current coverage is balanced, with mixed positive and negative themes."}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
+                <CardContent className="p-3 sm:p-4 pt-0 space-y-3">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {analysis.sentimentAnalysisTrend && (
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">Sentiment Trend</div>
+                      <>
+                        <span className="text-xs text-muted-foreground">Sentiment:</span>
                         <Badge variant={
                           analysis.sentimentAnalysisTrend === 'positive' ? 'default' :
                           analysis.sentimentAnalysisTrend === 'negative' ? 'destructive' : 'secondary'
-                        } className="capitalize">
+                        } className="capitalize text-xs">
                           {analysis.sentimentAnalysisTrend}
                         </Badge>
-                      </div>
+                      </>
                     )}
                     {analysis.sentimentAnalysisNewsVolume && (
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">News Volume</div>
-                        <Badge variant="outline" className="capitalize">
+                      <>
+                        <span className="text-xs text-muted-foreground">Volume:</span>
+                        <Badge variant="outline" className="capitalize text-xs">
                           {analysis.sentimentAnalysisNewsVolume}
                         </Badge>
-                      </div>
+                      </>
                     )}
                   </div>
 
                   {analysis.sentimentAnalysisKeyThemes && analysis.sentimentAnalysisKeyThemes.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium">Key Themes in Coverage:</div>
-                      <div className="flex flex-wrap gap-2">
-                        {analysis.sentimentAnalysisKeyThemes.map((theme: string, index: number) => (
-                          <Badge key={index} variant="secondary" className="text-xs">
-                            {theme}
-                          </Badge>
-                        ))}
-                      </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysis.sentimentAnalysisKeyThemes.slice(0, 5).map((theme: string, index: number) => (
+                        <Badge key={index} variant="secondary" className="text-[10px]">
+                          {theme}
+                        </Badge>
+                      ))}
                     </div>
                   )}
-
-                  <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
-                    <strong>For Advanced Investors:</strong> Sentiment scores aggregate tone, relevance, and <TermTooltip term="volume">volume</TermTooltip> of recent news coverage. 
-                    High positive sentiment with high volume often precedes price movements. Key themes reveal what's driving the narrative—watch for shifts 
-                    in coverage that may signal changing market perception ahead of price action.
-                  </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Financial Health - Detailed Breakdown */}
+            {/* Financial Health */}
             {analysis.financialHealthScore != null && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center justify-between">
-                    <span>Financial Health Analysis</span>
+                <CardHeader className="p-3 sm:p-4 pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>Financial Health</span>
                     <Badge variant={
                       analysis.financialHealthScore >= 70 ? 'default' :
                       analysis.financialHealthScore >= 40 ? 'secondary' : 'destructive'
@@ -634,124 +541,23 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p className="font-medium text-foreground">What This Means:</p>
-                    <p>
-                      Financial health evaluates the company's balance sheet, income statement, and cash flow. 
-                      A strong score indicates solid profitability, healthy liquidity, manageable debt, and sustainable growth. 
-                      This provides confidence that the company can weather economic headwinds and fund future operations.
-                    </p>
-                  </div>
-
-                  {/* Key Metrics with Evidence from Fundamental Data */}
-                  {analysis.fundamentalData && (
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Profitability Evidence */}
-                      <div className="p-3 bg-muted/30 rounded-lg space-y-2">
-                        <div className="text-xs text-muted-foreground font-medium">Profitability</div>
-                        <div className="text-sm font-medium">{assessProfitability(analysis.fundamentalData)}</div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          {analysis.fundamentalData?.profitMargin != null && (
-                            <div>Profit Margin: <span className="font-mono">{(analysis.fundamentalData.profitMargin * 100).toFixed(1)}%</span></div>
-                          )}
-                          {analysis.fundamentalData?.returnOnEquity != null && (
-                            <div>ROE: <span className="font-mono">{(analysis.fundamentalData.returnOnEquity * 100).toFixed(1)}%</span></div>
-                          )}
-                          {analysis.fundamentalData?.returnOnAssets != null && (
-                            <div>ROA: <span className="font-mono">{(analysis.fundamentalData.returnOnAssets * 100).toFixed(1)}%</span></div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Liquidity Evidence */}
-                      <div className="p-3 bg-muted/30 rounded-lg space-y-2">
-                        <div className="text-xs text-muted-foreground font-medium">Liquidity</div>
-                        <div className="text-sm font-medium">{assessLiquidity(analysis.fundamentalData)}</div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          {analysis.fundamentalData?.currentRatio != null && (
-                            <div>Current Ratio: <span className="font-mono">{analysis.fundamentalData.currentRatio.toFixed(2)}</span></div>
-                          )}
-                          {analysis.fundamentalData?.quickRatio != null && (
-                            <div>Quick Ratio: <span className="font-mono">{analysis.fundamentalData.quickRatio.toFixed(2)}</span></div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Leverage Evidence */}
-                      <div className="p-3 bg-muted/30 rounded-lg space-y-2">
-                        <div className="text-xs text-muted-foreground font-medium">Debt Level</div>
-                        <div className="text-sm font-medium">{assessDebtLevel(analysis.fundamentalData)}</div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          {analysis.fundamentalData?.debtToEquity != null && (
-                            <div>Debt-to-Equity: <span className="font-mono">{analysis.fundamentalData.debtToEquity.toFixed(2)}</span></div>
-                          )}
-                          {analysis.fundamentalData?.operatingMargin != null && (
-                            <div>Op. Margin: <span className="font-mono">{(analysis.fundamentalData.operatingMargin * 100).toFixed(1)}%</span></div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Growth Evidence */}
-                      <div className="p-3 bg-muted/30 rounded-lg space-y-2">
-                        <div className="text-xs text-muted-foreground font-medium">Growth</div>
-                        <div className="text-sm font-medium">{assessGrowth(analysis.fundamentalData)}</div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          {analysis.fundamentalData?.eps != null && (
-                            <div>EPS: <span className="font-mono">${analysis.fundamentalData.eps.toFixed(2)}</span></div>
-                          )}
-                          {analysis.fundamentalData?.peRatio != null && (
-                            <div>P/E Ratio: <span className="font-mono">{analysis.fundamentalData.peRatio.toFixed(1)}</span></div>
-                          )}
-                          {analysis.fundamentalData?.dividendYield != null && (
-                            <div>Dividend Yield: <span className="font-mono">{(analysis.fundamentalData.dividendYield * 100).toFixed(2)}%</span></div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-xs text-muted-foreground italic bg-muted/30 p-3 rounded-lg">
-                    <strong>For Fundamental Analysts:</strong> Financial health combines <TermTooltip term="profit margin">profit margins</TermTooltip>, <TermTooltip term="ROE">return on equity (ROE)</TermTooltip>, 
-                    <TermTooltip term="current ratio">current ratio</TermTooltip> (liquidity), <TermTooltip term="debt-to-equity ratio">debt-to-equity ratio</TermTooltip> (leverage), and revenue/earnings growth trends. 
-                    Companies with high financial health scores are better positioned to execute their strategy, pay dividends, 
-                    and maintain competitive advantages during market downturns.
+                <CardContent className="p-3 sm:p-4 pt-0">
+                  <div className="text-xs text-muted-foreground">
+                    Fundamental analysis based on profitability, liquidity, and growth metrics.
                   </div>
                 </CardContent>
               </Card>
             )}
+
+            {/* Analysis Timestamp */}
+            {analysis.analyzedAt && (
+              <div className="text-xs text-muted-foreground text-center pt-2">
+                Last analyzed: {new Date(analysis.analyzedAt).toLocaleString()}
+              </div>
+            )}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-
-      {/* Footer */}
-      <div className="flex flex-col items-center gap-3 pt-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => analyzeMutation.mutate()}
-          disabled={analyzeMutation.isPending}
-          data-testid={`button-reanalyze-${ticker}`}
-        >
-          {analyzeMutation.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Re-analyzing...
-            </>
-          ) : (
-            <>
-              <Brain className="h-4 w-4 mr-2" />
-              Refresh Playbook
-            </>
-          )}
-        </Button>
-        
-        {analysis.analyzedAt && (
-          <p className="text-xs text-muted-foreground">
-            Last updated: {new Date(analysis.analyzedAt).toLocaleDateString()} at {new Date(analysis.analyzedAt).toLocaleTimeString()}
-          </p>
-        )}
-      </div>
     </div>
   );
 }

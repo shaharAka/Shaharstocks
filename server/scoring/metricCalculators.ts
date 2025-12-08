@@ -332,11 +332,10 @@ function generateRationale(
 /**
  * Calculate all metrics for a section and return section score
  */
-export function calculateFundamentalsSection(data: RawStockData): SectionScore {
+export function calculateFundamentalsSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
   const sectionConfig = scorecardConfig.sections.fundamentals;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
-  const opportunityType = data.opportunityType || 'BUY';
   
   // Revenue Growth
   const revGrowth = scoreNumericMetric(data.fundamentals?.revenueGrowthYoY, 'revenueGrowth', 'fundamentals', opportunityType);
@@ -420,11 +419,10 @@ export function calculateFundamentalsSection(data: RawStockData): SectionScore {
 /**
  * Calculate technicals section
  */
-export function calculateTechnicalsSection(data: RawStockData): SectionScore {
+export function calculateTechnicalsSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
   const sectionConfig = scorecardConfig.sections.technicals;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
-  const opportunityType = data.opportunityType || 'BUY';
   
   // SMA Alignment
   const smaCondition = getSmaAlignment(
@@ -523,11 +521,10 @@ export function calculateTechnicalsSection(data: RawStockData): SectionScore {
 /**
  * Calculate insider activity section
  */
-export function calculateInsiderSection(data: RawStockData): SectionScore {
+export function calculateInsiderSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
   const sectionConfig = scorecardConfig.sections.insiderActivity;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
-  const opportunityType = data.opportunityType || 'BUY';
   
   // Net Buy Ratio
   const netBuyScore = scoreNumericMetric(data.insiderActivity?.netBuyRatio30d, 'netBuyRatio', 'insiderActivity', opportunityType);
@@ -595,11 +592,10 @@ export function calculateInsiderSection(data: RawStockData): SectionScore {
 /**
  * Calculate news sentiment section
  */
-export function calculateNewsSentimentSection(data: RawStockData): SectionScore {
+export function calculateNewsSentimentSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
   const sectionConfig = scorecardConfig.sections.newsSentiment;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
-  const opportunityType = data.opportunityType || 'BUY';
   
   // Average Sentiment
   const sentimentScore = scoreNumericMetric(data.newsSentiment?.avgSentiment, 'avgSentiment', 'newsSentiment', opportunityType);
@@ -666,11 +662,10 @@ export function calculateNewsSentimentSection(data: RawStockData): SectionScore 
 /**
  * Calculate macro/sector section
  */
-export function calculateMacroSectorSection(data: RawStockData): SectionScore {
+export function calculateMacroSectorSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
   const sectionConfig = scorecardConfig.sections.macroSector;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
-  const opportunityType = data.opportunityType || 'BUY';
   
   // Sector vs SPY
   const sectorScore = scoreNumericMetric(data.macroSector?.sectorVsSpy10d, 'sectorMomentum', 'macroSector', opportunityType);
@@ -711,11 +706,10 @@ export function calculateMacroSectorSection(data: RawStockData): SectionScore {
 /**
  * Calculate AI Agent evaluation section
  */
-export function calculateAIAgentSection(data: RawStockData): SectionScore {
+export function calculateAIAgentSection(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): SectionScore {
   const sectionConfig = scorecardConfig.sections.aiAgent;
   const metrics: Record<string, MetricScore> = {};
   const missingMetrics: string[] = [];
-  const opportunityType = data.opportunityType || 'BUY';
   
   // Risk Assessment
   const riskScore = scoreConditionMetric(data.aiAgentEvaluation?.riskAssessment, 'riskAssessment', 'aiAgent', opportunityType);
@@ -768,15 +762,17 @@ export function calculateAIAgentSection(data: RawStockData): SectionScore {
 
 /**
  * Generate complete scorecard from raw stock data
+ * @param data - Raw stock data for all metrics
+ * @param opportunityType - BUY or SELL opportunity (drives polarity-aware inversion)
  */
-export function generateScorecard(data: RawStockData): Scorecard {
+export function generateScorecard(data: RawStockData, opportunityType: 'BUY' | 'SELL' = 'BUY'): Scorecard {
   const sections: Record<string, SectionScore> = {
-    fundamentals: calculateFundamentalsSection(data),
-    technicals: calculateTechnicalsSection(data),
-    insiderActivity: calculateInsiderSection(data),
-    newsSentiment: calculateNewsSentimentSection(data),
-    macroSector: calculateMacroSectorSection(data),
-    aiAgent: calculateAIAgentSection(data)
+    fundamentals: calculateFundamentalsSection(data, opportunityType),
+    technicals: calculateTechnicalsSection(data, opportunityType),
+    insiderActivity: calculateInsiderSection(data, opportunityType),
+    newsSentiment: calculateNewsSentimentSection(data, opportunityType),
+    macroSector: calculateMacroSectorSection(data, opportunityType),
+    aiAgent: calculateAIAgentSection(data, opportunityType)
   };
   
   const globalScore = calculateGlobalScore(sections);

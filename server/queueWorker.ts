@@ -660,8 +660,10 @@ class QueueWorker {
         }
         
         // Use pure rule-based scorecard generation (no LLM dependency, deterministic)
-        scorecard = generateRuleBasedScorecard(scorecardInputForLogging);
-        console.log(`[QueueWorker] ✅ Scorecard complete: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
+        // CRITICAL: Pass opportunityType to drive BUY vs SELL inversion logic
+        const oppType = (job.opportunityType === 'SELL' ? 'SELL' : 'BUY') as 'BUY' | 'SELL';
+        scorecard = generateRuleBasedScorecard(scorecardInputForLogging, oppType);
+        console.log(`[QueueWorker] ✅ Scorecard complete (${job.opportunityType}): ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
       } catch (scorecardError) {
         // Non-fatal: log detailed error and continue with analysis save
         console.error(`[QueueWorker] ❌ Scorecard generation FAILED for ${job.ticker}:`, scorecardError);

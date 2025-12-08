@@ -1,65 +1,11 @@
 /**
- * Finnhub Stock Market Data Service
- * Fetches real-time stock quotes from Finnhub API
- * Free tier: 60 API calls/minute
+ * Stock Market Data Service (Alpha Vantage)
+ * Fetches real-time stock quotes, company profiles, news, and historical data
+ * Using Alpha Vantage API (Pro license: 75 requests/minute)
+ * 
+ * Note: This file was previously using Finnhub. Now uses Alpha Vantage exclusively.
+ * The service name is kept for backward compatibility with imports.
  */
-
-interface FinnhubQuote {
-  c: number;  // Current price
-  d: number;  // Change
-  dp: number; // Percent change
-  h: number;  // High price of the day
-  l: number;  // Low price of the day
-  o: number;  // Open price of the day
-  pc: number; // Previous close price
-  t: number;  // Timestamp
-}
-
-interface FinnhubCompanyProfile {
-  marketCapitalization: number;
-  name: string;
-  ticker: string;
-  shareOutstanding: number;
-  country: string;
-  currency: string;
-  exchange: string;
-  finnhubIndustry: string;
-  ipo: string;
-  weburl: string;
-  description?: string;
-  logo?: string;
-  phone?: string;
-}
-
-interface FinnhubNewsArticle {
-  category: string;
-  datetime: number;
-  headline: string;
-  id: number;
-  image: string;
-  related: string;
-  source: string;
-  summary: string;
-  url: string;
-}
-
-interface FinnhubCandle {
-  c: number[];  // Close prices
-  h: number[];  // High prices
-  l: number[];  // Low prices
-  o: number[];  // Open prices
-  s: string;    // Status: "ok" or "no_data"
-  t: number[];  // Timestamps (UNIX)
-  v: number[];  // Volume
-}
-
-interface FinnhubInsiderSentiment {
-  symbol: string;
-  year: number;
-  month: number;
-  change: number;
-  mspr: number;  // Monthly Share Purchase Ratio
-}
 
 interface StockQuote {
   symbol: string;
@@ -79,6 +25,9 @@ interface CompanyInfo {
   webUrl?: string;
   ipo?: string;
   marketCap?: number;
+  name?: string;
+  sector?: string;
+  peRatio?: number;
 }
 
 interface NewsArticle {
@@ -88,6 +37,7 @@ interface NewsArticle {
   url: string;
   datetime: number;
   image?: string;
+  sentiment?: number;
 }
 
 interface InsiderSentiment {
@@ -103,19 +53,68 @@ interface StockData {
   insiderSentiment?: InsiderSentiment;
 }
 
-class FinnhubService {
+class AlphaVantageStockService {
   private apiKey: string;
-  private baseUrl = "https://finnhub.io/api/v1";
+  private baseUrl = "https://www.alphavantage.co/query";
+  private cache: Map<string, { data: any; timestamp: number }> = new Map();
+  private cacheTimeout = 60 * 1000; // 1 minute cache
+  private lastApiCallTime: number = 0;
+  private minDelayBetweenCalls: number = 800; // 0.8 seconds (Pro: 75 requests/minute)
 
   constructor() {
-    this.apiKey = process.env.FINNHUB_API_KEY || "";
+    this.apiKey = process.env.ALPHA_VANTAGE_API_KEY || "";
     
     if (!this.apiKey) {
-      console.warn("[Finnhub] WARNING: FINNHUB_API_KEY not set. Stock price updates will not work.");
-      console.warn("[Finnhub] Get a free API key at: https://finnhub.io/register");
+      console.warn("[AlphaVantage] WARNING: ALPHA_VANTAGE_API_KEY not set. Stock data will not be available.");
     } else {
-      console.log("[Finnhub] Service initialized successfully");
+      console.log("[AlphaVantage] Stock service initialized (Pro license: 75 calls/min)");
     }
+  }
+
+  /**
+   * Rate limiter - ensures at least 0.8 seconds between API calls (Pro: 75/min)
+   */
+  private async enforceRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastCall = now - this.lastApiCallTime;
+    
+    if (timeSinceLastCall < this.minDelayBetweenCalls) {
+      const waitTime = this.minDelayBetweenCalls - timeSinceLastCall;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastApiCallTime = Date.now();
+  }
+
+  /**
+   * Fetch with caching and rate limiting
+   */
+  private async fetchWithCache(url: string, cacheKey: string): Promise<any> {
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+      return cached.data;
+    }
+
+    await this.enforceRateLimit();
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Alpha Vantage API request failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (data["Error Message"]) {
+      throw new Error(`Alpha Vantage API Error: ${data["Error Message"]}`);
+    }
+    
+    if (data["Note"]) {
+      console.warn("[AlphaVantage] API rate limit warning:", data["Note"]);
+      throw new Error("API rate limit exceeded. Please try again later.");
+    }
+
+    this.cache.set(cacheKey, { data, timestamp: Date.now() });
+    return data;
   }
 
   /**
@@ -123,36 +122,31 @@ class FinnhubService {
    */
   async getQuote(ticker: string): Promise<StockQuote> {
     if (!this.apiKey) {
-      throw new Error("FINNHUB_API_KEY is not configured");
+      throw new Error("ALPHA_VANTAGE_API_KEY is not configured");
     }
 
-    const url = `${this.baseUrl}/quote?symbol=${ticker}&token=${this.apiKey}`;
+    const url = `${this.baseUrl}?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${this.apiKey}`;
     
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Finnhub API request failed: ${response.statusText}`);
-      }
-
-      const data: FinnhubQuote = await response.json();
+      const data = await this.fetchWithCache(url, `quote_${ticker}`);
+      const quote = data["Global Quote"];
       
-      // Check if we got valid data
-      if (data.c === 0 && data.pc === 0) {
-        throw new Error(`No data available for ticker ${ticker}`);
+      if (!quote || !quote["05. price"]) {
+        throw new Error(`No quote data found for ${ticker}`);
       }
 
       return {
         symbol: ticker,
-        currentPrice: data.c,
-        previousClose: data.pc,
-        change: data.d,
-        changePercent: data.dp,
-        high: data.h,
-        low: data.l,
-        open: data.o,
+        currentPrice: parseFloat(quote["05. price"]),
+        previousClose: parseFloat(quote["08. previous close"]),
+        change: parseFloat(quote["09. change"]),
+        changePercent: parseFloat(quote["10. change percent"].replace("%", "")),
+        high: parseFloat(quote["03. high"]),
+        low: parseFloat(quote["04. low"]),
+        open: parseFloat(quote["02. open"]),
       };
     } catch (error) {
-      console.error(`[Finnhub] Error fetching quote for ${ticker}:`, error);
+      console.error(`[AlphaVantage] Error fetching quote for ${ticker}:`, error);
       throw error;
     }
   }
@@ -162,167 +156,108 @@ class FinnhubService {
    */
   async getCompanyProfile(ticker: string): Promise<CompanyInfo | null> {
     if (!this.apiKey) {
-      throw new Error("FINNHUB_API_KEY is not configured");
+      throw new Error("ALPHA_VANTAGE_API_KEY is not configured");
     }
 
-    const url = `${this.baseUrl}/stock/profile2?symbol=${ticker}&token=${this.apiKey}`;
+    const url = `${this.baseUrl}?function=OVERVIEW&symbol=${ticker}&apikey=${this.apiKey}`;
     
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Finnhub API request failed: ${response.statusText}`);
-      }
-
-      const data: FinnhubCompanyProfile = await response.json();
+      const data = await this.fetchWithCache(url, `profile_${ticker}`);
       
-      // Check if we got valid data
-      if (!data || Object.keys(data).length === 0) {
+      if (!data || Object.keys(data).length === 0 || data["Error Message"]) {
         return null;
       }
 
       return {
-        marketCap: data.marketCapitalization,
-        description: data.description,
-        industry: data.finnhubIndustry,
-        country: data.country,
-        webUrl: data.weburl,
-        ipo: data.ipo,
+        name: data.Name,
+        marketCap: data.MarketCapitalization ? parseFloat(data.MarketCapitalization) : undefined,
+        description: data.Description,
+        industry: data.Industry,
+        sector: data.Sector,
+        country: data.Country,
+        webUrl: data.Website || undefined,
+        ipo: data.IPODate || undefined,
+        peRatio: data.PERatio ? parseFloat(data.PERatio) : undefined,
       };
     } catch (error) {
-      console.error(`[Finnhub] Error fetching company profile for ${ticker}:`, error);
+      console.error(`[AlphaVantage] Error fetching company profile for ${ticker}:`, error);
       return null;
     }
   }
 
   /**
-   * Get latest company news (last 7 days)
+   * Get company news with sentiment
    */
   async getCompanyNews(ticker: string): Promise<NewsArticle[]> {
     if (!this.apiKey) {
-      throw new Error("FINNHUB_API_KEY is not configured");
+      throw new Error("ALPHA_VANTAGE_API_KEY is not configured");
     }
 
-    // Get news from last 7 days
-    const today = new Date();
-    const weekAgo = new Date(today);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    
-    const toDate = today.toISOString().split('T')[0];
-    const fromDate = weekAgo.toISOString().split('T')[0];
-
-    const url = `${this.baseUrl}/company-news?symbol=${ticker}&from=${fromDate}&to=${toDate}&token=${this.apiKey}`;
+    const url = `${this.baseUrl}?function=NEWS_SENTIMENT&tickers=${ticker}&limit=10&apikey=${this.apiKey}`;
     
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Finnhub API request failed: ${response.statusText}`);
+      const data = await this.fetchWithCache(url, `news_${ticker}`);
+      
+      if (!data.feed || !Array.isArray(data.feed)) {
+        return [];
       }
 
-      const data: FinnhubNewsArticle[] = await response.json();
-      
-      // Return top 5 most recent news articles
-      return data
+      return data.feed
         .slice(0, 5)
-        .map(article => ({
-          headline: article.headline,
-          summary: article.summary,
-          source: article.source,
-          url: article.url,
-          datetime: article.datetime,
-          image: article.image,
-        }));
+        .map((article: any) => {
+          // Find sentiment for this specific ticker
+          const tickerSentiment = article.ticker_sentiment?.find(
+            (ts: any) => ts.ticker.toUpperCase() === ticker.toUpperCase()
+          );
+          
+          return {
+            headline: article.title,
+            summary: article.summary,
+            source: article.source,
+            url: article.url,
+            datetime: new Date(article.time_published).getTime() / 1000,
+            image: article.banner_image || undefined,
+            sentiment: tickerSentiment ? parseFloat(tickerSentiment.ticker_sentiment_score) : undefined,
+          };
+        });
     } catch (error) {
-      console.error(`[Finnhub] Error fetching news for ${ticker}:`, error);
+      console.error(`[AlphaVantage] Error fetching news for ${ticker}:`, error);
       return [];
     }
   }
 
   /**
-   * Get insider sentiment data for a stock
-   * Returns the most recent month's MSPR (Monthly Share Purchase Ratio) data
+   * Get insider sentiment (not directly available in Alpha Vantage)
+   * Returns null - insider data comes from OpenInsider instead
    */
   async getInsiderSentiment(ticker: string): Promise<InsiderSentiment | null> {
-    if (!this.apiKey) {
-      throw new Error("FINNHUB_API_KEY is not configured");
-    }
-
-    try {
-      // Get data from last 3 months to ensure we get recent data
-      const today = new Date();
-      const threeMonthsAgo = new Date(today);
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-      
-      const toDate = today.toISOString().split('T')[0];
-      const fromDate = threeMonthsAgo.toISOString().split('T')[0];
-
-      const url = `${this.baseUrl}/stock/insider-sentiment?symbol=${ticker}&from=${fromDate}&to=${toDate}&token=${this.apiKey}`;
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Finnhub API request failed: ${response.statusText}`);
-      }
-
-      const data: { data: FinnhubInsiderSentiment[] } = await response.json();
-      
-      // Get the most recent month's data
-      if (data.data && data.data.length > 0) {
-        const sortedData = data.data.sort((a, b) => {
-          // Sort by year and month descending
-          if (a.year !== b.year) return b.year - a.year;
-          return b.month - a.month;
-        });
-        
-        const latest = sortedData[0];
-        console.log(`[Finnhub] Insider sentiment for ${ticker}: MSPR=${latest.mspr.toFixed(2)}, change=${latest.change.toFixed(2)}`);
-        
-        return {
-          mspr: latest.mspr,
-          change: latest.change,
-        };
-      }
-      
-      console.log(`[Finnhub] No insider sentiment data found for ${ticker}`);
-      return null;
-    } catch (error) {
-      console.error(`[Finnhub] Error fetching insider sentiment for ${ticker}:`, error);
-      return null;
-    }
+    // Alpha Vantage doesn't provide insider sentiment data
+    // This data is sourced from OpenInsider via openinsiderService.ts
+    console.log(`[AlphaVantage] Insider sentiment not available via Alpha Vantage for ${ticker} (use OpenInsider)`);
+    return null;
   }
 
   /**
-   * Get historical closing price for a specific date using Alpha Vantage
+   * Get historical closing price for a specific date
    * @param ticker Stock symbol
    * @param dateString Date in DD.MM.YYYY or DD.MM.YYYY HH:MM format
    */
   async getHistoricalPrice(ticker: string, dateString: string): Promise<number | null> {
-    const alphaVantageKey = process.env.ALPHA_VANTAGE_API_KEY;
-    if (!alphaVantageKey) {
+    if (!this.apiKey) {
       console.log('[AlphaVantage] API key not configured, skipping historical price fetch');
       return null;
     }
 
     try {
       // Parse DD.MM.YYYY or DD.MM.YYYY HH:MM format
-      const datePart = dateString.split(' ')[0]; // Remove time if present
+      const datePart = dateString.split(' ')[0];
       const [day, month, year] = datePart.split('.').map(Number);
       
       // Format as YYYY-MM-DD for Alpha Vantage
       const targetDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       
-      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${alphaVantageKey}`;
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Alpha Vantage API request failed: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      // Check for API errors
-      if (data['Error Message'] || data['Note']) {
-        console.log(`[AlphaVantage] API limit or error for ${ticker}: ${data['Error Message'] || data['Note']}`);
-        return null;
-      }
+      const url = `${this.baseUrl}?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${this.apiKey}`;
+      const data = await this.fetchWithCache(url, `daily_${ticker}`);
       
       const timeSeries = data['Time Series (Daily)'];
       if (!timeSeries) {
@@ -339,7 +274,7 @@ class FinnhubService {
       
       // If exact date not found (weekend/holiday), find closest previous trading day
       const targetDateObj = new Date(targetDate);
-      const sortedDates = Object.keys(timeSeries).sort().reverse(); // Most recent first
+      const sortedDates = Object.keys(timeSeries).sort().reverse();
       
       for (const date of sortedDates) {
         const dateObj = new Date(date);
@@ -366,29 +301,27 @@ class FinnhubService {
    * @returns Array of daily prices with date and close price
    */
   async getHistoricalCandlesAlphaVantage(ticker: string, fromDate: Date | string, toDate: Date | string): Promise<Array<{ date: string; close: number }>> {
-    const alphaVantageKey = process.env.ALPHA_VANTAGE_API_KEY;
-    if (!alphaVantageKey) {
+    return this.getHistoricalCandles(ticker, fromDate, toDate);
+  }
+
+  /**
+   * Get historical daily candles (OHLCV) for a stock
+   * @param ticker Stock symbol
+   * @param fromDate Start date (YYYY-MM-DD or Date object)
+   * @param toDate End date (YYYY-MM-DD or Date object)
+   * @returns Array of daily prices with date and close price
+   */
+  async getHistoricalCandles(ticker: string, fromDate: Date | string, toDate: Date | string): Promise<Array<{ date: string; close: number }>> {
+    if (!this.apiKey) {
       throw new Error("ALPHA_VANTAGE_API_KEY is not configured");
     }
 
     try {
-      // Convert to Date objects if needed
       const fromDateObj = fromDate instanceof Date ? fromDate : new Date(fromDate);
       const toDateObj = toDate instanceof Date ? toDate : new Date(toDate);
 
-      const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${alphaVantageKey}&outputsize=full`;
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Alpha Vantage API request failed: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      // Check for API errors
-      if (data['Error Message'] || data['Note']) {
-        throw new Error(`Alpha Vantage API error: ${data['Error Message'] || data['Note']}`);
-      }
+      const url = `${this.baseUrl}?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${this.apiKey}&outputsize=full`;
+      const data = await this.fetchWithCache(url, `candles_${ticker}_full`);
       
       const timeSeries = data['Time Series (Daily)'];
       if (!timeSeries) {
@@ -422,78 +355,17 @@ class FinnhubService {
   }
 
   /**
-   * Get historical daily candles (OHLCV) for a stock
-   * @param ticker Stock symbol
-   * @param fromDate Start date (YYYY-MM-DD or Date object)
-   * @param toDate End date (YYYY-MM-DD or Date object)
-   * @returns Array of daily prices with date and close price
-   */
-  async getHistoricalCandles(ticker: string, fromDate: Date | string, toDate: Date | string): Promise<Array<{ date: string; close: number }>> {
-    if (!this.apiKey) {
-      throw new Error("FINNHUB_API_KEY is not configured");
-    }
-
-    try {
-      // Convert dates to UNIX timestamps
-      const fromTimestamp = Math.floor(
-        (fromDate instanceof Date ? fromDate : new Date(fromDate)).getTime() / 1000
-      );
-      const toTimestamp = Math.floor(
-        (toDate instanceof Date ? toDate : new Date(toDate)).getTime() / 1000
-      );
-
-      const url = `${this.baseUrl}/stock/candle?symbol=${ticker}&resolution=D&from=${fromTimestamp}&to=${toTimestamp}&token=${this.apiKey}`;
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Finnhub API request failed: ${response.statusText}`);
-      }
-
-      const data: FinnhubCandle = await response.json();
-      
-      // Check if we got valid data
-      if (data.s !== 'ok' || !data.c || data.c.length === 0) {
-        console.log(`[Finnhub] No historical data available for ${ticker}`);
-        return [];
-      }
-
-      // Convert to our format: array of { date, close }
-      const prices: Array<{ date: string; close: number }> = [];
-      for (let i = 0; i < data.c.length; i++) {
-        const date = new Date(data.t[i] * 1000).toISOString().split('T')[0]; // Convert UNIX to YYYY-MM-DD
-        prices.push({
-          date,
-          close: data.c[i],
-        });
-      }
-
-      console.log(`[Finnhub] Fetched ${prices.length} historical prices for ${ticker} from ${prices[0]?.date} to ${prices[prices.length - 1]?.date}`);
-      return prices;
-    } catch (error) {
-      console.error(`[Finnhub] Error fetching historical candles for ${ticker}:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Get quotes for multiple stocks (batch)
    */
   async getBatchQuotes(tickers: string[]): Promise<Map<string, StockQuote>> {
     const quotes = new Map<string, StockQuote>();
     
-    // Finnhub free tier: 60 calls/minute = 1 call per second
-    // We'll add a small delay between requests to be safe
     for (const ticker of tickers) {
       try {
         const quote = await this.getQuote(ticker);
         quotes.set(ticker, quote);
-        
-        // Wait 1 second between requests to avoid rate limits
-        if (tickers.indexOf(ticker) < tickers.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
       } catch (error) {
-        console.error(`[Finnhub] Failed to fetch ${ticker}, skipping`);
+        console.error(`[AlphaVantage] Failed to fetch quote for ${ticker}, skipping`);
       }
     }
     
@@ -501,40 +373,26 @@ class FinnhubService {
   }
 
   /**
-   * Get quotes, market cap, company info, news, and insider sentiment for multiple stocks (batch)
+   * Get quotes, market cap, company info, and news for multiple stocks (batch)
    */
   async getBatchStockData(tickers: string[]): Promise<Map<string, StockData>> {
     const stockData = new Map<string, StockData>();
     
-    // Finnhub free tier: 60 calls/minute = 1 call per second
-    // We need 4 calls per ticker (quote + profile + news + insider sentiment)
     for (const ticker of tickers) {
       try {
         const quote = await this.getQuote(ticker);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
         const companyInfo = await this.getCompanyProfile(ticker);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
         const news = await this.getCompanyNews(ticker);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const insiderSentiment = await this.getInsiderSentiment(ticker);
         
         stockData.set(ticker, {
           quote,
           marketCap: companyInfo?.marketCap,
           companyInfo: companyInfo || undefined,
           news,
-          insiderSentiment: insiderSentiment || undefined,
+          insiderSentiment: undefined, // Sourced from OpenInsider
         });
-        
-        // Wait 1 second before next ticker
-        if (tickers.indexOf(ticker) < tickers.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
       } catch (error) {
-        console.error(`[Finnhub] Failed to fetch data for ${ticker}, skipping`);
+        console.error(`[AlphaVantage] Failed to fetch data for ${ticker}, skipping`);
       }
     }
     
@@ -542,4 +400,5 @@ class FinnhubService {
   }
 }
 
-export const finnhubService = new FinnhubService();
+// Export with same name for backward compatibility
+export const finnhubService = new AlphaVantageStockService();

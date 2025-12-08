@@ -54,5 +54,4 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
     - **Telegram**: GramJS for MTProto API communication.
     - **SEC Insider Trading Filings**: Automated collection from SEC regulatory data sources.
     - **SEC EDGAR API**: For company filings.
-    - **Alpha Vantage API**: For financial fundamentals, technical indicators, and news sentiment.
-    - **Finnhub API**: For real-time stock prices, company profiles, market cap, and historical data.
+    - **Alpha Vantage API (Pro License)**: Used exclusively for all stock market data including real-time quotes, company profiles, market cap, historical prices, technical indicators, news sentiment, and fundamental data. Pro license provides 75 requests/minute with 20+ years of historical data. The service is implemented in `server/finnhubService.ts` (kept for backward compatibility) but uses Alpha Vantage endpoints.

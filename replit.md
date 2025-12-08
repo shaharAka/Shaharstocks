@@ -17,6 +17,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **WebSocket Push Notification System**: Replaces aggressive polling with real-time, event-driven WebSocket communication for instant UI updates.
 - **Database-Level Race Prevention**: Utilizes partial unique indexes on `aiAnalysisJobs(ticker)` where status is 'pending' or 'processing' to prevent duplicate AI analysis jobs.
 - **Candlestick Data Architecture**: Candlestick data is stored once per ticker in a shared `stockCandlesticks` table and populated via daily background jobs, immediate fire-and-forget fetches on new stock follows, and on-demand frontend API requests.
+- **Batch Filtering Optimization**: Transaction ingestion uses single-pass filtering with `getExistingTransactionKeys()` to detect duplicates in one DB query instead of N+1 queries. Quotes and stock data are batch-fetched for unique tickers, then all filters (market cap, options deals) are applied in memory.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, Wouter for routing, TanStack Query for server state management (with optimistic updates and user-scoped cache keys), React Hook Form with Zod for validation.

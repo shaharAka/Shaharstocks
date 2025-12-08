@@ -71,7 +71,7 @@ function safeFixed(value: number | null | undefined, decimals: number): string |
 
 class GeminiAgentService {
   private genAI: GoogleGenAI;
-  private model: string = "gemini-2.5-flash-preview-05-20";
+  private model: string = "gemini-3-pro-preview";
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;

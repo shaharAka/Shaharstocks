@@ -229,27 +229,27 @@ function startPriceUpdateJob() {
 
       log(`[PriceUpdate] Updating prices for ${tickers.length} unique pending tickers across all users`);
 
-      // Fetch quotes, market cap, company info, and news for all pending stocks (using Alpha Vantage)
-      const stockData = await stockService.getBatchStockData(tickers);
+      // Batch fetch quotes and stock data in parallel
+      const [quotesMap, stockDataMap] = await Promise.all([
+        stockService.getBatchQuotes(tickers),
+        stockService.getBatchStockData(tickers),
+      ]);
+      
+      log(`[PriceUpdate] Batch fetch complete: ${quotesMap.size}/${tickers.length} quotes, ${stockDataMap.size}/${tickers.length} stock data`);
 
       // Update each ticker globally (across all users) with shared market data
       let successCount = 0;
       for (const ticker of tickers) {
-        const data = stockData.get(ticker);
-        if (data) {
+        const quote = quotesMap.get(ticker);
+        const data = stockDataMap.get(ticker);
+        
+        if (quote) {
           // Update all instances of this ticker (across all users) with the same market data
           const updatedCount = await storage.updateStocksByTickerGlobally(ticker, {
-            currentPrice: data.quote.currentPrice.toString(),
-            previousClose: data.quote.previousClose.toString(),
-            marketCap: data.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-            description: data.companyInfo?.description || null,
-            industry: data.companyInfo?.industry || null,
-            country: data.companyInfo?.country || null,
-            webUrl: data.companyInfo?.webUrl || null,
-            ipo: data.companyInfo?.ipo || null,
-            news: data.news || [],
-            insiderSentimentMspr: data.insiderSentiment?.mspr.toString() || null,
-            insiderSentimentChange: data.insiderSentiment?.change.toString() || null,
+            currentPrice: quote.currentPrice.toString(),
+            previousClose: quote.previousClose.toString(),
+            marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
+            industry: data?.companyInfo?.industry || null,
           });
           if (updatedCount > 0) {
             successCount++;
@@ -615,8 +615,33 @@ function startOpeninsiderFetchJob() {
       let filteredMarketCap = 0;
       let filteredOptionsDeals = 0;
       let filteredNoQuote = 0;
+      let filteredNoStockData = 0;  // API fetch failure (distinct from market cap filter)
       let filteredDuplicates = 0;
       const createdTickers = new Set<string>(); // Track unique tickers for AI analysis
+      
+      // ========== BATCH PREFETCH: Fetch all data upfront for unique tickers ==========
+      // This deduplicates API calls - each ticker is fetched only once instead of per-transaction
+      const uniqueTickers = Array.from(new Set(transactions.map(t => t.ticker)));
+      log(`[OpeninsiderFetch] Batch prefetch: ${uniqueTickers.length} unique tickers from ${transactions.length} transactions`);
+      
+      // Batch fetch quotes and stock data in parallel
+      const [quotesMap, stockDataMap] = await Promise.all([
+        stockService.getBatchQuotes(uniqueTickers),
+        stockService.getBatchStockData(uniqueTickers),
+      ]);
+      
+      // Track fetch failures separately from filter results
+      const quoteFetchFailures = uniqueTickers.filter(t => !quotesMap.has(t));
+      const stockDataFetchFailures = uniqueTickers.filter(t => !stockDataMap.has(t) || !stockDataMap.get(t)?.marketCap);
+      
+      log(`[OpeninsiderFetch] Batch fetch complete:`);
+      log(`[OpeninsiderFetch]   Quotes: ${quotesMap.size}/${uniqueTickers.length} success, ${quoteFetchFailures.length} failures`);
+      log(`[OpeninsiderFetch]   Stock data: ${stockDataMap.size}/${uniqueTickers.length} fetched, ${stockDataFetchFailures.length} missing market cap`);
+      
+      if (quoteFetchFailures.length > 0) {
+        log(`[OpeninsiderFetch]   ⚠️ Quote fetch failures: ${quoteFetchFailures.slice(0, 5).join(', ')}${quoteFetchFailures.length > 5 ? '...' : ''}`);
+      }
+      // ================================================================================
       
       // Get only users who are eligible for data refresh based on subscription type
       // Trial users: daily refresh only, Paid subscribers: hourly refresh
@@ -634,17 +659,16 @@ function startOpeninsiderFetchJob() {
       
       for (const transaction of transactions) {
         try {
-          // Get current market price from Alpha Vantage (once per transaction)
-          const quote = await stockService.getQuote(transaction.ticker);
-          if (!quote || !quote.price) {
+          // Use prefetched quote data (no API call here)
+          const quote = quotesMap.get(transaction.ticker);
+          if (!quote || !quote.currentPrice) {
             filteredNoQuote++;
-            log(`[OpeninsiderFetch] Could not get quote for ${transaction.ticker}, skipping`);
+            log(`[OpeninsiderFetch] No quote data for ${transaction.ticker}, skipping`);
             continue;
           }
 
-          // Fetch company profile, market cap, and news (using Alpha Vantage)
-          const stockData = await stockService.getBatchStockData([transaction.ticker]);
-          const data = stockData.get(transaction.ticker);
+          // Use prefetched stock data (no API call here)
+          const data = stockDataMap.get(transaction.ticker);
           
           // Apply market cap filter
           if (!data?.marketCap || data.marketCap < minMarketCap) {
@@ -681,6 +705,8 @@ function startOpeninsiderFetchJob() {
             }
 
             // Create stock recommendation for this user
+            // Note: getBatchStockData only returns marketCap and industry/sector
+            // Other fields (description, news, etc.) are populated by background jobs
             await storage.createStock({
               userId: user.id,
               ticker: transaction.ticker,
@@ -698,14 +724,14 @@ function startOpeninsiderFetchJob() {
               confidenceScore: transaction.confidence || 75,
               peRatio: null,
               marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-              description: data?.companyInfo?.description || null,
+              description: null,
               industry: data?.companyInfo?.industry || null,
-              country: data?.companyInfo?.country || null,
-              webUrl: data?.companyInfo?.webUrl || null,
-              ipo: data?.companyInfo?.ipo || null,
-              news: data?.news || [],
-              insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
-              insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
+              country: null,
+              webUrl: null,
+              ipo: null,
+              news: [],
+              insiderSentimentMspr: null,
+              insiderSentimentChange: null,
               priceHistory: [],
             });
           }

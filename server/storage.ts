@@ -3159,12 +3159,22 @@ export class DatabaseStorage implements IStorage {
 
       // Create or update analysis record with "analyzing" status
       // This ensures the frontend can show the analyzing state immediately
-      // But DON'T overwrite completed analysis with integrated scores
       const existingAnalysis = await this.getStockAnalysis(ticker);
       if (existingAnalysis) {
-        // Only set to "analyzing" if not already completed with an integrated score
-        if (existingAnalysis.status !== "completed" || !existingAnalysis.integratedScore) {
-          await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
+        // If force=true, ALWAYS reset to analyzing (user wants fresh analysis)
+        // Otherwise, only update if not completed with integrated score
+        if (force || existingAnalysis.status !== "completed" || !existingAnalysis.integratedScore) {
+          // Delete old analysis when forcing a refresh to ensure fresh data
+          if (force) {
+            await db.delete(stockAnalyses).where(eq(stockAnalyses.ticker, ticker));
+            await db.insert(stockAnalyses).values({
+              ticker,
+              status: "analyzing",
+            });
+            console.log(`[Queue] Deleted old analysis for ${ticker} (forced refresh)`);
+          } else {
+            await this.updateStockAnalysis(ticker, { status: "analyzing", errorMessage: null });
+          }
         }
       } else {
         await db.insert(stockAnalyses).values({

@@ -756,19 +756,3 @@ Respond in JSON format:
     };
   }
 }
-
-export function integrateScores(microScore: number, macroFactor: number): { integratedScore: number; adjustment: string } {
-  const integrated = Math.round(microScore * macroFactor);
-  const clamped = Math.max(0, Math.min(100, integrated));
-  
-  let adjustment = "";
-  if (macroFactor < 0.9) {
-    adjustment = `Score reduced from ${microScore} to ${clamped} due to challenging macro conditions (${macroFactor}x factor)`;
-  } else if (macroFactor > 1.1) {
-    adjustment = `Score boosted from ${microScore} to ${clamped} due to favorable macro conditions (${macroFactor}x factor)`;
-  } else {
-    adjustment = `Score maintained at ${clamped} (neutral macro environment, ${macroFactor}x factor)`;
-  }
-  
-  return { integratedScore: clamped, adjustment };
-}

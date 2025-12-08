@@ -53,8 +53,9 @@ All per-user tables enforce FK constraints to `users.id` with `ON DELETE CASCADE
   1. **Data Collection**: Fetch fundamentals, technicals, news, SEC filings, insider data, and macro/industry context
   2. **Scorecard Generation**: Calculate 6-section rule-based scorecard (fundamentals, technicals, insider, news, macro, aiAgent) with Gemini AI evaluation
   3. **AI Report Generation**: Generate investment recommendation grounded by the completed scorecard
-  4. **Finalization**: Save analysis atomically with integrated scores
+  4. **Finalization**: Save analysis with scorecard globalScore as the integrated score (no legacy micro*macro calculation)
   Phase flags: `macroCompleted` (after data collection), `microCompleted` (after scorecard), `combinedCompleted` (after save)
+- **Scorecard as Primary Score**: The scorecard's `globalScore` (0-100) is now the authoritative score for all stock analyses. The legacy micro*macro multiplier calculation has been removed. Macro sector data is still collected and contributes to the scorecard's macroSector section.
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
 - **Collaboration**: Multi-user system with stock-specific comment threads and recommendation filtering.
 - **Adaptive Stock Fetching**: Stock fetch limits adjust based on user onboarding and configuration, with customizable OpenInsider filters.

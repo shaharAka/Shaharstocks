@@ -479,11 +479,11 @@ class QueueWorker {
         const { runMacroAnalysis } = await import("./macroAgentService");
         const macroData = await runMacroAnalysis(stockIndustry);
         macroAnalysis = await storage.createMacroAnalysis(macroData);
-        console.log(`[QueueWorker] Created macro analysis for ${stockIndustry || "General Market"} with factor ${macroAnalysis.macroFactor}`);
+        console.log(`[QueueWorker] Created macro analysis for ${stockIndustry || "General Market"} (score: ${macroAnalysis.macroScore}/100)`);
       } else {
         const createdDate = macroAnalysis.createdAt ? macroAnalysis.createdAt.toISOString() : "unknown";
         console.log(`[QueueWorker] Using existing macro analysis for ${stockIndustry || "General Market"} from ${createdDate}`);
-        console.log(`[QueueWorker] Macro factor: ${macroAnalysis.macroFactor}, Macro score: ${macroAnalysis.macroScore}/100`);
+        console.log(`[QueueWorker] Macro score: ${macroAnalysis.macroScore}/100 (used for scorecard sector analysis)`);
       }
 
       // Mark data collection phase complete (macro is part of data collection now)
@@ -852,17 +852,20 @@ class QueueWorker {
       });
       console.log(`[QueueWorker] ✅ AI report complete (rating: ${analysis.overallRating}, confidence: ${analysis.confidenceScore}/100)`);
 
-      // PHASE 4: Score Integration & Save
+      // PHASE 4: Save Analysis
       await this.updateProgress(job.id, job.ticker, "calculating_score", {
-        phase: "integration",
-        substep: "Calculating integrated score (micro × macro)"
+        phase: "saving",
+        substep: "Saving analysis with scorecard"
       });
 
-      // Calculate integrated score (micro score × macro factor), clamped to 0-100
-      const macroFactor = macroAnalysis.macroFactor ? parseFloat(macroAnalysis.macroFactor) : 1.0;
-      const rawIntegratedScore = analysis.confidenceScore * macroFactor;
-      const integratedScore = Math.max(0, Math.min(100, Math.round(rawIntegratedScore)));
-      console.log(`[QueueWorker] Score integration: Micro ${analysis.confidenceScore} × Macro ${macroFactor} = ${rawIntegratedScore.toFixed(1)} → Clamped to ${integratedScore}/100`);
+      // Use scorecard globalScore as the integrated score (replaces legacy micro*macro calculation)
+      // SAFETY: scorecard is guaranteed to be non-null at this point due to validation above,
+      // but we add explicit guard for extra safety and to satisfy type checker
+      if (!scorecard || typeof scorecard.globalScore !== 'number') {
+        throw new Error(`Scorecard validation failed at save point for ${job.ticker} - this should not happen`);
+      }
+      const integratedScore = scorecard.globalScore;
+      console.log(`[QueueWorker] Using scorecard globalScore: ${integratedScore}/100 (confidence: ${scorecard.confidence})`);
 
       // Save analysis to database with macro integration
       console.log(`[QueueWorker] 💾 Saving integrated analysis to database...`);
@@ -898,9 +901,9 @@ class QueueWorker {
         businessOverview: secFilingData?.businessOverview,
         fundamentalData: comprehensiveFundamentals,
         macroAnalysisId: macroAnalysis.id,
-        integratedScore: scorecard ? scorecard.globalScore : integratedScore, // Use scorecard global score if available
-        scorecard: scorecard || undefined,
-        scorecardVersion: scorecard ? scorecard.version : undefined,
+        integratedScore: integratedScore, // Direct scorecard globalScore
+        scorecard: scorecard,
+        scorecardVersion: scorecard.version,
       });
 
       // Set combined flag after integrated score is saved
@@ -998,7 +1001,7 @@ class QueueWorker {
       await storage.updateJobStatus(job.id, "completed");
       
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.log(`[QueueWorker] ✅ Job ${job.id} completed successfully in ${duration}s (${job.ticker}: ${analysis.overallRating}, integrated score: ${integratedScore}/100)`);
+      console.log(`[QueueWorker] ✅ Job ${job.id} completed successfully in ${duration}s (${job.ticker}: ${analysis.overallRating}, scorecard: ${integratedScore}/100)`);
 
     } catch (error) {
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);

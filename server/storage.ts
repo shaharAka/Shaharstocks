@@ -2442,7 +2442,7 @@ export class DatabaseStorage implements IStorage {
       const owningStance = normalizeStance(latestBrief?.owningStance);
       const aiScore = latestBrief?.watchingConfidence ?? null;
       
-      // Get integrated score from stock analysis (comprehensive micro + macro score)
+      // Get integrated score from stock analysis (scorecard globalScore)
       const analyses = await db
         .select()
         .from(stockAnalyses)

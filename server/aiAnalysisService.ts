@@ -419,7 +419,7 @@ HIGH SCORE = STRONG SELL OPPORTUNITY (weak company + insiders selling = strong b
 - 30-49: PASS - Fundamentals don't support signal
 - 0-29: IGNORE - Red flags contradict signal`)}
 
-NOTE: This micro score will be adjusted by a separate MACRO analysis that considers market-wide and sector conditions.
+NOTE: This AI confidence score is one of 6 sections in the overall scorecard. The final score integrates fundamentals, technicals, insider activity, news sentiment, macro/sector conditions, and this AI evaluation.
 
 Focus on actionable insights. Be direct. This is for real money decisions.`;
 
@@ -475,7 +475,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       overallRating: string; 
       summary: string; 
       recommendation?: string; // Full AI recommendation text from playbook
-      integratedScore?: number; // Combined micro+macro score (0-100)
+      integratedScore?: number; // Scorecard globalScore (0-100)
       confidenceScore?: number; // MICRO AGENT confidence (0-100)
       technicalAnalysis?: {
         trend?: string;
@@ -611,7 +611,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
     let aiPlaybookContext = "";
     
     if (previousAnalysis) {
-      // Use integrated score if available (combines micro + macro agents)
+      // Use integrated score if available (scorecard globalScore)
       signalScore = previousAnalysis.integratedScore ?? previousAnalysis.confidenceScore ?? 50;
       
       // Build technical analysis context

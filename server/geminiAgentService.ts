@@ -61,9 +61,17 @@ export interface StockContext {
   macroScore?: number;
 }
 
+/**
+ * Helper to safely format a number with toFixed, handling null/undefined
+ */
+function safeFixed(value: number | null | undefined, decimals: number): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return value.toFixed(decimals);
+}
+
 class GeminiAgentService {
   private genAI: GoogleGenAI;
-  private model: string = "gemini-1.5-flash";
+  private model: string = "gemini-2.5-flash-preview-05-20";
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -94,18 +102,10 @@ class GeminiAgentService {
       
       return this.parseEvaluationResponse(responseText);
     } catch (error) {
-      console.error("[GeminiAgentService] Error evaluating stock:", error);
-      // Return neutral assessment on error
-      return {
-        riskAssessment: "moderate_risk",
-        entryTiming: "mid_way_through_move",
-        conviction: "moderate_conviction",
-        rationale: {
-          risk: "Unable to assess risk due to AI service error",
-          timing: "Unable to assess timing due to AI service error",
-          conviction: "Unable to assess conviction due to AI service error"
-        }
-      };
+      // CRITICAL: Don't hide Gemini failures - propagate them so job can retry
+      console.error("[GeminiAgentService] Gemini API call failed:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Gemini API call failed: ${errorMessage}`);
     }
   }
 
@@ -122,33 +122,33 @@ class GeminiAgentService {
 Current Price: $${context.currentPrice}
 
 ## PRICE TREND & TECHNICALS
-${context.sma5 ? `- 5-day SMA: $${context.sma5.toFixed(2)}` : ''}
-${context.sma10 ? `- 10-day SMA: $${context.sma10.toFixed(2)}` : ''}
-${context.sma20 ? `- 20-day SMA: $${context.sma20.toFixed(2)}` : ''}
-${context.rsi ? `- RSI (14-day): ${context.rsi.toFixed(1)}` : ''}
-${context.macdHistogram ? `- MACD Histogram: ${context.macdHistogram.toFixed(3)}` : ''}
-${context.priceChangePercent ? `- Recent Price Change: ${context.priceChangePercent > 0 ? '+' : ''}${context.priceChangePercent.toFixed(1)}%` : ''}
+${safeFixed(context.sma5, 2) ? `- 5-day SMA: $${safeFixed(context.sma5, 2)}` : ''}
+${safeFixed(context.sma10, 2) ? `- 10-day SMA: $${safeFixed(context.sma10, 2)}` : ''}
+${safeFixed(context.sma20, 2) ? `- 20-day SMA: $${safeFixed(context.sma20, 2)}` : ''}
+${safeFixed(context.rsi, 1) ? `- RSI (14-day): ${safeFixed(context.rsi, 1)}` : ''}
+${safeFixed(context.macdHistogram, 3) ? `- MACD Histogram: ${safeFixed(context.macdHistogram, 3)}` : ''}
+${safeFixed(context.priceChangePercent, 1) ? `- Recent Price Change: ${(context.priceChangePercent ?? 0) > 0 ? '+' : ''}${safeFixed(context.priceChangePercent, 1)}%` : ''}
 
 ## FUNDAMENTALS
-${context.revenueGrowthYoY !== undefined ? `- Revenue Growth YoY: ${context.revenueGrowthYoY > 0 ? '+' : ''}${context.revenueGrowthYoY.toFixed(1)}%` : ''}
-${context.epsGrowthYoY !== undefined ? `- EPS Growth YoY: ${context.epsGrowthYoY > 0 ? '+' : ''}${context.epsGrowthYoY.toFixed(1)}%` : ''}
-${context.debtToEquity !== undefined ? `- Debt-to-Equity: ${context.debtToEquity.toFixed(2)}` : ''}
+${safeFixed(context.revenueGrowthYoY, 1) ? `- Revenue Growth YoY: ${(context.revenueGrowthYoY ?? 0) > 0 ? '+' : ''}${safeFixed(context.revenueGrowthYoY, 1)}%` : ''}
+${safeFixed(context.epsGrowthYoY, 1) ? `- EPS Growth YoY: ${(context.epsGrowthYoY ?? 0) > 0 ? '+' : ''}${safeFixed(context.epsGrowthYoY, 1)}%` : ''}
+${safeFixed(context.debtToEquity, 2) ? `- Debt-to-Equity: ${safeFixed(context.debtToEquity, 2)}` : ''}
 
 ## INSIDER ACTIVITY
-${context.daysSinceInsiderTrade ? `- Days Since Insider Trade: ${context.daysSinceInsiderTrade}` : ''}
-${context.insiderPrice ? `- Insider Price: $${context.insiderPrice}` : ''}
+${context.daysSinceInsiderTrade != null ? `- Days Since Insider Trade: ${context.daysSinceInsiderTrade}` : ''}
+${context.insiderPrice != null ? `- Insider Price: $${context.insiderPrice}` : ''}
 
 ## MARKET SENTIMENT
-${context.avgSentiment !== undefined ? `- News Sentiment: ${context.avgSentiment.toFixed(2)} (-1 to +1)` : ''}
-${context.newsCount ? `- News Volume (7d): ${context.newsCount} articles` : ''}
-${context.sectorVsSpy10d !== undefined ? `- Sector vs SPY (10d): ${context.sectorVsSpy10d > 0 ? '+' : ''}${context.sectorVsSpy10d.toFixed(1)}%` : ''}
+${safeFixed(context.avgSentiment, 2) ? `- News Sentiment: ${safeFixed(context.avgSentiment, 2)} (-1 to +1)` : ''}
+${context.newsCount != null ? `- News Volume (7d): ${context.newsCount} articles` : ''}
+${safeFixed(context.sectorVsSpy10d, 1) ? `- Sector vs SPY (10d): ${(context.sectorVsSpy10d ?? 0) > 0 ? '+' : ''}${safeFixed(context.sectorVsSpy10d, 1)}%` : ''}
 
 ## RULE-BASED SCORES (0-100)
-${context.fundamentalsScore !== undefined ? `- Fundamentals: ${context.fundamentalsScore}/100` : ''}
-${context.technicalsScore !== undefined ? `- Technicals: ${context.technicalsScore}/100` : ''}
-${context.insiderScore !== undefined ? `- Insider Activity: ${context.insiderScore}/100` : ''}
-${context.newsScore !== undefined ? `- News Sentiment: ${context.newsScore}/100` : ''}
-${context.macroScore !== undefined ? `- Macro/Sector: ${context.macroScore}/100` : ''}
+${context.fundamentalsScore != null ? `- Fundamentals: ${context.fundamentalsScore}/100` : ''}
+${context.technicalsScore != null ? `- Technicals: ${context.technicalsScore}/100` : ''}
+${context.insiderScore != null ? `- Insider Activity: ${context.insiderScore}/100` : ''}
+${context.newsScore != null ? `- News Sentiment: ${context.newsScore}/100` : ''}
+${context.macroScore != null ? `- Macro/Sector: ${context.macroScore}/100` : ''}
 
 ---
 
@@ -203,20 +203,11 @@ Return ONLY the JSON object, no other text.`;
         }
       };
     } catch (error) {
+      // CRITICAL: Don't hide parse failures - propagate them so job can retry
       console.error("[GeminiAgentService] Error parsing response:", error);
       console.error("[GeminiAgentService] Raw response:", response);
-      
-      // Return neutral fallback
-      return {
-        riskAssessment: "moderate_risk",
-        entryTiming: "mid_way_through_move",
-        conviction: "moderate_conviction",
-        rationale: {
-          risk: "Unable to parse AI risk assessment",
-          timing: "Unable to parse AI timing assessment",
-          conviction: "Unable to parse AI conviction assessment"
-        }
-      };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to parse Gemini response: ${errorMessage}. Raw response: ${response.substring(0, 200)}`);
     }
   }
 }

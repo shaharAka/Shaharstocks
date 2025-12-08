@@ -447,14 +447,16 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
   const rsiCondition = getRsiMomentumCondition(data.technicals?.rsi, data.technicals?.rsiDirection);
   const rsiScore = scoreConditionMetric(rsiCondition, 'rsiMomentum', 'technicals', opportunityType);
   if (rsiScore.ruleBucket === 'missing') missingMetrics.push('rsiMomentum');
+  const rsiValue = data.technicals?.rsi;
+  const rsiDisplay = (rsiValue != null && typeof rsiValue === 'number') ? rsiValue.toFixed(1) : '?';
   metrics.rsiMomentum = {
     name: sectionConfig.metrics.rsiMomentum.name,
-    measurement: rsiCondition === 'missing' ? null : `RSI: ${data.technicals?.rsi?.toFixed(1) || '?'} (${rsiCondition})`,
+    measurement: rsiCondition === 'missing' ? null : `RSI: ${rsiDisplay} (${rsiCondition})`,
     ruleBucket: rsiScore.ruleBucket,
     score: rsiScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.rsiMomentum.weight,
-    rationale: generateRationale('RSI Momentum', rsiCondition === 'missing' ? null : `${data.technicals?.rsi?.toFixed(1)} ${data.technicals?.rsiDirection || ''}`, rsiScore.ruleBucket, rsiScore.score)
+    rationale: generateRationale('RSI Momentum', rsiCondition === 'missing' ? null : `${rsiDisplay} ${data.technicals?.rsiDirection || ''}`, rsiScore.ruleBucket, rsiScore.score)
   };
   
   // MACD Signal
@@ -480,14 +482,16 @@ export function calculateTechnicalsSection(data: RawStockData, opportunityType: 
   const volCondition = getVolumeCondition(data.technicals?.volumeVsAvg, data.technicals?.priceConfirmation);
   const volScore = scoreConditionMetric(volCondition, 'volumeSurge', 'technicals', opportunityType);
   if (volScore.ruleBucket === 'missing') missingMetrics.push('volumeSurge');
+  const volumeVal = data.technicals?.volumeVsAvg;
+  const volumeDisplay = (volumeVal != null && typeof volumeVal === 'number') ? volumeVal.toFixed(2) : null;
   metrics.volumeSurge = {
     name: sectionConfig.metrics.volumeSurge.name,
-    measurement: data.technicals?.volumeVsAvg != null ? `${data.technicals.volumeVsAvg.toFixed(2)}x avg` : null,
+    measurement: volumeDisplay ? `${volumeDisplay}x avg` : null,
     ruleBucket: volScore.ruleBucket,
     score: volScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.volumeSurge.weight,
-    rationale: generateRationale('Volume vs Avg', data.technicals?.volumeVsAvg != null ? `${data.technicals.volumeVsAvg.toFixed(2)}x` : null, volScore.ruleBucket, volScore.score)
+    rationale: generateRationale('Volume vs Avg', volumeDisplay ? `${volumeDisplay}x` : null, volScore.ruleBucket, volScore.score)
   };
   
   // Price vs Key Levels
@@ -555,14 +559,16 @@ export function calculateInsiderSection(data: RawStockData, opportunityType: 'BU
   // Transaction Size
   const sizeScore = scoreNumericMetric(data.insiderActivity?.transactionSizeVsFloat, 'transactionSize', 'insiderActivity', opportunityType);
   if (sizeScore.ruleBucket === 'missing') missingMetrics.push('transactionSize');
+  const sizeVal = sizeScore.measurement;
+  const sizeDisplay = (sizeVal != null && typeof sizeVal === 'number') ? sizeVal.toFixed(3) : null;
   metrics.transactionSize = {
     name: sectionConfig.metrics.transactionSize.name,
-    measurement: sizeScore.measurement != null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null,
+    measurement: sizeDisplay ? `${sizeDisplay}%` : null,
     ruleBucket: sizeScore.ruleBucket,
     score: sizeScore.score,
     maxScore: 10,
     weight: sectionConfig.metrics.transactionSize.weight,
-    rationale: generateRationale('Size vs Float', sizeScore.measurement != null ? `${(sizeScore.measurement as number).toFixed(3)}%` : null, sizeScore.ruleBucket, sizeScore.score)
+    rationale: generateRationale('Size vs Float', sizeDisplay ? `${sizeDisplay}%` : null, sizeScore.ruleBucket, sizeScore.score)
   };
   
   // Insider Role

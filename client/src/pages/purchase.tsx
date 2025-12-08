@@ -676,7 +676,7 @@ export default function Purchase() {
           onClick={() => setFunnelSection("all")}
           data-testid="filter-all"
         >
-          All ({funnelSections.all?.length || 0})
+          Active ({funnelSections.all?.length || 0})
         </Badge>
         <Badge
           variant={funnelSection === "worthExploring" ? "default" : "outline"}

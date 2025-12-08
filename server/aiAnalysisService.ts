@@ -339,8 +339,10 @@ ${Object.entries(scorecard.sections).map(([sectionName, section]: [string, any])
 
 KEY METRICS BY SECTION:
 ${Object.entries(scorecard.sections).map(([sectionName, section]: [string, any]) => {
-  const topMetrics = section.metrics
-    .filter((m: any) => m.bucket !== 'missing')
+  // section.metrics is a Record<string, MetricScore>, not an array - use Object.values()
+  const metricsArray = section.metrics ? Object.values(section.metrics) : [];
+  const topMetrics = metricsArray
+    .filter((m: any) => m && m.bucket !== 'missing')
     .slice(0, 3)
     .map((m: any) => `  • ${m.name}: ${m.measurement || 'N/A'} → ${m.bucket} (${m.score}/${m.maxScore})`)
     .join('\n');

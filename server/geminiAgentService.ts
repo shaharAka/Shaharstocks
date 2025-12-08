@@ -7,9 +7,12 @@
  * - Conviction (confidence in trade thesis)
  * 
  * SELL-aware: Adapts prompts based on opportunity type (BUY vs SELL)
+ * 
+ * Uses backoffice-configured AI provider (OpenAI or Gemini with selected model)
  */
 
-import { GoogleGenAI } from "@google/genai";
+import { getAIProvider, type AIProviderConfig, type ChatMessage } from "./aiProvider";
+import { storage } from "./storage";
 
 export interface AIAgentEvaluation {
   riskAssessment: "minimal_risk" | "manageable_risk" | "moderate_risk" | "elevated_risk" | "high_risk";
@@ -70,42 +73,49 @@ function safeFixed(value: number | null | undefined, decimals: number): string |
 }
 
 class GeminiAgentService {
-  private genAI: GoogleGenAI;
-  private model: string = "gemini-3-pro-preview";
-
-  constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn("[GeminiAgentService] GEMINI_API_KEY not found - AI evaluation will be disabled");
-    }
-    this.genAI = new GoogleGenAI({ apiKey: apiKey || "" });
+  /**
+   * Get the AI provider configuration from backoffice settings
+   */
+  private async getProviderConfig(): Promise<AIProviderConfig> {
+    const settings = await storage.getSystemSettings();
+    const provider = (settings?.aiProvider as "openai" | "gemini") || "gemini";
+    const model = settings?.aiModel || undefined;
+    
+    console.log(`[GeminiAgentService] Using backoffice config: provider=${provider}, model=${model || 'default'}`);
+    
+    return { provider, model };
   }
 
   /**
-   * Evaluate stock opportunity using Gemini AI
+   * Evaluate stock opportunity using backoffice-configured AI provider
    */
   async evaluateStock(context: StockContext): Promise<AIAgentEvaluation> {
     const prompt = this.buildEvaluationPrompt(context);
     
     try {
-      const response = await this.genAI.models.generateContent({
-        model: this.model,
-        contents: prompt,
-      });
+      const config = await this.getProviderConfig();
+      const aiProvider = getAIProvider(config);
       
-      // Extract text from response properly
-      const candidate = response.candidates?.[0];
-      let responseText = "";
-      if (candidate?.content?.parts) {
-        responseText = candidate.content.parts.map((p: any) => p.text || "").join("");
-      }
+      console.log(`[GeminiAgentService] Calling ${aiProvider.getName()} (${aiProvider.getModel()}) for ${context.ticker} evaluation`);
+      
+      const messages: ChatMessage[] = [
+        {
+          role: "user",
+          content: prompt
+        }
+      ];
+      
+      const responseText = await aiProvider.generateCompletion(messages, {
+        temperature: 0.3,
+        responseFormat: "json"
+      });
       
       return this.parseEvaluationResponse(responseText);
     } catch (error) {
-      // CRITICAL: Don't hide Gemini failures - propagate them so job can retry
-      console.error("[GeminiAgentService] Gemini API call failed:", error);
+      // CRITICAL: Don't hide AI failures - propagate them so job can retry
+      console.error("[GeminiAgentService] AI API call failed:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`Gemini API call failed: ${errorMessage}`);
+      throw new Error(`AI API call failed: ${errorMessage}`);
     }
   }
 

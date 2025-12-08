@@ -135,7 +135,14 @@ export function FetchConfigDialog() {
       return await res.json();
     },
     onSuccess: (data) => {
+      // Clear all stock-related caches including AI analysis
       queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
+      // Clear AI analysis cache for all stocks
+      queryClient.removeQueries({ predicate: (query) => 
+        query.queryKey[0]?.toString().includes('/api/stocks/') && query.queryKey[0]?.toString().includes('/analysis')
+      });
       toast({
         title: "Fetch complete",
         description: data.message || "New opportunities have been fetched",

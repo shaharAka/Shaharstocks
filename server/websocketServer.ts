@@ -124,12 +124,18 @@ class WebSocketManager {
     // Create a fake req/res to use with session middleware
     const fakeReq = {
       headers: { cookie: request.headers.cookie },
+      url: request.url || '/ws',
+      originalUrl: request.url || '/ws',
+      method: 'GET',
+      connection: request.socket,
       session: undefined,
     } as any;
 
     const fakeRes = {
       getHeader: () => null,
       setHeader: () => {},
+      end: () => {},
+      writeHead: () => {},
     } as any;
 
     sessionMiddleware(fakeReq, fakeRes, (err?: any) => {

@@ -864,6 +864,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.transaction(async (tx) => {
       // 1. Find candidate stocks (older than cutoff + NOT followed by any user)
       // insiderTradeDate is stored as text (YYYY-MM-DD), so compare with string
+      // Note: Cannot use FOR UPDATE with LEFT JOIN, so we do two-phase delete
       const candidates = await tx
         .select({ ticker: stocks.ticker })
         .from(stocks)
@@ -871,8 +872,7 @@ export class DatabaseStorage implements IStorage {
         .where(and(
           lt(stocks.insiderTradeDate, cutoffDateString),
           sql`${followedStocks.ticker} IS NULL` // Not followed by anyone
-        ))
-        .for('update'); // Lock rows for deletion
+        ));
       
       if (candidates.length === 0) {
         console.log('[CLEANUP] No old non-followed stocks found');

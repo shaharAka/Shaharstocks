@@ -15,19 +15,6 @@ import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
 import { aiAnalysisService } from "./aiAnalysisService";
 import type { AiAnalysisJob } from "@shared/schema";
-import {
-  extractTechnicalsFromCandlesticks,
-  determineSmaAlignment,
-  determineMacdCondition,
-  determineRsiCondition,
-  determineVolumeCondition,
-  determineInsiderRoleCondition,
-  determineSentimentCondition,
-  determineProfitMarginTrend,
-  normalizeInsiderRoles,
-  normalizeSentimentTrend,
-} from "./scoring/scorecardDataExtractor";
-import { generateScorecard as generateRuleBasedScorecard } from "./scoring/metricCalculators";
 
 class QueueWorker {
   private running = false;
@@ -403,149 +390,31 @@ class QueueWorker {
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'micro');
       console.log(`[QueueWorker] ✅ Micro analysis phase complete for ${job.ticker}`);
 
-      // PHASE 3.5: Generate Rule-Based Scorecard (parallel to integration, non-blocking)
-      let scorecard: any = null;
-      try {
-        console.log(`[QueueWorker] 📊 Generating rule-based scorecard for ${job.ticker}...`);
-        
-        // Fetch candlestick data for enhanced technical metrics
-        const candlestickRecord = await storage.getCandlesticksByTicker(job.ticker);
-        const candlestickData = candlestickRecord?.candlestickData || [];
-        
-        // Extract additional technicals from candlestick data (5/10-day SMAs, volume)
-        const extractedTechnicals = extractTechnicalsFromCandlesticks(candlestickData);
-        
-        // Determine RSI direction from signal
-        const rsiDirection: 'rising' | 'falling' | 'flat' = 
-          technicalIndicators?.rsi?.signal === 'oversold' ? 'rising' : 
-          technicalIndicators?.rsi?.signal === 'overbought' ? 'falling' : 'flat';
-        
-        // Get fallback current price from stock record if not available from candlesticks
-        const fallbackCurrentPrice = stock?.currentPrice ? parseFloat(stock.currentPrice) : undefined;
-        const currentPriceValue = extractedTechnicals?.currentPrice || fallbackCurrentPrice;
-        
-        // Safely determine SMA alignment (guards for undefined values)
-        const safeCurrentPrice = currentPriceValue;
-        const safeSma5 = extractedTechnicals?.sma5;
-        const safeSma10 = extractedTechnicals?.sma10;
-        const safeSma20 = extractedTechnicals?.sma20 || technicalIndicators?.sma20;
-        
-        // Only calculate SMA alignment if we have current price and at least one SMA
-        const canCalculateSmaAlignment = safeCurrentPrice !== undefined && (safeSma5 !== undefined || safeSma10 !== undefined || safeSma20 !== undefined);
-        
-        // Determine price direction for volume condition (only when both values exist)
-        const priceDirection: 'up' | 'down' | undefined = 
-          (safeCurrentPrice !== undefined && safeSma5 !== undefined) 
-            ? (safeCurrentPrice > safeSma5 ? 'up' : 'down') 
-            : undefined;
-        
-        // Build comprehensive scorecard input with all available data
-        const scorecardInput = {
-          ticker: job.ticker,
-          fundamentals: comprehensiveFundamentals ? {
-            revenueGrowthYoY: comprehensiveFundamentals.revenueGrowthYoY,
-            epsGrowthYoY: comprehensiveFundamentals.epsGrowthYoY,
-            profitMarginTrend: determineProfitMarginTrend(comprehensiveFundamentals.profitMargin),
-            freeCashFlow: comprehensiveFundamentals.freeCashFlow 
-              ? parseFloat(comprehensiveFundamentals.freeCashFlow.replace(/[^0-9.-]/g, '')) 
-              : undefined,
-            totalDebt: comprehensiveFundamentals.totalDebt,
-            debtToEquity: comprehensiveFundamentals.debtToEquity,
-          } : undefined,
-          technicals: {
-            currentPrice: currentPriceValue,
-            sma5: safeSma5,
-            sma10: safeSma10,
-            sma20: safeSma20,
-            smaAlignment: canCalculateSmaAlignment 
-              ? determineSmaAlignment(safeCurrentPrice!, safeSma5, safeSma10, safeSma20) 
-              : undefined,
-            rsi: technicalIndicators?.rsi?.value,
-            rsiCondition: determineRsiCondition(technicalIndicators?.rsi?.value, rsiDirection),
-            macdLine: technicalIndicators?.macd?.value,
-            macdSignal: technicalIndicators?.macd?.signal,
-            macdHistogram: technicalIndicators?.macd?.histogram,
-            macdCondition: determineMacdCondition(
-              technicalIndicators?.macd?.value,
-              technicalIndicators?.macd?.signal,
-              technicalIndicators?.macd?.histogram
-            ),
-            volumeVsAvg: extractedTechnicals?.volumeVsAvg,
-            volumeCondition: (extractedTechnicals?.volumeVsAvg !== undefined && priceDirection !== undefined)
-              ? determineVolumeCondition(extractedTechnicals.volumeVsAvg, priceDirection)
-              : undefined,
-          },
-          insiderActivity: insiderTradingStrength ? {
-            netBuyRatio30d: insiderTradingStrength.buyCount > 0 || insiderTradingStrength.sellCount > 0
-              ? ((insiderTradingStrength.buyCount - insiderTradingStrength.sellCount) / 
-                 (insiderTradingStrength.buyCount + insiderTradingStrength.sellCount)) * 100
-              : undefined,
-            daysSinceLastTransaction: insiderTradingStrength.tradeDate 
-              ? Math.floor((Date.now() - new Date(insiderTradingStrength.tradeDate).getTime()) / (1000 * 60 * 60 * 24))
-              : undefined,
-            transactionSizeVsFloat: undefined, // Still requires float data from external source
-            insiderRoles: normalizeInsiderRoles(insiderTradingStrength.insiderTitle),
-          } : undefined,
-          newsSentiment: newsSentiment ? {
-            avgSentiment: newsSentiment.aggregateSentiment,
-            sentimentTrend: normalizeSentimentTrend(newsSentiment.sentimentTrend),
-            newsCount7d: newsSentiment.newsVolume,
-            upcomingCatalyst: undefined, // Would need catalyst detection
-          } : undefined,
-          macroSector: macroAnalysis ? {
-            sectorVsSpy10d: undefined, // Would need sector ETF performance data
-            macroRiskEnvironment: macroAnalysis.macroScore !== null && macroAnalysis.macroScore !== undefined
-              ? (macroAnalysis.macroScore > 70 ? 'favorable_tailwinds' as const :
-                 macroAnalysis.macroScore > 50 ? 'low_risk' as const :
-                 macroAnalysis.macroScore > 30 ? 'neutral' as const : 'some_headwinds' as const)
-              : undefined,
-          } : undefined,
-        };
-        
-        // Log data availability for debugging
-        const availableMetrics = {
-          fundamentals: !!scorecardInput.fundamentals,
-          technicals: !!scorecardInput.technicals?.currentPrice,
-          smas: !!(scorecardInput.technicals?.sma5 && scorecardInput.technicals?.sma10),
-          volume: !!scorecardInput.technicals?.volumeVsAvg,
-          insider: !!scorecardInput.insiderActivity,
-          news: !!scorecardInput.newsSentiment,
-          macro: !!scorecardInput.macroSector,
-        };
-        console.log(`[QueueWorker] Scorecard data availability:`, availableMetrics);
-        
-        // Use pure rule-based scorecard generation (no LLM dependency, deterministic)
-        scorecard = generateRuleBasedScorecard(scorecardInput);
-        console.log(`[QueueWorker] ✅ Scorecard complete: ${scorecard.globalScore}/100 (${scorecard.confidence} confidence)`);
-      } catch (scorecardError) {
-        // Non-fatal: log and continue with analysis save
-        console.warn(`[QueueWorker] ⚠️ Scorecard generation failed for ${job.ticker}:`, scorecardError);
-      }
-
-      // PHASE 4: Score Integration
+      // PHASE 4: Score Integration (Simplified - AI signal score is the final score)
       await this.updateProgress(job.id, job.ticker, "calculating_score", {
         phase: "integration",
-        substep: "Calculating integrated score (micro × macro)"
+        substep: "Processing signal score"
       });
 
-      // Calculate integrated score (micro score × macro factor), clamped to 0-100
+      // Use AI's confidence score directly as the integrated signal score (1-100)
+      // Macro factor can optionally adjust, but AI already considers all factors
       const macroFactor = macroAnalysis.macroFactor ? parseFloat(macroAnalysis.macroFactor) : 1.0;
       const rawIntegratedScore = analysis.confidenceScore * macroFactor;
-      const integratedScore = Math.max(0, Math.min(100, Math.round(rawIntegratedScore)));
-      console.log(`[QueueWorker] Score integration: Micro ${analysis.confidenceScore} × Macro ${macroFactor} = ${rawIntegratedScore.toFixed(1)} → Clamped to ${integratedScore}/100`);
+      const integratedScore = Math.max(1, Math.min(100, Math.round(rawIntegratedScore)));
+      console.log(`[QueueWorker] Signal score: ${analysis.confidenceScore} (AI) × ${macroFactor} (macro) = ${integratedScore}/100`);
 
-      // Save analysis to database with macro integration
-      console.log(`[QueueWorker] 💾 Saving integrated analysis to database...`);
+      // Save analysis to database with playbook
+      console.log(`[QueueWorker] 💾 Saving analysis with playbook to database...`);
       await storage.saveStockAnalysis({
         ticker: analysis.ticker,
         status: "completed",
         overallRating: analysis.overallRating,
         confidenceScore: analysis.confidenceScore,
         summary: analysis.summary,
-        financialHealthScore: analysis.financialHealth.score,
-        strengths: analysis.financialHealth.strengths,
-        weaknesses: analysis.financialHealth.weaknesses,
-        redFlags: analysis.financialHealth.redFlags,
+        financialHealthScore: analysis.financialHealth?.score,
+        strengths: analysis.financialHealth?.strengths,
+        weaknesses: analysis.financialHealth?.weaknesses,
+        redFlags: analysis.financialHealth?.redFlags,
         technicalAnalysisScore: analysis.technicalAnalysis?.score,
         technicalAnalysisTrend: analysis.technicalAnalysis?.trend,
         technicalAnalysisMomentum: analysis.technicalAnalysis?.momentum,
@@ -557,7 +426,7 @@ class QueueWorker {
         keyMetrics: analysis.keyMetrics,
         risks: analysis.risks,
         opportunities: analysis.opportunities,
-        recommendation: analysis.recommendation,
+        recommendation: analysis.playbook || analysis.recommendation, // Store playbook in recommendation field
         analyzedAt: new Date(analysis.analyzedAt),
         secFilingUrl: secFilingData?.filingUrl,
         secFilingType: secFilingData?.formType,
@@ -568,9 +437,7 @@ class QueueWorker {
         businessOverview: secFilingData?.businessOverview,
         fundamentalData: comprehensiveFundamentals,
         macroAnalysisId: macroAnalysis.id,
-        integratedScore: scorecard ? scorecard.globalScore : integratedScore, // Use scorecard global score if available
-        scorecard: scorecard || undefined,
-        scorecardVersion: scorecard ? scorecard.version : undefined,
+        integratedScore: integratedScore, // Use AI signal score directly
       });
 
       // Set combined flag after integrated score is saved
@@ -578,10 +445,10 @@ class QueueWorker {
       console.log(`[QueueWorker] ✅ All analysis phases complete for ${job.ticker}`);
 
       // Create notifications for high-value opportunities (high confidence signals)
-      // High score BUY: score > 70 with BUY recommendation (highest buy scores)
-      // High score SELL: score > 70 with SELL recommendation (highest sell scores)
-      const isBuyOpportunity = analysis.recommendation === 'buy' && integratedScore > 70;
-      const isSellOpportunity = analysis.recommendation === 'sell' && integratedScore > 70;
+      // High score BUY: score > 70 with BUY rating (highest buy scores)
+      // High score SELL: score > 70 with SELL/AVOID rating (highest sell scores)
+      const isBuyOpportunity = (analysis.overallRating === 'buy' || analysis.overallRating === 'strong_buy') && integratedScore > 70;
+      const isSellOpportunity = (analysis.overallRating === 'sell' || analysis.overallRating === 'avoid' || analysis.overallRating === 'strong_avoid') && integratedScore > 70;
       
       if (isBuyOpportunity || isSellOpportunity) {
         const notificationType = isBuyOpportunity ? 'high_score_buy' : 'high_score_sell';

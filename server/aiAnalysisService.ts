@@ -48,9 +48,10 @@ function stripMarkdownCodeBlocks(content: string): string {
 
 export interface FinancialAnalysis {
   ticker: string;
-  overallRating: "strong_buy" | "buy" | "hold" | "avoid" | "strong_avoid";
-  confidenceScore: number; // 0-100
+  overallRating: "strong_buy" | "buy" | "hold" | "avoid" | "strong_avoid" | "sell";
+  confidenceScore: number; // 1-100 - The main signal score
   summary: string;
+  playbook?: string; // Detailed actionable playbook with data references
   financialHealth: {
     score: number; // 0-100
     strengths: string[];
@@ -69,7 +70,7 @@ export interface FinancialAnalysis {
     newsVolume: "high" | "medium" | "low";
     key_themes: string[];
   };
-  keyMetrics: {
+  keyMetrics?: {
     profitability: string;
     liquidity: string;
     leverage: string;
@@ -167,8 +168,10 @@ class AIAnalysisService {
   }
 
   /**
-   * Analyze a stock using AI with multi-signal approach
-   * Combines fundamental data, technical indicators, news sentiment, and insider trading
+   * Analyze a stock using AI - Simplified Signal Score + Playbook approach
+   * Combines ALL available data and asks AI for:
+   * 1. Signal Score (1-100): Relevance of insider transaction to 1-2 week profit opportunity
+   * 2. Playbook: Actionable explanation with data references and clear recommendation
    */
   async analyzeStock(financialData: FinancialData): Promise<FinancialAnalysis> {
     const { 
@@ -190,117 +193,33 @@ class AIAnalysisService {
     const latestIncomeStatement = incomeStatement?.annualReports?.[0] || incomeStatement?.quarterlyReports?.[0];
     const latestCashFlow = cashFlow?.annualReports?.[0] || cashFlow?.quarterlyReports?.[0];
 
-    // Determine transaction direction and build context-aware prompt
+    // Determine transaction direction
     const isBuy = insiderTradingStrength?.direction === "buy";
     const isSell = insiderTradingStrength?.direction === "sell";
-    const transactionContext = isBuy 
-      ? "INSIDER BUYING" 
-      : (isSell ? "INSIDER SELLING" : "INSIDER TRADING");
+    const transactionContext = isBuy ? "INSIDER BUYING" : (isSell ? "INSIDER SELLING" : "INSIDER TRADING");
     
-    const analysisContext = isBuy
-      ? "Company insiders (executives, board members) just purchased shares. Analyze if this is a strong buy signal or if there are concerns that make it a pass within the next 1-2 weeks."
-      : (isSell 
-        ? "Company insiders (executives, board members) just SOLD shares. This is typically a BEARISH signal. Analyze if the fundamentals justify their decision to sell, or if this is just routine portfolio rebalancing. Consider whether you should AVOID this stock or if the sell is a false alarm."
-        : "Company insiders just transacted shares. Analyze the signal.");
+    // Calculate days since insider transaction
+    let daysSinceTransaction = "Unknown";
+    if (insiderTradingStrength?.tradeDate) {
+      const tradeDate = new Date(insiderTradingStrength.tradeDate);
+      const today = new Date();
+      const diffDays = Math.floor((today.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24));
+      daysSinceTransaction = `${diffDays} days ago`;
+    }
 
-    // Build insider trade validation prompt - focus on 1-2 week outlook
-    const prompt = `You are a seasoned equity analyst specializing in insider trading patterns. This stock has recent ${transactionContext} activity. Your job is to validate whether this insider signal is worth acting on for a 1-2 WEEK TRADING WINDOW.
+    // Build comprehensive prompt with ALL available data
+    const prompt = `You are an expert trader analyzing insider trading opportunities. Your job is to evaluate whether this ${transactionContext} signal is worth acting on for a 1-2 WEEK trading window.
 
-INVESTMENT HORIZON: 1-2 weeks (short-term trading opportunity)
-
-CONTEXT: ${analysisContext}
-
-=== COMPANY: ${ticker} ===
+=== OPPORTUNITY OVERVIEW ===
+Stock: ${ticker}
 Sector: ${companyOverview?.sector || "N/A"}
 Market Cap: ${comprehensiveFundamentals?.marketCap || companyOverview?.marketCap || "N/A"}
+Insider Action: ${transactionContext}
+Time Since Transaction: ${daysSinceTransaction}
 
-=== SEC FILING ANALYSIS ===
-${secFilings ? `
-Filing Type: ${secFilings.formType} (Filed: ${secFilings.filingDate})
-
-Read through this SEC filing as an analyst. Extract KEY SIGNALS that validate or contradict the insider ${isBuy ? "buy" : (isSell ? "sell" : "transaction")}:
-
-BUSINESS OVERVIEW EXCERPT:
-${secFilings.businessOverview ? secFilings.businessOverview.substring(0, 2500) : "Not available"}
-
-MANAGEMENT DISCUSSION & ANALYSIS (MD&A) EXCERPT:
-${secFilings.managementDiscussion ? secFilings.managementDiscussion.substring(0, 4000) : "Not available"}
-
-RISK FACTORS EXCERPT:
-${secFilings.riskFactors ? secFilings.riskFactors.substring(0, 3000) : "Not available"}
-
-YOUR TASK: Extract 3-5 specific insights from these filings that either:
-${isBuy 
-  ? "- SUPPORT the insider buy (e.g., new product launch, expansion plans, strong guidance)\n- CONTRADICT the insider buy (e.g., major risks, declining markets, litigation)"
-  : (isSell 
-    ? "- JUSTIFY the insider sell (e.g., major risks, declining markets, litigation, operational challenges)\n- CONTRADICT the insider sell (e.g., strong guidance, new opportunities, improving fundamentals)"
-    : "- Support or contradict the insider transaction")}
-` : "SEC filings not available - rely on fundamentals only"}
-
-=== COMPREHENSIVE FUNDAMENTALS ANALYSIS ===
-Read these numbers like a professional analyst. Look for patterns, trends, and signals.
-
-CRITICAL: When providing your financialHealth analysis, you MUST cite specific metrics from the company data below as evidence in your strengths and weaknesses arrays. 
-For example:
-- "Profit margin of 18.5% indicates strong profitability"
-- "Current ratio of 2.1 shows excellent liquidity"
-- "Debt-to-equity of 1.8 indicates high leverage"
-- "Operating cash flow of $2.5B demonstrates solid operations"
-
-Use the ACTUAL NUMBERS from the data below - do not make up numbers:
-
-VALUATION & PROFITABILITY:
-- P/E Ratio: ${comprehensiveFundamentals?.peRatio || companyOverview?.peRatio || "N/A"}
-- PEG Ratio: ${comprehensiveFundamentals?.pegRatio || "N/A"}
-- Profit Margin: ${comprehensiveFundamentals?.profitMargin ? `${(comprehensiveFundamentals.profitMargin * 100).toFixed(2)}%` : "N/A"}
-- Return on Equity: ${comprehensiveFundamentals?.returnOnEquity ? `${(comprehensiveFundamentals.returnOnEquity * 100).toFixed(2)}%` : "N/A"}
-
-BALANCE SHEET HEALTH (${latestBalanceSheet?.fiscalDateEnding || "Latest"}):
-- Total Assets: ${comprehensiveFundamentals?.totalAssets || latestBalanceSheet?.totalAssets || "N/A"}
-- Total Liabilities: ${comprehensiveFundamentals?.totalLiabilities || latestBalanceSheet?.totalLiabilities || "N/A"}
-- Current Ratio: ${comprehensiveFundamentals?.currentRatio || "N/A"}
-- Debt-to-Equity: ${comprehensiveFundamentals?.debtToEquity || "N/A"}
-- Cash Position: ${latestBalanceSheet?.cashAndCashEquivalentsAtCarryingValue || "N/A"}
-
-INCOME PERFORMANCE (${latestIncomeStatement?.fiscalDateEnding || "Latest"}):
-- Revenue: ${comprehensiveFundamentals?.totalRevenue || latestIncomeStatement?.totalRevenue || "N/A"}
-- Gross Profit: ${comprehensiveFundamentals?.grossProfit || latestIncomeStatement?.grossProfit || "N/A"}
-- Net Income: ${comprehensiveFundamentals?.netIncome || latestIncomeStatement?.netIncome || "N/A"}
-- EBITDA: ${latestIncomeStatement?.ebitda || "N/A"}
-
-CASH FLOW STRENGTH (${latestCashFlow?.fiscalDateEnding || "Latest"}):
-- Operating Cash Flow: ${comprehensiveFundamentals?.operatingCashflow || latestCashFlow?.operatingCashflow || "N/A"}
-- Free Cash Flow: ${comprehensiveFundamentals?.freeCashFlow || (latestCashFlow?.operatingCashflow && latestCashFlow?.capitalExpenditures 
-    ? (parseFloat(latestCashFlow.operatingCashflow) - parseFloat(latestCashFlow.capitalExpenditures)).toString() 
-    : "N/A")}
-
-YOUR TASK: Analyze these fundamentals to identify:
-- Is the company financially healthy enough to support a price increase?
-- Are profit margins expanding or contracting?
-- Is there sufficient cash flow to fund operations?
-- Are valuation multiples (P/E, PEG) attractive or expensive?
-
-=== TECHNICAL & SENTIMENT ===
-${technicalIndicators ? `
-Technical Indicators:
-- RSI: ${technicalIndicators.rsi.value.toFixed(2)} (${technicalIndicators.rsi.signal})
-- MACD Trend: ${technicalIndicators.macd.trend}
-- Price vs Moving Averages: SMA20 $${technicalIndicators.sma20.toFixed(2)}, SMA50 $${technicalIndicators.sma50.toFixed(2)}
-- Volatility (ATR): ${technicalIndicators.atr.toFixed(2)}
-` : ""}
-
-${newsSentiment ? `
-Recent News Sentiment: ${newsSentiment.aggregateSentiment.toFixed(2)} (${newsSentiment.sentimentTrend})
-News Volume: ${newsSentiment.newsVolume} articles
-Top Headlines: ${newsSentiment.articles.slice(0, 3).map(a => a.title).join(' | ')}
-` : ""}
-
-=== INSIDER TRADE VALIDATION ===
+=== INSIDER TRANSACTION DETAILS ===
 ${insiderTradingStrength ? `
-SIGNAL SUMMARY: ${insiderTradingStrength.dominantSignal}
-Transaction Breakdown: ${insiderTradingStrength.buyCount} BUY, ${insiderTradingStrength.sellCount} SELL (Total: ${insiderTradingStrength.totalTransactions})
-
-PRIMARY TRANSACTION (Most Recent):
+Primary Transaction:
 - Direction: ${insiderTradingStrength.direction.toUpperCase()}
 - Insider: ${insiderTradingStrength.insiderName} (${insiderTradingStrength.insiderTitle})
 - Date: ${insiderTradingStrength.tradeDate}
@@ -309,88 +228,125 @@ PRIMARY TRANSACTION (Most Recent):
 - Current Price: ${insiderTradingStrength.currentPrice}
 - Total Value: ${insiderTradingStrength.totalValue}
 
-ALL TRANSACTIONS FOR THIS TICKER:
+All Recent Transactions:
 ${insiderTradingStrength.allTransactions.map((t, idx) => 
   `${idx + 1}. ${t.direction.toUpperCase()} - ${t.insiderName} (${t.insiderTitle}): ${t.quantityStr} @ ${t.price} on ${t.date} (Value: ${t.value})`
 ).join('\n')}
 
-SIGNAL INTERPRETATION:
-${isBuy && insiderTradingStrength.sellCount === 0
-  ? "✓ BULLISH SIGNAL: Only insider BUYING detected - typically indicates confidence in future performance"
-  : (isSell && insiderTradingStrength.buyCount === 0
-    ? "✗ BEARISH SIGNAL: Only insider SELLING detected - typically indicates concerns about future performance or overvaluation"
-    : (insiderTradingStrength.buyCount > 0 && insiderTradingStrength.sellCount > 0
-      ? `⚠️  MIXED SIGNALS: Both buying (${insiderTradingStrength.buyCount}) and selling (${insiderTradingStrength.sellCount}) detected. Analyze which signal is more recent and credible. Consider if different insiders have different outlooks, or if some are routine portfolio management.`
-      : ""))}
-` : "Insider transaction detected - validate this signal"}
+Signal Summary: ${insiderTradingStrength.buyCount} BUY, ${insiderTradingStrength.sellCount} SELL (Total: ${insiderTradingStrength.totalTransactions})
+` : "No insider transaction details available"}
 
-=== ANALYSIS REQUIREMENTS ===
-${isBuy 
-  ? `Your rating should be "buy" if the insider purchase is validated by strong fundamentals, or "pass" if there are concerns.`
-  : (isSell 
-    ? `Your rating should be "sell" or "avoid" if the insider sale is justified by weak fundamentals or risks, or "pass" if the sell appears to be routine and fundamentals remain strong.`
-    : `Your rating should reflect whether the insider transaction is validated by fundamentals.`)}
+=== FUNDAMENTALS ===
+VALUATION:
+- P/E Ratio: ${comprehensiveFundamentals?.peRatio || companyOverview?.peRatio || "N/A"}
+- PEG Ratio: ${comprehensiveFundamentals?.pegRatio || "N/A"}
+- Profit Margin: ${comprehensiveFundamentals?.profitMargin ? `${(comprehensiveFundamentals.profitMargin * 100).toFixed(2)}%` : "N/A"}
+- Return on Equity: ${comprehensiveFundamentals?.returnOnEquity ? `${(comprehensiveFundamentals.returnOnEquity * 100).toFixed(2)}%` : "N/A"}
 
-Provide your analysis in this EXACT JSON format:
+BALANCE SHEET (${latestBalanceSheet?.fiscalDateEnding || "Latest"}):
+- Total Assets: ${comprehensiveFundamentals?.totalAssets || latestBalanceSheet?.totalAssets || "N/A"}
+- Total Liabilities: ${comprehensiveFundamentals?.totalLiabilities || latestBalanceSheet?.totalLiabilities || "N/A"}
+- Current Ratio: ${comprehensiveFundamentals?.currentRatio || "N/A"}
+- Debt-to-Equity: ${comprehensiveFundamentals?.debtToEquity || "N/A"}
+- Cash: ${latestBalanceSheet?.cashAndCashEquivalentsAtCarryingValue || "N/A"}
+
+INCOME (${latestIncomeStatement?.fiscalDateEnding || "Latest"}):
+- Revenue: ${comprehensiveFundamentals?.totalRevenue || latestIncomeStatement?.totalRevenue || "N/A"}
+- Gross Profit: ${comprehensiveFundamentals?.grossProfit || latestIncomeStatement?.grossProfit || "N/A"}
+- Net Income: ${comprehensiveFundamentals?.netIncome || latestIncomeStatement?.netIncome || "N/A"}
+- EBITDA: ${latestIncomeStatement?.ebitda || "N/A"}
+
+CASH FLOW (${latestCashFlow?.fiscalDateEnding || "Latest"}):
+- Operating Cash Flow: ${comprehensiveFundamentals?.operatingCashflow || latestCashFlow?.operatingCashflow || "N/A"}
+- Free Cash Flow: ${comprehensiveFundamentals?.freeCashFlow || "N/A"}
+
+=== TECHNICALS ===
+${technicalIndicators ? `
+- RSI: ${technicalIndicators.rsi.value.toFixed(2)} (${technicalIndicators.rsi.signal})
+- MACD Trend: ${technicalIndicators.macd.trend}
+- SMA20: $${technicalIndicators.sma20.toFixed(2)}, SMA50: $${technicalIndicators.sma50.toFixed(2)}
+- Volatility (ATR): ${technicalIndicators.atr.toFixed(2)}
+` : "Technical data not available"}
+
+=== NEWS & SENTIMENT ===
+${newsSentiment ? `
+Sentiment Score: ${newsSentiment.aggregateSentiment.toFixed(2)} (${newsSentiment.sentimentTrend})
+News Volume: ${newsSentiment.newsVolume} articles
+Recent Headlines:
+${newsSentiment.articles.slice(0, 5).map(a => `- ${a.title} (Sentiment: ${a.sentiment.toFixed(2)})`).join('\n')}
+` : "News data not available"}
+
+=== SEC FILINGS ===
+${secFilings ? `
+Filing: ${secFilings.formType} (${secFilings.filingDate})
+
+Business Overview:
+${secFilings.businessOverview ? secFilings.businessOverview.substring(0, 1500) : "Not available"}
+
+Management Discussion:
+${secFilings.managementDiscussion ? secFilings.managementDiscussion.substring(0, 2000) : "Not available"}
+
+Risk Factors:
+${secFilings.riskFactors ? secFilings.riskFactors.substring(0, 1500) : "Not available"}
+` : "SEC filings not available"}
+
+=== YOUR ANALYSIS TASK ===
+
+Evaluate this opportunity and provide:
+
+1. SIGNAL SCORE (1-100): How relevant is this insider ${isBuy ? "buy" : "sell"} signal to making money in 1-2 weeks?
+   Consider:
+   - Quality of the insider (C-suite vs routine filing)
+   - Timing (how fresh is the transaction?)
+   - Stock trend alignment with insider action
+   - Sector/market conditions
+   - Fundamentals supporting the trade thesis
+
+2. PLAYBOOK: Clear, actionable guidance with data references
+
+SCORING GUIDE:
+${isBuy ? `
+For INSIDER BUYING:
+- 70-100: STRONG BUY - Early opportunity, good fundamentals, favorable trend → ENTER position
+- 40-69: MODERATE - Some merit but mixed signals → Watch closely, consider small position
+- 1-39: WEAK/LATE - Poor timing, weak fundamentals, or already priced in → AVOID
+` : `
+For INSIDER SELLING:
+- 70-100: STRONG SHORT - Valid bearish signal, weak fundamentals → Consider SHORT
+- 40-69: MODERATE - Some weakness but not conclusive → Watch for breakdown
+- 1-39: IGNORE - Routine selling, strong fundamentals → False alarm, PASS
+`}
+
+Return ONLY this JSON (no markdown):
 {
-  "overallRating": ${isBuy ? '"buy" or "pass"' : (isSell ? '"sell" or "avoid" or "pass"' : '"buy" or "sell" or "pass"')},
-  "confidenceScore": 0-100,
-  "summary": "2-3 sentences: ${isBuy ? 'Does this insider buy have merit? What\'s the 1-2 week outlook?' : (isSell ? 'Does this insider sell signal weakness? Should investors avoid or is this routine portfolio management?' : 'Validate the insider transaction')}",
+  "overallRating": "${isBuy ? 'buy' : 'sell'}" or "hold" or "avoid",
+  "confidenceScore": 1-100,
+  "summary": "2-3 sentence executive summary of the opportunity",
+  "playbook": "DETAILED playbook (3-5 sentences) with specific data references. Structure: 1) What the signal tells us, 2) Key supporting/concerning data points, 3) Clear action recommendation (ENTER/WATCH/AVOID)",
   "financialHealth": {
     "score": 0-100,
-    "strengths": ["MUST cite specific metrics with actual values - e.g., 'Current ratio of 2.1 indicates strong liquidity', 'Profit margin of 18.5% shows excellent profitability'"],
-    "weaknesses": ["MUST cite specific metrics with actual values - e.g., 'Debt-to-equity of 2.3 indicates high leverage', 'Negative operating cash flow of -$50M raises sustainability concerns'"],
-    "redFlags": ["List any serious red flags from SEC filings or financials, or empty array"]
+    "strengths": ["List 2-3 specific strengths with data values"],
+    "weaknesses": ["List 2-3 specific weaknesses with data values"],
+    "redFlags": ["List any serious red flags, or empty array"]
   },
-  "secFilingInsights": ["Extract 3-5 KEY INSIGHTS from SEC filings that validate OR contradict the insider ${isBuy ? "buy" : (isSell ? "sell" : "transaction")}"],
-  "fundamentalSignals": ["Extract 3-5 specific SIGNALS from the fundamental numbers (e.g., 'ROE 25% indicates strong profitability', 'Debt-to-equity 0.3 shows conservative leverage')"],
   "technicalAnalysis": {
     "score": 0-100,
     "trend": "bullish" or "bearish" or "neutral",
     "momentum": "strong" or "moderate" or "weak",
-    "signals": ["2-3 key technical signals for the 1-2 week window"]
+    "signals": ["2-3 key technical observations"]
   },
   "sentimentAnalysis": {
     "score": 0-100,
     "trend": "positive" or "negative" or "neutral",
     "newsVolume": "high" or "medium" or "low",
-    "key_themes": ["2-3 key themes from recent news"]
+    "key_themes": ["2-3 news themes if available"]
   },
-  "insiderValidation": "1-2 sentences: Does the fundamental and technical analysis support this insider ${isBuy ? "buy" : (isSell ? "sell" : "transaction")}?",
-  "risks": ["List 3-5 specific risks for the 1-2 week window"],
-  "opportunities": ["List 2-4 specific catalysts that could ${isBuy ? "drive price up" : (isSell ? "drive price down" : "move price")} in 1-2 weeks"],
-  "recommendation": "Clear 2-3 sentence recommendation: ${isBuy ? "BUY or PASS" : (isSell ? "SELL/AVOID or PASS" : "Action")} for 1-2 week window, and why"
+  "risks": ["List 2-4 specific risks with data backing"],
+  "opportunities": ["List 2-3 potential catalysts"],
+  "recommendation": "${isBuy ? 'BUY NOW / WATCH / AVOID' : 'SHORT NOW / WATCH / AVOID'} - Clear 2-sentence action with reasoning"
 }
 
-CRITICAL: OPPORTUNITY SCORE RUBRIC (confidenceScore: 0-100 scale)
-⚠️ THIS SCORE REPRESENTS "OPPORTUNITY STRENGTH" NOT "COMPANY QUALITY" ⚠️
-
-${isBuy 
-  ? `For INSIDER BUYING (BUY signal):
-HIGH SCORE = STRONG BUY OPPORTUNITY (good company + insiders buying = strong opportunity)
-- 90-100: EXCEPTIONAL BUY - Company fundamentals excellent, insider buy highly validated, all signals bullish
-- 70-89: STRONG BUY - Solid fundamentals support insider confidence, favorable 1-2 week outlook  
-- 50-69: MODERATE BUY - Mixed signals, insider buy has merit but some concerns exist
-- 30-49: WEAK/PASS - Fundamentals don't strongly support insider buy, or significant risks present
-- 0-29: AVOID - Red flags contradict insider buy signal, company has serious issues`
-  : (isSell 
-    ? `For INSIDER SELLING (SELL signal):  
-HIGH SCORE = STRONG SELL OPPORTUNITY (weak company + insiders selling = strong bearish signal)
-- 90-100: EXCEPTIONAL SELL - Company fundamentals very weak, insider sell highly validated by deteriorating metrics, avoid this stock
-- 70-89: STRONG SELL - Weak fundamentals justify insider sell, significant bearish indicators present
-- 50-69: MODERATE SELL - Some weakness validates sell but not conclusive, proceed with caution
-- 30-49: WEAK/PASS - Fundamentals remain relatively strong, likely routine portfolio rebalancing
-- 0-29: IGNORE SELL - Strong fundamentals contradict sell signal, company remains healthy`
-    : `For MIXED SIGNALS:
-- 90-100: STRONG SIGNAL - All signals align
-- 70-89: VALIDATED - Fundamentals support insider signal
-- 50-69: MIXED - Some merit but concerns exist
-- 30-49: PASS - Fundamentals don't support signal
-- 0-29: IGNORE - Red flags contradict signal`)}
-
-NOTE: This micro score will be adjusted by a separate MACRO analysis that considers market-wide and sector conditions.
-
-Focus on actionable insights. Be direct. This is for real money decisions.`;
+BE DIRECT. This is for real money decisions. Reference actual data points in your analysis.`;
 
     try {
       const provider = this.getProvider();
@@ -400,7 +356,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
       
       const content = await provider.generateCompletion(messages, {
         temperature: 0.3,
-        maxTokens: 8192,
+        maxTokens: 4096,
         responseFormat: "json"
       });
 
@@ -424,7 +380,7 @@ Focus on actionable insights. Be direct. This is for real money decisions.`;
    */
   generateQuickSummary(analysis: FinancialAnalysis): string {
     const rating = analysis.overallRating.replace(/_/g, " ").toUpperCase();
-    const score = analysis.financialHealth.score;
+    const score = analysis.confidenceScore; // Use the main signal score
     return `${rating} (${score}/100) - ${analysis.summary}`;
   }
 

@@ -2957,16 +2957,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Don't fail the follow request if analysis enqueue fails
       }
       
-      // Generate day-0 daily brief immediately
-      try {
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      // Generate day-0 daily brief immediately with retry logic
+      const userId = req.session.userId; // Capture for use in async function
+      const generateDay0Brief = async (retryCount: number = 0): Promise<void> => {
+        const maxRetries = 2;
+        const retryDelayMs = 3000; // 3 seconds between retries
         
-        // Check if brief already exists for today
-        const existingBriefs = await storage.getDailyBriefsForTicker(ticker, req.session.userId);
-        const briefExistsToday = existingBriefs.some((b: any) => b.briefDate === today);
-        
-        if (!briefExistsToday) {
-          console.log(`[Follow] Generating day-0 daily brief for ${ticker}...`);
+        try {
+          const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+          
+          // Check if brief already exists for today
+          const existingBriefs = await storage.getDailyBriefsForTicker(ticker, userId);
+          const briefExistsToday = existingBriefs.some((b: any) => b.briefDate === today);
+          
+          if (briefExistsToday) {
+            console.log(`[Follow] Daily brief already exists for ${ticker} today, skipping`);
+            return;
+          }
+          
+          console.log(`[Follow] Generating day-0 daily brief for ${ticker}${retryCount > 0 ? ` (retry ${retryCount}/${maxRetries})` : ''}...`);
           
           // Get current price data (matching daily job implementation)
           const quote = await stockService.getQuote(ticker);
@@ -2976,7 +2985,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Get LATEST AI analysis from stock_analyses table (primary source of truth)
           const latestAnalysis = await storage.getStockAnalysis(ticker);
-          const stock = await storage.getStock(req.session.userId, ticker);
+          const stock = await storage.getStock(userId, ticker);
           const stockData = stock as any;
           
           // Helper to safely convert analyzedAt (could be Date or string from DB)
@@ -3059,7 +3068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const opportunityType = (latestRec.includes("sell") || latestRec.includes("avoid") || stockRec.includes("sell")) ? "sell" : "buy";
           
           // Check if user owns this stock (real holdings only, not simulated)
-          const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
+          const holding = await storage.getPortfolioHoldingByTicker(userId, ticker, false);
           const userOwnsPosition = holding !== undefined && holding.quantity > 0;
           
           // Fetch FRESH news sentiment from Alpha Vantage (with fallback to cached)
@@ -3104,7 +3113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Store in database with BOTH scenarios
           await storage.createDailyBrief({
-            userId: req.session.userId,
+            userId,
             ticker,
             briefDate: today,
             priceSnapshot: quote.price.toString(),
@@ -3132,16 +3141,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           console.log(`[Follow] Generated day-0 dual-scenario brief for ${ticker}: Watching=${brief.watching.recommendedStance}(${brief.watching.confidence}), Owning=${brief.owning.recommendedStance}(${brief.owning.confidence})`);
-        } else {
-          console.log(`[Follow] Daily brief already exists for ${ticker} today, skipping`);
+        } catch (briefError) {
+          const errorDetails = briefError instanceof Error ? briefError.message : JSON.stringify(briefError);
+          console.error(`[Follow] Failed to generate day-0 brief for ${ticker} (attempt ${retryCount + 1}/${maxRetries + 1}):`, errorDetails);
+          
+          // Retry if we haven't exhausted retries
+          if (retryCount < maxRetries) {
+            console.log(`[Follow] Retrying day-0 brief for ${ticker} in ${retryDelayMs / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+            return generateDay0Brief(retryCount + 1);
+          } else {
+            console.error(`[Follow] Day-0 brief generation failed permanently for ${ticker} after ${maxRetries + 1} attempts`);
+          }
         }
-      } catch (briefError) {
-        const errorDetails = briefError instanceof Error ? 
-          `${briefError.message}\n${briefError.stack}` : 
-          JSON.stringify(briefError);
-        console.error(`[Follow] Failed to generate day-0 brief for ${ticker}:`, errorDetails);
-        // Don't fail the follow request if brief generation fails
-      }
+      };
+      
+      // Run brief generation (don't await to not block the response, but do run with retries)
+      generateDay0Brief().catch(err => {
+        console.error(`[Follow] Unhandled error in day-0 brief generation for ${ticker}:`, err);
+      });
       
       res.status(201).json(follow);
     } catch (error) {

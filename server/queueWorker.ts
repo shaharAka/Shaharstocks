@@ -412,10 +412,10 @@ class QueueWorker {
       console.log(`[QueueWorker] ✅ Analysis complete for ${job.ticker}`);
 
       // Create notifications for high-value opportunities (high confidence signals)
-      // High score BUY: score > 70 with BUY rating (highest buy scores)
-      // High score SELL: score > 70 with SELL/AVOID rating (highest sell scores)
-      const isBuyOpportunity = (analysis.overallRating === 'buy' || analysis.overallRating === 'strong_buy') && integratedScore > 70;
-      const isSellOpportunity = (analysis.overallRating === 'sell' || analysis.overallRating === 'avoid' || analysis.overallRating === 'strong_avoid') && integratedScore > 70;
+      // High score BUY: score >= 80 with BUY rating (only the best opportunities)
+      // High score SELL: score >= 80 with SELL/AVOID rating (only the strongest sell signals)
+      const isBuyOpportunity = (analysis.overallRating === 'buy' || analysis.overallRating === 'strong_buy') && integratedScore >= 80;
+      const isSellOpportunity = (analysis.overallRating === 'sell' || analysis.overallRating === 'avoid' || analysis.overallRating === 'strong_avoid') && integratedScore >= 80;
       
       if (isBuyOpportunity || isSellOpportunity) {
         const notificationType = isBuyOpportunity ? 'high_score_buy' : 'high_score_sell';

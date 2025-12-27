@@ -47,6 +47,11 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Onboarding Flow**: 4-step onboarding with automatic data fetching, visual feedback for fetch status, and educational content. Uses a reduced fetch limit (50 max) during onboarding for faster completion.
 - **Tutorial System**: Manual-only tutorials, triggered by user interaction, with enhanced element targeting and simplified content.
 - **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language.
+- **Unified Stock Detail Page**: Single page layout with 3 visual zones that adapts to user's stage with the stock:
+  - **Stock Zone** (top): Ticker, price, market cap, P/E, insider summary, stage indicator badge (Opportunity/Following/In Position), and stage-appropriate actions (Follow button, position toggle, unfollow)
+  - **Company Zone** (middle): Company description, industry/country/IPO info, and Daily Briefs (only for followed stocks)
+  - **AI Zone** (bottom): Trading rules chart (only for followed stocks), AI Analysis tab, News tab, Insider details tab, Discussion tab
+  - Trading rules/simulation plot hidden for Opportunity stage (no rules before following)
 - **Fetch Configuration**: Simplified dialog for data ingestion settings, defaulting to daily refresh, with display preferences managed on the Opportunities page.
 - **Unified Global Opportunities System**: Replaces per-user data fetching with a global opportunities system where ALL users see the SAME insider trading opportunities. Key features:
   - **Global Data**: Opportunities stored without userId - fetched once, shared by all users

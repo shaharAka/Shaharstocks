@@ -561,6 +561,30 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           {!analysis.recommendation && !analysis.summary && (
             <p className="text-sm text-muted-foreground italic">No playbook available</p>
           )}
+
+          {/* Stop Loss / Profit Target - actionable levels */}
+          {(analysis.stopLoss || analysis.profitTarget) && (
+            <div className="mt-4 pt-4 border-t flex flex-wrap gap-4">
+              {analysis.stopLoss && (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="text-sm text-muted-foreground">Stop Loss:</span>
+                  <span className="text-sm font-semibold text-red-600 dark:text-red-400" data-testid="text-stop-loss">
+                    ${parseFloat(analysis.stopLoss).toFixed(2)}
+                  </span>
+                </div>
+              )}
+              {analysis.profitTarget && (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="text-sm text-muted-foreground">Profit Target:</span>
+                  <span className="text-sm font-semibold text-green-600 dark:text-green-400" data-testid="text-profit-target">
+                    ${parseFloat(analysis.profitTarget).toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

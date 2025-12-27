@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { MacroAnalysis, InsertMacroAnalysis } from "@shared/schema";
-import { getAIProvider, type AIProviderConfig, type ChatMessage } from "./aiProvider";
+import { getAIProvider, generateWithFallback, type AIProviderConfig, type ChatMessage } from "./aiProvider";
 
 // Using OpenAI API for macro analysis (deprecated, using provider interface now)
 const openai = new OpenAI({
@@ -590,8 +590,7 @@ Respond in JSON format:
   "risks": ["<risk1>", "<risk2>", ...]
 }`;
 
-    const provider = getAIProvider(currentProviderConfig);
-    console.log(`[MacroAgent] Using ${provider.getName()} (${provider.getModel()}) for macro analysis`);
+    console.log(`[MacroAgent] Using ${currentProviderConfig.provider} for macro analysis`);
     
     const messages: ChatMessage[] = [
       {
@@ -604,11 +603,16 @@ Respond in JSON format:
       },
     ];
 
-    let responseText = await provider.generateCompletion(messages, {
+    const result = await generateWithFallback(currentProviderConfig, messages, {
       temperature: 0.3,
       responseFormat: "json"
     });
-    sanitizedResponse = responseText;
+    
+    if (result.usedFallback) {
+      console.log(`[MacroAgent] ⚠️ Used fallback: ${result.provider} (${result.model})`);
+    }
+    
+    sanitizedResponse = result.content;
     
     // Strip markdown code fences if present (e.g., ```json ... ```)
     // Handle multiple formats: ```json\n{...}\n```, ```\n{...}\n```, or just {...}

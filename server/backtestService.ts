@@ -4,7 +4,7 @@ import { openinsiderService } from "./openinsiderService";
 import { finnhubService } from "./finnhubService";
 import type { BacktestJob } from "@shared/schema";
 import OpenAI from "openai";
-import { getAIProvider, type AIProviderConfig, type ChatMessage } from "./aiProvider";
+import { getAIProvider, generateWithFallback, type AIProviderConfig, type ChatMessage } from "./aiProvider";
 
 // Initialize OpenAI for backtesting analysis (deprecated, using provider interface)
 const openai = new OpenAI({
@@ -617,20 +617,24 @@ Return ONLY valid JSON in this exact format:
 Generate 100 diverse scenarios exploring all ranges of risk/reward profiles.`;
 
     try {
-      const provider = getAIProvider(currentProviderConfig);
-      console.log(`[BacktestJob ${jobId}] Using ${provider.getName()} (${provider.getModel()}) for scenario generation`);
+      console.log(`[BacktestJob ${jobId}] Using ${currentProviderConfig.provider} for scenario generation`);
       
       const messages: ChatMessage[] = [
         { role: "system", content: "You are a stock trading strategist. Return only valid JSON with 100 diverse trading scenarios." },
         { role: "user", content: prompt }
       ];
 
-      const content = await provider.generateCompletion(messages, {
+      const result = await generateWithFallback(currentProviderConfig, messages, {
         temperature: 0.9,
         maxTokens: 16000,
         responseFormat: "json"
       });
       
+      if (result.usedFallback) {
+        console.log(`[BacktestJob ${jobId}] ⚠️ Used fallback: ${result.provider} (${result.model})`);
+      }
+      
+      const content = result.content;
       if (!content) {
         throw new Error("No response from AI provider");
       }
@@ -649,14 +653,14 @@ Generate 100 diverse scenarios exploring all ranges of risk/reward profiles.`;
       console.log(`[BacktestJob ${jobId}] OpenAI response preview: ${cleanContent.substring(0, 200)}...`);
 
       // Parse JSON response
-      let result;
+      let parsedResult;
       try {
-        result = JSON.parse(cleanContent);
+        parsedResult = JSON.parse(cleanContent);
       } catch (parseError) {
         console.error(`[BacktestJob ${jobId}] JSON parse error. First 500 chars of content:`, cleanContent.substring(0, 500));
         throw parseError;
       }
-      let scenarios = result.scenarios || [];
+      let scenarios = parsedResult.scenarios || [];
 
       if (scenarios.length === 0) {
         throw new Error("No scenarios generated");
@@ -681,7 +685,7 @@ Generate 100 diverse scenarios exploring all ranges of risk/reward profiles.`;
         return isValid;
       });
 
-      console.log(`[BacktestJob ${jobId}] Generated ${scenarios.length} valid scenarios (filtered from ${result.scenarios?.length || 0})`);
+      console.log(`[BacktestJob ${jobId}] Generated ${scenarios.length} valid scenarios (filtered from ${parsedResult.scenarios?.length || 0})`);
 
       // Store all scenarios and calculate P&L
       for (let i = 0; i < scenarios.length; i++) {

@@ -9,7 +9,7 @@
 
 import OpenAI from "openai";
 import type { TechnicalIndicators, NewsSentiment, PriceNewsCorrelation } from "./stockService";
-import { getAIProvider, type AIProviderConfig, type AIProvider, type ChatMessage } from "./aiProvider";
+import { getAIProvider, generateWithFallback, type AIProviderConfig, type AIProvider, type ChatMessage, type AICompletionOptions } from "./aiProvider";
 import { 
   generateScoringRubricPrompt, 
   scorecardConfig, 
@@ -386,18 +386,21 @@ Return ONLY this JSON (no markdown):
 REMEMBER: You are an investor putting real money on the line. Explain your thinking. Reference actual numbers. Be honest about what the data says - don't sugarcoat weak signals. If you wouldn't personally take this trade for a 1-2 week quick turnaround, say so clearly.`;
 
     try {
-      const provider = this.getProvider();
-      console.log(`[AIAnalysisService] Analyzing ${ticker} using ${provider.getName()} (${provider.getModel()})`);
+      console.log(`[AIAnalysisService] Analyzing ${ticker} using ${currentProviderConfig.provider}`);
       
       const messages: ChatMessage[] = [{ role: "user", content: prompt }];
       
-      const content = await provider.generateCompletion(messages, {
+      const result = await generateWithFallback(currentProviderConfig, messages, {
         temperature: 0.3,
         maxTokens: 4096,
         responseFormat: "json"
       });
 
-      const cleanedContent = stripMarkdownCodeBlocks(content || "{}");
+      if (result.usedFallback) {
+        console.log(`[AIAnalysisService] ⚠️ Used fallback provider: ${result.provider} (${result.model})`);
+      }
+
+      const cleanedContent = stripMarkdownCodeBlocks(result.content || "{}");
       const analysis = JSON.parse(cleanedContent);
 
       // Add metadata
@@ -841,16 +844,19 @@ Return JSON in this EXACT format (no extra text, no markdown, pure JSON):
 - Owning a SHORT position: Use "cover" (exit short/buy to cover) or "hold" (stay short)`;
 
     try {
-      const provider = this.getProvider();
       const messages: ChatMessage[] = [{ role: "user", content: prompt }];
       
-      const content = await provider.generateCompletion(messages, {
+      const result = await generateWithFallback(currentProviderConfig, messages, {
         temperature: 0.3,
         maxTokens: 500,
         responseFormat: "json"
       });
 
-      const cleanedContent = stripMarkdownCodeBlocks(content || "{}");
+      if (result.usedFallback) {
+        console.log(`[AIAnalysisService] ⚠️ Daily brief used fallback: ${result.provider} (${result.model})`);
+      }
+
+      const cleanedContent = stripMarkdownCodeBlocks(result.content || "{}");
       const brief = JSON.parse(cleanedContent);
       
       // Validate and enforce word limit on briefText
@@ -988,18 +994,21 @@ Return your evaluation as JSON with this EXACT structure:
 REMEMBER: This is a 1-2 WEEK trading horizon. Weight short-term catalysts and momentum appropriately.`;
 
     try {
-      const provider = this.getProvider();
-      console.log(`[AIAnalysisService] Generating scorecard for ${ticker} using ${provider.getName()}`);
+      console.log(`[AIAnalysisService] Generating scorecard for ${ticker} using ${currentProviderConfig.provider}`);
       
       const messages: ChatMessage[] = [{ role: "user", content: prompt }];
       
-      const content = await provider.generateCompletion(messages, {
+      const result = await generateWithFallback(currentProviderConfig, messages, {
         temperature: 0.2, // Lower temperature for more consistent scoring
         maxTokens: 4096,
         responseFormat: "json"
       });
 
-      const cleanedContent2 = stripMarkdownCodeBlocks(content || "{}");
+      if (result.usedFallback) {
+        console.log(`[AIAnalysisService] ⚠️ Scorecard used fallback: ${result.provider} (${result.model})`);
+      }
+
+      const cleanedContent2 = stripMarkdownCodeBlocks(result.content || "{}");
       const llmResponse = JSON.parse(cleanedContent2);
       
       // Build the full scorecard from LLM response

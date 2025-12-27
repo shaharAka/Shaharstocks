@@ -157,6 +157,10 @@ class GeminiProvider implements AIProvider {
 let cachedProvider: AIProvider | null = null;
 let cachedConfig: AIProviderConfig | null = null;
 
+// Fallback configuration
+const FALLBACK_PROVIDER = "openai";
+const FALLBACK_MODEL = "gpt-5.2";
+
 export function getAIProvider(config: AIProviderConfig): AIProvider {
   if (cachedProvider && 
       cachedConfig?.provider === config.provider && 
@@ -180,6 +184,76 @@ export function getAIProvider(config: AIProviderConfig): AIProvider {
   return cachedProvider;
 }
 
+/**
+ * Check if an error indicates a quota/rate limit issue
+ * Handles both string messages and structured error objects from various providers
+ */
+function isQuotaOrRateLimitError(error: any): boolean {
+  // Check error message string
+  const errorMessage = error?.message || String(error);
+  if (
+    errorMessage.includes("429") ||
+    errorMessage.includes("quota") ||
+    errorMessage.includes("RESOURCE_EXHAUSTED") ||
+    errorMessage.includes("rate") ||
+    errorMessage.includes("exceeded")
+  ) {
+    return true;
+  }
+  
+  // Check Gemini-style structured errors
+  if (error?.status === 429 || error?.code === 429) return true;
+  if (error?.code === "RESOURCE_EXHAUSTED") return true;
+  if (error?.error?.code === 429) return true;
+  if (error?.error?.status === "RESOURCE_EXHAUSTED") return true;
+  
+  // Check nested error objects (Google API style)
+  if (error?.response?.status === 429) return true;
+  
+  return false;
+}
+
+/**
+ * Get AI provider with automatic fallback on quota/rate limit errors
+ * If primary provider fails with 429 error, falls back to OpenAI gpt-5.2
+ */
+export async function generateWithFallback(
+  config: AIProviderConfig,
+  messages: ChatMessage[],
+  options?: AICompletionOptions
+): Promise<{ content: string; usedFallback: boolean; provider: string; model: string }> {
+  const primaryProvider = getAIProvider(config);
+  
+  try {
+    const content = await primaryProvider.generateCompletion(messages, options);
+    return { 
+      content, 
+      usedFallback: false, 
+      provider: primaryProvider.getName(),
+      model: primaryProvider.getModel()
+    };
+  } catch (error: any) {
+    if (isQuotaOrRateLimitError(error) && config.provider !== FALLBACK_PROVIDER && isOpenAIAvailable()) {
+      console.log(`[AIProvider] ⚠️ ${config.provider} quota exceeded, falling back to ${FALLBACK_PROVIDER} ${FALLBACK_MODEL}`);
+      
+      // Clear the cache so next call uses fresh provider
+      clearProviderCache();
+      
+      const fallbackProvider = new OpenAIProvider(FALLBACK_MODEL);
+      const content = await fallbackProvider.generateCompletion(messages, options);
+      
+      return { 
+        content, 
+        usedFallback: true, 
+        provider: fallbackProvider.getName(),
+        model: fallbackProvider.getModel()
+      };
+    }
+    
+    throw error;
+  }
+}
+
 export function clearProviderCache(): void {
   cachedProvider = null;
   cachedConfig = null;
@@ -199,7 +273,7 @@ export function getAvailableProviders(): { id: string; name: string; available: 
       id: "openai",
       name: "OpenAI",
       available: isOpenAIAvailable(),
-      models: ["gpt-5.1", "gpt-4o", "gpt-4o-mini"]
+      models: ["gpt-5.2", "gpt-5.1", "gpt-4o", "gpt-4o-mini"]
     },
     {
       id: "gemini",
@@ -227,7 +301,7 @@ interface GeminiModel {
 export async function fetchOpenAIModels(): Promise<string[]> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return ["gpt-5.1", "gpt-4o", "gpt-4o-mini"];
+    return ["gpt-5.2", "gpt-5.1", "gpt-4o", "gpt-4o-mini"];
   }
 
   try {
@@ -260,24 +334,26 @@ export async function fetchOpenAIModels(): Promise<string[]> {
       .map((m: OpenAIModel) => m.id)
       .sort((a: string, b: string) => {
         const priority = (id: string) => {
-          if (id === "gpt-5.1") return 0;
-          if (id.startsWith("gpt-5.1") && !id.includes("mini") && !id.includes("nano")) return 1;
-          if (id === "gpt-4o") return 2;
-          if (id === "gpt-4o-mini") return 3;
-          if (id === "gpt-4") return 4;
-          if (id.includes("gpt-5")) return 5;
-          if (id.includes("gpt-4o")) return 6;
-          if (id.includes("gpt-4")) return 7;
+          if (id === "gpt-5.2") return 0;
+          if (id === "gpt-5.1") return 1;
+          if (id.startsWith("gpt-5.2") && !id.includes("mini") && !id.includes("nano")) return 2;
+          if (id.startsWith("gpt-5.1") && !id.includes("mini") && !id.includes("nano")) return 3;
+          if (id === "gpt-4o") return 4;
+          if (id === "gpt-4o-mini") return 5;
+          if (id === "gpt-4") return 6;
+          if (id.includes("gpt-5")) return 7;
+          if (id.includes("gpt-4o")) return 8;
+          if (id.includes("gpt-4")) return 9;
           return 10;
         };
         return priority(a) - priority(b);
       });
 
     console.log("[AIProvider] Fetched OpenAI models:", chatModels);
-    return chatModels.length > 0 ? chatModels : ["gpt-5.1", "gpt-4o", "gpt-4o-mini"];
+    return chatModels.length > 0 ? chatModels : ["gpt-5.2", "gpt-5.1", "gpt-4o", "gpt-4o-mini"];
   } catch (error) {
     console.error("[AIProvider] Error fetching OpenAI models:", error);
-    return ["gpt-5.1", "gpt-4o", "gpt-4o-mini"];
+    return ["gpt-5.2", "gpt-5.1", "gpt-4o", "gpt-4o-mini"];
   }
 }
 

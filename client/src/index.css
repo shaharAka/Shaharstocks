@@ -345,7 +345,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    padding: 1rem 1rem 1rem 2.5rem;
+    padding: 0.875rem 0.75rem 0.875rem 2rem;
     background-color: transparent;
     font-size: 0.8rem;
     color: oklch(var(--muted-foreground));
@@ -356,11 +356,11 @@
   /* Background icon */
   .book-tab .tab-icon {
     position: absolute;
-    left: 0.5rem;
+    left: 0.375rem;
     top: 50%;
     transform: translateY(-50%);
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.125rem;
+    height: 1.125rem;
     opacity: 0.15;
     transition: opacity 0.15s ease;
   }
@@ -391,5 +391,12 @@
     gap: 0;
     padding: 0.5rem 0;
     background-color: oklch(var(--notebook-page));
+  }
+  
+  /* Sidebar positioned below the header */
+  .sidebar-below-header {
+    top: var(--header-height, 3rem) !important;
+    height: calc(100vh - var(--header-height, 3rem)) !important;
+    max-height: calc(100vh - var(--header-height, 3rem)) !important;
   }
 }

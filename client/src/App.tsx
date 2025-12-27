@@ -98,8 +98,9 @@ function AuthenticatedApp() {
   }
 
   const style = {
-    "--sidebar-width": "10rem",
+    "--sidebar-width": "11rem",
     "--sidebar-width-icon": "3rem",
+    "--header-height": "3rem",
   };
 
   return (
@@ -111,7 +112,7 @@ function AuthenticatedApp() {
         onComplete={() => {}}
       />
       <div className="flex flex-col h-screen w-full book-page">
-        <header className="flex items-center justify-between px-2 py-2 md:px-4 bg-[oklch(var(--notebook-page))] shrink-0 border-b border-border/30">
+        <header className="flex items-center justify-between px-2 py-2 md:px-4 bg-[oklch(var(--notebook-page))] shrink-0 border-b border-border/30 h-[var(--header-height)] z-20">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
             <div className="flex items-center gap-2">

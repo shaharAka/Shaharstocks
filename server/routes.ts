@@ -3533,6 +3533,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/portfolio/holdings", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const { ticker, quantity, averagePurchasePrice, isSimulated } = req.body;
+      
+      if (!ticker || quantity === undefined || !averagePurchasePrice) {
+        return res.status(400).json({ error: "Missing required fields: ticker, quantity, averagePurchasePrice" });
+      }
+      
+      const holding = await storage.createPortfolioHolding({
+        userId: req.session.userId,
+        ticker: ticker.toUpperCase(),
+        quantity,
+        averagePurchasePrice,
+        isSimulated: isSimulated ?? false,
+      });
+      
+      res.status(201).json(holding);
+    } catch (error) {
+      console.error("Create portfolio holding error:", error);
+      res.status(500).json({ error: "Failed to create portfolio holding" });
+    }
+  });
+
   app.get("/api/portfolio/holdings/:id", async (req, res) => {
     try {
       // CRITICAL SECURITY: Verify authentication and ownership

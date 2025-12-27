@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   ShieldCheck,
@@ -31,6 +31,7 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const searchString = useSearch();
   const { user } = useUser();
   const newStocksCount = useNewStocksCount(user?.showAllOpportunities ?? false);
   const { setOpenMobile, isMobile, state } = useSidebar();
@@ -59,13 +60,14 @@ export function AppSidebar() {
   };
 
   const isCollapsed = state === "collapsed";
-  const currentPath = location.split('?')[0];
+  const currentPath = location;
   
   // Check if we're on a stock/ticker detail page
   const isStockPage = currentPath.startsWith('/stock/') || currentPath.startsWith('/ticker/');
   
   // Get the referrer from query params to determine which section to highlight
-  const urlParams = new URLSearchParams(location.split('?')[1] || '');
+  // useSearch() returns the query string (e.g., "from=following")
+  const urlParams = new URLSearchParams(searchString);
   const fromSection = urlParams.get('from');
 
   const getBadgeCount = (url: string): number | null => {

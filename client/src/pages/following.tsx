@@ -244,20 +244,19 @@ export default function Following() {
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-md border overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table className="text-xs">
-              <TableHeader className="sticky top-0 bg-background z-[1]">
-                <TableRow>
-                  <TableHead className="min-w-[60px] px-1">Ticker</TableHead>
-                  <TableHead className="hidden md:table-cell min-w-[100px] px-1">Company</TableHead>
-                  <TableHead className="text-right w-[60px] px-1">Signal</TableHead>
-                  <TableHead className="w-[50px] px-1">Type</TableHead>
-                  <TableHead className="text-right min-w-[60px] px-1">Price</TableHead>
-                  <TableHead className="text-right min-w-[60px] px-1">Change</TableHead>
-                  <TableHead className="w-[120px] text-right px-1">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[100px]">Ticker</TableHead>
+                <TableHead className="hidden md:table-cell">Company</TableHead>
+                <TableHead className="text-right w-[70px]">Signal</TableHead>
+                <TableHead className="w-[60px]">Type</TableHead>
+                <TableHead className="text-right w-[80px]">Price</TableHead>
+                <TableHead className="text-right w-[80px]">Change</TableHead>
+                <TableHead className="w-[140px] text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {sortedStocks.map((stock) => {
                 const currentPrice = parseFloat(stock.currentPrice || "0");
@@ -267,25 +266,25 @@ export default function Following() {
 
                 return (
                   <TableRow key={stock.ticker} className="hover-elevate" data-testid={`row-stock-${stock.ticker}`}>
-                    <TableCell className="font-mono font-medium px-1">
-                      <div className="flex items-center gap-1">
-                        <Star className="h-3 w-3 text-primary fill-current shrink-0" />
+                    <TableCell className="font-mono font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <Star className="h-3 w-3 text-primary fill-current" />
                         <Link href={`/ticker/${stock.ticker}`} className="hover:underline">
                           {stock.ticker}
                         </Link>
                       </div>
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground truncate max-w-[200px] px-1">
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm truncate max-w-[200px]">
                       {stock.companyName || "-"}
                     </TableCell>
-                    <TableCell className="text-right px-1">
+                    <TableCell className="text-right">
                       {stock.integratedScore ? (
                         <Tooltip>
                           <TooltipTrigger>
                             <Badge 
                               variant={stock.integratedScore >= 70 ? "default" : "secondary"}
                               className={cn(
-                                "font-mono text-[10px]",
+                                "font-mono",
                                 stock.integratedScore >= 80 && "bg-amber-500 text-white"
                               )}
                             >
@@ -297,29 +296,29 @@ export default function Following() {
                           </TooltipContent>
                         </Tooltip>
                       ) : stock.jobStatus === 'pending' || stock.jobStatus === 'processing' ? (
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-xs">
                           Analyzing...
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="px-1">
+                    <TableCell>
                       {stock.insiderAction && (
                         <Badge 
                           variant={stock.insiderAction === 'BUY' ? "default" : "destructive"}
-                          className="text-[10px]"
+                          className="text-xs"
                         >
                           {stock.insiderAction}
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-mono px-1">
+                    <TableCell className="text-right font-mono">
                       ${currentPrice.toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-right px-1">
+                    <TableCell className="text-right">
                       <div className={cn(
-                        "flex items-center justify-end gap-0.5",
+                        "flex items-center justify-end gap-0.5 text-sm",
                         isPositive ? "text-success" : "text-destructive"
                       )}>
                         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -328,12 +327,12 @@ export default function Following() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right px-1">
+                    <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 px-1.5 text-[10px] text-muted-foreground"
+                          className="h-7 px-2 text-xs text-muted-foreground"
                           onClick={() => unfollowMutation.mutate(stock.ticker)}
                           disabled={unfollowMutation.isPending}
                           data-testid={`button-unfollow-${stock.ticker}`}
@@ -344,7 +343,7 @@ export default function Following() {
                           <Button
                             size="sm"
                             variant="default"
-                            className="h-6 px-1.5 text-[10px]"
+                            className="h-7 px-2 text-xs"
                             onClick={() => enterPositionMutation.mutate({ 
                               ticker: stock.ticker, 
                               price: currentPrice 
@@ -356,7 +355,7 @@ export default function Following() {
                           </Button>
                         )}
                         {inPosition && (
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-xs">
                             In Position
                           </Badge>
                         )}
@@ -366,8 +365,7 @@ export default function Following() {
                 );
               })}
             </TableBody>
-            </Table>
-          </div>
+          </Table>
         </div>
       )}
     </div>

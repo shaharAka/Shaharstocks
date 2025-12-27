@@ -282,20 +282,19 @@ export default function InPosition() {
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-md border overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table className="text-xs">
-              <TableHeader className="sticky top-0 bg-background z-[1]">
-                <TableRow>
-                  <TableHead className="min-w-[60px] px-1">Ticker</TableHead>
-                  <TableHead className="text-right min-w-[60px] px-1">Entry</TableHead>
-                  <TableHead className="text-right min-w-[60px] px-1">Current</TableHead>
-                  <TableHead className="text-right w-[45px] px-1">Qty</TableHead>
-                  <TableHead className="text-right min-w-[70px] px-1">P&L</TableHead>
-                  <TableHead className="text-right min-w-[60px] px-1">P&L %</TableHead>
-                  <TableHead className="w-[70px] text-right px-1">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[100px]">Ticker</TableHead>
+                <TableHead className="text-right w-[80px]">Entry</TableHead>
+                <TableHead className="text-right w-[80px]">Current</TableHead>
+                <TableHead className="text-right w-[60px]">Qty</TableHead>
+                <TableHead className="text-right w-[100px]">P&L</TableHead>
+                <TableHead className="text-right w-[80px]">P&L %</TableHead>
+                <TableHead className="w-[100px] text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {sortedHoldings.map((holding) => {
                 const { pnl, pnlPercent, currentPrice } = calculatePnL(holding);
@@ -304,22 +303,22 @@ export default function InPosition() {
 
                 return (
                   <TableRow key={holding.id} className="hover-elevate" data-testid={`row-position-${holding.ticker}`}>
-                    <TableCell className="font-mono font-medium px-1">
-                      <Link href={`/ticker/${holding.ticker}`} className="hover:underline flex items-center gap-1">
-                        <Briefcase className="h-3 w-3 text-primary shrink-0" />
+                    <TableCell className="font-mono font-medium">
+                      <Link href={`/ticker/${holding.ticker}`} className="hover:underline flex items-center gap-1.5">
+                        <Briefcase className="h-3 w-3 text-primary" />
                         {holding.ticker}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground px-1">
+                    <TableCell className="text-right font-mono text-muted-foreground">
                       ${entryPrice.toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-right font-mono px-1">
+                    <TableCell className="text-right font-mono">
                       ${currentPrice.toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-right font-mono px-1">
+                    <TableCell className="text-right font-mono">
                       {holding.quantity}
                     </TableCell>
-                    <TableCell className="text-right px-1">
+                    <TableCell className="text-right">
                       <span className={cn(
                         "font-mono font-medium",
                         isPositive ? "text-success" : "text-destructive"
@@ -327,7 +326,7 @@ export default function InPosition() {
                         {isPositive ? "+" : ""}${pnl.toFixed(2)}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right px-1">
+                    <TableCell className="text-right">
                       <div className={cn(
                         "flex items-center justify-end gap-0.5",
                         isPositive ? "text-success" : "text-destructive"
@@ -338,11 +337,11 @@ export default function InPosition() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right px-1">
+                    <TableCell className="text-right">
                       <Button
                         size="sm"
                         variant="destructive"
-                        className="h-6 px-2 text-[10px]"
+                        className="h-7 px-3 text-xs"
                         onClick={() => handleClosePosition(holding)}
                         data-testid={`button-close-${holding.ticker}`}
                       >
@@ -353,8 +352,7 @@ export default function InPosition() {
                 );
               })}
             </TableBody>
-            </Table>
-          </div>
+          </Table>
         </div>
       )}
 

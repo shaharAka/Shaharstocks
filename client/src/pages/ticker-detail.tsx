@@ -620,17 +620,16 @@ export default function TickerDetail() {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════════
-            RIGHT COLUMN (2/3) - Trading Rules + AI Analysis (No Tabs)
+            RIGHT COLUMN (2/3) - AI Analysis + Trading Rules (No Tabs)
             ═══════════════════════════════════════════════════════════════════════ */}
         <div className="lg:col-span-2 space-y-4">
+          {/* AI Analysis - Direct, no tabs */}
+          <StockAIAnalysis ticker={ticker} />
           
           {/* Trading Rules Chart - Only for stocks where user is in position */}
           {hasEnteredPosition && (
             <StockSimulationPlot ticker={ticker} stock={stock} />
           )}
-
-          {/* AI Analysis - Direct, no tabs */}
-          <StockAIAnalysis ticker={ticker} />
         </div>
       </div>
     </div>

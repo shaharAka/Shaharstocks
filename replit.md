@@ -42,14 +42,18 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Tutorial System**: Manual-only tutorials, triggered by user interaction, with enhanced element targeting and simplified content.
 - **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language.
 - **Fetch Configuration**: Simplified dialog for data ingestion settings, defaulting to daily refresh, with display preferences managed on the Opportunities page.
-- **Unified Global Opportunities System (NEW)**: Replaces per-user data fetching with a global opportunities system where ALL users see the SAME insider trading opportunities. Key features:
+- **Unified Global Opportunities System**: Replaces per-user data fetching with a global opportunities system where ALL users see the SAME insider trading opportunities. Key features:
   - **Global Data**: Opportunities stored without userId - fetched once, shared by all users
   - **Tier-Based Filtering**: Free/trial users see daily opportunities (fetched at 00:00 UTC), Pro users see both daily AND hourly opportunities
-  - **User Rejections**: Users can dismiss opportunities via `user_opportunity_rejections` table, filtered at query time
+  - **Opportunity Visibility Rules**: Opportunities are shown to users UNLESS:
+    - User has dismissed it (stored in `user_opportunity_rejections` table)
+    - User is already following the ticker (moves to Following page)
+    - Insider trade date is more than 12 days old (auto-filtered)
   - **Efficient API Usage**: Per-ticker caching during batch fetches minimizes Alpha Vantage API calls (2*uniqueTickers instead of 2N)
   - **Duplicate Prevention**: Same transaction can exist in different cadence batches via cadence-aware duplicate detection
   - **Database Tables**: `opportunities` (global), `opportunity_batches` (fetch tracking), `user_opportunity_rejections` (per-user dismissals)
   - **API Endpoint**: `GET /api/opportunities` with automatic tier detection for logged-in users
+  - **Timer Display**: Always shows countdown to next fetch (next hour for Pro, next midnight UTC for Free) even when no previous batch exists
 
 ## External Dependencies
 

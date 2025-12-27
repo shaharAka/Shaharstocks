@@ -3461,6 +3461,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get global ticker daily briefs (score evolution - shared across all users)
+  app.get("/api/stocks/:ticker/ticker-daily-briefs", async (req, res) => {
+    try {
+      // Validate ticker parameter
+      const tickerParam = req.params.ticker?.trim()?.toUpperCase();
+      if (!tickerParam || tickerParam.length > 10 || !/^[A-Z]+$/.test(tickerParam)) {
+        return res.status(400).json({ error: "Invalid ticker format" });
+      }
+      
+      // Get limit from query params, default to 7 (one week)
+      const limit = Math.min(parseInt(req.query.limit as string) || 7, 30);
+      
+      // Fetch global ticker daily briefs (not user-specific)
+      const briefs = await storage.getTickerDailyBriefs(tickerParam, limit);
+      res.json(briefs);
+    } catch (error) {
+      console.error("Get ticker daily briefs error:", error);
+      res.status(500).json({ error: "Failed to fetch ticker daily briefs" });
+    }
+  });
+
   // Stock views routes
   app.post("/api/stocks/:ticker/view", async (req, res) => {
     try {

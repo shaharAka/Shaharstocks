@@ -72,6 +72,8 @@ import {
   type InsertFollowedStock,
   type DailyBrief,
   type InsertDailyBrief,
+  type TickerDailyBrief,
+  type InsertTickerDailyBrief,
   type StockCandlesticks,
   type Opportunity,
   type InsertOpportunity,
@@ -118,6 +120,7 @@ import {
   adminNotifications,
   followedStocks,
   dailyBriefs,
+  tickerDailyBriefs,
   systemSettings,
   opportunities,
   opportunityBatches,
@@ -333,6 +336,11 @@ export interface IStorage {
   getDailyBriefsForTicker(ticker: string, userId: string): Promise<DailyBrief[]>;
   getDailyBriefForUser(userId: string, ticker: string, briefDate: string): Promise<DailyBrief | undefined>;
   createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief>;
+
+  // Global Ticker Daily Briefs (not per-user)
+  getTickerDailyBriefs(ticker: string, limit?: number): Promise<TickerDailyBrief[]>;
+  createTickerDailyBrief(brief: InsertTickerDailyBrief): Promise<TickerDailyBrief>;
+  getLatestTickerBrief(ticker: string): Promise<TickerDailyBrief | undefined>;
 
   // User Stock Statuses
   getUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus | undefined>;
@@ -2771,6 +2779,57 @@ export class DatabaseStorage implements IStorage {
       .values(brief)
       .returning();
     return created;
+  }
+
+  // Global Ticker Daily Briefs (not per-user, shared across all users)
+  async getTickerDailyBriefs(ticker: string, limit: number = 7): Promise<TickerDailyBrief[]> {
+    return await db
+      .select()
+      .from(tickerDailyBriefs)
+      .where(eq(tickerDailyBriefs.ticker, ticker.toUpperCase()))
+      .orderBy(desc(tickerDailyBriefs.briefDate))
+      .limit(limit);
+  }
+
+  async createTickerDailyBrief(brief: InsertTickerDailyBrief): Promise<TickerDailyBrief> {
+    // Check if brief already exists for this ticker+date
+    const [existing] = await db
+      .select()
+      .from(tickerDailyBriefs)
+      .where(
+        and(
+          eq(tickerDailyBriefs.ticker, brief.ticker.toUpperCase()),
+          eq(tickerDailyBriefs.briefDate, brief.briefDate)
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      // Update existing brief
+      const [updated] = await db
+        .update(tickerDailyBriefs)
+        .set({ ...brief, ticker: brief.ticker.toUpperCase() })
+        .where(eq(tickerDailyBriefs.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    // Create new brief
+    const [created] = await db
+      .insert(tickerDailyBriefs)
+      .values({ ...brief, ticker: brief.ticker.toUpperCase() })
+      .returning();
+    return created;
+  }
+
+  async getLatestTickerBrief(ticker: string): Promise<TickerDailyBrief | undefined> {
+    const [brief] = await db
+      .select()
+      .from(tickerDailyBriefs)
+      .where(eq(tickerDailyBriefs.ticker, ticker.toUpperCase()))
+      .orderBy(desc(tickerDailyBriefs.briefDate))
+      .limit(1);
+    return brief;
   }
 
   async getUserStockStatus(userId: string, ticker: string): Promise<UserStockStatus | undefined> {

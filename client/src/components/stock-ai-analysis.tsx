@@ -16,8 +16,13 @@ import {
   RotateCcw,
   CheckCircle,
   XCircle,
-  Pause
+  Pause,
+  History,
+  ArrowUp,
+  ArrowDown,
+  Minus
 } from "lucide-react";
+import type { TickerDailyBrief } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { StockAnalysis } from "@shared/schema";
@@ -153,6 +158,17 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
       }
       return false;
     },
+  });
+
+  // Fetch 7-day ticker daily briefs for score evolution
+  const { data: dailyBriefs = [] } = useQuery<TickerDailyBrief[]>({
+    queryKey: ["/api/stocks", ticker, "ticker-daily-briefs"],
+    queryFn: async () => {
+      const response = await fetch(`/api/stocks/${ticker}/ticker-daily-briefs`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!ticker,
   });
 
   const analyzeMutation = useMutation({
@@ -547,6 +563,78 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Score Evolution - 7-day history from daily briefs */}
+      {dailyBriefs.length > 0 && (
+        <Card>
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <History className="h-4 w-4 text-muted-foreground" />
+              Score Evolution (7 days)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="flex flex-wrap gap-1.5">
+              {dailyBriefs.slice(0, 7).map((brief, index) => {
+                const score = brief.newSignalScore;
+                const change = brief.scoreChange;
+                const isPositive = change && change > 0;
+                const isNegative = change && change < 0;
+                return (
+                  <Tooltip key={brief.id}>
+                    <TooltipTrigger asChild>
+                      <div 
+                        className={`relative flex flex-col items-center p-2 rounded-lg border cursor-help min-w-[45px] ${getSignalBgColor(score)}`}
+                        data-testid={`score-day-${index}`}
+                      >
+                        <span className={`text-sm font-bold ${getSignalColor(score)}`}>{score}</span>
+                        <span className="text-[8px] text-muted-foreground">
+                          {new Date(brief.briefDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                        {change !== null && change !== 0 && (
+                          <div className={`absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full text-[8px] font-bold ${
+                            isPositive ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                          }`}>
+                            {isPositive ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
+                          </div>
+                        )}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <div className="space-y-1">
+                        <div className="font-medium">
+                          {brief.stance} • Score {score}
+                          {change !== null && change !== 0 && (
+                            <span className={isPositive ? 'text-green-500' : 'text-red-500'}>
+                              {' '}({isPositive ? '+' : ''}{change})
+                            </span>
+                          )}
+                        </div>
+                        {brief.scoreChangeReason && (
+                          <p className="text-xs text-muted-foreground">{brief.scoreChangeReason}</p>
+                        )}
+                        {brief.briefText && (
+                          <p className="text-xs line-clamp-3">{brief.briefText}</p>
+                        )}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+            
+            {/* Latest brief summary */}
+            {dailyBriefs[0]?.briefText && (
+              <div className="mt-3 pt-3 border-t">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Latest update: </span>
+                  {dailyBriefs[0].briefText}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Section 3: Key Factors - Strengths & Risks */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">

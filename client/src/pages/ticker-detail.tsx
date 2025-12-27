@@ -100,13 +100,6 @@ export default function TickerDetail() {
   const hasEnteredPosition = currentFollowedStock?.hasEnteredPosition ?? false;
   const stageInfo = getStageInfo(isFollowing, hasEnteredPosition);
 
-  // Fetch daily briefs (lightweight daily reports for followed stocks)
-  const { data: dailyBriefs = [], isLoading: briefsLoading } = useQuery<any[]>({
-    queryKey: ["/api/stocks", ticker, "daily-briefs"],
-    enabled: !!ticker && isFollowing,
-    retry: false,
-    meta: { ignoreError: true },
-  });
 
   // Mark stock as viewed mutation
   const markViewedMutation = useMutation({
@@ -492,50 +485,6 @@ export default function TickerDetail() {
                 </>
               )}
 
-              {/* Daily Briefs - Only for followed stocks */}
-              {isFollowing && (
-                <>
-                  <Separator className="my-1" />
-                  <Collapsible defaultOpen className="group">
-                    <CollapsibleTrigger asChild>
-                      <button className="w-full flex items-center justify-between text-[10px] font-medium cursor-pointer" data-testid="button-toggle-briefs">
-                        <span>Daily Briefs</span>
-                        <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="pt-1.5">
-                      {briefsLoading ? (
-                        <Skeleton className="h-12 w-full" />
-                      ) : dailyBriefs.length === 0 ? (
-                        <p className="text-[9px] text-muted-foreground">Briefs appear once generated.</p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {dailyBriefs.slice(0, 3).map((brief: any) => {
-                            const activeStance = hasEnteredPosition ? brief.owningStance : brief.watchingStance;
-                            const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
-                            const getStanceConfig = (stance: string) => {
-                              const s = stance?.toLowerCase() || "hold";
-                              if (s === "buy" || s === "enter") return { text: "BUY", bg: "bg-green-50 dark:bg-green-950/30" };
-                              if (s === "sell" || s === "short") return { text: hasEnteredPosition ? "SELL" : "SHORT", bg: "bg-red-50 dark:bg-red-950/30" };
-                              return { text: "HOLD", bg: "bg-muted/30" };
-                            };
-                            const cfg = getStanceConfig(activeStance);
-                            return (
-                              <div key={brief.id} className={`rounded p-1.5 text-[9px] ${cfg.bg}`}>
-                                <div className="flex items-center gap-1 mb-0.5">
-                                  <Badge variant="outline" className="text-[8px] h-3 px-1">{cfg.text}</Badge>
-                                  <span className="text-muted-foreground">{new Date(brief.briefDate).toLocaleDateString()}</span>
-                                </div>
-                                <p className="line-clamp-2 text-muted-foreground">{activeText}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </CollapsibleContent>
-                  </Collapsible>
-                </>
-              )}
             </CardContent>
           </Card>
 
@@ -665,8 +614,8 @@ export default function TickerDetail() {
             ═══════════════════════════════════════════════════════════════════════ */}
         <div className="lg:col-span-2 space-y-4">
           
-          {/* Trading Rules Chart - Only for followed stocks */}
-          {isFollowing && (
+          {/* Trading Rules Chart - Only for stocks where user is in position */}
+          {hasEnteredPosition && (
             <StockSimulationPlot ticker={ticker} stock={stock} />
           )}
 

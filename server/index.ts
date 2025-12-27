@@ -8,6 +8,7 @@ import { telegramNotificationService } from "./telegramNotificationService";
 import { openinsiderService } from "./openinsiderService";
 import { aiAnalysisService } from "./aiAnalysisService";
 import { startCleanupScheduler } from "./jobs/cleanupStaleStocks";
+import { startTickerDailyBriefScheduler } from "./jobs/generateTickerDailyBriefs";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
 import { sessionMiddleware } from "./session";
@@ -164,6 +165,9 @@ app.use((req, res, next) => {
   
   // Start daily cleanup of stale pending stocks (> 10 days old)
   startCleanupScheduler(storage);
+  
+  // Start daily ticker brief generation for global opportunities (score evolution tracking)
+  startTickerDailyBriefScheduler(storage);
   
   // Start automatic candlestick data fetching for purchase candidates (once a day)
   startCandlestickDataJob();

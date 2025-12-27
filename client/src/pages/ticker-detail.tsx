@@ -36,7 +36,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import { StockSimulationPlot } from "@/components/stock-simulation-plot";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
-import { CompactSignalBadge } from "@/components/compact-signal-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
@@ -282,37 +281,34 @@ export default function TickerDetail() {
           <Card>
             <CardContent className="p-3">
               {/* Header Row */}
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    asChild
-                    data-testid="button-back"
-                  >
-                    <Link href={backNav.href}>
-                      <ArrowLeft className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <h1 className="text-lg font-bold font-mono" data-testid="heading-ticker">
-                        {stock.ticker}
-                      </h1>
-                      <Badge variant={stageInfo.variant} className="text-[9px] h-4" data-testid="badge-stage">
-                        <stageInfo.icon className="h-2.5 w-2.5 mr-0.5" />
-                        {stageInfo.label}
-                      </Badge>
-                    </div>
-                    {stock.companyName && (
-                      <p className="text-[10px] text-muted-foreground" data-testid="text-company-name">
-                        {stock.companyName}
-                      </p>
-                    )}
+              <div className="flex items-center gap-2 mb-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  asChild
+                  data-testid="button-back"
+                >
+                  <Link href={backNav.href}>
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="text-lg font-bold font-mono" data-testid="heading-ticker">
+                      {stock.ticker}
+                    </h1>
+                    <Badge variant={stageInfo.variant} className="text-[9px] h-4" data-testid="badge-stage">
+                      <stageInfo.icon className="h-2.5 w-2.5 mr-0.5" />
+                      {stageInfo.label}
+                    </Badge>
                   </div>
+                  {stock.companyName && (
+                    <p className="text-[10px] text-muted-foreground" data-testid="text-company-name">
+                      {stock.companyName}
+                    </p>
+                  )}
                 </div>
-                <CompactSignalBadge ticker={ticker} />
               </div>
 
               {/* Price */}

@@ -13,6 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   TrendingUp,
@@ -20,7 +27,8 @@ import {
   Star,
   Search,
   ArrowRight,
-  ExternalLink,
+  SortAsc,
+  HelpCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -43,10 +51,13 @@ type FollowedStock = {
   stanceAlignment?: 'act' | 'hold' | null;
 };
 
+type SortOption = "signal" | "price" | "change";
+
 export default function Following() {
   const { toast } = useToast();
   const { user } = useUser();
   const [tickerSearch, setTickerSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("signal");
 
   const { data: followedStocks = [], isLoading } = useQuery<FollowedStock[]>({
     queryKey: ["/api/followed-stocks-with-status"],
@@ -110,13 +121,22 @@ export default function Following() {
 
   const sortedStocks = useMemo(() => {
     return [...filteredStocks].sort((a, b) => {
-      if (a.stanceAlignment === 'act' && b.stanceAlignment !== 'act') return -1;
-      if (a.stanceAlignment !== 'act' && b.stanceAlignment === 'act') return 1;
-      const scoreA = a.integratedScore ?? 0;
-      const scoreB = b.integratedScore ?? 0;
-      return scoreB - scoreA;
+      switch (sortBy) {
+        case "signal":
+          if (a.stanceAlignment === 'act' && b.stanceAlignment !== 'act') return -1;
+          if (a.stanceAlignment !== 'act' && b.stanceAlignment === 'act') return 1;
+          const scoreA = a.integratedScore ?? 0;
+          const scoreB = b.integratedScore ?? 0;
+          return scoreB - scoreA;
+        case "price":
+          return parseFloat(b.currentPrice || "0") - parseFloat(a.currentPrice || "0");
+        case "change":
+          return parseFloat(b.priceChangePercent || "0") - parseFloat(a.priceChangePercent || "0");
+        default:
+          return 0;
+      }
     });
-  }, [filteredStocks]);
+  }, [filteredStocks, sortBy]);
 
   const hasPosition = (ticker: string) => {
     return holdings.some((h: any) => h.ticker === ticker && h.quantity > 0);
@@ -125,10 +145,8 @@ export default function Following() {
   if (isLoading) {
     return (
       <div className="p-4 md:p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-9 w-64" />
-        </div>
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-10 w-full" />
         <Skeleton className="h-[400px] w-full" />
       </div>
     );
@@ -136,26 +154,76 @@ export default function Following() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Star className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-semibold">Following</h1>
-          <Badge variant="secondary" className="ml-2">
-            {followedStocks.length}
-          </Badge>
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search stocks..."
-              value={tickerSearch}
-              onChange={(e) => setTickerSearch(e.target.value)}
-              className="pl-9"
-              data-testid="input-search-following"
-            />
+      {/* Page Header - Matches Opportunities */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Star className="h-5 w-5 text-primary" />
+            <h1 className="text-xl md:text-2xl font-semibold" data-testid="text-page-title">
+              Following
+            </h1>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6"
+                  tabIndex={0}
+                  aria-label="Learn how following works"
+                  data-testid="button-help-following"
+                >
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-sm p-4 space-y-3 text-left">
+                <p className="font-semibold text-sm">Your Watchlist</p>
+                <div className="space-y-2 text-xs">
+                  <p><strong>Following:</strong> Stocks you're actively monitoring</p>
+                  <p><strong>Enter Position:</strong> Move to active trading when ready</p>
+                  <p><strong>Signal Score:</strong> AI-generated opportunity strength</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
           </div>
+          <p className="text-sm text-muted-foreground">
+            Stocks you're watching for potential trades
+          </p>
+        </div>
+      </div>
+
+      {/* Search and Controls Row - Matches Opportunities */}
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search ticker or company..."
+            value={tickerSearch}
+            onChange={(e) => setTickerSearch(e.target.value)}
+            className="pl-9"
+            data-testid="input-search-following"
+          />
+        </div>
+        
+        <div className="w-full sm:w-48">
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+            <SelectTrigger data-testid="select-sort-following">
+              <SortAsc className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="signal">Signal Strength</SelectItem>
+              <SelectItem value="price">Price</SelectItem>
+              <SelectItem value="change">% Change</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Stats Bar - Matches Opportunities */}
+      <div className="flex gap-4 text-sm items-center">
+        <div>
+          <span className="text-muted-foreground">Total Following: </span>
+          <span className="font-medium" data-testid="text-following-count">{followedStocks.length}</span>
         </div>
       </div>
 
@@ -180,7 +248,7 @@ export default function Following() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Ticker</TableHead>
+                <TableHead className="w-[100px]">Ticker</TableHead>
                 <TableHead className="hidden md:table-cell">Company</TableHead>
                 <TableHead className="text-right w-[70px]">Signal</TableHead>
                 <TableHead className="w-[60px]">Type</TableHead>

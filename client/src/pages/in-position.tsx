@@ -14,6 +14,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -28,6 +35,8 @@ import {
   Search,
   ArrowRight,
   Briefcase,
+  SortAsc,
+  HelpCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -54,10 +63,13 @@ type FollowedStock = {
   companyName?: string;
 };
 
+type SortOption = "pnl" | "pnlPercent" | "value";
+
 export default function InPosition() {
   const { toast } = useToast();
   const { user } = useUser();
   const [tickerSearch, setTickerSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("pnl");
   const [closeDialog, setCloseDialog] = useState<{ open: boolean; holding: PortfolioHolding | null }>({
     open: false,
     holding: null,
@@ -116,6 +128,24 @@ export default function InPosition() {
     return { pnl, pnlPercent, currentPrice };
   };
 
+  const sortedHoldings = useMemo(() => {
+    return [...filteredHoldings].sort((a, b) => {
+      const pnlA = calculatePnL(a);
+      const pnlB = calculatePnL(b);
+      
+      switch (sortBy) {
+        case "pnl":
+          return pnlB.pnl - pnlA.pnl;
+        case "pnlPercent":
+          return pnlB.pnlPercent - pnlA.pnlPercent;
+        case "value":
+          return (pnlB.currentPrice * b.quantity) - (pnlA.currentPrice * a.quantity);
+        default:
+          return 0;
+      }
+    });
+  }, [filteredHoldings, stockPrices, sortBy]);
+
   const totalPnL = useMemo(() => {
     return filteredHoldings.reduce((sum, h) => {
       const { pnl } = calculatePnL(h);
@@ -140,10 +170,8 @@ export default function InPosition() {
   if (holdingsLoading) {
     return (
       <div className="p-4 md:p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-9 w-64" />
-        </div>
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-10 w-full" />
         <Skeleton className="h-[400px] w-full" />
       </div>
     );
@@ -151,36 +179,90 @@ export default function InPosition() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Briefcase className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-semibold">In Position</h1>
-          <Badge variant="secondary" className="ml-2">
-            {activeHoldings.length}
-          </Badge>
-          {activeHoldings.length > 0 && (
-            <Badge 
-              variant={totalPnL >= 0 ? "default" : "destructive"} 
-              className={cn("ml-2", totalPnL >= 0 ? "bg-success" : "")}
-            >
-              {totalPnL >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-              {totalPnL >= 0 ? "+" : ""}${totalPnL.toFixed(2)}
-            </Badge>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search positions..."
-              value={tickerSearch}
-              onChange={(e) => setTickerSearch(e.target.value)}
-              className="pl-9"
-              data-testid="input-search-positions"
-            />
+      {/* Page Header - Matches Opportunities */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-primary" />
+            <h1 className="text-xl md:text-2xl font-semibold" data-testid="text-page-title">
+              In Position
+            </h1>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6"
+                  tabIndex={0}
+                  aria-label="Learn how positions work"
+                  data-testid="button-help-positions"
+                >
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-sm p-4 space-y-3 text-left">
+                <p className="font-semibold text-sm">Active Positions</p>
+                <div className="space-y-2 text-xs">
+                  <p><strong>Entry Price:</strong> Your average purchase price</p>
+                  <p><strong>Current Price:</strong> Live market price</p>
+                  <p><strong>P&L:</strong> Profit or loss on your position</p>
+                  <p><strong>Close:</strong> Close position and record P&L</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
           </div>
+          <p className="text-sm text-muted-foreground">
+            Your active stock positions and performance
+          </p>
         </div>
+      </div>
+
+      {/* Search and Controls Row - Matches Opportunities */}
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search ticker..."
+            value={tickerSearch}
+            onChange={(e) => setTickerSearch(e.target.value)}
+            className="pl-9"
+            data-testid="input-search-positions"
+          />
+        </div>
+        
+        <div className="w-full sm:w-48">
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+            <SelectTrigger data-testid="select-sort-positions">
+              <SortAsc className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pnl">P&L Amount</SelectItem>
+              <SelectItem value="pnlPercent">P&L Percent</SelectItem>
+              <SelectItem value="value">Position Value</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Stats Bar - Matches Opportunities */}
+      <div className="flex gap-4 text-sm items-center">
+        <div>
+          <span className="text-muted-foreground">Total Positions: </span>
+          <span className="font-medium" data-testid="text-positions-count">{activeHoldings.length}</span>
+        </div>
+        {activeHoldings.length > 0 && (
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">Total P&L: </span>
+            <span className={cn(
+              "font-medium flex items-center gap-0.5",
+              totalPnL >= 0 ? "text-success" : "text-destructive"
+            )}>
+              {totalPnL >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {totalPnL >= 0 ? "+" : ""}${totalPnL.toFixed(2)}
+            </span>
+          </div>
+        )}
       </div>
 
       {activeHoldings.length === 0 ? (
@@ -204,7 +286,7 @@ export default function InPosition() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Ticker</TableHead>
+                <TableHead className="w-[100px]">Ticker</TableHead>
                 <TableHead className="text-right w-[80px]">Entry</TableHead>
                 <TableHead className="text-right w-[80px]">Current</TableHead>
                 <TableHead className="text-right w-[60px]">Qty</TableHead>
@@ -214,7 +296,7 @@ export default function InPosition() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredHoldings.map((holding) => {
+              {sortedHoldings.map((holding) => {
                 const { pnl, pnlPercent, currentPrice } = calculatePnL(holding);
                 const entryPrice = parseFloat(holding.averagePurchasePrice);
                 const isPositive = pnl >= 0;

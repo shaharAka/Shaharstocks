@@ -142,7 +142,7 @@ function AuthenticatedApp() {
         </header>
         <div className="flex flex-1 min-h-0 md:pl-[calc(var(--sidebar-width)+0.375rem)]">
           <AppSidebar />
-          <main className="flex-1 overflow-auto notebook-page">
+          <main className="flex-1 overflow-auto notebook-page pl-[2px] pr-[2px]">
             <TrialStatusBanner />
             <Router />
           </main>

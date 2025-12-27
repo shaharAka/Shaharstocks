@@ -77,13 +77,7 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon" 
-      className="border-r-0 bg-[oklch(var(--notebook-page))] sidebar-floating-custom"
-      style={{
-        // Position sidebar below header with gap
-        "--sidebar-top": "calc(var(--header-height, 3rem) + 0.75rem)",
-        "--sidebar-bottom": "0.75rem",
-        "--sidebar-left": "0.75rem",
-      } as React.CSSProperties}
+      className="border-r-0 bg-[oklch(var(--notebook-page))] sidebar-below-header sidebar-floating"
     >
       <SidebarContent className="book-tab-rail">
         <nav className="flex flex-col">

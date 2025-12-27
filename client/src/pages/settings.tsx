@@ -221,14 +221,11 @@ export default function Settings() {
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1 flex items-center gap-2" data-testid="text-page-title">
-          <SettingsIcon className="h-6 w-6" />
+      <div className="flex items-center gap-2">
+        <SettingsIcon className="h-5 w-5 text-primary" />
+        <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
           Fetch Configuration
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Configure data sources for insider trading opportunities
-        </p>
       </div>
 
       {featureFlags?.enableTelegram && status && (

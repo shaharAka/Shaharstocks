@@ -131,13 +131,10 @@ export default function Portfolio() {
         onComplete={() => setOnboardingOpen(false)}
       />
       <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl">
-        <div>
-          <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
             Watchlist
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Monitor tracked stocks, view active alerts, and review trading history
-          </p>
         </div>
 
         {/* Watchlist Summary Cards */}

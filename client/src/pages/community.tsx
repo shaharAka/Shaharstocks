@@ -96,24 +96,19 @@ export default function Community() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Community</h1>
-          <p className="text-muted-foreground text-sm">
-            See what others are discussing and share insights
-          </p>
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search ticker..."
-              value={tickerSearch}
-              onChange={(e) => setTickerSearch(e.target.value)}
-              className="pl-8 w-48"
-              data-testid="input-search-ticker"
-            />
-          </div>
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">Community</h1>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search..."
+            value={tickerSearch}
+            onChange={(e) => setTickerSearch(e.target.value)}
+            className="pl-8 h-8 w-32 text-sm"
+            data-testid="input-search-ticker"
+          />
         </div>
       </div>
 

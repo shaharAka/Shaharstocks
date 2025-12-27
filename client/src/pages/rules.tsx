@@ -344,17 +344,14 @@ export default function Rules() {
 
   return (
     <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
             Trading Rules
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Configure automated trigger-based rules like stop-loss and take-profit
-          </p>
         </div>
-        <Button onClick={openCreateDialog} data-testid="button-create-rule">
-          <Plus className="h-4 w-4 mr-2" />
+        <Button size="sm" onClick={openCreateDialog} data-testid="button-create-rule">
+          <Plus className="h-4 w-4 mr-1" />
           Create Rule
         </Button>
       </div>

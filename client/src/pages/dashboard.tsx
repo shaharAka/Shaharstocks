@@ -122,13 +122,10 @@ export default function Dashboard() {
   return (
     <>
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-screen-2xl mx-auto">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold mb-1" data-testid="text-page-title">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
             Portfolio Overview
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Track your investments and monitor market performance
-          </p>
         </div>
 
       {/* Portfolio Summary Cards */}

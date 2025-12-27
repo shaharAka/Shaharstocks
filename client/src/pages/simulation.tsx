@@ -872,13 +872,10 @@ export default function Simulation() {
   if (!holdings || holdings.length === 0) {
     return (
       <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
             Simulation
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Track simulated stock positions and performance
-          </p>
         </div>
         <Card className="p-12">
           <div className="text-center">
@@ -895,13 +892,10 @@ export default function Simulation() {
 
   return (
     <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
           Simulation
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Test trading strategies with simulated positions and AI-powered backtests
-        </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "realtime" | "whatif")} className="space-y-6" data-testid="tabs-simulation">

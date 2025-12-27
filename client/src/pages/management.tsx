@@ -378,13 +378,10 @@ export default function Management() {
   if (!holdings || holdings.length === 0) {
     return (
       <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
             Portfolio Management
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Interactive price charts with trading rule boundaries
-          </p>
         </div>
         <Card className="p-12">
           <div className="text-center">
@@ -401,13 +398,10 @@ export default function Management() {
 
   return (
     <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
           Portfolio Management
         </h1>
-        <p className="text-sm text-muted-foreground">
-          All managed stocks with editable sell boundaries
-        </p>
       </div>
 
       {portfolioSummary && (

@@ -329,15 +329,12 @@ export default function FollowedDashboard() {
     : (totalPnlData?.totalPnl ?? 0);
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 max-w-screen-2xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 max-w-screen-2xl mx-auto">
       {/* Header */}
-      <div className="space-y-1 sm:space-y-2">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-page-title">
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
           My Watchlist
         </h1>
-        <p className="text-xs sm:text-sm text-muted-foreground">
-          Track your followed stocks and discover new opportunities
-        </p>
       </div>
 
       {/* Stats Overview - Only show if user has stocks */}

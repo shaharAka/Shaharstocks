@@ -41,13 +41,10 @@ export default function Trading() {
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl">
-      <div>
-        <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="text-page-title">
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
           Trading
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Configure automated trading rules and run backtesting simulations
-        </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 md:space-y-6">

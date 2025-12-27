@@ -144,29 +144,22 @@ export default function CommunityDiscussion() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 md:space-y-8 max-w-7xl">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <MessageSquare className="h-6 w-6 md:h-8 md:w-8 text-primary" />
-        <div>
-          <h1 className="text-xl md:text-2xl font-semibold mb-1" data-testid="heading-discussion">
+    <div className="p-4 md:p-6 space-y-4 max-w-7xl">
+      {/* Header with inline search */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-5 w-5 text-primary" />
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="heading-discussion">
             Discussion
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Stocks with team comments
-          </p>
         </div>
-      </div>
-
-      {/* Search */}
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="Search by ticker or company..."
+            placeholder="Search..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
+            className="pl-8 h-8 w-32 text-sm"
             data-testid="input-search"
           />
         </div>

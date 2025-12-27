@@ -183,13 +183,10 @@ export default function Stocks() {
 
   return (
     <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
           Available Stocks
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Browse and trade from available stocks in your n8n workflow
-        </p>
       </div>
 
       {!stocks || stocks.length === 0 ? (

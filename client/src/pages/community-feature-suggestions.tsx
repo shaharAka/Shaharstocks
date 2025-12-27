@@ -209,13 +209,10 @@ export default function FeatureSuggestions() {
   };
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl">
-      <div className="flex items-center gap-3 mb-4 md:mb-6">
-        <Lightbulb className="h-6 w-6 md:h-8 md:w-8 text-primary" />
-        <div>
-          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold" data-testid="heading-feature-suggestions">Feature Suggestions</h1>
-          <p className="text-sm text-muted-foreground">Suggest features and vote on what matters most</p>
-        </div>
+    <div className="container mx-auto p-4 md:p-6 space-y-4 max-w-7xl">
+      <div className="flex items-center gap-2">
+        <Lightbulb className="h-5 w-5 text-primary" />
+        <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="heading-feature-suggestions">Feature Suggestions</h1>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4 md:gap-6">

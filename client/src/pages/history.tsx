@@ -75,13 +75,10 @@ export default function History() {
 
   return (
     <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1" data-testid="text-page-title">
+      <div className="flex items-center gap-2">
+        <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
           Trade History
         </h1>
-        <p className="text-sm text-muted-foreground">
-          View all your past transactions and trading activity
-        </p>
       </div>
 
       {/* Summary Cards */}

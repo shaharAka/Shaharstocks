@@ -79,7 +79,7 @@ export function AppSidebar() {
       collapsible="icon" 
       className="border-r-0 bg-[oklch(var(--notebook-page))] sidebar-below-header sidebar-floating"
     >
-      <SidebarContent className="book-tab-rail justify-center">
+      <SidebarContent className="book-tab-rail justify-start pt-2">
         <nav className="flex flex-col">
           {menuItems.map((item) => {
             const itemPath = item.url.split('?')[0];

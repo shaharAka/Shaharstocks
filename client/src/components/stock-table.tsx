@@ -29,6 +29,15 @@ interface StockTableProps {
   onStockClick: (stock: Stock) => void;
   viewedTickers?: string[];
   preserveOrder?: boolean;
+  // Optional action handlers for different page contexts
+  onFollow?: (stock: Stock) => void;
+  onUnfollow?: (ticker: string) => void;
+  onEnterPosition?: (ticker: string, price: number) => void;
+  onClosePosition?: (ticker: string) => void;
+  // Additional data for position tracking
+  holdings?: { ticker: string; quantity: number; averagePurchasePrice: string }[];
+  followedTickers?: string[];
+  showActions?: boolean;
 }
 
 type SortField = "ticker" | "price" | "change" | "insiderPrice" | "marketCap" | "recommendation" | "aiScore" | "daysFromBuy" | "none";
@@ -45,7 +54,14 @@ export function StockTable({
   onSelectAll,
   onStockClick,
   viewedTickers = [],
-  preserveOrder = false
+  preserveOrder = false,
+  onFollow,
+  onUnfollow,
+  onEnterPosition,
+  onClosePosition,
+  holdings = [],
+  followedTickers = [],
+  showActions = false
 }: StockTableProps) {
   const [sortField, setSortField] = useState<SortField>(preserveOrder ? "none" : "ticker");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -96,6 +112,16 @@ export function StockTable({
     const now = new Date();
     const daysDiff = Math.floor((now.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24));
     return daysDiff;
+  };
+
+  // Check if user has a position in a stock
+  const hasPosition = (ticker: string): boolean => {
+    return holdings.some(h => h.ticker === ticker && h.quantity > 0);
+  };
+
+  // Check if stock is followed
+  const isFollowed = (ticker: string): boolean => {
+    return followedTickers.includes(ticker);
   };
 
   const sortedStocks = sortField === "none" ? stocks : [...stocks].sort((a, b) => {
@@ -327,6 +353,9 @@ export function StockTable({
                   <SortIcon field="daysFromBuy" />
                 </Button>
               </TableHead>
+              {showActions && (
+                <TableHead className="w-[100px] px-1 text-right">Actions</TableHead>
+              )}
             </TableRow>
             </TableHeader>
           <TableBody>
@@ -504,6 +533,59 @@ export function StockTable({
                     </div>
                   )}
                 </TableCell>
+                {showActions && (
+                  <TableCell className="py-1 px-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
+                      {/* Follow/Unfollow button */}
+                      {onFollow && !isFollowed(stock.ticker) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => onFollow(stock)}
+                          data-testid={`button-follow-${stock.ticker}`}
+                        >
+                          <Star className="h-3 w-3 mr-1" />
+                          Follow
+                        </Button>
+                      )}
+                      {onUnfollow && isFollowed(stock.ticker) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-[10px] text-muted-foreground"
+                          onClick={() => onUnfollow(stock.ticker)}
+                          data-testid={`button-unfollow-${stock.ticker}`}
+                        >
+                          Unfollow
+                        </Button>
+                      )}
+                      {/* Enter/Close Position button */}
+                      {onEnterPosition && !hasPosition(stock.ticker) && isFollowed(stock.ticker) && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => onEnterPosition(stock.ticker, currentPrice)}
+                          data-testid={`button-enter-position-${stock.ticker}`}
+                        >
+                          Enter
+                        </Button>
+                      )}
+                      {onClosePosition && hasPosition(stock.ticker) && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => onClosePosition(stock.ticker)}
+                          data-testid={`button-close-position-${stock.ticker}`}
+                        >
+                          Close
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             );
           })}

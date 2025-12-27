@@ -138,7 +138,11 @@ export default function Opportunities() {
   }, [currentUser?.showAllOpportunities]);
 
   // Fetch unified global opportunities - filtered by user tier on server
-  const { data: rawOpportunities, isLoading } = useQuery<Opportunity[]>({
+  const { data: opportunitiesResponse, isLoading } = useQuery<{
+    opportunities: Opportunity[];
+    tier: 'pro' | 'free';
+    cadence: string;
+  }>({
     queryKey: ["/api/opportunities"],
     staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
     refetchOnWindowFocus: true,
@@ -146,9 +150,9 @@ export default function Opportunities() {
   
   // Convert opportunities to stock-like format
   const stocks = useMemo(() => {
-    if (!rawOpportunities) return [];
-    return rawOpportunities.map(opportunityToStock);
-  }, [rawOpportunities]);
+    if (!opportunitiesResponse?.opportunities) return [];
+    return opportunitiesResponse.opportunities.map(opportunityToStock);
+  }, [opportunitiesResponse]);
 
   // Fetch AI analyses - poll every 30 seconds to catch completed AI jobs while user is on page
   const { data: analyses = [] } = useQuery<any[]>({

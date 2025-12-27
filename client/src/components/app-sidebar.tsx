@@ -13,12 +13,6 @@ import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
   SidebarTrigger,
@@ -28,42 +22,41 @@ import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 import { useWebSocket } from "@/hooks/use-websocket";
 
-// New funnel-based menu structure
 const menuItems = [
   {
     title: "Opportunities",
+    description: "Insider transactions",
     url: "/opportunities",
     icon: Lightbulb,
     testId: "link-opportunities",
-    description: "All insider transactions",
   },
   {
     title: "Following",
+    description: "Your watchlist",
     url: "/following",
     icon: Star,
     testId: "link-following",
-    description: "Stocks you're watching",
   },
   {
     title: "In Position",
+    description: "Active trades",
     url: "/in-position",
     icon: TrendingUp,
     testId: "link-in-position",
-    description: "Active trades",
   },
   {
     title: "Portfolio",
+    description: "Holdings & P&L",
     url: "/portfolio",
     icon: PieChart,
     testId: "link-portfolio",
-    description: "Holdings & P&L",
   },
   {
     title: "Community",
+    description: "Discussion",
     url: "/community",
     icon: Users,
     testId: "link-community",
-    description: "Discussion & insights",
   },
 ];
 
@@ -73,16 +66,13 @@ export function AppSidebar() {
   const newStocksCount = useNewStocksCount(user?.showAllOpportunities ?? false);
   const { setOpenMobile, isMobile, state } = useSidebar();
   
-  // Initialize WebSocket for real-time updates
   useWebSocket();
 
-  // Fetch version info
   const { data: versionInfo } = useQuery<{ version: string; name: string }>({
     queryKey: ["/api/version"],
     staleTime: Infinity,
   });
 
-  // Fetch counts for badge display
   const { data: followedCount = 0 } = useQuery<number>({
     queryKey: ["/api/followed-stocks/count"],
     enabled: !!user,
@@ -102,7 +92,6 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
   const currentPath = location.split('?')[0];
 
-  // Get badge count for each menu item
   const getBadgeCount = (url: string): number | null => {
     switch (url) {
       case "/opportunities":
@@ -117,8 +106,11 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4">
+    <Sidebar 
+      collapsible="icon" 
+      className="border-r-0 bg-[oklch(var(--notebook-page))]"
+    >
+      <SidebarHeader className="p-4 border-b border-[oklch(var(--notebook-ruled-line)/0.2)]">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary flex-shrink-0">
@@ -136,78 +128,91 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Workflow</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item, index) => {
-                const itemPath = item.url.split('?')[0];
-                const isPageActive = currentPath === itemPath || 
-                                      (itemPath === "/opportunities" && (currentPath === "/" || currentPath === "/recommendations"));
-                const badgeCount = getBadgeCount(item.url);
-                
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      className={cn(
-                        "relative",
-                        isPageActive && "bg-sidebar-accent"
-                      )}
-                      data-testid={item.testId}
-                      tooltip={isCollapsed ? item.title : undefined}
-                    >
-                      <Link href={item.url} onClick={handleNavClick}>
-                        {/* Funnel indicator - shows progression */}
-                        <div className={cn(
-                          "absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full transition-colors",
-                          isPageActive ? "bg-primary" : "bg-transparent"
-                        )} />
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+      <SidebarContent className="p-2">
+        <nav className="space-y-1">
+          {menuItems.map((item) => {
+            const itemPath = item.url.split('?')[0];
+            const isPageActive = currentPath === itemPath || 
+                                  (itemPath === "/opportunities" && (currentPath === "/" || currentPath === "/recommendations"));
+            const badgeCount = getBadgeCount(item.url);
+            
+            return (
+              <Link
+                key={item.title}
+                href={item.url}
+                onClick={handleNavClick}
+                data-testid={item.testId}
+                data-active={isPageActive}
+                className={cn(
+                  "section-link block rounded-sm",
+                  isCollapsed && "flex items-center justify-center p-2"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <item.icon className={cn(
+                    "h-4 w-4 flex-shrink-0",
+                    isPageActive ? "text-primary" : "text-muted-foreground"
+                  )} />
+                  {!isCollapsed && (
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={cn(
+                          "section-link-title",
+                          isPageActive && "text-primary"
+                        )}>
+                          {item.title}
+                        </span>
                         {badgeCount !== null && (
-                          <span 
-                            className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
-                            data-testid={`badge-${item.testId}`}
-                          >
+                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground">
                             {badgeCount}
                           </span>
                         )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                      </div>
+                      <span className="section-link-desc">{item.description}</span>
+                    </div>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
+        </nav>
 
         {user?.isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Admin</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    className={location === "/admin" ? "bg-sidebar-accent" : ""}
-                    data-testid="link-admin"
-                    tooltip={isCollapsed ? "Backoffice" : undefined}
-                  >
-                    <Link href="/admin" onClick={handleNavClick}>
-                      <ShieldCheck className="h-4 w-4" />
-                      <span>Backoffice</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <>
+            <div className="h-px bg-[oklch(var(--notebook-ruled-line)/0.2)] my-3" />
+            <Link
+              href="/admin"
+              onClick={handleNavClick}
+              data-testid="link-admin"
+              data-active={location === "/admin"}
+              className={cn(
+                "section-link block rounded-sm",
+                isCollapsed && "flex items-center justify-center p-2"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <ShieldCheck className={cn(
+                  "h-4 w-4 flex-shrink-0",
+                  location === "/admin" ? "text-primary" : "text-muted-foreground"
+                )} />
+                {!isCollapsed && (
+                  <div className="flex-1 min-w-0">
+                    <span className={cn(
+                      "section-link-title",
+                      location === "/admin" && "text-primary"
+                    )}>
+                      Admin
+                    </span>
+                    <span className="section-link-desc">Backoffice</span>
+                  </div>
+                )}
+              </div>
+            </Link>
+          </>
         )}
       </SidebarContent>
       
-      <SidebarFooter className="p-2 border-t">
+      <SidebarFooter className="p-2 border-t border-[oklch(var(--notebook-ruled-line)/0.2)]">
         {isCollapsed ? (
           <SidebarTrigger 
             className="h-8 w-8 mx-auto" 

@@ -334,4 +334,38 @@
   .notebook-tab[data-state="active"] {
     background-color: oklch(var(--notebook-tab-active));
   }
+  
+  /* Unified surface - sidebar and content share same background */
+  .unified-surface {
+    background-color: oklch(var(--notebook-page));
+  }
+  
+  /* Section link styling - clean, minimal */
+  .section-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    padding: 0.75rem 1rem;
+    border-left: 2px solid transparent;
+    transition: all 0.15s ease;
+  }
+  
+  .section-link:hover {
+    background-color: oklch(var(--notebook-ruled-line) / 0.15);
+  }
+  
+  .section-link[data-active="true"] {
+    border-left-color: oklch(var(--primary));
+    background-color: oklch(var(--notebook-ruled-line) / 0.1);
+  }
+  
+  .section-link-title {
+    font-weight: 500;
+    font-size: 0.875rem;
+  }
+  
+  .section-link-desc {
+    font-size: 0.7rem;
+    opacity: 0.6;
+  }
 }

@@ -195,7 +195,6 @@ export default function Following() {
       {/* Header with inline search */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Star className="h-5 w-5 text-primary" />
           <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
             Following
           </h1>

@@ -3358,6 +3358,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get followed stocks count for sidebar badge
+  app.get("/api/followed-stocks/count", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
+      res.json(followedStocks.length);
+    } catch (error) {
+      console.error("Get followed stocks count error:", error);
+      res.status(500).json({ error: "Failed to fetch count" });
+    }
+  });
+
+  // Get active positions count for sidebar badge
+  app.get("/api/positions/count", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      const holdings = await storage.getPortfolioHoldings(req.session.userId, false);
+      const activePositions = holdings.filter(h => h.quantity > 0);
+      res.json(activePositions.length);
+    } catch (error) {
+      console.error("Get positions count error:", error);
+      res.status(500).json({ error: "Failed to fetch count" });
+    }
+  });
+
   // Get total P&L for user's portfolio
   app.get("/api/portfolio/total-pnl", async (req, res) => {
     try {

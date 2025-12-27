@@ -4,16 +4,11 @@ import {
   Activity,
   ShieldCheck,
   Lightbulb,
-  MessageSquare,
-  ChevronDown,
   Star,
-  Loader2,
-  Minus,
-  ChevronRight,
-  LayoutDashboard,
+  TrendingUp,
+  PieChart,
   Users,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -24,112 +19,102 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
   SidebarHeader,
   SidebarFooter,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 import { useWebSocket } from "@/hooks/use-websocket";
 
-const mainMenuItems = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-    testId: "link-dashboard",
-  },
+// New funnel-based menu structure
+const menuItems = [
   {
     title: "Opportunities",
-    url: "/recommendations",
+    url: "/opportunities",
     icon: Lightbulb,
     testId: "link-opportunities",
-  },
-];
-
-const communityMenuItems = [
-  {
-    title: "Discussion",
-    url: "/community/discussion",
-    icon: MessageSquare,
-    testId: "link-discussion",
+    description: "All insider transactions",
   },
   {
-    title: "Feature Suggestions",
-    url: "/community/feature-suggestions",
-    icon: Lightbulb,
-    testId: "link-feature-suggestions",
+    title: "Following",
+    url: "/following",
+    icon: Star,
+    testId: "link-following",
+    description: "Stocks you're watching",
+  },
+  {
+    title: "In Position",
+    url: "/in-position",
+    icon: TrendingUp,
+    testId: "link-in-position",
+    description: "Active trades",
+  },
+  {
+    title: "Portfolio",
+    url: "/portfolio",
+    icon: PieChart,
+    testId: "link-portfolio",
+    description: "Holdings & P&L",
+  },
+  {
+    title: "Community",
+    url: "/community",
+    icon: Users,
+    testId: "link-community",
+    description: "Discussion & insights",
   },
 ];
 
 export function AppSidebar() {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
   const { user } = useUser();
   const newStocksCount = useNewStocksCount(user?.showAllOpportunities ?? false);
   const { setOpenMobile, isMobile, state } = useSidebar();
   
-  // Initialize WebSocket for real-time updates (replaces aggressive polling)
-  const { isConnected: wsConnected } = useWebSocket();
+  // Initialize WebSocket for real-time updates
+  useWebSocket();
 
   // Fetch version info
   const { data: versionInfo } = useQuery<{ version: string; name: string }>({
     queryKey: ["/api/version"],
-    staleTime: Infinity, // Version doesn't change during runtime
+    staleTime: Infinity,
   });
 
-  // Fetch followed stocks with status - Poll when there are active jobs
-  const { data: followedStocks = [], isLoading: isLoadingFollowed, error: followedError } = useQuery<Array<{ 
-    ticker: string; 
-    currentPrice: string;
-    jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
-    insiderAction?: 'BUY' | 'SELL' | null;
-    aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
-    aiScore?: number | null;
-    integratedScore?: number | null;
-    stanceAlignment?: 'act' | 'hold' | null;
-  }>>({
-    queryKey: ["/api/followed-stocks-with-status"],
+  // Fetch counts for badge display
+  const { data: followedCount = 0 } = useQuery<number>({
+    queryKey: ["/api/followed-stocks/count"],
     enabled: !!user,
-    // Poll every 5 seconds if there are active analysis jobs to update spinner
-    refetchInterval: (query) => {
-      const hasActiveJobs = query.state.data?.some((stock: any) => 
-        stock.jobStatus === 'pending' || stock.jobStatus === 'processing'
-      );
-      return hasActiveJobs ? 5000 : false; // 5 seconds if active jobs, otherwise no polling
-    },
-    retry: false,
-    meta: { ignoreError: true },
   });
 
-  // Debug logging
-  console.log('[Sidebar] Followed stocks data:', { 
-    count: followedStocks.length, 
-    isLoading: isLoadingFollowed, 
-    error: followedError,
-    hasUser: !!user,
-    stocks: followedStocks 
+  const { data: positionCount = 0 } = useQuery<number>({
+    queryKey: ["/api/positions/count"],
+    enabled: !!user,
   });
 
   const handleNavClick = () => {
-    // Close sidebar on mobile after navigation
     if (isMobile) {
       setOpenMobile(false);
     }
   };
 
   const isCollapsed = state === "collapsed";
-  
-  // Get current path for active state detection (without query params)
   const currentPath = location.split('?')[0];
+
+  // Get badge count for each menu item
+  const getBadgeCount = (url: string): number | null => {
+    switch (url) {
+      case "/opportunities":
+        return newStocksCount > 0 ? newStocksCount : null;
+      case "/following":
+        return followedCount > 0 ? followedCount : null;
+      case "/in-position":
+        return positionCount > 0 ? positionCount : null;
+      default:
+        return null;
+    }
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -141,7 +126,7 @@ export function AppSidebar() {
             </div>
             <div className="group-data-[collapsible=icon]:hidden min-w-0">
               <h1 className="text-base font-semibold truncate">signal2</h1>
-              <p className="text-xs text-muted-foreground truncate">Opportunity Tracker</p>
+              <p className="text-xs text-muted-foreground truncate">Trading Notebook</p>
             </div>
           </div>
           <SidebarTrigger 
@@ -150,34 +135,43 @@ export function AppSidebar() {
           />
         </div>
       </SidebarHeader>
+      
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
+          <SidebarGroupLabel>Workflow</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainMenuItems.map((item) => {
+              {menuItems.map((item, index) => {
                 const itemPath = item.url.split('?')[0];
                 const isPageActive = currentPath === itemPath || 
-                                      (itemPath === "/recommendations" && currentPath === "/");
-                const showBadge = item.url === "/recommendations" && newStocksCount > 0;
+                                      (itemPath === "/opportunities" && (currentPath === "/" || currentPath === "/recommendations"));
+                const badgeCount = getBadgeCount(item.url);
                 
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
-                      className={isPageActive ? "bg-sidebar-accent" : ""}
+                      className={cn(
+                        "relative",
+                        isPageActive && "bg-sidebar-accent"
+                      )}
                       data-testid={item.testId}
                       tooltip={isCollapsed ? item.title : undefined}
                     >
                       <Link href={item.url} onClick={handleNavClick}>
+                        {/* Funnel indicator - shows progression */}
+                        <div className={cn(
+                          "absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-full transition-colors",
+                          isPageActive ? "bg-primary" : "bg-transparent"
+                        )} />
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
-                        {showBadge && (
+                        {badgeCount !== null && (
                           <span 
                             className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground"
-                            data-testid="badge-new-opportunities"
+                            data-testid={`badge-${item.testId}`}
                           >
-                            {newStocksCount}
+                            {badgeCount}
                           </span>
                         )}
                       </Link>
@@ -185,234 +179,6 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
-              
-              {/* Following Submenu - Always visible */}
-              {(() => {
-                // Group stocks by stanceAlignment
-                // ACT: AI agrees with insider (strong signal)
-                // HOLD: AI conflicts with insider (weak signal)
-                // No alignment: Missing data (shown after ACT stocks, no special grouping)
-                const actStocks = followedStocks.filter(s => s.stanceAlignment === 'act');
-                const holdStocks = followedStocks.filter(s => s.stanceAlignment === 'hold');
-                const noAlignmentStocks = followedStocks.filter(s => !s.stanceAlignment);
-                
-                // Determine if hold stocks should be grouped
-                const HOLD_DISPLAY_LIMIT = 3;
-                const shouldGroupHoldStocks = holdStocks.length > HOLD_DISPLAY_LIMIT;
-                
-                const renderStockItem = (stock: typeof followedStocks[0]) => {
-                  const tickerPath = `/ticker/${stock.ticker}`;
-                  const isTickerActive = currentPath === tickerPath;
-                  const isProcessing = stock.jobStatus === 'pending' || stock.jobStatus === 'processing';
-                  
-                  // Determine buy/sell tag based on INSIDER ACTION (left of ticker)
-                  // Show this whenever we have insider action data
-                  // BUY uses green success color, SELL uses red destructive color
-                  let insiderTag: { text: string; isBuy: boolean } | null = null;
-                  if (stock.insiderAction === 'BUY') {
-                    insiderTag = { text: 'B', isBuy: true };
-                  } else if (stock.insiderAction === 'SELL') {
-                    insiderTag = { text: 'S', isBuy: false };
-                  }
-                  
-                  // Determine action recommendation based on AI STANCE and position status (right of price)
-                  // Shows the actual AI recommendation: BUY (entry), SELL (exit/short entry), or HOLD (maintain)
-                  // The aiStance already reflects the appropriate action for current position status
-                  let actionTag: { text: string; variant: 'default' | 'secondary' | 'outline'; className?: string } | null = null;
-                  if (stock.stanceAlignment != null) {
-                    if (stock.stanceAlignment === 'act') {
-                      // Show the AI's recommended stance (BUY for entry, SELL for exit/short entry)
-                      const actionText = stock.aiStance || 'ACT';
-                      actionTag = { text: actionText, variant: 'default' };
-                    } else if (stock.stanceAlignment === 'hold') {
-                      actionTag = { text: 'HOLD', variant: 'outline', className: 'text-muted-foreground border-muted-foreground/30' };
-                    }
-                  }
-                  
-                  return (
-                    <SidebarMenuSubItem key={stock.ticker}>
-                      <SidebarMenuSubButton
-                        asChild
-                        className={isTickerActive ? "bg-sidebar-accent" : ""}
-                        data-testid={`link-ticker-${stock.ticker}`}
-                      >
-                        <Link href={tickerPath} onClick={handleNavClick}>
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                            {/* Insider action badge (left of ticker) */}
-                            {insiderTag && !isProcessing && (
-                              insiderTag.isBuy ? (
-                                <Badge 
-                                  className="h-4 px-1 text-[10px] font-bold flex-shrink-0 bg-success text-success-foreground hover-elevate"
-                                  data-testid={`badge-insider-${stock.ticker}`}
-                                >
-                                  {insiderTag.text}
-                                </Badge>
-                              ) : (
-                                <Badge 
-                                  variant="destructive"
-                                  className="h-4 px-1 text-[10px] font-bold flex-shrink-0"
-                                  data-testid={`badge-insider-${stock.ticker}`}
-                                >
-                                  {insiderTag.text}
-                                </Badge>
-                              )
-                            )}
-                            {/* AI Integrated Score Badge (next to B/S badge) - shows comprehensive 0-100 score */}
-                            {stock.integratedScore != null && !isProcessing && (
-                              <Badge 
-                                className={cn(
-                                  "h-4 px-1 text-[10px] font-bold flex-shrink-0 border-0",
-                                  stock.integratedScore >= 90 && "bg-amber-500 text-white dark:bg-amber-600",
-                                  stock.integratedScore >= 70 && stock.integratedScore < 90 && "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
-                                  stock.integratedScore >= 50 && stock.integratedScore < 70 && "bg-secondary text-secondary-foreground",
-                                  stock.integratedScore < 50 && "bg-secondary text-muted-foreground opacity-60"
-                                )}
-                                data-testid={`badge-ai-score-${stock.ticker}`}
-                              >
-                                {stock.integratedScore}
-                              </Badge>
-                            )}
-                            <span className="font-mono font-medium">
-                              {stock.ticker}
-                            </span>
-                            {isProcessing && (
-                              <Loader2 className="h-3 w-3 text-muted-foreground animate-spin flex-shrink-0" />
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
-                            <span className="text-xs font-mono text-muted-foreground">
-                              ${parseFloat(stock.currentPrice).toFixed(2)}
-                            </span>
-                            {/* Act/hold badge (right of price) */}
-                            {actionTag && !isProcessing && (
-                              <Badge 
-                                variant={actionTag.variant} 
-                                className={cn("h-4 px-1.5 text-[10px]", actionTag.className)}
-                                data-testid={`badge-action-${stock.ticker}`}
-                              >
-                                {actionTag.text}
-                              </Badge>
-                            )}
-                          </div>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  );
-                };
-                
-                return (
-                  <Collapsible 
-                    defaultOpen={currentPath.startsWith("/ticker/")}
-                    className="group/collapsible"
-                  >
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton
-                          tooltip={isCollapsed ? "Following" : undefined}
-                          data-testid="link-following"
-                        >
-                          <Star className="h-4 w-4" />
-                          <span>Following</span>
-                          <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {/* Empty state when no followed stocks */}
-                          {followedStocks.length === 0 && (
-                            <SidebarMenuSubItem>
-                              <div className="px-2 py-3 text-xs text-muted-foreground">
-                                <p className="mb-2">No stocks followed yet.</p>
-                                <Link 
-                                  href="/recommendations" 
-                                  onClick={handleNavClick}
-                                  className="text-primary hover:underline"
-                                  data-testid="link-discover-stocks"
-                                >
-                                  Discover stocks →
-                                </Link>
-                              </div>
-                            </SidebarMenuSubItem>
-                          )}
-                          
-                          {/* ACT stocks first (strong signals - AI agrees with insider) */}
-                          {actStocks.map(renderStockItem)}
-                          
-                          {/* HOLD stocks - either individual or grouped (weak signals - AI conflicts with insider) */}
-                          {holdStocks.length > 0 && (
-                            shouldGroupHoldStocks ? (
-                              <Collapsible className="group/hold-collapsible">
-                                <SidebarMenuSubItem>
-                                  <CollapsibleTrigger asChild>
-                                    <SidebarMenuSubButton
-                                      className="text-muted-foreground hover:text-foreground cursor-pointer"
-                                      data-testid="button-toggle-hold-stocks"
-                                    >
-                                      <Minus className="h-3 w-3" />
-                                      <span className="text-xs">HOLD ({holdStocks.length})</span>
-                                      <ChevronRight className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/hold-collapsible:rotate-90" />
-                                    </SidebarMenuSubButton>
-                                  </CollapsibleTrigger>
-                                </SidebarMenuSubItem>
-                                <CollapsibleContent>
-                                  {holdStocks.map(renderStockItem)}
-                                </CollapsibleContent>
-                              </Collapsible>
-                            ) : (
-                              holdStocks.map(renderStockItem)
-                            )
-                          )}
-                          
-                          {/* Stocks without alignment data (missing insider or AI data) */}
-                          {noAlignmentStocks.map(renderStockItem)}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                );
-              })()}
-              
-              {/* Community Submenu */}
-              <Collapsible 
-                defaultOpen={currentPath.startsWith("/community")}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip={isCollapsed ? "Community" : undefined}
-                      data-testid="link-community"
-                    >
-                      <Users className="h-4 w-4" />
-                      <span>Community</span>
-                      <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {communityMenuItems.map((subItem) => {
-                        const subItemPath = subItem.url.split('?')[0];
-                        const isSubPageActive = currentPath === subItemPath;
-                        
-                        return (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              asChild
-                              className={isSubPageActive ? "bg-sidebar-accent" : ""}
-                              data-testid={subItem.testId}
-                            >
-                              <Link href={subItem.url} onClick={handleNavClick}>
-                                <subItem.icon className="h-4 w-4" />
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        );
-                      })}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -440,6 +206,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
+      
       <SidebarFooter className="p-2 border-t">
         {isCollapsed ? (
           <SidebarTrigger 

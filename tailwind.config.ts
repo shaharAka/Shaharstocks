@@ -74,6 +74,14 @@ export default {
           DEFAULT: "oklch(var(--sidebar-accent) / <alpha-value>)",
           foreground: "oklch(var(--sidebar-accent-foreground) / <alpha-value>)",
         },
+        notebook: {
+          page: "oklch(var(--notebook-page) / <alpha-value>)",
+          "page-foreground": "oklch(var(--notebook-page-foreground) / <alpha-value>)",
+          "ruled-line": "oklch(var(--notebook-ruled-line) / <alpha-value>)",
+          margin: "oklch(var(--notebook-margin) / <alpha-value>)",
+          "tab-inactive": "oklch(var(--notebook-tab-inactive) / <alpha-value>)",
+          "tab-active": "oklch(var(--notebook-tab-active) / <alpha-value>)",
+        },
         status: {
           online: "rgb(34 197 94)",
           away: "rgb(245 158 11)",

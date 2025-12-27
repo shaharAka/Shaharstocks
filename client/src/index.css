@@ -72,6 +72,15 @@
   --success-foreground: 0 0% 99%;
   --warning: 36 100% 45%;
   --warning-foreground: 0 0% 99%;
+  
+  /* Notebook styling tokens */
+  --notebook-page: 0.9800 0.0020 90.0;
+  --notebook-page-foreground: 0.3772 0.0619 212.6640;
+  --notebook-ruled-line: 0.9200 0.0150 197.0;
+  --notebook-margin: 0.6500 0.1500 25.0;
+  --notebook-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --notebook-tab-inactive: 0.9400 0.0100 197.0;
+  --notebook-tab-active: 0.9800 0.0020 90.0;
 }
 
 .dark {
@@ -140,6 +149,15 @@
   --success-foreground: 0 0% 99%;
   --warning: 36 100% 60%;
   --warning-foreground: 0 0% 99%;
+  
+  /* Notebook styling tokens (dark mode) */
+  --notebook-page: 0.2500 0.0280 216.0;
+  --notebook-page-foreground: 0.8520 0.1269 195.0354;
+  --notebook-ruled-line: 0.3200 0.0400 216.0;
+  --notebook-margin: 0.4500 0.1000 25.0;
+  --notebook-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --notebook-tab-inactive: 0.2800 0.0350 216.0;
+  --notebook-tab-active: 0.2500 0.0280 216.0;
 }
 
 @layer base {
@@ -271,5 +289,49 @@
     100% {
       background-position: -200% 0;
     }
+  }
+  
+  /* Notebook page styling */
+  .notebook-page {
+    background-color: oklch(var(--notebook-page));
+    color: oklch(var(--notebook-page-foreground));
+    box-shadow: var(--notebook-shadow);
+    position: relative;
+  }
+  
+  /* Notebook ruled lines effect */
+  .notebook-ruled {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 1.5rem,
+      oklch(var(--notebook-ruled-line)) 1.5rem,
+      oklch(var(--notebook-ruled-line)) calc(1.5rem + 1px)
+    );
+    background-size: 100% 1.5rem;
+    background-position: 0 0.75rem;
+  }
+  
+  /* Notebook margin line */
+  .notebook-margin::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 2.5rem;
+    width: 1px;
+    background-color: oklch(var(--notebook-margin));
+    opacity: 0.4;
+  }
+  
+  /* Notebook tab styling */
+  .notebook-tab {
+    background-color: oklch(var(--notebook-tab-inactive));
+    transition: background-color 0.15s ease;
+  }
+  
+  .notebook-tab.active,
+  .notebook-tab[data-state="active"] {
+    background-color: oklch(var(--notebook-tab-active));
   }
 }

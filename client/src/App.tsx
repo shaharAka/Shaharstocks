@@ -110,38 +110,38 @@ function AuthenticatedApp() {
         onOpenChange={() => {}} 
         onComplete={() => {}}
       />
-      <div className="flex h-screen w-full book-page">
-        <AppSidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between px-2 py-2 md:px-4 bg-[oklch(var(--notebook-page))] shrink-0">
+      <div className="flex flex-col h-screen w-full book-page">
+        <header className="flex items-center justify-between px-2 py-2 md:px-4 bg-[oklch(var(--notebook-page))] shrink-0 border-b border-border/30">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
             <div className="flex items-center gap-2">
-              <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded bg-primary flex-shrink-0">
-                  <Activity className="h-4 w-4 text-primary-foreground" />
-                </div>
-                <span className="text-sm font-semibold">signal2</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded bg-primary flex-shrink-0">
+                <Activity className="h-4 w-4 text-primary-foreground" />
               </div>
+              <span className="text-sm font-semibold">signal2</span>
             </div>
-            <div className="flex items-center gap-1 md:gap-2">
-              <BugReportButton />
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent('replay-tutorial'));
-                }}
-                data-testid="button-help"
-                className="h-10 w-10"
-              >
-                <HelpCircle className="h-5 w-5" />
-              </Button>
-              <NotificationBell />
-              <AnnouncementBell />
-              <UserProfile />
-              <ThemeToggle />
-            </div>
-          </header>
+          </div>
+          <div className="flex items-center gap-1 md:gap-2">
+            <BugReportButton />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('replay-tutorial'));
+              }}
+              data-testid="button-help"
+              className="h-10 w-10"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </Button>
+            <NotificationBell />
+            <AnnouncementBell />
+            <UserProfile />
+            <ThemeToggle />
+          </div>
+        </header>
+        <div className="flex flex-1 min-h-0">
+          <AppSidebar />
           <main className="flex-1 overflow-auto notebook-page">
             <TrialStatusBanner />
             <Router />

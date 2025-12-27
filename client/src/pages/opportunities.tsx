@@ -1,14 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
@@ -19,32 +17,21 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
-  TrendingUp,
-  TrendingDown,
-  ExternalLink,
-  Clock,
-  MessageSquare,
-  Star,
-  SlidersHorizontal,
-  Pin,
-  PinOff,
   HelpCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type Stock, type User } from "@shared/schema";
+import { type Stock, type User, type Opportunity } from "@shared/schema";
 import { getTerm } from "@/lib/compliance";
 import { useUser } from "@/contexts/UserContext";
 import { StockTable } from "@/components/stock-table";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Filter, Search, SortAsc } from "lucide-react";
-import { FetchConfigDialog } from "@/components/fetch-config-dialog";
+import { Search, SortAsc } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type StockWithUserStatus = Stock & {
+// Opportunity adapted to Stock-like format for StockTable compatibility
+type OpportunityAsStock = Stock & {
+  opportunityId: string;
+  cadence: string;
   userStatus: string;
   isFollowing?: boolean;
   analysisJob?: {
@@ -55,19 +42,49 @@ type StockWithUserStatus = Stock & {
 };
 
 type SortOption = "signal" | "daysFromTrade" | "marketCap";
-type FunnelSection = "worthExploring";
 
-type GroupedStock = {
-  ticker: string;
-  companyName: string;
-  transactions: StockWithUserStatus[];
-  latestTransaction: StockWithUserStatus;
-  transactionCount: number;
-  highestScore: number | null;
-  daysSinceLatest: number;
-  communityScore: number; // follows count
-  isFollowing: boolean;
-};
+
+// Convert Opportunity to Stock-like format for StockTable
+function opportunityToStock(opp: Opportunity): OpportunityAsStock {
+  return {
+    id: opp.id,
+    opportunityId: opp.id,
+    cadence: opp.cadence,
+    userId: "", // Not applicable for global opportunities
+    ticker: opp.ticker,
+    companyName: opp.companyName,
+    currentPrice: opp.currentPrice,
+    previousClose: opp.previousClose,
+    insiderPrice: opp.insiderPrice,
+    insiderQuantity: opp.insiderQuantity,
+    insiderTradeDate: opp.insiderTradeDate,
+    insiderName: opp.insiderName,
+    insiderTitle: opp.insiderTitle,
+    marketPriceAtInsiderDate: opp.marketPriceAtInsiderDate,
+    marketCap: opp.marketCap,
+    peRatio: opp.peRatio,
+    recommendation: opp.recommendation,
+    recommendationStatus: "pending",
+    source: opp.source,
+    confidenceScore: opp.confidenceScore,
+    priceHistory: opp.priceHistory,
+    description: opp.description,
+    industry: opp.industry,
+    country: opp.country,
+    webUrl: opp.webUrl,
+    ipo: opp.ipo,
+    news: opp.news,
+    insiderSentimentMspr: opp.insiderSentimentMspr,
+    insiderSentimentChange: opp.insiderSentimentChange,
+    microAnalysisCompleted: false,
+    macroAnalysisCompleted: false,
+    combinedAnalysisCompleted: false,
+    lastUpdated: opp.lastUpdated,
+    rejectedAt: null,
+    userStatus: "pending",
+    isFollowing: false,
+  } as OpportunityAsStock;
+}
 
 // Generate contextual signal tooltip based on score and recommendation type
 const getSignalTooltip = (score: number, recommendation: string): string => {
@@ -94,9 +111,7 @@ export default function Opportunities() {
   const [sortBy, setSortBy] = useState<SortOption>("signal");
   const [tickerSearch, setTickerSearch] = useState("");
   const [showAllOpportunities, setShowAllOpportunities] = useState(currentUser?.showAllOpportunities ?? false);
-  const [funnelSection] = useState<FunnelSection>("worthExploring");
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
-  const [fetchConfigOpen, setFetchConfigOpen] = useState(false);
 
   // Selection handlers
   const toggleSelection = (ticker: string) => {
@@ -122,12 +137,18 @@ export default function Opportunities() {
     }
   }, [currentUser?.showAllOpportunities]);
 
-  // Fetch opportunities - refresh on window focus and after stale time
-  const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
-    queryKey: ["/api/stocks/with-user-status"],
+  // Fetch unified global opportunities - filtered by user tier on server
+  const { data: rawOpportunities, isLoading } = useQuery<Opportunity[]>({
+    queryKey: ["/api/opportunities"],
     staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
     refetchOnWindowFocus: true,
   });
+  
+  // Convert opportunities to stock-like format
+  const stocks = useMemo(() => {
+    if (!rawOpportunities) return [];
+    return rawOpportunities.map(opportunityToStock);
+  }, [rawOpportunities]);
 
   // Fetch AI analyses - poll every 30 seconds to catch completed AI jobs while user is on page
   const { data: analyses = [] } = useQuery<any[]>({
@@ -219,46 +240,29 @@ export default function Opportunities() {
     },
   });
 
-  // Reject stock mutation
+  // Reject opportunity mutation (uses opportunityId, not ticker)
   const rejectMutation = useMutation({
-    mutationFn: async (ticker: string) => {
-      return await apiRequest("POST", `/api/stocks/${ticker}/reject`, null);
+    mutationFn: async (opportunityId: string) => {
+      return await apiRequest("POST", `/api/opportunities/${opportunityId}/reject`, null);
     },
     onSuccess: async () => {
       // Force immediate refetch to update UI
-      await queryClient.refetchQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/opportunities"] });
       toast({
-        title: "Opportunity Rejected",
-        description: "This opportunity has been hidden",
+        title: "Opportunity Dismissed",
+        description: "This opportunity has been hidden from your view",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to reject opportunity",
+        description: "Failed to dismiss opportunity",
         variant: "destructive",
       });
     },
   });
 
   // Helper functions
-  const getCommentCount = (ticker: string) => {
-    return commentCounts.find(c => c.ticker === ticker)?.count || 0;
-  };
-
-  const getInitials = (name: string) => {
-    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-  };
-
-  const isNewStock = (ticker: string, insiderTradeDate: string | null): boolean => {
-    if (!insiderTradeDate) return false;
-    if (viewedTickers.includes(ticker)) return false;
-    const tradeDate = new Date(insiderTradeDate);
-    const now = new Date();
-    const hoursSinceAdded = (now.getTime() - tradeDate.getTime()) / (1000 * 60 * 60);
-    return hoursSinceAdded <= 48;
-  };
-
   const getDaysFromBuy = (insiderTradeDate: string | null): number => {
     if (!insiderTradeDate) return 0;
     const tradeDate = new Date(insiderTradeDate);
@@ -266,64 +270,51 @@ export default function Opportunities() {
     return Math.floor((now.getTime() - tradeDate.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  // Group stocks by ticker and categorize into funnel sections
-  const { groupedStocks, funnelSections } = useMemo(() => {
-    if (!stocks) return { groupedStocks: [], funnelSections: {} as Record<FunnelSection, GroupedStock[]> };
+  // Helper to parse market cap string to millions
+  const parseMarketCap = (mc: string | null): number => {
+    if (!mc) return 0;
+    const normalized = mc.replace(/^(USD|US\$|\$|EUR|€|GBP|£)\s*/i, "").trim().toLowerCase();
+    const match = normalized.match(/([\d,]+(?:\.\d+)?)\s*([tbmk])?/i);
+    if (!match) return 0;
+    const value = parseFloat(match[1].replace(/,/g, ""));
+    if (isNaN(value)) return 0;
+    const suffix = match[2];
+    if (suffix === "t") return value * 1_000_000;
+    if (suffix === "b") return value * 1000;
+    if (suffix === "m") return value;
+    if (suffix === "k") return value * 0.001;
+    return value;
+  };
 
-    // Start with pending or rejected stocks
+  // Filter, enrich, group, and sort opportunities
+  const displayOpportunities = useMemo(() => {
+    if (!stocks || stocks.length === 0) return [];
+
+    // Apply filters
+    const followedTickers = new Set(followedStocks.map(f => f.ticker));
+    
     let filtered = stocks.filter(stock => {
       const rec = stock.recommendation?.toLowerCase();
       if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
       
-      // Apply recommendation filter: Buy Only (default) or All (Buy + Sell)
-      if (!showAllOpportunities && !rec.includes("buy")) {
-        return false; // Filter out SELL when "Buy Only" mode is active
-      }
+      // Buy Only vs All filter
+      if (!showAllOpportunities && !rec.includes("buy")) return false;
       
-      // Runtime filter: Exclude BUY opportunities that are likely options deals
-      // Use per-user threshold (default 15%)
+      // Options deal filter (BUY only)
       if (rec.includes("buy")) {
-        const insiderPrice = stock.insiderPrice ? parseFloat(stock.insiderPrice) : 0;
-        const currentPrice = stock.currentPrice ? parseFloat(stock.currentPrice) : 0;
+        const insiderPrice = stock.insiderPrice ? parseFloat(String(stock.insiderPrice)) : 0;
+        const currentPrice = stock.currentPrice ? parseFloat(String(stock.currentPrice)) : 0;
         const thresholdPercent = (currentUser?.optionsDealThresholdPercent || 15) / 100;
-        if (currentPrice > 0 && insiderPrice < currentPrice * thresholdPercent) {
-          return false; // Filter out likely options deals based on user's threshold
-        }
+        if (currentPrice > 0 && insiderPrice < currentPrice * thresholdPercent) return false;
       }
       
-      // Market cap filter: Apply per-user minimum market cap threshold
+      // Market cap filter
       if (currentUser?.minMarketCapFilter) {
-        const marketCap = stock.marketCap;
-        if (marketCap) {
-          // Parse market cap string (supports formats like "$1.5B", "500M", etc.)
-          const parseMarketCap = (cap: string): number | null => {
-            const normalized = cap.replace(/^(USD|US\$|\$|EUR|€|GBP|£)\s*/i, "").trim().toLowerCase();
-            const match = normalized.match(/([\d,]+(?:\.\d+)?)\s*([tbmk])?/i);
-            if (!match) return null;
-            
-            const value = parseFloat(match[1].replace(/,/g, ""));
-            if (isNaN(value) || value === 0) return null;
-            
-            const suffix = match[2];
-            // Convert to millions
-            if (suffix === "t") return value * 1_000_000;
-            if (suffix === "b") return value * 1000;
-            if (suffix === "m") return value;
-            if (suffix === "k") return value * 0.001;
-            // If no suffix and value > 100000, assume it's in dollars
-            if (!suffix && value > 100000) return value / 1_000_000;
-            // Otherwise assume millions
-            return value;
-          };
-          
-          const marketCapValue = parseMarketCap(marketCap);
-          if (marketCapValue && marketCapValue < currentUser.minMarketCapFilter) {
-            return false; // Filter out stocks below user's minimum market cap
-          }
-        }
+        const marketCapValue = parseMarketCap(stock.marketCap);
+        if (marketCapValue > 0 && marketCapValue < currentUser.minMarketCapFilter) return false;
       }
       
-      // Apply ticker search
+      // Search filter
       if (tickerSearch.trim() !== "") {
         const searchTerm = tickerSearch.trim().toLowerCase();
         const tickerMatch = stock.ticker.toLowerCase().includes(searchTerm);
@@ -334,122 +325,58 @@ export default function Opportunities() {
       return true;
     });
 
-    // Join AI scores and calculate days from trade
-    const followedTickers = new Set(followedStocks.map(f => f.ticker));
-    const stocksWithScores = filtered.map(stock => {
+    // Enrich with AI scores and following status
+    const enriched = filtered.map(stock => {
       const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
       const daysSinceTrade = getDaysFromBuy(stock.insiderTradeDate);
       return {
         ...stock,
         integratedScore: analysis?.integratedScore ?? null,
         aiScore: analysis?.aiScore ?? null,
-        daysSinceTrade: daysSinceTrade,
+        daysSinceTrade,
         isFollowing: followedTickers.has(stock.ticker),
       };
     });
 
-    // Group by ticker
-    const grouped = new Map<string, GroupedStock>();
-    stocksWithScores.forEach(stock => {
+    // Group by ticker to get highest score per ticker
+    const grouped = new Map<string, typeof enriched[0] & { highestScore: number | null }>();
+    enriched.forEach(stock => {
+      const score = stock.integratedScore ?? stock.aiScore;
       const existing = grouped.get(stock.ticker);
-      const score = (stock as any).integratedScore ?? (stock as any).aiScore;
-      const daysSince = (stock as any).daysSinceTrade;
-      
-      // Calculate community score based on comment activity
-      const communityScore = getCommentCount(stock.ticker);
       
       if (!existing) {
-        grouped.set(stock.ticker, {
-          ticker: stock.ticker,
-          companyName: stock.companyName || stock.ticker,
-          transactions: [stock],
-          latestTransaction: stock,
-          transactionCount: 1,
-          highestScore: score,
-          daysSinceLatest: daysSince,
-          communityScore,
-          isFollowing: (stock as any).isFollowing || false,
-        });
+        grouped.set(stock.ticker, { ...stock, highestScore: score });
       } else {
-        existing.transactions.push(stock);
-        existing.transactionCount++;
-        
-        // Update latest transaction if newer
-        if (daysSince < existing.daysSinceLatest) {
-          existing.latestTransaction = stock;
-          existing.daysSinceLatest = daysSince;
-        }
-        
-        // Update highest score
+        // Keep the one with highest score, or most recent if scores equal
         if (score !== null && (existing.highestScore === null || score > existing.highestScore)) {
-          existing.highestScore = score;
+          grouped.set(stock.ticker, { ...stock, highestScore: score });
+        } else if (stock.daysSinceTrade < existing.daysSinceTrade) {
+          // Update to more recent transaction but preserve highest score
+          grouped.set(stock.ticker, { ...stock, highestScore: existing.highestScore });
         }
       }
     });
 
-    const groupedArray = Array.from(grouped.values());
-
-    // Filter to high signal only (score >= 70)
-    const highSignalStocks = groupedArray.filter(group => {
-      const score = group.highestScore;
-      const isUserRejected = group.latestTransaction.userStatus === "rejected";
-      
-      // Skip stocks without scores or rejected stocks
-      if (score === null || isUserRejected) return false;
-      
-      // Only include high signal stocks (score >= 70)
-      return score >= 70;
+    // Convert back to array and filter for high signal (score >= 70)
+    let result = Array.from(grouped.values()).filter(stock => {
+      const score = stock.highestScore;
+      return score !== null && score >= 70;
     });
 
-    // Sort stocks
-    const sortGroupedStocks = (groups: GroupedStock[]) => {
-      return [...groups].sort((a, b) => {
-        if (sortBy === "signal") {
-          return (b.highestScore ?? 0) - (a.highestScore ?? 0);
-        } else if (sortBy === "daysFromTrade") {
-          return a.daysSinceLatest - b.daysSinceLatest;
-        } else if (sortBy === "marketCap") {
-          const parseMarketCap = (mc: string | null) => {
-            if (!mc) return 0;
-            const match = mc.match(/\$?([\d.]+)([BMK])?/i);
-            if (!match) return 0;
-            const value = parseFloat(match[1]);
-            const unit = match[2]?.toUpperCase();
-            if (unit === "B") return value * 1000;
-            if (unit === "M") return value;
-            if (unit === "K") return value / 1000;
-            return value;
-          };
-          return parseMarketCap(b.latestTransaction.marketCap) - parseMarketCap(a.latestTransaction.marketCap);
-        }
-        return 0;
-      });
-    };
+    // Sort
+    result.sort((a, b) => {
+      if (sortBy === "signal") {
+        return (b.highestScore ?? 0) - (a.highestScore ?? 0);
+      } else if (sortBy === "daysFromTrade") {
+        return a.daysSinceTrade - b.daysSinceTrade;
+      } else if (sortBy === "marketCap") {
+        return parseMarketCap(b.marketCap) - parseMarketCap(a.marketCap);
+      }
+      return 0;
+    });
 
-    const sections: Record<FunnelSection, GroupedStock[]> = {
-      worthExploring: sortGroupedStocks(highSignalStocks),
-    };
-
-    return { groupedStocks: groupedArray, funnelSections: sections };
-  }, [stocks, analyses, sortBy, tickerSearch, showAllOpportunities, followedStocks, users, commentCounts, openinsiderConfig]);
-
-  // Get current section's stocks and flatten for rendering
-  const groupedOpportunities = funnelSections[funnelSection] || [];
-  
-  // Convert grouped stocks back to individual stocks for rendering
-  // Use latestTransaction as the main stock, but add metadata about grouping
-  const opportunities = groupedOpportunities.map(group => ({
-    ...group.latestTransaction,
-    _groupedData: {
-      transactionCount: group.transactionCount,
-      highestScore: group.highestScore,
-      allTransactions: group.transactions,
-      communityScore: group.communityScore,
-    },
-    integratedScore: group.highestScore,
-    aiScore: group.highestScore,
-    isFollowing: group.isFollowing,
-  }));
+    return result;
+  }, [stocks, analyses, sortBy, tickerSearch, showAllOpportunities, followedStocks, currentUser]);
 
   if (isLoading) {
     return (
@@ -515,23 +442,6 @@ export default function Opportunities() {
             {getTerm("opportunitiesDescription")}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setFetchConfigOpen(true)}
-                data-testid="button-fetch-config"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Fetch Configuration</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
       </div>
 
       {/* Search, Filters, and Controls - Consolidated Row */}
@@ -580,7 +490,7 @@ export default function Opportunities() {
         <div className="flex gap-4">
           <div>
             <span className="text-muted-foreground">Total {getTerm("opportunities")}: </span>
-            <span className="font-medium" data-testid="text-total-count">{opportunities.length}</span>
+            <span className="font-medium" data-testid="text-total-count">{displayOpportunities.length}</span>
           </div>
         </div>
 
@@ -659,15 +569,22 @@ export default function Opportunities() {
                   return;
                 }
                 
-                // Reject all selected stocks
+                // Find opportunity IDs for selected tickers and reject them
                 const tickers = Array.from(selectedTickers);
-                tickers.forEach(ticker => {
-                  rejectMutation.mutate(ticker);
+                const opportunityIds = tickers
+                  .map(ticker => {
+                    const opp = displayOpportunities.find(o => o.ticker === ticker);
+                    return opp?.opportunityId;
+                  })
+                  .filter((id): id is string => !!id);
+                
+                opportunityIds.forEach(id => {
+                  rejectMutation.mutate(id);
                 });
                 
                 toast({
-                  title: "Rejecting Stocks",
-                  description: `Rejecting ${tickers.length} stocks`,
+                  title: "Dismissing Opportunities",
+                  description: `Dismissing ${opportunityIds.length} opportunities`,
                 });
                 
                 setSelectedTickers(new Set());
@@ -682,7 +599,7 @@ export default function Opportunities() {
       </div>
 
       {/* Opportunities List - Table View */}
-      {opportunities.length === 0 ? (
+      {displayOpportunities.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-muted-foreground">
@@ -692,7 +609,7 @@ export default function Opportunities() {
         </Card>
       ) : (
         <StockTable
-          stocks={opportunities}
+          stocks={displayOpportunities as any}
           users={users}
           commentCounts={commentCounts}
           analyses={analyses}
@@ -706,18 +623,6 @@ export default function Opportunities() {
           }}
         />
       )}
-
-      <Dialog open={fetchConfigOpen} onOpenChange={setFetchConfigOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">
-          <DialogHeader>
-            <DialogTitle>Fetch Configuration</DialogTitle>
-            <DialogDescription>
-              Configure how insider trading opportunities are discovered
-            </DialogDescription>
-          </DialogHeader>
-          <FetchConfigDialog />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

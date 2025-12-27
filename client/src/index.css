@@ -393,18 +393,30 @@
     background-color: oklch(var(--notebook-page));
   }
   
-  /* Enhanced floating sidebar styling */
+  /* Custom floating sidebar styling - pretty rounded panel */
   @media (min-width: 768px) {
-    [data-slot="sidebar"][data-variant="floating"] [data-slot="sidebar-inner"] {
+    .sidebar-floating-custom [data-slot="sidebar-inner"] {
+      border-radius: 0.75rem;
       box-shadow: 
         0 4px 6px -1px rgba(0, 0, 0, 0.1),
         0 2px 4px -2px rgba(0, 0, 0, 0.1);
+      border: 1px solid oklch(var(--border) / 0.5);
+      overflow: hidden;
     }
     
-    .dark [data-slot="sidebar"][data-variant="floating"] [data-slot="sidebar-inner"] {
+    .dark .sidebar-floating-custom [data-slot="sidebar-inner"] {
       box-shadow: 
         0 4px 6px -1px rgba(0, 0, 0, 0.3),
         0 2px 4px -2px rgba(0, 0, 0, 0.2);
+    }
+  }
+  
+  /* Mobile - reset floating styles */
+  @media (max-width: 767px) {
+    .sidebar-floating-custom [data-slot="sidebar-inner"] {
+      border-radius: 0;
+      box-shadow: none;
+      border: none;
     }
   }
 }

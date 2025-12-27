@@ -77,13 +77,12 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon" 
-      variant="floating"
-      className="border-r-0 bg-[oklch(var(--notebook-page))]"
+      className="border-r-0 bg-[oklch(var(--notebook-page))] sidebar-floating-custom"
       style={{
         // Position sidebar below header with gap
-        "--sidebar-top": "calc(var(--header-height, 3rem) + 0.5rem)",
-        "--sidebar-bottom": "0.5rem",
-        "--sidebar-left": "0.5rem",
+        "--sidebar-top": "calc(var(--header-height, 3rem) + 0.75rem)",
+        "--sidebar-bottom": "0.75rem",
+        "--sidebar-left": "0.75rem",
       } as React.CSSProperties}
     >
       <SidebarContent className="book-tab-rail">

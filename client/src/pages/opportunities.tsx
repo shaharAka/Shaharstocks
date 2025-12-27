@@ -25,7 +25,7 @@ import { type Stock, type User, type Opportunity } from "@shared/schema";
 import { getTerm } from "@/lib/compliance";
 import { useUser } from "@/contexts/UserContext";
 import { StockTable } from "@/components/stock-table";
-import { OpportunitiesStatusPopup } from "@/components/opportunities-status-popup";
+import { AnalysisStatusPopup } from "@/components/analysis-status-popup";
 import { Search, SortAsc } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -629,7 +629,7 @@ export default function Opportunities() {
         />
       )}
       
-      <OpportunitiesStatusPopup />
+      <AnalysisStatusPopup />
     </div>
   );
 }

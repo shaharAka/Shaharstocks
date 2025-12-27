@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Minimize2, Maximize2, Loader2, CheckCircle, XCircle, Clock, Timer, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useLocation } from "wouter";
 
 type QueueStats = {
   pending: number;
@@ -11,17 +12,96 @@ type QueueStats = {
   failed: number;
 };
 
+type OpportunitiesResponse = {
+  opportunities: any[];
+  tier: 'pro' | 'free';
+  cadence: string;
+};
+
+type BatchInfo = {
+  id: string;
+  cadence: 'daily' | 'hourly';
+  fetchedAt: string;
+  opportunityCount: number;
+};
+
 export function AnalysisStatusPopup() {
-  const [dismissed, setDismissed] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const [lastCompleted, setLastCompleted] = useState(0);
   const [lastFailed, setLastFailed] = useState(0);
   const [recentlyAdded, setRecentlyAdded] = useState(0);
   const [recentlyRejected, setRecentlyRejected] = useState(0);
+  const [, setLocation] = useLocation();
 
   const { data: stats } = useQuery<QueueStats>({
     queryKey: ["/api/analysis-jobs/stats"],
     refetchInterval: 3000,
   });
+
+  const { data: opportunitiesResponse } = useQuery<OpportunitiesResponse>({
+    queryKey: ["/api/opportunities"],
+    staleTime: 60 * 1000,
+  });
+
+  const { data: latestBatch } = useQuery<BatchInfo>({
+    queryKey: ["/api/opportunities/latest-batch"],
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+
+  const tier = opportunitiesResponse?.tier || 'free';
+  const isPro = tier === 'pro';
+
+  const calculateCountdown = (lastFetchStr: string | undefined, userIsPro: boolean) => {
+    if (!lastFetchStr) {
+      return { countdown: userIsPro ? '--:--' : '--:--:--' };
+    }
+    
+    const lastFetch = new Date(lastFetchStr);
+    const now = new Date();
+    
+    let nextUpdate: Date;
+    if (userIsPro) {
+      nextUpdate = new Date(lastFetch.getTime() + 60 * 60 * 1000);
+      while (nextUpdate <= now) {
+        nextUpdate = new Date(nextUpdate.getTime() + 60 * 60 * 1000);
+      }
+    } else {
+      nextUpdate = new Date(lastFetch);
+      nextUpdate.setUTCDate(nextUpdate.getUTCDate() + 1);
+      nextUpdate.setUTCHours(0, 0, 0, 0);
+      if (nextUpdate <= now) {
+        nextUpdate = new Date(now);
+        nextUpdate.setUTCDate(nextUpdate.getUTCDate() + 1);
+        nextUpdate.setUTCHours(0, 0, 0, 0);
+      }
+    }
+    
+    const diffMs = Math.max(0, nextUpdate.getTime() - now.getTime());
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const hours = Math.floor(diffSeconds / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+    const seconds = diffSeconds % 60;
+    
+    const countdownStr = userIsPro 
+      ? `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      : `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    return { countdown: countdownStr };
+  };
+
+  const [displayCountdown, setDisplayCountdown] = useState('--:--');
+  
+  useEffect(() => {
+    const updateCountdown = () => {
+      const { countdown } = calculateCountdown(latestBatch?.fetchedAt, isPro);
+      setDisplayCountdown(countdown);
+    };
+    
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [latestBatch?.fetchedAt, isPro]);
 
   useEffect(() => {
     if (stats) {
@@ -47,87 +127,131 @@ export function AnalysisStatusPopup() {
   }, [stats]);
 
   const activeJobs = (stats?.pending ?? 0) + (stats?.processing ?? 0);
-  const isActive = activeJobs > 0;
-  const [wasActive, setWasActive] = useState(false);
+  const isProcessing = activeJobs > 0;
 
-  useEffect(() => {
-    if (!wasActive && isActive) {
-      setDismissed(false);
-    }
-    setWasActive(isActive);
-  }, [isActive, wasActive]);
-
-  if (dismissed || !isActive) {
-    return null;
+  if (minimized) {
+    return (
+      <div 
+        className={cn(
+          "fixed bottom-4 right-4 z-50",
+          "bg-card border border-border rounded-lg shadow-lg",
+          "animate-in slide-in-from-bottom-2 fade-in duration-200"
+        )}
+        data-testid="popup-analysis-status-minimized"
+      >
+        <button
+          onClick={() => setMinimized(false)}
+          className="flex items-center gap-2 p-2 hover-elevate rounded-lg"
+          data-testid="button-expand-status-popup"
+        >
+          {isProcessing && (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              <span className="text-xs font-medium">{activeJobs}</span>
+              <span className="text-muted-foreground">|</span>
+            </>
+          )}
+          <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="font-mono text-xs">{displayCountdown}</span>
+          <Maximize2 className="h-3 w-3 text-muted-foreground" />
+        </button>
+      </div>
+    );
   }
 
   return (
     <div 
       className={cn(
-        "fixed bottom-4 right-4 z-50 min-w-[280px] max-w-[320px]",
+        "fixed bottom-4 right-4 z-50 min-w-[260px] max-w-[300px]",
         "bg-card border border-border rounded-lg shadow-lg",
         "animate-in slide-in-from-bottom-5 fade-in duration-300"
       )}
       data-testid="popup-analysis-status"
     >
-      <div className="flex items-center justify-between p-3 border-b border-border/50">
+      <div className="flex items-center justify-between p-2.5 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          <span className="font-medium text-sm">Analyzing Opportunities</span>
+          {isProcessing ? (
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          ) : (
+            <Timer className="h-4 w-4 text-muted-foreground" />
+          )}
+          <span className="font-medium text-sm">
+            {isProcessing ? "Analyzing" : "Status"}
+          </span>
         </div>
         <Button
           size="icon"
           variant="ghost"
           className="h-6 w-6"
-          onClick={() => setDismissed(true)}
-          data-testid="button-dismiss-analysis-popup"
+          onClick={() => setMinimized(true)}
+          data-testid="button-minimize-analysis-popup"
         >
-          <X className="h-3.5 w-3.5" />
+          <Minimize2 className="h-3.5 w-3.5" />
         </Button>
       </div>
       
-      <div className="p-3 space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            <span>In Queue</span>
+      <div className="p-2.5 space-y-1.5">
+        {isProcessing && (
+          <>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                <span>In Queue</span>
+              </div>
+              <span className="font-mono font-medium text-xs">{stats?.pending ?? 0}</span>
+            </div>
+            
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-primary">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Processing</span>
+              </div>
+              <span className="font-mono font-medium text-xs">{stats?.processing ?? 0}</span>
+            </div>
+
+            {recentlyAdded > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 text-success">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  <span>Added</span>
+                </div>
+                <span className="font-mono font-medium text-xs text-success">+{recentlyAdded}</span>
+              </div>
+            )}
+
+            {recentlyRejected > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 text-destructive">
+                  <XCircle className="h-3.5 w-3.5" />
+                  <span>Rejected</span>
+                </div>
+                <span className="font-mono font-medium text-xs text-destructive">{recentlyRejected}</span>
+              </div>
+            )}
+          </>
+        )}
+
+        <div className={cn(
+          "flex items-center justify-between text-xs",
+          isProcessing && "pt-1.5 border-t border-border/50"
+        )}>
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Timer className="h-3 w-3" />
+            <span>Next update</span>
           </div>
-          <span className="font-mono font-medium">{stats?.pending ?? 0}</span>
+          <span className="font-mono font-medium">{displayCountdown}</span>
         </div>
         
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 text-primary">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <span>Processing</span>
-          </div>
-          <span className="font-mono font-medium">{stats?.processing ?? 0}</span>
-        </div>
-
-        {recentlyAdded > 0 && (
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2 text-success">
-              <CheckCircle className="h-3.5 w-3.5" />
-              <span>Added</span>
-            </div>
-            <span className="font-mono font-medium text-success">+{recentlyAdded}</span>
-          </div>
+        {!isPro && (
+          <button
+            onClick={() => setLocation("/purchase")}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            data-testid="link-upgrade-faster-updates"
+          >
+            <Zap className="h-3 w-3" />
+            <span className="underline underline-offset-2">Get hourly updates</span>
+          </button>
         )}
-
-        {recentlyRejected > 0 && (
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2 text-destructive">
-              <XCircle className="h-3.5 w-3.5" />
-              <span>Rejected</span>
-            </div>
-            <span className="font-mono font-medium text-destructive">{recentlyRejected}</span>
-          </div>
-        )}
-
-        <div className="pt-2 border-t border-border/50">
-          <div className="text-xs text-muted-foreground">
-            Processing {activeJobs} {activeJobs === 1 ? 'opportunity' : 'opportunities'}...
-          </div>
-        </div>
       </div>
     </div>
   );

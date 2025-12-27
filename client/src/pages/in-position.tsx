@@ -172,7 +172,7 @@ export default function InPosition() {
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-8 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
         <div className="flex items-center justify-between">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-9 w-64" />
@@ -183,7 +183,7 @@ export default function InPosition() {
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-4">
+    <div className="p-4 md:p-6 space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Briefcase className="h-5 w-5 text-primary" />

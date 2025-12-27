@@ -429,7 +429,7 @@ export default function FollowedDashboard() {
               const isHighSignal = (stock.integratedScore ?? 0) >= 70;
 
               return (
-                <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
+                <Link href={`/ticker/${stock.ticker}?from=following`} key={stock.ticker}>
                   <Card 
                     className={cn(
                       "hover-elevate active-elevate-2 cursor-pointer h-full transition-all",
@@ -572,7 +572,7 @@ export default function FollowedDashboard() {
                   const isPricePositive = priceChange >= 0;
 
                   return (
-                    <Link href={`/ticker/${stock.ticker}`} key={stock.ticker}>
+                    <Link href={`/ticker/${stock.ticker}?from=opportunities`} key={stock.ticker}>
                       <div 
                         className="flex items-center gap-2 sm:gap-4 py-3 sm:py-4 hover-elevate active-elevate-2 cursor-pointer rounded-lg px-1 sm:px-2 -mx-1 sm:-mx-2"
                         data-testid={`opportunity-${stock.ticker}`}

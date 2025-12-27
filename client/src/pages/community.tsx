@@ -171,7 +171,7 @@ export default function Community() {
                       <TableRow 
                         key={stock.ticker} 
                         className="hover-elevate cursor-pointer"
-                        onClick={() => window.location.href = `/ticker/${stock.ticker}`}
+                        onClick={() => window.location.href = `/ticker/${stock.ticker}?from=community`}
                         data-testid={`row-discussion-${stock.ticker}`}
                       >
                         <TableCell className="font-mono text-muted-foreground">
@@ -210,7 +210,7 @@ export default function Community() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <Link href={`/ticker/${stock.ticker}`}>
+                          <Link href={`/ticker/${stock.ticker}?from=community`}>
                             <Button size="sm" variant="ghost" data-testid={`button-view-${stock.ticker}`}>
                               <ExternalLink className="h-3 w-3" />
                             </Button>

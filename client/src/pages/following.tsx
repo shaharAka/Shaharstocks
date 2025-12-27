@@ -339,12 +339,12 @@ export default function Following() {
                       key={stock.ticker} 
                       className="hover-elevate h-10 cursor-pointer" 
                       data-testid={`row-stock-${stock.ticker}`}
-                      onClick={() => setLocation(`/ticker/${stock.ticker}`)}
+                      onClick={() => setLocation(`/ticker/${stock.ticker}?from=following`)}
                     >
                       <TableCell className="font-mono font-medium py-1 px-1 text-xs">
                         <div className="flex items-center gap-1.5">
                           <Star className="h-3 w-3 text-primary fill-current" />
-                          <Link href={`/ticker/${stock.ticker}`} className="hover:underline">
+                          <Link href={`/ticker/${stock.ticker}?from=following`} className="hover:underline">
                             {stock.ticker}
                           </Link>
                         </div>

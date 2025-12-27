@@ -304,7 +304,7 @@ export default function InPosition() {
                 return (
                   <TableRow key={holding.id} className="hover-elevate" data-testid={`row-position-${holding.ticker}`}>
                     <TableCell className="font-mono font-medium">
-                      <Link href={`/ticker/${holding.ticker}`} className="hover:underline flex items-center gap-1.5">
+                      <Link href={`/ticker/${holding.ticker}?from=in-position`} className="hover:underline flex items-center gap-1.5">
                         <Briefcase className="h-3 w-3 text-primary" />
                         {holding.ticker}
                       </Link>

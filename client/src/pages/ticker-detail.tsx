@@ -1,4 +1,4 @@
-import { useParams } from "wouter";
+import { useParams, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,12 +40,31 @@ import { CompactSignalBadge } from "@/components/compact-signal-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { LoadingStrikeBorder } from "@/components/loading-strike-border";
+
+// Map source param to back navigation config
+const getBackNavigation = (source: string | null) => {
+  switch (source) {
+    case "following":
+      return { href: "/following", label: "Following" };
+    case "in-position":
+      return { href: "/in-position", label: "In Position" };
+    case "community":
+      return { href: "/community", label: "Community" };
+    case "opportunities":
+    default:
+      return { href: "/opportunities", label: "Opportunities" };
+  }
+};
 
 export default function TickerDetail() {
   const { ticker: rawTicker } = useParams<{ ticker: string }>();
   const ticker = rawTicker?.toUpperCase();
+  const searchString = useSearch();
+  const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const source = searchParams.get("from");
+  const backNav = getBackNavigation(source);
   const { toast } = useToast();
   const { user: currentUser } = useUser();
   const [commentText, setCommentText] = useState("");
@@ -257,9 +276,9 @@ export default function TickerDetail() {
           <CardContent className="p-8 text-center">
             <p className="text-muted-foreground">Stock not found</p>
             <Button asChild className="mt-4" data-testid="button-back">
-              <Link href="/recommendations">
+              <Link href={backNav.href}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Opportunities
+                Back to {backNav.label}
               </Link>
             </Button>
           </CardContent>
@@ -287,7 +306,7 @@ export default function TickerDetail() {
             asChild
             data-testid="button-back"
           >
-            <Link href="/recommendations">
+            <Link href={backNav.href}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Link>
@@ -531,13 +550,66 @@ export default function TickerDetail() {
         </LoadingStrikeBorder>
       )}
 
+      {/* Company Information - Always visible */}
+      {(stock.description || stock.industry || stock.country || stock.webUrl) && (
+        <Card>
+          <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+            <div className="flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
+              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                <Building2 className="h-4 sm:h-5 w-4 sm:w-5" />
+                Company Information
+              </CardTitle>
+              <CompactSignalBadge ticker={ticker} />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
+            {stock.description && (
+              <div>
+                <h4 className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">About</h4>
+                <p className="text-xs sm:text-sm text-muted-foreground" data-testid="text-description">
+                  {stock.description}
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+              {stock.industry && (
+                <div>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground">Industry</p>
+                  <p className="text-xs sm:text-base font-medium truncate" data-testid="text-industry">{stock.industry}</p>
+                </div>
+              )}
+              {stock.country && (
+                <div>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground">Country</p>
+                  <p className="text-xs sm:text-base font-medium" data-testid="text-country">{stock.country}</p>
+                </div>
+              )}
+              {stock.ipo && (
+                <div>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground">IPO Date</p>
+                  <p className="text-xs sm:text-base font-medium" data-testid="text-ipo">{stock.ipo}</p>
+                </div>
+              )}
+            </div>
+            {stock.webUrl && (
+              <Button variant="outline" size="sm" asChild data-testid="button-website" className="text-xs sm:text-sm">
+                <a href={stock.webUrl} target="_blank" rel="noopener noreferrer">
+                  <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 mr-1.5 sm:mr-2" />
+                  Website
+                  <ExternalLink className="h-3 w-3 ml-1.5 sm:ml-2" />
+                </a>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Simulation Plot - shows price chart with trading rules overlay for followed stocks */}
       <StockSimulationPlot ticker={ticker} stock={stock} />
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="w-full h-auto flex flex-wrap gap-1 p-1 sm:grid sm:grid-cols-5 sm:gap-0 sm:h-10 sm:p-1">
-          <TabsTrigger value="overview" className="text-[11px] sm:text-sm flex-1 min-w-[60px] h-8 sm:h-auto">Overview</TabsTrigger>
+      <Tabs defaultValue="analysis" className="w-full">
+        <TabsList className="w-full h-auto flex flex-wrap gap-1 p-1 sm:grid sm:grid-cols-4 sm:gap-0 sm:h-10 sm:p-1">
           <TabsTrigger value="analysis" className="text-[11px] sm:text-sm flex-1 min-w-[55px] h-8 sm:h-auto">AI Analysis</TabsTrigger>
           <TabsTrigger value="news" className="text-[11px] sm:text-sm flex-1 min-w-[45px] h-8 sm:h-auto">News</TabsTrigger>
           <TabsTrigger value="insider" className="text-[11px] sm:text-sm flex-1 min-w-[55px] h-8 sm:h-auto">Insider</TabsTrigger>
@@ -551,63 +623,6 @@ export default function TickerDetail() {
             )}
           </TabsTrigger>
         </TabsList>
-
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-3 sm:space-y-4">
-          {/* Company Information */}
-          {(stock.description || stock.industry || stock.country || stock.webUrl) && (
-            <Card>
-              <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-                <div className="flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <Building2 className="h-4 sm:h-5 w-4 sm:w-5" />
-                    Company Information
-                  </CardTitle>
-                  <CompactSignalBadge ticker={ticker} />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
-                {stock.description && (
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">About</h4>
-                    <p className="text-xs sm:text-sm text-muted-foreground" data-testid="text-description">
-                      {stock.description}
-                    </p>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                  {stock.industry && (
-                    <div>
-                      <p className="text-[10px] sm:text-sm text-muted-foreground">Industry</p>
-                      <p className="text-xs sm:text-base font-medium truncate" data-testid="text-industry">{stock.industry}</p>
-                    </div>
-                  )}
-                  {stock.country && (
-                    <div>
-                      <p className="text-[10px] sm:text-sm text-muted-foreground">Country</p>
-                      <p className="text-xs sm:text-base font-medium" data-testid="text-country">{stock.country}</p>
-                    </div>
-                  )}
-                  {stock.ipo && (
-                    <div>
-                      <p className="text-[10px] sm:text-sm text-muted-foreground">IPO Date</p>
-                      <p className="text-xs sm:text-base font-medium" data-testid="text-ipo">{stock.ipo}</p>
-                    </div>
-                  )}
-                </div>
-                {stock.webUrl && (
-                  <Button variant="outline" size="sm" asChild data-testid="button-website" className="text-xs sm:text-sm">
-                    <a href={stock.webUrl} target="_blank" rel="noopener noreferrer">
-                      <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 mr-1.5 sm:mr-2" />
-                      Website
-                      <ExternalLink className="h-3 w-3 ml-1.5 sm:ml-2" />
-                    </a>
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
 
         {/* AI Analysis Tab */}
         <TabsContent value="analysis" className="w-full max-w-full min-w-0 overflow-hidden">

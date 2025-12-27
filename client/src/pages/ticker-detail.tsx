@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   ArrowLeft, 
@@ -358,33 +356,49 @@ export default function TickerDetail() {
                   <Star className="h-3.5 w-3.5 mr-1.5" />
                   {followMutation.isPending ? "Following..." : "Follow"}
                 </Button>
-              ) : (
+              ) : !hasEnteredPosition ? (
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 flex-1 px-2 py-1 bg-muted/50 rounded text-[10px]">
-                    <Label htmlFor="position-toggle" className="text-muted-foreground cursor-pointer">
-                      {hasEnteredPosition ? "In Position" : "Watching"}
-                    </Label>
-                    <Switch
-                      id="position-toggle"
-                      className="scale-75"
-                      checked={hasEnteredPosition}
-                      onCheckedChange={(checked) => togglePositionMutation.mutate({ 
-                        hasEnteredPosition: checked,
-                        entryPrice: checked ? currentPrice : undefined 
-                      })}
-                      disabled={togglePositionMutation.isPending || isFollowedStocksFetching}
-                      data-testid="switch-position"
-                    />
-                  </div>
+                  <Button
+                    size="sm"
+                    className="flex-1 h-8"
+                    onClick={() => togglePositionMutation.mutate({ 
+                      hasEnteredPosition: true,
+                      entryPrice: currentPrice 
+                    })}
+                    disabled={togglePositionMutation.isPending || isFollowedStocksFetching}
+                    data-testid="button-enter-position"
+                  >
+                    <TrendingUp className="h-3.5 w-3.5 mr-1.5" />
+                    {togglePositionMutation.isPending ? "Entering..." : "Enter Position"}
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 text-[10px] px-2"
+                    className="h-8 px-2"
                     onClick={() => unfollowMutation.mutate()}
                     disabled={unfollowMutation.isPending}
                     data-testid="button-unfollow"
                   >
-                    <Star className="h-3 w-3 fill-current" />
+                    <Star className="h-3.5 w-3.5 fill-current" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-1 px-2 py-1.5 bg-primary/10 rounded text-xs">
+                    <Briefcase className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-medium text-primary">In Position</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs px-3"
+                    onClick={() => togglePositionMutation.mutate({ 
+                      hasEnteredPosition: false 
+                    })}
+                    disabled={togglePositionMutation.isPending}
+                    data-testid="button-exit-position"
+                  >
+                    Exit
                   </Button>
                 </div>
               )}

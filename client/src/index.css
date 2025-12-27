@@ -373,14 +373,17 @@
     color: oklch(var(--foreground));
   }
   
-  /* Active tab - highlight text only */
+  /* Active tab - highlight with background and left accent */
   .book-tab[data-active="true"] {
     color: oklch(var(--primary));
     font-weight: 600;
+    background-color: oklch(var(--primary) / 0.12);
+    border-left: 3px solid oklch(var(--primary));
+    padding-left: calc(2rem - 3px);
   }
   
   .book-tab[data-active="true"] .tab-icon {
-    opacity: 0.3;
+    opacity: 0.5;
     color: oklch(var(--primary));
   }
   

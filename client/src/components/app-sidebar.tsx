@@ -60,6 +60,13 @@ export function AppSidebar() {
 
   const isCollapsed = state === "collapsed";
   const currentPath = location.split('?')[0];
+  
+  // Check if we're on a stock/ticker detail page
+  const isStockPage = currentPath.startsWith('/stock/') || currentPath.startsWith('/ticker/');
+  
+  // Get the referrer from query params to determine which section to highlight
+  const urlParams = new URLSearchParams(location.split('?')[1] || '');
+  const fromSection = urlParams.get('from');
 
   const getBadgeCount = (url: string): number | null => {
     switch (url) {
@@ -83,8 +90,19 @@ export function AppSidebar() {
         <nav className="flex flex-col">
           {menuItems.map((item) => {
             const itemPath = item.url.split('?')[0];
-            const isPageActive = currentPath === itemPath || 
-                                  (itemPath === "/opportunities" && (currentPath === "/" || currentPath === "/recommendations"));
+            
+            // Determine if this tab should be active
+            let isPageActive = currentPath === itemPath || 
+                               (itemPath === "/opportunities" && (currentPath === "/" || currentPath === "/recommendations"));
+            
+            // When on a stock detail page, highlight the section we came from
+            if (isStockPage && fromSection) {
+              isPageActive = itemPath === `/${fromSection}`;
+            } else if (isStockPage && !fromSection) {
+              // Default to opportunities if no fromSection specified
+              isPageActive = itemPath === "/opportunities";
+            }
+            
             const badgeCount = getBadgeCount(item.url);
             
             const tabContent = (

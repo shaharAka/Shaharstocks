@@ -333,6 +333,7 @@ export interface IStorage {
   // Cross-user aggregation for "popular stock" notifications
   getFollowerCountForTicker(ticker: string): Promise<number>;
   getFollowerUserIdsForTicker(ticker: string): Promise<string[]>;
+  hasAnyUserPositionInTicker(ticker: string): Promise<boolean>;
   getDailyBriefsForTicker(ticker: string, userId: string): Promise<DailyBrief[]>;
   getDailyBriefForUser(userId: string, ticker: string, briefDate: string): Promise<DailyBrief | undefined>;
   createDailyBrief(brief: InsertDailyBrief): Promise<DailyBrief>;
@@ -2523,6 +2524,20 @@ export class DatabaseStorage implements IStorage {
       .from(followedStocks)
       .where(eq(followedStocks.ticker, ticker));
     return result.map(r => r.userId);
+  }
+
+  async hasAnyUserPositionInTicker(ticker: string): Promise<boolean> {
+    const result = await db
+      .select({ id: followedStocks.id })
+      .from(followedStocks)
+      .where(
+        and(
+          eq(followedStocks.ticker, ticker),
+          eq(followedStocks.hasEnteredPosition, true)
+        )
+      )
+      .limit(1);
+    return result.length > 0;
   }
 
   async getFollowedStocksWithPrices(userId: string): Promise<Array<FollowedStock & { currentPrice: string; priceChange: string; priceChangePercent: string }>> {

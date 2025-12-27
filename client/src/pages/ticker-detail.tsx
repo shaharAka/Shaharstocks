@@ -210,6 +210,8 @@ export default function TickerDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "daily-briefs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/portfolio/holdings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/positions/count"] });
     },
     onError: (error: any) => {
       const errorMessage = error.message || "Failed to update position status";

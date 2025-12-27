@@ -3202,18 +3202,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.toggleStockPosition(ticker, req.session.userId, hasEnteredPosition, entryPrice);
       
       // Also manage portfolio holdings to sync with In Position page
-      if (hasEnteredPosition && entryPrice) {
+      if (hasEnteredPosition) {
         // Check if a holding already exists for this ticker
         const existingHoldings = await storage.getPortfolioHoldings(req.session.userId, false);
         const existingHolding = existingHoldings.find(h => h.ticker === ticker && h.quantity > 0);
         
         if (!existingHolding) {
-          // Create a new portfolio holding
+          // Create a new portfolio holding, use entryPrice or default to 0
+          const priceToUse = (entryPrice && entryPrice > 0) ? entryPrice : 0;
           await storage.createPortfolioHolding({
             userId: req.session.userId,
             ticker,
             quantity: 1,
-            averagePurchasePrice: entryPrice.toString(),
+            averagePurchasePrice: priceToUse.toString(),
             isSimulated: false,
           });
         }

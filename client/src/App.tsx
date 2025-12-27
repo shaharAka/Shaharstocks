@@ -98,7 +98,7 @@ function AuthenticatedApp() {
   }
 
   const style = {
-    "--sidebar-width": "7rem",
+    "--sidebar-width": "10rem",
     "--sidebar-width-icon": "3rem",
   };
 

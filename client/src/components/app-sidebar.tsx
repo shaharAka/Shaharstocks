@@ -79,25 +79,25 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon" 
-      className="border-r-0 bg-transparent"
+      className="border-r-0 bg-[oklch(var(--notebook-page))]"
     >
-      <SidebarHeader className="p-2 pb-0">
-        <div className="flex items-center gap-1.5 px-1">
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-primary flex-shrink-0">
-            <Activity className="h-3.5 w-3.5 text-primary-foreground" />
+      <SidebarHeader className="p-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded bg-primary flex-shrink-0">
+            <Activity className="h-4 w-4 text-primary-foreground" />
           </div>
-          <span className="text-xs font-semibold group-data-[collapsible=icon]:hidden truncate">
+          <span className="text-sm font-semibold group-data-[collapsible=icon]:hidden truncate">
             signal2
           </span>
           <SidebarTrigger 
-            className="h-5 w-5 ml-auto flex-shrink-0 group-data-[collapsible=icon]:hidden" 
+            className="h-6 w-6 ml-auto flex-shrink-0 group-data-[collapsible=icon]:hidden" 
             data-testid="button-sidebar-toggle" 
           />
         </div>
       </SidebarHeader>
       
-      <SidebarContent className="book-tab-rail mt-2">
-        <nav className="flex flex-col gap-0.5 pr-0">
+      <SidebarContent className="book-tab-rail">
+        <nav className="flex flex-col">
           {menuItems.map((item) => {
             const itemPath = item.url.split('?')[0];
             const isPageActive = currentPath === itemPath || 
@@ -112,17 +112,19 @@ export function AppSidebar() {
                 data-active={isPageActive}
                 className={cn(
                   "book-tab",
-                  isCollapsed && "justify-center px-2"
+                  isCollapsed && "justify-center px-2 py-3"
                 )}
               >
-                <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                <item.icon className="tab-icon" />
                 {!isCollapsed && (
-                  <span className="truncate flex-1">{item.title}</span>
-                )}
-                {badgeCount !== null && !isCollapsed && (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium text-primary-foreground">
-                    {badgeCount}
-                  </span>
+                  <>
+                    <span className="flex-1">{item.title}</span>
+                    {badgeCount !== null && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/20 px-1.5 text-[10px] font-medium text-primary">
+                        {badgeCount}
+                      </span>
+                    )}
+                  </>
                 )}
               </Link>
             );
@@ -160,9 +162,9 @@ export function AppSidebar() {
                     onClick={handleNavClick}
                     data-testid="link-admin"
                     data-active={location === "/admin"}
-                    className="book-tab justify-center px-2"
+                    className="book-tab justify-center px-2 py-3"
                   >
-                    <ShieldCheck className="h-3.5 w-3.5" />
+                    <ShieldCheck className="tab-icon" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Admin</TooltipContent>
@@ -175,22 +177,22 @@ export function AppSidebar() {
                 data-active={location === "/admin"}
                 className="book-tab"
               >
-                <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="truncate flex-1">Admin</span>
+                <ShieldCheck className="tab-icon" />
+                <span className="flex-1">Admin</span>
               </Link>
             )}
           </>
         )}
       </SidebarContent>
       
-      <SidebarFooter className="p-1">
+      <SidebarFooter className="p-2">
         {isCollapsed ? (
           <SidebarTrigger 
-            className="h-5 w-5 mx-auto" 
+            className="h-6 w-6 mx-auto" 
             data-testid="button-sidebar-expand" 
           />
         ) : (
-          <div className="text-[9px] text-muted-foreground text-center font-mono" data-testid="text-version">
+          <div className="text-[10px] text-muted-foreground text-center font-mono" data-testid="text-version">
             v{versionInfo?.version || "1.0.0"}
           </div>
         )}

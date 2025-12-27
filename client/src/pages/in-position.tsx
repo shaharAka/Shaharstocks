@@ -41,7 +41,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 
 type PortfolioHolding = {
@@ -68,6 +68,7 @@ type SortOption = "pnl" | "pnlPercent" | "value";
 export default function InPosition() {
   const { toast } = useToast();
   const { user } = useUser();
+  const [, setLocation] = useLocation();
   const [tickerSearch, setTickerSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("pnl");
   const [closeDialog, setCloseDialog] = useState<{ open: boolean; holding: PortfolioHolding | null }>({
@@ -302,12 +303,17 @@ export default function InPosition() {
                 const isPositive = pnl >= 0;
 
                 return (
-                  <TableRow key={holding.id} className="hover-elevate" data-testid={`row-position-${holding.ticker}`}>
+                  <TableRow 
+                    key={holding.id} 
+                    className="hover-elevate cursor-pointer" 
+                    onClick={() => setLocation(`/ticker/${holding.ticker}?from=in-position`)}
+                    data-testid={`row-position-${holding.ticker}`}
+                  >
                     <TableCell className="font-mono font-medium">
-                      <Link href={`/ticker/${holding.ticker}?from=in-position`} className="hover:underline flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5">
                         <Briefcase className="h-3 w-3 text-primary" />
                         {holding.ticker}
-                      </Link>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
                       ${entryPrice.toFixed(2)}
@@ -337,7 +343,7 @@ export default function InPosition() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="sm"
                         variant="destructive"

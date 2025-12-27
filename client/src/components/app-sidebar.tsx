@@ -1,4 +1,5 @@
-import { Link, useLocation, useSearch } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ShieldCheck,
@@ -31,10 +32,15 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const searchString = useSearch();
+  const [searchString, setSearchString] = useState('');
   const { user } = useUser();
   const newStocksCount = useNewStocksCount(user?.showAllOpportunities ?? false);
   const { setOpenMobile, isMobile, state } = useSidebar();
+  
+  // Track search string changes from window.location
+  useEffect(() => {
+    setSearchString(window.location.search);
+  }, [location]);
   
   useWebSocket();
 
@@ -66,7 +72,6 @@ export function AppSidebar() {
   const isStockPage = currentPath.startsWith('/stock/') || currentPath.startsWith('/ticker/');
   
   // Get the referrer from query params to determine which section to highlight
-  // useSearch() returns the query string (e.g., "from=following")
   const urlParams = new URLSearchParams(searchString);
   const fromSection = urlParams.get('from');
 

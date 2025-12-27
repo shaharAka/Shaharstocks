@@ -112,17 +112,17 @@ function AuthenticatedApp() {
         onComplete={() => {}}
       />
       <div className="flex flex-col h-screen w-full book-page">
-        <header className="flex items-center justify-between px-2 py-2 md:px-4 bg-[oklch(var(--notebook-page))] shrink-0 border-b border-border/30 h-[var(--header-height)] z-20">
+        <header className="flex items-center justify-between px-2 py-1.5 md:px-4 md:py-2 bg-[oklch(var(--notebook-page))] shrink-0 border-b border-border/30 min-h-[var(--header-height)] z-20">
           <div className="flex items-center gap-2">
-            <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded bg-primary flex-shrink-0">
-                <Activity className="h-4 w-4 text-primary-foreground" />
+            <SidebarTrigger className="md:hidden h-8 w-8" data-testid="button-mobile-menu" />
+            <div className="flex items-center gap-1.5 md:gap-2">
+              <div className="flex h-6 w-6 md:h-7 md:w-7 items-center justify-center rounded bg-primary flex-shrink-0">
+                <Activity className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary-foreground" />
               </div>
-              <span className="text-sm font-semibold">signal2</span>
+              <span className="text-xs md:text-sm font-semibold">signal2</span>
             </div>
           </div>
-          <div className="flex items-center gap-1 md:gap-2">
+          <div className="flex items-center gap-0.5 md:gap-2">
             <BugReportButton />
             <Button
               size="icon"
@@ -131,9 +131,9 @@ function AuthenticatedApp() {
                 window.dispatchEvent(new CustomEvent('replay-tutorial'));
               }}
               data-testid="button-help"
-              className="h-10 w-10"
+              className="h-8 w-8 md:h-10 md:w-10 hidden md:flex"
             >
-              <HelpCircle className="h-5 w-5" />
+              <HelpCircle className="h-4 w-4 md:h-5 md:w-5" />
             </Button>
             <NotificationBell />
             <AnnouncementBell />

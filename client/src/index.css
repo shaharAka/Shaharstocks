@@ -393,10 +393,12 @@
     background-color: oklch(var(--notebook-page));
   }
   
-  /* Sidebar positioned below the header */
-  .sidebar-below-header {
-    top: var(--header-height, 3rem) !important;
-    height: calc(100vh - var(--header-height, 3rem)) !important;
-    max-height: calc(100vh - var(--header-height, 3rem)) !important;
+  /* Sidebar positioned below the header - desktop only */
+  @media (min-width: 768px) {
+    .sidebar-below-header {
+      top: var(--header-height, 3rem) !important;
+      height: calc(100vh - var(--header-height, 3rem)) !important;
+      max-height: calc(100vh - var(--header-height, 3rem)) !important;
+    }
   }
 }

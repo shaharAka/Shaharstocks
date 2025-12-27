@@ -43,7 +43,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect, useMemo } from "react";
-import { LoadingStrikeBorder } from "@/components/loading-strike-border";
 
 // Map source param to back navigation config
 const getBackNavigation = (source: string | null) => {
@@ -108,18 +107,6 @@ export default function TickerDetail() {
     retry: false,
     meta: { ignoreError: true },
   });
-
-  // Check if there's an active analysis job for this stock
-  const { data: analysisJobs = [] } = useQuery<any[]>({
-    queryKey: ["/api/analysis-jobs", { ticker }],
-    enabled: !!ticker,
-    retry: false,
-    meta: { ignoreError: true },
-  });
-  
-  const hasActiveAnalysisJob = analysisJobs.some(
-    (job: any) => job.status === "pending" || job.status === "processing"
-  );
 
   // Mark stock as viewed mutation
   const markViewedMutation = useMutation({
@@ -509,49 +496,44 @@ export default function TickerDetail() {
               {isFollowing && (
                 <>
                   <Separator className="my-1" />
-                  <LoadingStrikeBorder isLoading={hasActiveAnalysisJob}>
-                    <Collapsible defaultOpen className="group">
-                      <CollapsibleTrigger asChild>
-                        <button className="w-full flex items-center justify-between text-[10px] font-medium cursor-pointer" data-testid="button-toggle-briefs">
-                          <span className="flex items-center gap-1">
-                            Daily Briefs
-                            {hasActiveAnalysisJob && <Badge variant="secondary" className="text-[8px] h-3 px-1">Analyzing</Badge>}
-                          </span>
-                          <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="pt-1.5">
-                        {briefsLoading ? (
-                          <Skeleton className="h-12 w-full" />
-                        ) : dailyBriefs.length === 0 ? (
-                          <p className="text-[9px] text-muted-foreground">Briefs appear once generated.</p>
-                        ) : (
-                          <div className="space-y-1.5">
-                            {dailyBriefs.slice(0, 3).map((brief: any) => {
-                              const activeStance = hasEnteredPosition ? brief.owningStance : brief.watchingStance;
-                              const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
-                              const getStanceConfig = (stance: string) => {
-                                const s = stance?.toLowerCase() || "hold";
-                                if (s === "buy" || s === "enter") return { text: "BUY", bg: "bg-green-50 dark:bg-green-950/30" };
-                                if (s === "sell" || s === "short") return { text: hasEnteredPosition ? "SELL" : "SHORT", bg: "bg-red-50 dark:bg-red-950/30" };
-                                return { text: "HOLD", bg: "bg-muted/30" };
-                              };
-                              const cfg = getStanceConfig(activeStance);
-                              return (
-                                <div key={brief.id} className={`rounded p-1.5 text-[9px] ${cfg.bg}`}>
-                                  <div className="flex items-center gap-1 mb-0.5">
-                                    <Badge variant="outline" className="text-[8px] h-3 px-1">{cfg.text}</Badge>
-                                    <span className="text-muted-foreground">{new Date(brief.briefDate).toLocaleDateString()}</span>
-                                  </div>
-                                  <p className="line-clamp-2 text-muted-foreground">{activeText}</p>
+                  <Collapsible defaultOpen className="group">
+                    <CollapsibleTrigger asChild>
+                      <button className="w-full flex items-center justify-between text-[10px] font-medium cursor-pointer" data-testid="button-toggle-briefs">
+                        <span>Daily Briefs</span>
+                        <ChevronDown className="h-3 w-3 transition-transform group-data-[state=open]:rotate-180" />
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-1.5">
+                      {briefsLoading ? (
+                        <Skeleton className="h-12 w-full" />
+                      ) : dailyBriefs.length === 0 ? (
+                        <p className="text-[9px] text-muted-foreground">Briefs appear once generated.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {dailyBriefs.slice(0, 3).map((brief: any) => {
+                            const activeStance = hasEnteredPosition ? brief.owningStance : brief.watchingStance;
+                            const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
+                            const getStanceConfig = (stance: string) => {
+                              const s = stance?.toLowerCase() || "hold";
+                              if (s === "buy" || s === "enter") return { text: "BUY", bg: "bg-green-50 dark:bg-green-950/30" };
+                              if (s === "sell" || s === "short") return { text: hasEnteredPosition ? "SELL" : "SHORT", bg: "bg-red-50 dark:bg-red-950/30" };
+                              return { text: "HOLD", bg: "bg-muted/30" };
+                            };
+                            const cfg = getStanceConfig(activeStance);
+                            return (
+                              <div key={brief.id} className={`rounded p-1.5 text-[9px] ${cfg.bg}`}>
+                                <div className="flex items-center gap-1 mb-0.5">
+                                  <Badge variant="outline" className="text-[8px] h-3 px-1">{cfg.text}</Badge>
+                                  <span className="text-muted-foreground">{new Date(brief.briefDate).toLocaleDateString()}</span>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </LoadingStrikeBorder>
+                                <p className="line-clamp-2 text-muted-foreground">{activeText}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
                 </>
               )}
             </CardContent>

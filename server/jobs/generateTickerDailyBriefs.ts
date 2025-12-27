@@ -2,8 +2,8 @@
  * Background job to generate global ticker daily briefs for opportunities
  * Runs daily to:
  * 1. Re-analyze all existing opportunities (queue AI analysis jobs)
- * 2. Update signal scores
- * 3. Remove opportunities with score < 70 (unless user follows or is in position)
+ * 2. Wait for fresh analysis results
+ * 3. Update signal scores and remove opportunities with score < 70
  * 4. Generate comprehensive daily briefs with:
  *    - AI playbook summary
  *    - Price changes (24h)
@@ -12,11 +12,43 @@
  */
 
 import type { IStorage } from '../storage';
-import type { InsertTickerDailyBrief } from '@shared/schema';
+import type { InsertTickerDailyBrief, StockAnalysis } from '@shared/schema';
 import { stockService } from '../stockService';
 import { openinsiderService } from '../openinsiderService';
 
 const SIGNAL_SCORE_THRESHOLD = 70;
+const MAX_ANALYSIS_WAIT_MS = 120000; // 2 minutes max wait for analysis
+const ANALYSIS_POLL_INTERVAL_MS = 5000; // Poll every 5 seconds
+
+/**
+ * Wait for analysis to complete with polling
+ */
+async function waitForAnalysis(
+  storage: IStorage, 
+  ticker: string, 
+  maxWaitMs: number = MAX_ANALYSIS_WAIT_MS
+): Promise<StockAnalysis | null> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    const analysis = await storage.getStockAnalysis(ticker);
+    
+    if (analysis && analysis.status === 'completed') {
+      return analysis;
+    }
+    
+    if (analysis && analysis.status === 'failed') {
+      console.log(`[TickerDailyBriefs] Analysis failed for ${ticker}`);
+      return null;
+    }
+    
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, ANALYSIS_POLL_INTERVAL_MS));
+  }
+  
+  console.log(`[TickerDailyBriefs] Timeout waiting for analysis for ${ticker}`);
+  return null;
+}
 
 export async function runTickerDailyBriefGeneration(storage: IStorage): Promise<void> {
   const today = new Date().toISOString().split('T')[0];
@@ -43,6 +75,7 @@ export async function runTickerDailyBriefGeneration(storage: IStorage): Promise<
     let briefsGenerated = 0;
     let opportunitiesRemoved = 0;
     let analysisQueued = 0;
+    let analysisRefreshed = 0;
     let skippedCount = 0;
     let errorCount = 0;
     
@@ -56,18 +89,37 @@ export async function runTickerDailyBriefGeneration(storage: IStorage): Promise<
         }
         
         // Queue fresh analysis for this ticker to get updated scores
+        let needsWait = false;
         try {
-          await storage.enqueueAnalysisJob(ticker, "daily_brief_refresh", "normal");
+          await storage.enqueueAnalysisJob(ticker, "daily_brief_refresh", "high");
           analysisQueued++;
+          needsWait = true;
         } catch (queueError) {
-          // Ignore duplicate job errors - a job may already be queued
+          // Job already exists - check if it's pending/processing
+          const existingAnalysis = await storage.getStockAnalysis(ticker);
+          if (existingAnalysis && (existingAnalysis.status === 'pending' || existingAnalysis.status === 'processing')) {
+            needsWait = true;
+          }
         }
         
-        // Get the current (or recently updated) analysis for this ticker
-        const analysis = await storage.getStockAnalysis(ticker);
+        // Wait for fresh analysis if we queued one or one is in progress
+        let analysis: StockAnalysis | null = null;
+        if (needsWait) {
+          console.log(`[TickerDailyBriefs] Waiting for fresh analysis for ${ticker}...`);
+          analysis = await waitForAnalysis(storage, ticker);
+          if (analysis) {
+            analysisRefreshed++;
+          }
+        } else {
+          // Use existing completed analysis
+          const existing = await storage.getStockAnalysis(ticker);
+          if (existing && existing.status === 'completed') {
+            analysis = existing;
+          }
+        }
         
-        if (!analysis || analysis.status !== 'completed') {
-          // Skip if no completed analysis exists yet - will be picked up next run
+        if (!analysis) {
+          // No completed analysis available
           skippedCount++;
           continue;
         }
@@ -138,21 +190,12 @@ export async function runTickerDailyBriefGeneration(storage: IStorage): Promise<
         
         // === CHECK SCORE THRESHOLD ===
         if (currentScore < SIGNAL_SCORE_THRESHOLD) {
+          // Remove from global opportunities board
+          // (Users who followed this stock still have it on their personal followed board)
           for (const opp of tickerOpportunities) {
-            // Check if any user is following this ticker
-            const followerIds = await storage.getFollowerUserIdsForTicker(opp.ticker);
-            // Check if any user has a position in this ticker
-            const hasPosition = await storage.hasAnyUserPositionInTicker(opp.ticker);
-            
-            if (followerIds.length === 0 && !hasPosition) {
-              // No one is following or in position - remove the opportunity
-              console.log(`[TickerDailyBriefs] ${ticker} score ${currentScore} < ${SIGNAL_SCORE_THRESHOLD}, removing opportunity`);
-              await storage.deleteOpportunity(opp.id);
-              opportunitiesRemoved++;
-            } else {
-              const reason = followerIds.length > 0 ? 'users are following' : 'users have positions';
-              console.log(`[TickerDailyBriefs] ${ticker} score ${currentScore} < ${SIGNAL_SCORE_THRESHOLD}, but ${reason} - keeping`);
-            }
+            console.log(`[TickerDailyBriefs] ${ticker} score ${currentScore} < ${SIGNAL_SCORE_THRESHOLD}, removing from global opportunities`);
+            await storage.deleteOpportunity(opp.id);
+            opportunitiesRemoved++;
           }
         }
         
@@ -284,6 +327,7 @@ export async function runTickerDailyBriefGeneration(storage: IStorage): Promise<
     console.log(`  • Briefs generated: ${briefsGenerated}`);
     console.log(`  • Opportunities removed (low score): ${opportunitiesRemoved}`);
     console.log(`  • Analysis jobs queued: ${analysisQueued}`);
+    console.log(`  • Analyses refreshed: ${analysisRefreshed}`);
     console.log(`  • Skipped: ${skippedCount}`);
     console.log(`  • Errors: ${errorCount}`);
     

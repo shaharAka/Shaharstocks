@@ -56,6 +56,13 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Unified Global Opportunities System**: Replaces per-user data fetching with a global opportunities system where ALL users see the SAME insider trading opportunities. Key features:
   - **Global Data**: Opportunities stored without userId - fetched once, shared by all users
   - **Tier-Based Filtering**: Free/trial users see daily opportunities (fetched at 00:00 UTC), Pro users see both daily AND hourly opportunities
+  - **Signal Score Gating (>=70)**: Opportunities are filtered by AI signal score at two points:
+    1. **At batch ingestion**: After fetching, check existing AI analysis. If score <70, opportunity is removed from global board
+    2. **Daily at 00:00 UTC**: Re-analyze all opportunities, update scores, remove those with score <70
+  - **Decoupled Architecture**: Global opportunities and per-user followed stocks are separate:
+    - Low-score opportunities are removed from global board
+    - Users who followed a stock KEEP it on their personal followed board regardless of global board changes
+  - **Daily Briefs with Fresh Analysis**: Daily job waits for fresh AI analysis (up to 2 min per ticker) before generating briefs with updated signal scores
   - **Opportunity Visibility Rules**: Opportunities are shown to users UNLESS:
     - User has dismissed it (stored in `user_opportunity_rejections` table)
     - User is already following the ticker (moves to Following page)

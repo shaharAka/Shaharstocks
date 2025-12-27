@@ -982,19 +982,11 @@ function startUnifiedOpportunitiesFetchJob() {
               const signalScore = existingAnalysis.integratedScore ?? existingAnalysis.confidenceScore ?? 0;
               
               if (signalScore < 70) {
-                // Check if any users are following or have positions in this ticker
-                const followerIds = await storage.getFollowerUserIdsForTicker(transaction.ticker);
-                const hasPosition = await storage.hasAnyUserPositionInTicker(transaction.ticker);
-                
-                if (followerIds.length === 0 && !hasPosition) {
-                  // Low signal and no users following/positioned - remove the opportunity
-                  log(`[UnifiedOpportunities] ${transaction.ticker} existing signal score ${signalScore} < 70, removing opportunity`);
-                  await storage.deleteOpportunity(opportunity.id);
-                  continue; // Don't count as created
-                }
-                
-                const reason = followerIds.length > 0 ? 'users are following' : 'users have positions';
-                log(`[UnifiedOpportunities] ${transaction.ticker} score ${signalScore} < 70, but ${reason} - keeping`);
+                // Low signal - remove from global opportunities board
+                // (Users who followed this stock still have it on their personal followed board)
+                log(`[UnifiedOpportunities] ${transaction.ticker} signal score ${signalScore} < 70, removing from global opportunities`);
+                await storage.deleteOpportunity(opportunity.id);
+                continue; // Don't count as created
               }
               
               log(`[UnifiedOpportunities] ${transaction.ticker} signal score ${signalScore} >= 70, keeping opportunity`);

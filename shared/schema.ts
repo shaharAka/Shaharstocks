@@ -88,6 +88,100 @@ export const insertUserStockStatusSchema = createInsertSchema(userStockStatuses)
 export type InsertUserStockStatus = z.infer<typeof insertUserStockStatusSchema>;
 export type UserStockStatus = typeof userStockStatuses.$inferSelect;
 
+// Opportunity Batches - tracks unified fetch runs for all users
+export const opportunityBatches = pgTable("opportunity_batches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  cadence: text("cadence").notNull(), // "daily" or "hourly"
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+  count: integer("count").notNull().default(0), // Number of opportunities in this batch
+  source: text("source").notNull().default("openinsider"), // Data source
+  metadata: jsonb("metadata").$type<{
+    filters?: {
+      minMarketCap?: number;
+      minTransactionValue?: number;
+      insiderTitles?: string[];
+    };
+    duration?: number; // Fetch duration in ms
+  }>(),
+});
+
+export const insertOpportunityBatchSchema = createInsertSchema(opportunityBatches).omit({ id: true });
+export type InsertOpportunityBatch = z.infer<typeof insertOpportunityBatchSchema>;
+export type OpportunityBatch = typeof opportunityBatches.$inferSelect;
+
+// Global Opportunities - unified insider trading opportunities for ALL users
+// No userId - this is shared data that all users can see
+export const opportunities = pgTable("opportunities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  batchId: varchar("batch_id").references(() => opportunityBatches.id, { onDelete: "cascade" }), // Which fetch batch this came from
+  cadence: text("cadence").notNull(), // "daily" or "hourly" - determines visibility by tier
+  ticker: text("ticker").notNull(),
+  companyName: text("company_name").notNull(),
+  currentPrice: decimal("current_price", { precision: 12, scale: 2 }).notNull(),
+  previousClose: decimal("previous_close", { precision: 12, scale: 2 }),
+  insiderPrice: decimal("insider_price", { precision: 12, scale: 2 }),
+  insiderQuantity: integer("insider_quantity"),
+  insiderTradeDate: text("insider_trade_date").notNull(),
+  insiderName: text("insider_name").notNull(),
+  insiderTitle: text("insider_title"),
+  marketPriceAtInsiderDate: decimal("market_price_at_insider_date", { precision: 12, scale: 2 }),
+  marketCap: text("market_cap"),
+  peRatio: decimal("pe_ratio", { precision: 10, scale: 2 }),
+  recommendation: text("recommendation").notNull(), // "buy" or "sell"
+  source: text("source"), // "telegram" or "openinsider"
+  confidenceScore: integer("confidence_score"), // 0-100 data quality score
+  priceHistory: jsonb("price_history").$type<{ date: string; price: number }[]>().default([]),
+  description: text("description"),
+  industry: text("industry"),
+  country: text("country"),
+  webUrl: text("web_url"),
+  ipo: text("ipo"),
+  news: jsonb("news").$type<{
+    headline: string;
+    summary: string;
+    source: string;
+    url: string;
+    datetime: number;
+    image?: string;
+  }[]>().default([]),
+  insiderSentimentMspr: decimal("insider_sentiment_mspr", { precision: 10, scale: 4 }),
+  insiderSentimentChange: decimal("insider_sentiment_change", { precision: 10, scale: 4 }),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint: Each real-world transaction is unique globally
+  transactionUnique: uniqueIndex("opportunity_transaction_unique_idx").on(
+    table.ticker,
+    table.insiderTradeDate,
+    table.insiderName,
+    table.recommendation
+  ),
+  // Index for efficient cadence filtering
+  cadenceIdx: index("opportunities_cadence_idx").on(table.cadence),
+  // Index for ticker lookups
+  tickerIdx: index("opportunities_ticker_idx").on(table.ticker),
+}));
+
+export const opportunitySchema = createSelectSchema(opportunities);
+export const insertOpportunitySchema = createInsertSchema(opportunities).omit({ id: true, lastUpdated: true, createdAt: true });
+export type InsertOpportunity = z.infer<typeof insertOpportunitySchema>;
+export type Opportunity = typeof opportunities.$inferSelect;
+
+// User Opportunity Rejections - per-user tracking of rejected/dismissed opportunities
+export const userOpportunityRejections = pgTable("user_opportunity_rejections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  opportunityId: varchar("opportunity_id").notNull().references(() => opportunities.id, { onDelete: "cascade" }),
+  rejectedAt: timestamp("rejected_at").defaultNow().notNull(),
+}, (table) => ({
+  userOpportunityUnique: uniqueIndex("user_opportunity_rejection_unique_idx").on(table.userId, table.opportunityId),
+  userIdIdx: index("user_opportunity_rejections_user_id_idx").on(table.userId),
+}));
+
+export const insertUserOpportunityRejectionSchema = createInsertSchema(userOpportunityRejections).omit({ id: true, rejectedAt: true });
+export type InsertUserOpportunityRejection = z.infer<typeof insertUserOpportunityRejectionSchema>;
+export type UserOpportunityRejection = typeof userOpportunityRejections.$inferSelect;
+
 // Insider profiles - tracks individual insider trading performance
 export const insiderProfiles = pgTable("insider_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

@@ -2799,6 +2799,7 @@ export class DatabaseStorage implements IStorage {
           userApprovedAt: row.userApprovedAt,
           userRejectedAt: row.userRejectedAt,
           userDismissedAt: row.userDismissedAt,
+          isFollowing: !!row.isFollowing,
           analysisJob: latestJob ? {
             status: latestJob.status,
             currentStep: latestJob.currentStep,

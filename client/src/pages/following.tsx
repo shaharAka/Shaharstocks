@@ -36,7 +36,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 
@@ -61,6 +61,7 @@ type SortDirection = "asc" | "desc";
 export default function Following() {
   const { toast } = useToast();
   const { user } = useUser();
+  const [, setLocation] = useLocation();
   const [tickerSearch, setTickerSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("signal");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -336,8 +337,9 @@ export default function Following() {
                   return (
                     <TableRow 
                       key={stock.ticker} 
-                      className="hover-elevate h-10" 
+                      className="hover-elevate h-10 cursor-pointer" 
                       data-testid={`row-stock-${stock.ticker}`}
+                      onClick={() => setLocation(`/ticker/${stock.ticker}`)}
                     >
                       <TableCell className="font-mono font-medium py-1 px-1 text-xs">
                         <div className="flex items-center gap-1.5">
@@ -416,7 +418,10 @@ export default function Following() {
                             size="sm"
                             variant="ghost"
                             className="h-7 px-2 text-xs text-muted-foreground"
-                            onClick={() => unfollowMutation.mutate(stock.ticker)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              unfollowMutation.mutate(stock.ticker);
+                            }}
                             disabled={unfollowMutation.isPending}
                             data-testid={`button-unfollow-${stock.ticker}`}
                           >
@@ -427,10 +432,13 @@ export default function Following() {
                               size="sm"
                               variant="default"
                               className="h-7 px-2 text-xs"
-                              onClick={() => enterPositionMutation.mutate({ 
-                                ticker: stock.ticker, 
-                                price: currentPrice 
-                              })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                enterPositionMutation.mutate({ 
+                                  ticker: stock.ticker, 
+                                  price: currentPrice 
+                                });
+                              }}
                               disabled={enterPositionMutation.isPending}
                               data-testid={`button-enter-${stock.ticker}`}
                             >

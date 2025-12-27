@@ -481,9 +481,9 @@ export default function Opportunities() {
   }
 
   return (
-    <div className="flex flex-col h-full p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 shrink-0 mb-4">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-xl md:text-2xl font-semibold" data-testid="text-page-title">
@@ -542,7 +542,7 @@ export default function Opportunities() {
       </div>
 
       {/* Search, Filters, and Controls - Consolidated Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 shrink-0 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -604,7 +604,7 @@ export default function Opportunities() {
 
 
       {/* Stats Bar */}
-      <div className="flex gap-4 text-sm items-center justify-between shrink-0 mb-4">
+      <div className="flex gap-4 text-sm items-center justify-between">
         <div className="flex gap-4">
           <div>
             <span className="text-muted-foreground">Total {getTerm("opportunities")}: </span>
@@ -709,9 +709,8 @@ export default function Opportunities() {
         )}
       </div>
 
-      {/* Opportunities List - Scrollable Area */}
-      <div className="flex-1 min-h-0 overflow-auto">
-        {opportunities.length === 0 ? (
+      {/* Opportunities List */}
+      {opportunities.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <p className="text-muted-foreground">
@@ -905,8 +904,7 @@ export default function Opportunities() {
             </div>
           ))}
         </div>
-        )}
-      </div>
+      )}
 
       <StockExplorer
         stock={explorerStock}

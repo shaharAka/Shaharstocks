@@ -53,24 +53,32 @@ export function AnalysisStatusPopup() {
   const isPro = tier === 'pro';
 
   const calculateCountdown = (lastFetch: string | Date | undefined, userIsPro: boolean) => {
-    if (!lastFetch) {
-      return { countdown: userIsPro ? '--:--' : '--:--:--' };
-    }
-    
-    const fetchDate = typeof lastFetch === 'string' ? new Date(lastFetch) : lastFetch;
-    if (isNaN(fetchDate.getTime())) {
-      return { countdown: userIsPro ? '--:--' : '--:--:--' };
-    }
-    
     const now = new Date();
-    
     let nextUpdate: Date;
+    
     if (userIsPro) {
-      nextUpdate = new Date(fetchDate.getTime() + 60 * 60 * 1000);
-      while (nextUpdate <= now) {
-        nextUpdate = new Date(nextUpdate.getTime() + 60 * 60 * 1000);
+      // Pro users: next fetch is at the top of the next hour
+      if (lastFetch) {
+        const fetchDate = typeof lastFetch === 'string' ? new Date(lastFetch) : lastFetch;
+        if (!isNaN(fetchDate.getTime())) {
+          nextUpdate = new Date(fetchDate.getTime() + 60 * 60 * 1000);
+          while (nextUpdate <= now) {
+            nextUpdate = new Date(nextUpdate.getTime() + 60 * 60 * 1000);
+          }
+        } else {
+          // Invalid date - calculate from current time to next hour
+          nextUpdate = new Date(now);
+          nextUpdate.setMinutes(0, 0, 0);
+          nextUpdate.setHours(nextUpdate.getHours() + 1);
+        }
+      } else {
+        // No last fetch - calculate from current time to next hour
+        nextUpdate = new Date(now);
+        nextUpdate.setMinutes(0, 0, 0);
+        nextUpdate.setHours(nextUpdate.getHours() + 1);
       }
     } else {
+      // Free users: next fetch is at midnight UTC
       nextUpdate = new Date(now);
       nextUpdate.setUTCDate(nextUpdate.getUTCDate() + 1);
       nextUpdate.setUTCHours(0, 0, 0, 0);

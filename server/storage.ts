@@ -1664,6 +1664,12 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(opportunities.ticker, options.ticker));
     }
     
+    // Filter out opportunities older than 12 days based on insider trade date
+    const twelvesDaysAgo = new Date();
+    twelvesDaysAgo.setDate(twelvesDaysAgo.getDate() - 12);
+    const cutoffDateStr = twelvesDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
+    conditions.push(sql`${opportunities.insiderTradeDate} >= ${cutoffDateStr}`);
+    
     // Get opportunities
     let query = db.select().from(opportunities);
     
@@ -1673,11 +1679,19 @@ export class DatabaseStorage implements IStorage {
     
     const results = await query.orderBy(desc(opportunities.createdAt));
     
-    // If userId provided, filter out rejected opportunities
+    // If userId provided, filter out rejected opportunities and followed tickers
     if (options?.userId) {
-      const rejections = await this.getUserRejections(options.userId);
+      const [rejections, followedStocksList] = await Promise.all([
+        this.getUserRejections(options.userId),
+        this.getUserFollowedStocks(options.userId)
+      ]);
       const rejectedIds = new Set(rejections.map(r => r.opportunityId));
-      return results.filter(opp => !rejectedIds.has(opp.id));
+      const followedTickers = new Set(followedStocksList.map(f => f.ticker.toUpperCase()));
+      
+      return results.filter(opp => 
+        !rejectedIds.has(opp.id) && 
+        !followedTickers.has(opp.ticker.toUpperCase())
+      );
     }
     
     return results;

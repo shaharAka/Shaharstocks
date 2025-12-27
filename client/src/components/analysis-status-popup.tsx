@@ -48,12 +48,14 @@ export function AnalysisStatusPopup() {
 
   const activeJobs = (stats?.pending ?? 0) + (stats?.processing ?? 0);
   const isActive = activeJobs > 0;
+  const [wasActive, setWasActive] = useState(false);
 
   useEffect(() => {
-    if (isActive && dismissed) {
+    if (!wasActive && isActive) {
       setDismissed(false);
     }
-  }, [isActive, dismissed]);
+    setWasActive(isActive);
+  }, [isActive, wasActive]);
 
   if (dismissed || !isActive) {
     return null;

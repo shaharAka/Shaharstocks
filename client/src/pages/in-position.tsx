@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -13,6 +21,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   TrendingUp,
   TrendingDown,
@@ -25,14 +34,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
-import { StockTable } from "@/components/stock-table";
-import { StockExplorer } from "@/components/stock-explorer";
-import type { Stock, User } from "@shared/schema";
-
-type StockWithUserStatus = Stock & {
-  userStatus: string;
-  isFollowing?: boolean;
-};
 
 type PortfolioHolding = {
   id: string;
@@ -45,21 +46,21 @@ type PortfolioHolding = {
   isSimulated: boolean;
 };
 
+type FollowedStock = {
+  ticker: string;
+  currentPrice: string;
+  priceChange?: string;
+  priceChangePercent?: string;
+  companyName?: string;
+};
+
 export default function InPosition() {
   const { toast } = useToast();
   const { user } = useUser();
   const [tickerSearch, setTickerSearch] = useState("");
-  const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
-  const [explorerOpen, setExplorerOpen] = useState(false);
-  const [closeDialog, setCloseDialog] = useState<{ open: boolean; ticker: string | null; holdingId: string | null }>({
+  const [closeDialog, setCloseDialog] = useState<{ open: boolean; holding: PortfolioHolding | null }>({
     open: false,
-    ticker: null,
-    holdingId: null,
-  });
-
-  const { data: stocks = [], isLoading: stocksLoading } = useQuery<StockWithUserStatus[]>({
-    queryKey: ["/api/stocks/with-user-status"],
-    enabled: !!user,
+    holding: null,
   });
 
   const { data: holdings = [], isLoading: holdingsLoading } = useQuery<PortfolioHolding[]>({
@@ -67,21 +68,9 @@ export default function InPosition() {
     enabled: !!user,
   });
 
-  const { data: analyses = [] } = useQuery<any[]>({
-    queryKey: ["/api/stock-analyses"],
+  const { data: stockPrices = [] } = useQuery<FollowedStock[]>({
+    queryKey: ["/api/followed-stocks-with-status"],
     enabled: !!user,
-  });
-
-  const { data: users = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-    retry: false,
-    meta: { ignoreError: true },
-  });
-
-  const { data: commentCounts = [] } = useQuery<{ ticker: string; count: number }[]>({
-    queryKey: ["/api/stock-comment-counts"],
-    retry: false,
-    meta: { ignoreError: true },
   });
 
   const closePositionMutation = useMutation({
@@ -94,7 +83,7 @@ export default function InPosition() {
       queryClient.invalidateQueries({ queryKey: ["/api/portfolio/holdings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/positions/count"] });
       queryClient.invalidateQueries({ queryKey: ["/api/portfolio/total-pnl"] });
-      setCloseDialog({ open: false, ticker: null, holdingId: null });
+      setCloseDialog({ open: false, holding: null });
       toast({
         title: "Position Closed",
         description: "Your position has been closed and P&L recorded",
@@ -102,75 +91,53 @@ export default function InPosition() {
     },
   });
 
-  const isLoading = stocksLoading || holdingsLoading;
-
   const activeHoldings = useMemo(() => {
     return holdings.filter(h => h.quantity > 0 && !h.isSimulated);
   }, [holdings]);
 
-  const positionTickers = useMemo(() => {
-    return new Set(activeHoldings.map(h => h.ticker));
-  }, [activeHoldings]);
-
-  const stocksInPosition = useMemo(() => {
-    return stocks.filter(s => positionTickers.has(s.ticker));
-  }, [stocks, positionTickers]);
-
-  const filteredStocks = useMemo(() => {
-    if (!tickerSearch.trim()) return stocksInPosition;
+  const filteredHoldings = useMemo(() => {
+    if (!tickerSearch.trim()) return activeHoldings;
     const search = tickerSearch.toUpperCase();
-    return stocksInPosition.filter(s => 
-      s.ticker.includes(search) || 
-      s.companyName?.toUpperCase().includes(search)
-    );
-  }, [stocksInPosition, tickerSearch]);
+    return activeHoldings.filter(h => h.ticker.toUpperCase().includes(search));
+  }, [activeHoldings, tickerSearch]);
 
-  const followedTickers = useMemo(() => {
-    return stocks.filter(s => s.isFollowing).map(s => s.ticker);
-  }, [stocks]);
+  const getStockData = (ticker: string) => {
+    return stockPrices.find(s => s.ticker.toUpperCase() === ticker.toUpperCase());
+  };
 
-  const holdingsData = useMemo(() => {
-    return activeHoldings.map(h => ({
-      ticker: h.ticker,
-      quantity: h.quantity,
-      averagePurchasePrice: h.averagePurchasePrice,
-    }));
-  }, [activeHoldings]);
-
-  const getHoldingForTicker = (ticker: string) => {
-    return activeHoldings.find(h => h.ticker === ticker);
+  const calculatePnL = (holding: PortfolioHolding) => {
+    const stockData = getStockData(holding.ticker);
+    if (!stockData) return { pnl: 0, pnlPercent: 0, currentPrice: 0 };
+    
+    const currentPrice = parseFloat(stockData.currentPrice);
+    const entryPrice = parseFloat(holding.averagePurchasePrice);
+    const pnl = (currentPrice - entryPrice) * holding.quantity;
+    const pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+    return { pnl, pnlPercent, currentPrice };
   };
 
   const totalPnL = useMemo(() => {
-    return activeHoldings.reduce((sum, h) => {
-      const stock = stocks.find(s => s.ticker === h.ticker);
-      if (!stock) return sum;
-      const currentPrice = parseFloat(stock.currentPrice);
-      const entryPrice = parseFloat(h.averagePurchasePrice);
-      return sum + (currentPrice - entryPrice) * h.quantity;
+    return filteredHoldings.reduce((sum, h) => {
+      const { pnl } = calculatePnL(h);
+      return sum + pnl;
     }, 0);
-  }, [activeHoldings, stocks]);
+  }, [filteredHoldings, stockPrices]);
 
-  const handleClosePosition = (ticker: string) => {
-    const holding = getHoldingForTicker(ticker);
-    if (holding) {
-      setCloseDialog({ open: true, ticker, holdingId: holding.id });
-    }
+  const handleClosePosition = (holding: PortfolioHolding) => {
+    setCloseDialog({ open: true, holding });
   };
 
   const confirmClosePosition = () => {
-    if (closeDialog.holdingId && closeDialog.ticker) {
-      const stock = stocks.find(s => s.ticker === closeDialog.ticker);
-      if (stock) {
-        closePositionMutation.mutate({
-          holdingId: closeDialog.holdingId,
-          closePrice: parseFloat(stock.currentPrice),
-        });
-      }
+    if (closeDialog.holding) {
+      const { currentPrice } = calculatePnL(closeDialog.holding);
+      closePositionMutation.mutate({
+        holdingId: closeDialog.holding.id,
+        closePrice: currentPrice,
+      });
     }
   };
 
-  if (isLoading) {
+  if (holdingsLoading) {
     return (
       <div className="p-4 md:p-6 space-y-4">
         <div className="flex items-center justify-between">
@@ -233,21 +200,78 @@ export default function InPosition() {
           </CardContent>
         </Card>
       ) : (
-        <StockTable
-          stocks={filteredStocks}
-          users={users}
-          commentCounts={commentCounts}
-          analyses={analyses}
-          onStockClick={(stock) => {
-            setExplorerStock(stock);
-            setExplorerOpen(true);
-          }}
-          showActions={true}
-          onClosePosition={handleClosePosition}
-          holdings={holdingsData}
-          followedTickers={followedTickers}
-          preserveOrder={false}
-        />
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[80px]">Ticker</TableHead>
+                <TableHead className="text-right w-[80px]">Entry</TableHead>
+                <TableHead className="text-right w-[80px]">Current</TableHead>
+                <TableHead className="text-right w-[60px]">Qty</TableHead>
+                <TableHead className="text-right w-[100px]">P&L</TableHead>
+                <TableHead className="text-right w-[80px]">P&L %</TableHead>
+                <TableHead className="w-[100px] text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredHoldings.map((holding) => {
+                const { pnl, pnlPercent, currentPrice } = calculatePnL(holding);
+                const entryPrice = parseFloat(holding.averagePurchasePrice);
+                const isPositive = pnl >= 0;
+
+                return (
+                  <TableRow key={holding.id} className="hover-elevate" data-testid={`row-position-${holding.ticker}`}>
+                    <TableCell className="font-mono font-medium">
+                      <Link href={`/ticker/${holding.ticker}`} className="hover:underline flex items-center gap-1.5">
+                        <Briefcase className="h-3 w-3 text-primary" />
+                        {holding.ticker}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      ${entryPrice.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      ${currentPrice.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {holding.quantity}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className={cn(
+                        "font-mono font-medium",
+                        isPositive ? "text-success" : "text-destructive"
+                      )}>
+                        {isPositive ? "+" : ""}${pnl.toFixed(2)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={cn(
+                        "flex items-center justify-end gap-0.5",
+                        isPositive ? "text-success" : "text-destructive"
+                      )}>
+                        {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                        <span className="font-mono">
+                          {isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-7 px-3 text-xs"
+                        onClick={() => handleClosePosition(holding)}
+                        data-testid={`button-close-${holding.ticker}`}
+                      >
+                        Close
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       <Dialog open={closeDialog.open} onOpenChange={(open) => setCloseDialog({ ...closeDialog, open })}>
@@ -255,13 +279,25 @@ export default function InPosition() {
           <DialogHeader>
             <DialogTitle>Close Position</DialogTitle>
             <DialogDescription>
-              Are you sure you want to close your position in {closeDialog.ticker}? This will record your P&L.
+              {closeDialog.holding && (
+                <>
+                  Are you sure you want to close your position in <strong>{closeDialog.holding.ticker}</strong>?
+                  {(() => {
+                    const { pnl, pnlPercent } = calculatePnL(closeDialog.holding!);
+                    return (
+                      <span className={cn("ml-1", pnl >= 0 ? "text-success" : "text-destructive")}>
+                        P&L: {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} ({pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(1)}%)
+                      </span>
+                    );
+                  })()}
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setCloseDialog({ open: false, ticker: null, holdingId: null })}
+              onClick={() => setCloseDialog({ open: false, holding: null })}
               data-testid="button-cancel-close"
             >
               Cancel
@@ -277,13 +313,6 @@ export default function InPosition() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <StockExplorer
-        stock={explorerStock}
-        open={explorerOpen}
-        onOpenChange={setExplorerOpen}
-        users={users}
-      />
     </div>
   );
 }

@@ -1,56 +1,64 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  TrendingUp,
+  TrendingDown,
   Star,
   Search,
   ArrowRight,
+  ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
-import { StockTable } from "@/components/stock-table";
-import { StockExplorer } from "@/components/stock-explorer";
-import type { Stock, User } from "@shared/schema";
 
-type StockWithUserStatus = Stock & {
-  userStatus: string;
-  isFollowing?: boolean;
-  analysisJob?: {
-    status: string;
-    currentStep: string | null;
-  } | null;
+type FollowedStock = {
+  ticker: string;
+  currentPrice: string;
+  priceChange?: string;
+  priceChangePercent?: string;
+  companyName?: string;
+  marketCap?: string;
+  jobStatus?: 'pending' | 'processing' | 'completed' | 'failed' | null;
+  insiderAction?: 'BUY' | 'SELL' | null;
+  aiStance?: 'BUY' | 'SELL' | 'HOLD' | null;
+  aiScore?: number | null;
+  integratedScore?: number | null;
+  stanceAlignment?: 'act' | 'hold' | null;
 };
 
 export default function Following() {
   const { toast } = useToast();
   const { user } = useUser();
   const [tickerSearch, setTickerSearch] = useState("");
-  const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
-  const [explorerOpen, setExplorerOpen] = useState(false);
 
-  const { data: stocks = [], isLoading } = useQuery<StockWithUserStatus[]>({
-    queryKey: ["/api/stocks/with-user-status"],
+  const { data: followedStocks = [], isLoading } = useQuery<FollowedStock[]>({
+    queryKey: ["/api/followed-stocks-with-status"],
     enabled: !!user,
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return false;
       const hasActiveJobs = data.some((stock) => 
-        stock.analysisJob?.status === 'pending' || stock.analysisJob?.status === 'processing'
+        stock.jobStatus === 'pending' || stock.jobStatus === 'processing'
       );
       return hasActiveJobs ? 5000 : false;
     },
-  });
-
-  const { data: analyses = [] } = useQuery<any[]>({
-    queryKey: ["/api/stock-analyses"],
-    enabled: !!user,
   });
 
   const { data: holdings = [] } = useQuery<any[]>({
@@ -58,24 +66,12 @@ export default function Following() {
     enabled: !!user,
   });
 
-  const { data: users = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
-    retry: false,
-    meta: { ignoreError: true },
-  });
-
-  const { data: commentCounts = [] } = useQuery<{ ticker: string; count: number }[]>({
-    queryKey: ["/api/stock-comment-counts"],
-    retry: false,
-    meta: { ignoreError: true },
-  });
-
   const unfollowMutation = useMutation({
     mutationFn: async (ticker: string) => {
       return await apiRequest("DELETE", `/api/stocks/${ticker}/follow`, null);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/stocks/with-user-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks/count"] });
       toast({
         title: "Stock Unfollowed",
@@ -103,10 +99,6 @@ export default function Following() {
     },
   });
 
-  const followedStocks = useMemo(() => {
-    return stocks.filter(s => s.isFollowing);
-  }, [stocks]);
-
   const filteredStocks = useMemo(() => {
     if (!tickerSearch.trim()) return followedStocks;
     const search = tickerSearch.toUpperCase();
@@ -116,17 +108,19 @@ export default function Following() {
     );
   }, [followedStocks, tickerSearch]);
 
-  const followedTickers = useMemo(() => {
-    return followedStocks.map(s => s.ticker);
-  }, [followedStocks]);
+  const sortedStocks = useMemo(() => {
+    return [...filteredStocks].sort((a, b) => {
+      if (a.stanceAlignment === 'act' && b.stanceAlignment !== 'act') return -1;
+      if (a.stanceAlignment !== 'act' && b.stanceAlignment === 'act') return 1;
+      const scoreA = a.integratedScore ?? 0;
+      const scoreB = b.integratedScore ?? 0;
+      return scoreB - scoreA;
+    });
+  }, [filteredStocks]);
 
-  const holdingsData = useMemo(() => {
-    return holdings.map((h: any) => ({
-      ticker: h.ticker,
-      quantity: h.quantity,
-      averagePurchasePrice: h.averagePurchasePrice,
-    }));
-  }, [holdings]);
+  const hasPosition = (ticker: string) => {
+    return holdings.some((h: any) => h.ticker === ticker && h.quantity > 0);
+  };
 
   if (isLoading) {
     return (
@@ -182,30 +176,130 @@ export default function Following() {
           </CardContent>
         </Card>
       ) : (
-        <StockTable
-          stocks={filteredStocks}
-          users={users}
-          commentCounts={commentCounts}
-          analyses={analyses}
-          onStockClick={(stock) => {
-            setExplorerStock(stock);
-            setExplorerOpen(true);
-          }}
-          showActions={true}
-          onUnfollow={(ticker) => unfollowMutation.mutate(ticker)}
-          onEnterPosition={(ticker, price) => enterPositionMutation.mutate({ ticker, price })}
-          holdings={holdingsData}
-          followedTickers={followedTickers}
-          preserveOrder={false}
-        />
-      )}
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[80px]">Ticker</TableHead>
+                <TableHead className="hidden md:table-cell">Company</TableHead>
+                <TableHead className="text-right w-[70px]">Signal</TableHead>
+                <TableHead className="w-[60px]">Type</TableHead>
+                <TableHead className="text-right w-[80px]">Price</TableHead>
+                <TableHead className="text-right w-[80px]">Change</TableHead>
+                <TableHead className="w-[140px] text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedStocks.map((stock) => {
+                const currentPrice = parseFloat(stock.currentPrice || "0");
+                const priceChangePercent = parseFloat(stock.priceChangePercent || "0");
+                const isPositive = priceChangePercent >= 0;
+                const inPosition = hasPosition(stock.ticker);
 
-      <StockExplorer
-        stock={explorerStock}
-        open={explorerOpen}
-        onOpenChange={setExplorerOpen}
-        users={users}
-      />
+                return (
+                  <TableRow key={stock.ticker} className="hover-elevate" data-testid={`row-stock-${stock.ticker}`}>
+                    <TableCell className="font-mono font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <Star className="h-3 w-3 text-primary fill-current" />
+                        <Link href={`/ticker/${stock.ticker}`} className="hover:underline">
+                          {stock.ticker}
+                        </Link>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm truncate max-w-[200px]">
+                      {stock.companyName || "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {stock.integratedScore ? (
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Badge 
+                              variant={stock.integratedScore >= 70 ? "default" : "secondary"}
+                              className={cn(
+                                "font-mono",
+                                stock.integratedScore >= 80 && "bg-amber-500 text-white"
+                              )}
+                            >
+                              {stock.integratedScore}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Signal strength: {stock.integratedScore}/100
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : stock.jobStatus === 'pending' || stock.jobStatus === 'processing' ? (
+                        <Badge variant="outline" className="text-xs">
+                          Analyzing...
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {stock.insiderAction && (
+                        <Badge 
+                          variant={stock.insiderAction === 'BUY' ? "default" : "destructive"}
+                          className="text-xs"
+                        >
+                          {stock.insiderAction}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      ${currentPrice.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className={cn(
+                        "flex items-center justify-end gap-0.5 text-sm",
+                        isPositive ? "text-success" : "text-destructive"
+                      )}>
+                        {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                        <span className="font-mono">
+                          {isPositive ? "+" : ""}{priceChangePercent.toFixed(1)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          onClick={() => unfollowMutation.mutate(stock.ticker)}
+                          disabled={unfollowMutation.isPending}
+                          data-testid={`button-unfollow-${stock.ticker}`}
+                        >
+                          Unfollow
+                        </Button>
+                        {!inPosition && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => enterPositionMutation.mutate({ 
+                              ticker: stock.ticker, 
+                              price: currentPrice 
+                            })}
+                            disabled={enterPositionMutation.isPending}
+                            data-testid={`button-enter-${stock.ticker}`}
+                          >
+                            Enter
+                          </Button>
+                        )}
+                        {inPosition && (
+                          <Badge variant="outline" className="text-xs">
+                            In Position
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }

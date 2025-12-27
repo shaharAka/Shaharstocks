@@ -15,16 +15,19 @@ import {
   TrendingDown, 
   ExternalLink,
   MessageSquare,
-  Users,
   Calendar,
   Globe,
   Building2,
   Newspaper,
-  TrendingUpIcon,
   ArrowUpCircle,
   ArrowDownCircle,
   MinusCircle,
-  ChevronDown
+  ChevronDown,
+  Eye,
+  Target,
+  DollarSign,
+  User,
+  Briefcase
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Link } from "wouter";
@@ -32,10 +35,8 @@ import type { Stock, StockCommentWithUser } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
-import { MiniCandlestickChart } from "@/components/mini-candlestick-chart";
 import { StockSimulationPlot } from "@/components/stock-simulation-plot";
 import { StockAIAnalysis } from "@/components/stock-ai-analysis";
-import { SignalSummary } from "@/components/signal-summary";
 import { CompactSignalBadge } from "@/components/compact-signal-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
@@ -56,6 +57,17 @@ const getBackNavigation = (source: string | null) => {
     default:
       return { href: "/opportunities", label: "Opportunities" };
   }
+};
+
+// Helper to get stage info
+const getStageInfo = (isFollowing: boolean, hasEnteredPosition: boolean) => {
+  if (hasEnteredPosition) {
+    return { label: "In Position", variant: "default" as const, icon: DollarSign };
+  }
+  if (isFollowing) {
+    return { label: "Following", variant: "secondary" as const, icon: Eye };
+  }
+  return { label: "Opportunity", variant: "outline" as const, icon: Target };
 };
 
 export default function TickerDetail() {
@@ -86,11 +98,12 @@ export default function TickerDetail() {
   const currentFollowedStock = followedStocks.find(f => f.ticker === ticker);
   const isFollowing = !!currentFollowedStock;
   const hasEnteredPosition = currentFollowedStock?.hasEnteredPosition ?? false;
+  const stageInfo = getStageInfo(isFollowing, hasEnteredPosition);
 
   // Fetch daily briefs (lightweight daily reports for followed stocks)
   const { data: dailyBriefs = [], isLoading: briefsLoading } = useQuery<any[]>({
     queryKey: ["/api/stocks", ticker, "daily-briefs"],
-    enabled: !!ticker && isFollowing, // Only fetch if following
+    enabled: !!ticker && isFollowing,
     retry: false,
     meta: { ignoreError: true },
   });
@@ -99,7 +112,6 @@ export default function TickerDetail() {
   const { data: analysisJobs = [] } = useQuery<any[]>({
     queryKey: ["/api/analysis-jobs", { ticker }],
     enabled: !!ticker,
-    // Removed aggressive polling - WebSocket invalidates cache on updates
     retry: false,
     meta: { ignoreError: true },
   });
@@ -114,7 +126,6 @@ export default function TickerDetail() {
       return await apiRequest("POST", `/api/stocks/${tickerToMark}/view`, null);
     },
     onSuccess: () => {
-      // Invalidate queries that depend on viewed status
       if (currentUser?.id) {
         queryClient.invalidateQueries({ queryKey: ["/api/stock-views", currentUser.id] });
       }
@@ -140,32 +151,20 @@ export default function TickerDetail() {
   // Follow mutation
   const followMutation = useMutation({
     mutationFn: async () => {
-      if (!ticker) {
-        throw new Error("Ticker is not defined");
-      }
-      console.log("[Follow] Attempting to follow:", ticker);
       return await apiRequest("POST", `/api/stocks/${ticker}/follow`, null);
     },
     onSuccess: () => {
-      console.log("[Follow] Successfully followed:", ticker);
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "daily-briefs"] }); // Fetch daily briefs after following
-      
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
       toast({
-        title: "Stock Followed",
-        description: "Day-0 AI analysis has been queued for this stock",
+        title: "Following",
+        description: `You are now following ${ticker}`,
       });
     },
     onError: (error: any) => {
-      console.error("[Follow] Error following stock:", error);
-      const message = error.message?.includes("already following") 
-        ? "You are already following this stock"
-        : `Failed to follow stock: ${error.message || 'Unknown error'}`;
       toast({
         title: "Error",
-        description: message,
+        description: error.message || "Failed to follow stock",
         variant: "destructive",
       });
     },
@@ -174,24 +173,19 @@ export default function TickerDetail() {
   // Unfollow mutation
   const unfollowMutation = useMutation({
     mutationFn: async () => {
-      if (!ticker) {
-        throw new Error("Ticker is not defined");
-      }
       return await apiRequest("DELETE", `/api/stocks/${ticker}/follow`, null);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
       toast({
-        title: "Stock Unfollowed",
-        description: "You are no longer following this stock",
+        title: "Unfollowed",
+        description: `You are no longer following ${ticker}`,
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to unfollow stock",
+        description: error.message || "Failed to unfollow stock",
         variant: "destructive",
       });
     },
@@ -200,31 +194,24 @@ export default function TickerDetail() {
   // Toggle position mutation
   const togglePositionMutation = useMutation({
     mutationFn: async ({ hasEnteredPosition, entryPrice }: { hasEnteredPosition: boolean; entryPrice?: number }) => {
-      if (!ticker) {
-        throw new Error("Ticker is not defined");
-      }
-      return await apiRequest("PATCH", `/api/stocks/${ticker}/position`, { hasEnteredPosition, entryPrice });
+      return await apiRequest("PATCH", `/api/stocks/${ticker}/position`, { 
+        hasEnteredPosition,
+        entryPrice 
+      });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-prices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/followed-stocks-with-status"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "daily-briefs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/portfolio/holdings"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/positions/count"] });
+      toast({
+        title: variables.hasEnteredPosition ? "Position entered" : "Position exited",
+        description: variables.hasEnteredPosition 
+          ? `Marked as in position for ${ticker}` 
+          : `Marked as watching ${ticker}`,
+      });
     },
     onError: (error: any) => {
-      const errorMessage = error.message || "Failed to update position status";
-      const isNotFollowing = errorMessage.includes("not being followed");
-      
-      // Refetch to ensure UI is in sync with backend state
-      queryClient.invalidateQueries({ queryKey: ["/api/users/me/followed"] });
-      
       toast({
         title: "Error",
-        description: isNotFollowing 
-          ? "You must follow this stock to track your position"
-          : "Failed to update position status",
+        description: error.message || "Failed to update position",
         variant: "destructive",
       });
     },
@@ -232,14 +219,8 @@ export default function TickerDetail() {
 
   // Add comment mutation
   const addCommentMutation = useMutation({
-    mutationFn: async (text: string) => {
-      if (!currentUser?.id) {
-        throw new Error("User not authenticated");
-      }
-      return await apiRequest("POST", `/api/stocks/${ticker}/comments`, { 
-        userId: currentUser.id,
-        comment: text 
-      });
+    mutationFn: async (comment: string) => {
+      return await apiRequest("POST", `/api/stocks/${ticker}/comments`, { comment });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/stocks", ticker, "comments"] });
@@ -249,23 +230,26 @@ export default function TickerDetail() {
         description: "Your comment has been posted",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to add comment",
+        description: error.message || "Failed to add comment",
         variant: "destructive",
       });
     },
   });
 
+  // Helper function to get user initials
   const getInitials = (name: string) => {
-    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
   if (stockLoading) {
     return (
-      <div className="p-4 md:p-6 space-y-6 max-w-7xl">
-        <Skeleton className="h-8 w-48" />
+      <div className="p-4 md:p-6 space-y-4 max-w-5xl">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-48 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
     );
@@ -273,11 +257,11 @@ export default function TickerDetail() {
 
   if (!stock) {
     return (
-      <div className="p-4 md:p-6 max-w-7xl">
+      <div className="p-4 md:p-6 max-w-5xl">
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-muted-foreground">Stock not found</p>
-            <Button asChild className="mt-4" data-testid="button-back">
+            <Button variant="outline" asChild className="mt-4">
               <Link href={backNav.href}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to {backNav.label}
@@ -289,77 +273,109 @@ export default function TickerDetail() {
     );
   }
 
-  const currentPrice = parseFloat(stock.currentPrice);
-  const previousPrice = parseFloat(stock.previousClose || stock.currentPrice);
-  const priceChange = currentPrice - previousPrice;
-  const priceChangePercent = (priceChange / previousPrice) * 100;
+  const currentPrice = parseFloat(stock.currentPrice || "0");
+  const previousClose = parseFloat(stock.previousClose || "0");
+  const priceChange = currentPrice - previousClose;
+  const priceChangePercent = previousClose > 0 ? (priceChange / previousClose) * 100 : 0;
   const isPositive = priceChange >= 0;
 
-  const newsItems = (stock as any).news || [];
+  // Parse news from stock data
+  const newsItems = stock.news ? 
+    (typeof stock.news === "string" ? JSON.parse(stock.news) : stock.news) 
+    : [];
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            data-testid="button-back"
-          >
-            <Link href={backNav.href}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold font-mono" data-testid="heading-ticker">
-              {stock.ticker}
-            </h1>
-            {stock.companyName && (
-              <p className="text-sm text-muted-foreground" data-testid="text-company-name">
-                {stock.companyName}
-              </p>
-            )}
-          </div>
-        </div>
-        {isFollowing ? (
-          <Button
-            variant="outline"
-            onClick={() => unfollowMutation.mutate()}
-            disabled={!ticker || unfollowMutation.isPending}
-            data-testid="button-unfollow"
-          >
-            <Star className="h-4 w-4 mr-2 fill-current" />
-            {unfollowMutation.isPending ? "Unfollowing..." : "Unfollow"}
-          </Button>
-        ) : (
-          <Button
-            variant="outline"
-            onClick={() => followMutation.mutate()}
-            disabled={!ticker || followMutation.isPending}
-            data-testid="button-follow"
-          >
-            <Star className="h-4 w-4 mr-2" />
-            {followMutation.isPending ? "Following..." : "Follow"}
-          </Button>
-        )}
-      </div>
-
-      {/* Price Overview */}
+    <div className="p-4 md:p-6 space-y-4 max-w-5xl">
+      {/* ═══════════════════════════════════════════════════════════════════════
+          STOCK ZONE - Header, Price, Stage Controls
+          ═══════════════════════════════════════════════════════════════════════ */}
       <Card>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent className="p-4 sm:p-6">
+          {/* Header Row */}
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                asChild
+                data-testid="button-back"
+              >
+                <Link href={backNav.href}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl md:text-3xl font-bold font-mono" data-testid="heading-ticker">
+                    {stock.ticker}
+                  </h1>
+                  <Badge variant={stageInfo.variant} className="text-xs" data-testid="badge-stage">
+                    <stageInfo.icon className="h-3 w-3 mr-1" />
+                    {stageInfo.label}
+                  </Badge>
+                </div>
+                {stock.companyName && (
+                  <p className="text-sm text-muted-foreground" data-testid="text-company-name">
+                    {stock.companyName}
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            {/* Stage Actions */}
+            <div className="flex items-center gap-2">
+              {!isFollowing ? (
+                <Button
+                  onClick={() => followMutation.mutate()}
+                  disabled={followMutation.isPending}
+                  data-testid="button-follow"
+                >
+                  <Star className="h-4 w-4 mr-2" />
+                  {followMutation.isPending ? "Following..." : "Follow"}
+                </Button>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mr-2">
+                    <Label htmlFor="position-toggle" className="text-xs text-muted-foreground whitespace-nowrap">
+                      {hasEnteredPosition ? "In Position" : "Watching"}
+                    </Label>
+                    <Switch
+                      id="position-toggle"
+                      checked={hasEnteredPosition}
+                      onCheckedChange={(checked) => togglePositionMutation.mutate({ 
+                        hasEnteredPosition: checked,
+                        entryPrice: checked ? currentPrice : undefined 
+                      })}
+                      disabled={togglePositionMutation.isPending || isFollowedStocksFetching}
+                      data-testid="switch-position"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => unfollowMutation.mutate()}
+                    disabled={unfollowMutation.isPending}
+                    data-testid="button-unfollow"
+                  >
+                    <Star className="h-4 w-4 mr-1 fill-current" />
+                    Unfollow
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Price Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <h3 className="text-sm text-muted-foreground mb-2">Current Price</h3>
-              <div className="flex items-baseline gap-4">
-                <span className="text-4xl font-bold font-mono" data-testid="text-current-price">
+              <p className="text-xs text-muted-foreground mb-1">Current Price</p>
+              <div className="flex items-baseline gap-3">
+                <span className="text-3xl font-bold font-mono" data-testid="text-current-price">
                   ${currentPrice.toFixed(2)}
                 </span>
                 <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {isPositive ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
-                  <span className="text-lg font-medium" data-testid="text-price-change">
+                  {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                  <span className="text-sm font-medium" data-testid="text-price-change">
                     {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
                   </span>
                 </div>
@@ -368,246 +384,248 @@ export default function TickerDetail() {
             <div className="grid grid-cols-2 gap-4">
               {stock.marketCap && (
                 <div>
-                  <p className="text-sm text-muted-foreground">Market Cap</p>
-                  <p className="text-lg font-medium" data-testid="text-market-cap">{stock.marketCap}</p>
+                  <p className="text-xs text-muted-foreground">Market Cap</p>
+                  <p className="font-medium font-mono" data-testid="text-market-cap">{stock.marketCap}</p>
                 </div>
               )}
               {stock.peRatio && (
                 <div>
-                  <p className="text-sm text-muted-foreground">P/E Ratio</p>
-                  <p className="text-lg font-medium" data-testid="text-pe-ratio">{parseFloat(stock.peRatio).toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground">P/E Ratio</p>
+                  <p className="font-medium font-mono" data-testid="text-pe-ratio">{parseFloat(stock.peRatio).toFixed(2)}</p>
                 </div>
               )}
             </div>
           </div>
+
+          {/* Insider Summary - Compact inline */}
+          {(stock.insiderPrice || stock.insiderTradeDate) && (
+            <>
+              <Separator className="my-4" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {stock.insiderPrice && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Insider Price</p>
+                    <p className="text-sm font-mono font-medium" data-testid="text-insider-price">
+                      ${parseFloat(stock.insiderPrice).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+                {stock.insiderQuantity && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Shares</p>
+                    <p className="text-sm font-medium" data-testid="text-insider-quantity">
+                      {stock.insiderQuantity.toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                {stock.insiderTradeDate && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Trade Date</p>
+                    <p className="text-sm font-medium" data-testid="text-trade-date">
+                      {stock.insiderTradeDate}
+                    </p>
+                  </div>
+                )}
+                {stock.insiderName && (
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Insider</p>
+                    <p className="text-sm font-medium truncate" data-testid="text-insider-name">
+                      {stock.insiderName}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
-      {/* Daily Briefs - Show above simulation for followed stocks */}
-      {isFollowing && currentFollowedStock && (
-        <LoadingStrikeBorder isLoading={hasActiveAnalysisJob}>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    Daily Stock Briefs
-                    {hasActiveAnalysisJob && (
-                      <Badge variant="secondary" className="ml-2">
-                        Analyzing...
-                      </Badge>
-                    )}
-                  </CardTitle>
-                  <CardDescription>
-                    Lightweight daily reports with quick buy/sell/hold guidance for followed stocks
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="position-toggle" className="text-sm text-muted-foreground whitespace-nowrap">
-                    {hasEnteredPosition ? "In Position" : "Watching"}
-                  </Label>
-                  <Switch
-                    id="position-toggle"
-                    checked={hasEnteredPosition}
-                    onCheckedChange={(checked) => togglePositionMutation.mutate({ 
-                      hasEnteredPosition: checked,
-                      entryPrice: checked ? currentPrice : undefined 
-                    })}
-                    disabled={togglePositionMutation.isPending || isFollowedStocksFetching}
-                    data-testid="switch-position"
-                  />
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-            {briefsLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
-              </div>
-            ) : dailyBriefs.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Daily briefs will appear here once generated. Briefs are created daily for stocks you follow.
-              </p>
-            ) : (
-              <div className="space-y-6">
-                {/* Helper function to render a brief */}
-                {(() => {
-                  const renderBrief = (brief: any, isLatest: boolean = false) => {
-                    const priceChange = parseFloat(brief.priceChange || 0);
-                    const priceChangePercent = parseFloat(brief.priceChangePercent || 0);
-                    const isPositive = priceChange >= 0;
-                    
-                    const activeStance = hasEnteredPosition ? brief.owningStance : brief.watchingStance;
-                    const activeConfidence = hasEnteredPosition ? brief.owningConfidence : brief.watchingConfidence;
-                    const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
-                    const activeHighlights = hasEnteredPosition ? brief.owningHighlights : brief.watchingHighlights;
-                    
-                    const isAct = activeStance === "buy" || activeStance === "sell" || activeStance === "enter" || activeStance === "short" || activeStance === "cover";
-                    
-                    const getStanceConfig = (stance: string) => {
-                      const normalizedStance = stance?.toLowerCase() || "hold";
-                      if (normalizedStance === "buy" || normalizedStance === "enter") {
-                        return { icon: ArrowUpCircle, text: "BUY", color: "text-green-600 dark:text-green-400", bgColor: "bg-green-50 dark:bg-green-950/30", borderColor: "border-green-500" };
-                      } else if (normalizedStance === "sell" || normalizedStance === "short") {
-                        // Display "SHORT" when watching (not in position), "SELL" when in position
-                        const displayText = !hasEnteredPosition ? "SHORT" : "SELL";
-                        return { icon: ArrowDownCircle, text: displayText, color: "text-red-600 dark:text-red-400", bgColor: "bg-red-50 dark:bg-red-950/30", borderColor: "border-red-500" };
-                      } else if (normalizedStance === "cover") {
-                        return { icon: ArrowUpCircle, text: "COVER", color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-50 dark:bg-blue-950/30", borderColor: "border-blue-500" };
-                      } else {
-                        return { icon: MinusCircle, text: "HOLD", color: "text-muted-foreground", bgColor: "bg-muted/20", borderColor: "border-gray-400 dark:border-gray-600" };
-                      }
-                    };
-                    
-                    const stanceConfig = getStanceConfig(activeStance);
-                    
-                    return (
-                      <div key={brief.id} className={`border rounded-lg overflow-hidden ${stanceConfig.bgColor}`}>
-                        <div className="px-4 py-4 space-y-3">
-                          {/* Top row: Badges | Price info */}
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" data-testid={`badge-date-${brief.briefDate}`}>
-                                {isLatest ? "Latest" : new Date(brief.briefDate).toLocaleDateString()}
-                              </Badge>
-                              <Badge variant={isAct ? "default" : "outline"} className={isAct ? "bg-primary" : ""}>
-                                {stanceConfig.text}
-                              </Badge>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-lg font-mono font-bold">
-                                ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
-                              </p>
-                              <p className={`text-sm font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%)
-                              </p>
-                            </div>
-                          </div>
-                          
-                          {/* Status row: Icon | Status text | Confidence */}
-                          <div className="flex items-center gap-2">
-                            <stanceConfig.icon className={`h-5 w-5 ${stanceConfig.color}`} />
-                            <h4 className="text-sm font-bold text-muted-foreground">
-                              {hasEnteredPosition ? "CURRENTLY IN POSITION" : "CONSIDERING ENTRY"}
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              Confidence: {activeConfidence}/10
-                            </p>
-                          </div>
-                          
-                          {/* Analysis text */}
-                          <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
-                            {activeText}
-                          </p>
-                          
-                          {/* Key highlights */}
-                          {activeHighlights && activeHighlights.length > 0 && (
-                            <ul className="list-disc list-inside space-y-1">
-                              {activeHighlights.map((highlight: string, idx: number) => (
-                                <li key={idx} className="text-xs text-muted-foreground">
-                                  {highlight}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  };
-
-                  const latestBrief = dailyBriefs[0];
-                  const previousBriefs = dailyBriefs.slice(1);
-
-                  return (
-                    <>
-                      {/* Latest Brief - Main Visual */}
-                      {latestBrief && renderBrief(latestBrief, true)}
-                      
-                      {/* Previous Reports - Collapsible */}
-                      {previousBriefs.length > 0 && (
-                        <Collapsible className="group">
-                          <div className="border rounded-lg overflow-hidden">
-                            <CollapsibleTrigger asChild>
-                              <button className="w-full px-4 py-3 bg-muted/50 hover:bg-muted text-left flex items-center justify-between gap-2 cursor-pointer" data-testid="button-toggle-previous-reports">
-                                <span className="font-medium text-sm">
-                                  Previous Reports ({previousBriefs.length})
-                                </span>
-                                <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-                              </button>
-                            </CollapsibleTrigger>
-                          </div>
-                          <CollapsibleContent className="space-y-3 mt-3">
-                            {previousBriefs.map((brief: any) => renderBrief(brief, false))}
-                          </CollapsibleContent>
-                        </Collapsible>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-            </CardContent>
-          </Card>
-        </LoadingStrikeBorder>
-      )}
-
-      {/* Company Information - Always visible */}
-      {(stock.description || stock.industry || stock.country || stock.webUrl) && (
+      {/* ═══════════════════════════════════════════════════════════════════════
+          COMPANY ZONE - About, Daily Briefs (if following)
+          ═══════════════════════════════════════════════════════════════════════ */}
+      {(stock.description || stock.industry || stock.country || stock.webUrl || (isFollowing && dailyBriefs.length > 0)) && (
         <Card>
-          <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-            <div className="flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
-              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                <Building2 className="h-4 sm:h-5 w-4 sm:w-5" />
-                Company Information
+          <CardHeader className="p-4 pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Building2 className="h-4 w-4" />
+                Company
               </CardTitle>
               <CompactSignalBadge ticker={ticker} />
             </div>
           </CardHeader>
-          <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6 pt-0">
+          <CardContent className="p-4 pt-0 space-y-4">
+            {/* Company Info */}
             {stock.description && (
-              <div>
-                <h4 className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">About</h4>
-                <p className="text-xs sm:text-sm text-muted-foreground" data-testid="text-description">
-                  {stock.description}
-                </p>
-              </div>
+              <p className="text-sm text-muted-foreground line-clamp-3" data-testid="text-description">
+                {stock.description}
+              </p>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            
+            <div className="flex items-center gap-4 flex-wrap text-sm">
               {stock.industry && (
-                <div>
-                  <p className="text-[10px] sm:text-sm text-muted-foreground">Industry</p>
-                  <p className="text-xs sm:text-base font-medium truncate" data-testid="text-industry">{stock.industry}</p>
+                <div className="flex items-center gap-1.5">
+                  <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span data-testid="text-industry">{stock.industry}</span>
                 </div>
               )}
               {stock.country && (
-                <div>
-                  <p className="text-[10px] sm:text-sm text-muted-foreground">Country</p>
-                  <p className="text-xs sm:text-base font-medium" data-testid="text-country">{stock.country}</p>
+                <div className="flex items-center gap-1.5">
+                  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span data-testid="text-country">{stock.country}</span>
                 </div>
               )}
               {stock.ipo && (
-                <div>
-                  <p className="text-[10px] sm:text-sm text-muted-foreground">IPO Date</p>
-                  <p className="text-xs sm:text-base font-medium" data-testid="text-ipo">{stock.ipo}</p>
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">IPO:</span>
+                  <span data-testid="text-ipo">{stock.ipo}</span>
                 </div>
               )}
+              {stock.webUrl && (
+                <Button variant="ghost" size="sm" asChild className="h-auto py-0.5 px-1.5 text-xs">
+                  <a href={stock.webUrl} target="_blank" rel="noopener noreferrer">
+                    Website
+                    <ExternalLink className="h-3 w-3 ml-1" />
+                  </a>
+                </Button>
+              )}
             </div>
-            {stock.webUrl && (
-              <Button variant="outline" size="sm" asChild data-testid="button-website" className="text-xs sm:text-sm">
-                <a href={stock.webUrl} target="_blank" rel="noopener noreferrer">
-                  <Globe className="h-3.5 sm:h-4 w-3.5 sm:w-4 mr-1.5 sm:mr-2" />
-                  Website
-                  <ExternalLink className="h-3 w-3 ml-1.5 sm:ml-2" />
-                </a>
-              </Button>
+
+            {/* Daily Briefs - Only for followed stocks */}
+            {isFollowing && (
+              <>
+                <Separator />
+                <LoadingStrikeBorder isLoading={hasActiveAnalysisJob}>
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <h4 className="text-sm font-medium flex items-center gap-2">
+                        Daily Briefs
+                        {hasActiveAnalysisJob && (
+                          <Badge variant="secondary" className="text-xs">Analyzing...</Badge>
+                        )}
+                      </h4>
+                    </div>
+                    
+                    {briefsLoading ? (
+                      <Skeleton className="h-20 w-full" />
+                    ) : dailyBriefs.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Daily briefs will appear here once generated.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {(() => {
+                          const renderBrief = (brief: any, isLatest: boolean = false) => {
+                            const briefPriceChange = parseFloat(brief.priceChange || 0);
+                            const briefPriceChangePercent = parseFloat(brief.priceChangePercent || 0);
+                            const briefIsPositive = briefPriceChange >= 0;
+                            
+                            const activeStance = hasEnteredPosition ? brief.owningStance : brief.watchingStance;
+                            const activeConfidence = hasEnteredPosition ? brief.owningConfidence : brief.watchingConfidence;
+                            const activeText = hasEnteredPosition ? brief.owningText : brief.watchingText;
+                            const activeHighlights = hasEnteredPosition ? brief.owningHighlights : brief.watchingHighlights;
+                            
+                            const isAct = activeStance === "buy" || activeStance === "sell" || activeStance === "enter" || activeStance === "short" || activeStance === "cover";
+                            
+                            const getStanceConfig = (stance: string) => {
+                              const normalizedStance = stance?.toLowerCase() || "hold";
+                              if (normalizedStance === "buy" || normalizedStance === "enter") {
+                                return { icon: ArrowUpCircle, text: "BUY", color: "text-green-600 dark:text-green-400", bgColor: "bg-green-50 dark:bg-green-950/30" };
+                              } else if (normalizedStance === "sell" || normalizedStance === "short") {
+                                const displayText = !hasEnteredPosition ? "SHORT" : "SELL";
+                                return { icon: ArrowDownCircle, text: displayText, color: "text-red-600 dark:text-red-400", bgColor: "bg-red-50 dark:bg-red-950/30" };
+                              } else if (normalizedStance === "cover") {
+                                return { icon: ArrowUpCircle, text: "COVER", color: "text-blue-600 dark:text-blue-400", bgColor: "bg-blue-50 dark:bg-blue-950/30" };
+                              } else {
+                                return { icon: MinusCircle, text: "HOLD", color: "text-muted-foreground", bgColor: "bg-muted/20" };
+                              }
+                            };
+                            
+                            const stanceConfig = getStanceConfig(activeStance);
+                            
+                            return (
+                              <div key={brief.id} className={`border rounded-lg p-3 ${stanceConfig.bgColor}`}>
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-xs">
+                                      {isLatest ? "Latest" : new Date(brief.briefDate).toLocaleDateString()}
+                                    </Badge>
+                                    <Badge variant={isAct ? "default" : "outline"} className="text-xs">
+                                      {stanceConfig.text}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">
+                                      Confidence: {activeConfidence}/10
+                                    </span>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="font-mono font-medium">
+                                      ${parseFloat(brief.priceSnapshot || 0).toFixed(2)}
+                                    </span>
+                                    <span className={`ml-2 text-xs ${briefIsPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                      {briefIsPositive ? '+' : ''}{briefPriceChangePercent.toFixed(2)}%
+                                    </span>
+                                  </div>
+                                </div>
+                                <p className="text-sm text-muted-foreground" data-testid={`text-brief-${brief.id}`}>
+                                  {activeText}
+                                </p>
+                                {activeHighlights && activeHighlights.length > 0 && (
+                                  <ul className="list-disc list-inside mt-2 space-y-0.5">
+                                    {activeHighlights.map((highlight: string, idx: number) => (
+                                      <li key={idx} className="text-xs text-muted-foreground">
+                                        {highlight}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            );
+                          };
+
+                          const latestBrief = dailyBriefs[0];
+                          const previousBriefs = dailyBriefs.slice(1);
+
+                          return (
+                            <>
+                              {latestBrief && renderBrief(latestBrief, true)}
+                              
+                              {previousBriefs.length > 0 && (
+                                <Collapsible className="group">
+                                  <CollapsibleTrigger asChild>
+                                    <button className="w-full px-3 py-2 bg-muted/50 hover:bg-muted rounded-lg text-left flex items-center justify-between gap-2 cursor-pointer text-sm" data-testid="button-toggle-previous-reports">
+                                      <span className="font-medium">
+                                        Previous Reports ({previousBriefs.length})
+                                      </span>
+                                      <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                                    </button>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent className="space-y-2 mt-2">
+                                    {previousBriefs.map((brief: any) => renderBrief(brief, false))}
+                                  </CollapsibleContent>
+                                </Collapsible>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </LoadingStrikeBorder>
+              </>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* Simulation Plot - shows price chart with trading rules overlay for followed stocks */}
-      <StockSimulationPlot ticker={ticker} stock={stock} />
+      {/* ═══════════════════════════════════════════════════════════════════════
+          AI ZONE - Analysis, Trading Rules (if following), News, Discussion
+          ═══════════════════════════════════════════════════════════════════════ */}
+      
+      {/* Trading Rules Chart - Only for followed stocks (not opportunities) */}
+      {isFollowing && (
+        <StockSimulationPlot ticker={ticker} stock={stock} />
+      )}
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="analysis" className="w-full">
@@ -629,85 +647,82 @@ export default function TickerDetail() {
         {/* AI Analysis Tab */}
         <TabsContent value="analysis" className="w-full max-w-full min-w-0 overflow-hidden">
           <div className="w-full max-w-full min-w-0">
-            {/* AI Playbook - Detailed analysis */}
             <StockAIAnalysis ticker={ticker} />
           </div>
         </TabsContent>
 
         {/* News Tab */}
-        <TabsContent value="news" className="space-y-3 sm:space-y-4">
+        <TabsContent value="news" className="space-y-3">
           {newsItems.length > 0 ? (
             newsItems.map((item: any, index: number) => (
               <Card key={index}>
-                <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-                  <CardTitle className="text-sm sm:text-lg flex items-start justify-between gap-2 sm:gap-4">
+                <CardHeader className="p-3 pb-2">
+                  <CardTitle className="text-sm flex items-start justify-between gap-2">
                     <span className="line-clamp-2">{item.headline}</span>
-                    <Button variant="ghost" size="icon" asChild className="flex-shrink-0">
+                    <Button variant="ghost" size="icon" asChild className="flex-shrink-0 h-6 w-6">
                       <a href={item.url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4" />
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     </Button>
                   </CardTitle>
-                  <CardDescription className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-sm flex-wrap">
-                    <Newspaper className="h-3 sm:h-4 w-3 sm:w-4" />
-                    <span className="truncate max-w-[100px] sm:max-w-none">{item.source}</span>
+                  <CardDescription className="flex items-center gap-1.5 text-[10px] flex-wrap">
+                    <Newspaper className="h-3 w-3" />
+                    <span className="truncate max-w-[100px]">{item.source}</span>
                     <span>•</span>
-                    <Calendar className="h-3 sm:h-4 w-3 sm:w-4" />
+                    <Calendar className="h-3 w-3" />
                     {new Date(item.datetime * 1000).toLocaleDateString()}
                   </CardDescription>
                 </CardHeader>
                 {item.summary && (
-                  <CardContent className="p-3 sm:p-6 pt-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-3 sm:line-clamp-none">{item.summary}</p>
+                  <CardContent className="p-3 pt-0">
+                    <p className="text-xs text-muted-foreground line-clamp-3">{item.summary}</p>
                   </CardContent>
                 )}
               </Card>
             ))
           ) : (
             <Card>
-              <CardContent className="p-6 sm:p-8 text-center">
-                <p className="text-xs sm:text-sm text-muted-foreground">No news available</p>
+              <CardContent className="p-6 text-center">
+                <p className="text-sm text-muted-foreground">No news available</p>
               </CardContent>
             </Card>
           )}
         </TabsContent>
 
         {/* Insider Tab */}
-        <TabsContent value="insider" className="space-y-3 sm:space-y-4">
+        <TabsContent value="insider" className="space-y-3">
           <Card>
-            <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-              <CardTitle className="text-sm sm:text-base">Insider Trade Information</CardTitle>
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="text-sm">Insider Trade Details</CardTitle>
             </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <CardContent className="p-3 pt-0">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {stock.insiderPrice && (
                   <div>
-                    <p className="text-[10px] sm:text-sm text-muted-foreground">Insider Price</p>
-                    <p className="text-sm sm:text-lg font-mono font-medium" data-testid="text-insider-price">
+                    <p className="text-[10px] text-muted-foreground">Insider Price</p>
+                    <p className="text-sm font-mono font-medium">
                       ${parseFloat(stock.insiderPrice).toFixed(2)}
                     </p>
                   </div>
                 )}
                 {stock.insiderQuantity && (
                   <div>
-                    <p className="text-[10px] sm:text-sm text-muted-foreground">Shares</p>
-                    <p className="text-sm sm:text-lg font-medium" data-testid="text-insider-quantity">
+                    <p className="text-[10px] text-muted-foreground">Shares</p>
+                    <p className="text-sm font-medium">
                       {stock.insiderQuantity.toLocaleString()}
                     </p>
                   </div>
                 )}
                 {stock.insiderTradeDate && (
                   <div>
-                    <p className="text-[10px] sm:text-sm text-muted-foreground">Trade Date</p>
-                    <p className="text-sm sm:text-lg font-medium" data-testid="text-trade-date">
-                      {stock.insiderTradeDate}
-                    </p>
+                    <p className="text-[10px] text-muted-foreground">Trade Date</p>
+                    <p className="text-sm font-medium">{stock.insiderTradeDate}</p>
                   </div>
                 )}
                 {stock.marketPriceAtInsiderDate && (
                   <div>
-                    <p className="text-[10px] sm:text-sm text-muted-foreground">Market at Trade</p>
-                    <p className="text-sm sm:text-lg font-mono font-medium" data-testid="text-market-price-at-trade">
+                    <p className="text-[10px] text-muted-foreground">Market at Trade</p>
+                    <p className="text-sm font-mono font-medium">
                       ${parseFloat(stock.marketPriceAtInsiderDate).toFixed(2)}
                     </p>
                   </div>
@@ -715,22 +730,24 @@ export default function TickerDetail() {
               </div>
               {(stock.insiderName || stock.insiderTitle) && (
                 <>
-                  <Separator className="my-4" />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Separator className="my-3" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {stock.insiderName && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Insider Name</p>
-                        <p className="text-lg font-medium" data-testid="text-insider-name">
-                          {stock.insiderName}
-                        </p>
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Name</p>
+                          <p className="text-sm font-medium">{stock.insiderName}</p>
+                        </div>
                       </div>
                     )}
                     {stock.insiderTitle && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Insider Title</p>
-                        <p className="text-lg font-medium" data-testid="text-insider-title">
-                          {stock.insiderTitle}
-                        </p>
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Title</p>
+                          <p className="text-sm font-medium">{stock.insiderTitle}</p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -741,16 +758,15 @@ export default function TickerDetail() {
         </TabsContent>
 
         {/* Discussion Tab */}
-        <TabsContent value="discussion" className="space-y-4">
-          {/* Comments */}
+        <TabsContent value="discussion" className="space-y-3">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5" />
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <MessageSquare className="h-4 w-4" />
                 Comments ({comments.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-3 pt-0 space-y-3">
               {/* Add Comment */}
               <div className="flex gap-2">
                 <Textarea
@@ -758,9 +774,11 @@ export default function TickerDetail() {
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   rows={2}
+                  className="text-sm"
                   data-testid="input-comment"
                 />
                 <Button
+                  size="sm"
                   onClick={() => {
                     if (commentText.trim()) {
                       addCommentMutation.mutate(commentText);
@@ -777,7 +795,7 @@ export default function TickerDetail() {
 
               {/* Comment List */}
               {comments.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-4">
+                <p className="text-muted-foreground text-xs text-center py-4">
                   No comments yet. Be the first to share your thoughts!
                 </p>
               ) : (
@@ -785,22 +803,22 @@ export default function TickerDetail() {
                   {comments.map((comment) => {
                     if (!comment.user) return null;
                     return (
-                      <div key={comment.id} className="flex gap-3" data-testid={`comment-${comment.id}`}>
-                        <Avatar>
-                          <AvatarFallback>
+                      <div key={comment.id} className="flex gap-2" data-testid={`comment-${comment.id}`}>
+                        <Avatar className="h-7 w-7">
+                          <AvatarFallback className="text-xs">
                             {getInitials(comment.user.name)}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-sm">{comment.user.name}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-medium text-xs truncate">{comment.user.name}</span>
                             {comment.createdAt && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-[10px] text-muted-foreground flex-shrink-0">
                                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground">{comment.comment}</p>
+                          <p className="text-xs text-muted-foreground">{comment.comment}</p>
                         </div>
                       </div>
                     );

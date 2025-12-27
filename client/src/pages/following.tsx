@@ -29,12 +29,16 @@ import {
   ArrowRight,
   SortAsc,
   HelpCircle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 
 type FollowedStock = {
   ticker: string;
@@ -51,13 +55,15 @@ type FollowedStock = {
   stanceAlignment?: 'act' | 'hold' | null;
 };
 
-type SortOption = "signal" | "price" | "change";
+type SortField = "ticker" | "signal" | "price" | "change";
+type SortDirection = "asc" | "desc";
 
 export default function Following() {
   const { toast } = useToast();
   const { user } = useUser();
   const [tickerSearch, setTickerSearch] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("signal");
+  const [sortField, setSortField] = useState<SortField>("signal");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const { data: followedStocks = [], isLoading } = useQuery<FollowedStock[]>({
     queryKey: ["/api/followed-stocks-with-status"],
@@ -110,6 +116,22 @@ export default function Following() {
     },
   });
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection(field === "ticker" ? "asc" : "desc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-4 w-4 ml-1" />;
+    return sortDirection === "asc" ? 
+      <ArrowUp className="h-4 w-4 ml-1" /> : 
+      <ArrowDown className="h-4 w-4 ml-1" />;
+  };
+
   const filteredStocks = useMemo(() => {
     if (!tickerSearch.trim()) return followedStocks;
     const search = tickerSearch.toUpperCase();
@@ -121,33 +143,48 @@ export default function Following() {
 
   const sortedStocks = useMemo(() => {
     return [...filteredStocks].sort((a, b) => {
-      switch (sortBy) {
+      let compareA: any;
+      let compareB: any;
+
+      switch (sortField) {
+        case "ticker":
+          compareA = a.ticker;
+          compareB = b.ticker;
+          break;
         case "signal":
-          if (a.stanceAlignment === 'act' && b.stanceAlignment !== 'act') return -1;
-          if (a.stanceAlignment !== 'act' && b.stanceAlignment === 'act') return 1;
-          const scoreA = a.integratedScore ?? 0;
-          const scoreB = b.integratedScore ?? 0;
-          return scoreB - scoreA;
+          compareA = a.integratedScore ?? a.aiScore ?? 0;
+          compareB = b.integratedScore ?? b.aiScore ?? 0;
+          break;
         case "price":
-          return parseFloat(b.currentPrice || "0") - parseFloat(a.currentPrice || "0");
+          compareA = parseFloat(a.currentPrice || "0");
+          compareB = parseFloat(b.currentPrice || "0");
+          break;
         case "change":
-          return parseFloat(b.priceChangePercent || "0") - parseFloat(a.priceChangePercent || "0");
+          compareA = parseFloat(a.priceChangePercent || "0");
+          compareB = parseFloat(b.priceChangePercent || "0");
+          break;
         default:
           return 0;
       }
+
+      if (compareA < compareB) return sortDirection === "asc" ? -1 : 1;
+      if (compareA > compareB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
     });
-  }, [filteredStocks, sortBy]);
+  }, [filteredStocks, sortField, sortDirection]);
 
   const hasPosition = (ticker: string) => {
-    return holdings.some((h: any) => h.ticker === ticker && h.quantity > 0);
+    return holdings.some((h: any) => h.ticker === ticker && h.quantity > 0 && !h.isSimulated);
   };
 
   if (isLoading) {
     return (
       <div className="p-4 md:p-6 space-y-4">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-[400px] w-full" />
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-10 w-full max-w-md" />
+        <div className="rounded-md border">
+          <Skeleton className="h-[400px] w-full" />
+        </div>
       </div>
     );
   }
@@ -162,33 +199,24 @@ export default function Following() {
             <h1 className="text-xl md:text-2xl font-semibold" data-testid="text-page-title">
               Following
             </h1>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-6 w-6"
-                  tabIndex={0}
-                  aria-label="Learn how following works"
-                  data-testid="button-help-following"
-                >
-                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-sm p-4 space-y-3 text-left">
-                <p className="font-semibold text-sm">Your Watchlist</p>
-                <div className="space-y-2 text-xs">
-                  <p><strong>Following:</strong> Stocks you're actively monitoring</p>
-                  <p><strong>Enter Position:</strong> Move to active trading when ready</p>
-                  <p><strong>Signal Score:</strong> AI-generated opportunity strength</p>
-                </div>
-              </TooltipContent>
-            </Tooltip>
           </div>
           <p className="text-sm text-muted-foreground">
-            Stocks you're watching for potential trades
+            Stocks you're watching for potential entry
           </p>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <HelpCircle className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="max-w-xs">
+            <p className="text-xs">
+              Stocks you've chosen to follow from Opportunities. 
+              Enter a position when ready to track P&L.
+            </p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Search and Controls Row - Matches Opportunities */}
@@ -202,20 +230,6 @@ export default function Following() {
             className="pl-9"
             data-testid="input-search-following"
           />
-        </div>
-        
-        <div className="w-full sm:w-48">
-          <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger data-testid="select-sort-following">
-              <SortAsc className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="signal">Signal Strength</SelectItem>
-              <SelectItem value="price">Price</SelectItem>
-              <SelectItem value="change">% Change</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -245,127 +259,197 @@ export default function Following() {
         </Card>
       ) : (
         <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[100px]">Ticker</TableHead>
-                <TableHead className="hidden md:table-cell">Company</TableHead>
-                <TableHead className="text-right w-[70px]">Signal</TableHead>
-                <TableHead className="w-[60px]">Type</TableHead>
-                <TableHead className="text-right w-[80px]">Price</TableHead>
-                <TableHead className="text-right w-[80px]">Change</TableHead>
-                <TableHead className="w-[140px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedStocks.map((stock) => {
-                const currentPrice = parseFloat(stock.currentPrice || "0");
-                const priceChangePercent = parseFloat(stock.priceChangePercent || "0");
-                const isPositive = priceChangePercent >= 0;
-                const inPosition = hasPosition(stock.ticker);
-
-                return (
-                  <TableRow key={stock.ticker} className="hover-elevate" data-testid={`row-stock-${stock.ticker}`}>
-                    <TableCell className="font-mono font-medium">
-                      <div className="flex items-center gap-1.5">
-                        <Star className="h-3 w-3 text-primary fill-current" />
-                        <Link href={`/ticker/${stock.ticker}`} className="hover:underline">
-                          {stock.ticker}
-                        </Link>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm truncate max-w-[200px]">
-                      {stock.companyName || "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {stock.integratedScore ? (
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <Badge 
-                              variant={stock.integratedScore >= 70 ? "default" : "secondary"}
-                              className={cn(
-                                "font-mono",
-                                stock.integratedScore >= 80 && "bg-amber-500 text-white"
-                              )}
-                            >
-                              {stock.integratedScore}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Signal strength: {stock.integratedScore}/100
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : stock.jobStatus === 'pending' || stock.jobStatus === 'processing' ? (
-                        <Badge variant="outline" className="text-xs">
-                          Analyzing...
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {stock.insiderAction && (
-                        <Badge 
-                          variant={stock.insiderAction === 'BUY' ? "default" : "destructive"}
-                          className="text-xs"
-                        >
-                          {stock.insiderAction}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      ${currentPrice.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className={cn(
-                        "flex items-center justify-end gap-0.5 text-sm",
-                        isPositive ? "text-success" : "text-destructive"
-                      )}>
-                        {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        <span className="font-mono">
-                          {isPositive ? "+" : ""}{priceChangePercent.toFixed(1)}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
+          <div className="overflow-x-auto">
+            <Table className="text-xs">
+              <TableHeader className="bg-background">
+                <TableRow>
+                  <TableHead className="min-w-[60px] px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("ticker")}
+                      className="px-1 h-7 text-xs"
+                      data-testid="sort-ticker"
+                    >
+                      Ticker
+                      <SortIcon field="ticker" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell min-w-[100px] px-1">Company</TableHead>
+                  <TableHead className="text-right w-[70px] px-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                         <Button
-                          size="sm"
                           variant="ghost"
-                          className="h-7 px-2 text-xs text-muted-foreground"
-                          onClick={() => unfollowMutation.mutate(stock.ticker)}
-                          disabled={unfollowMutation.isPending}
-                          data-testid={`button-unfollow-${stock.ticker}`}
+                          size="sm"
+                          onClick={() => handleSort("signal")}
+                          className="px-1 h-7 text-xs"
+                          data-testid="sort-signal"
                         >
-                          Unfollow
+                          Signal
+                          <SortIcon field="signal" />
                         </Button>
-                        {!inPosition && (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => enterPositionMutation.mutate({ 
-                              ticker: stock.ticker, 
-                              price: currentPrice 
-                            })}
-                            disabled={enterPositionMutation.isPending}
-                            data-testid={`button-enter-${stock.ticker}`}
-                          >
-                            Enter
-                          </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs">
+                        <p>Signal strength (0-100)</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="min-w-[55px] px-1">Type</TableHead>
+                  <TableHead className="text-right min-w-[65px] px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("price")}
+                      className="px-1 h-7 text-xs"
+                      data-testid="sort-price"
+                    >
+                      Price
+                      <SortIcon field="price" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell min-w-[100px] px-1">Trend</TableHead>
+                  <TableHead className="text-right min-w-[70px] px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("change")}
+                      className="px-1 h-7 text-xs"
+                      data-testid="sort-change"
+                    >
+                      Chg %
+                      <SortIcon field="change" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="hidden xl:table-cell w-[70px] px-1">Mkt Cap</TableHead>
+                  <TableHead className="w-[130px] px-1 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedStocks.map((stock) => {
+                  const currentPrice = parseFloat(stock.currentPrice || "0");
+                  const priceChangePercent = parseFloat(stock.priceChangePercent || "0");
+                  const isPositive = priceChangePercent >= 0;
+                  const inPosition = hasPosition(stock.ticker);
+                  const score = stock.integratedScore ?? stock.aiScore ?? null;
+
+                  return (
+                    <TableRow 
+                      key={stock.ticker} 
+                      className="hover-elevate h-10" 
+                      data-testid={`row-stock-${stock.ticker}`}
+                    >
+                      <TableCell className="font-mono font-medium py-1 px-1 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Star className="h-3 w-3 text-primary fill-current" />
+                          <Link href={`/ticker/${stock.ticker}`} className="hover:underline">
+                            {stock.ticker}
+                          </Link>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground text-xs truncate max-w-[200px] py-1 px-1">
+                        {stock.companyName || "-"}
+                      </TableCell>
+                      <TableCell className="text-right py-1 px-1">
+                        {score !== null ? (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Badge 
+                                className={cn(
+                                  "font-mono text-xs",
+                                  score >= 90 && "bg-amber-500 text-white",
+                                  score >= 70 && score < 90 && "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+                                  score >= 50 && score < 70 && "bg-secondary text-secondary-foreground",
+                                  score < 50 && "bg-secondary text-muted-foreground opacity-60"
+                                )}
+                              >
+                                {score}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Signal strength: {score}/100
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : stock.jobStatus === 'pending' || stock.jobStatus === 'processing' ? (
+                          <Badge variant="outline" className="text-[10px]">
+                            Analyzing...
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
                         )}
-                        {inPosition && (
-                          <Badge variant="outline" className="text-xs">
-                            In Position
+                      </TableCell>
+                      <TableCell className="py-1 px-1">
+                        {stock.insiderAction && (
+                          <Badge 
+                            variant={stock.insiderAction === 'BUY' ? "default" : "destructive"}
+                            className="text-[10px]"
+                          >
+                            {stock.insiderAction}
                           </Badge>
                         )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="text-right font-mono py-1 px-1 text-xs">
+                        ${currentPrice.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell py-1 px-1">
+                        <div className="h-8 w-[100px]">
+                          <CandlestickChartCell ticker={stock.ticker} height={32} />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right py-1 px-1">
+                        <div className={cn(
+                          "flex items-center justify-end gap-0.5 text-xs",
+                          isPositive ? "text-success" : "text-destructive"
+                        )}>
+                          {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          <span className="font-mono">
+                            {isPositive ? "+" : ""}{priceChangePercent.toFixed(1)}%
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell text-muted-foreground py-1 px-1 text-xs">
+                        {stock.marketCap || "-"}
+                      </TableCell>
+                      <TableCell className="text-right py-1 px-1">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-muted-foreground"
+                            onClick={() => unfollowMutation.mutate(stock.ticker)}
+                            disabled={unfollowMutation.isPending}
+                            data-testid={`button-unfollow-${stock.ticker}`}
+                          >
+                            Unfollow
+                          </Button>
+                          {!inPosition && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => enterPositionMutation.mutate({ 
+                                ticker: stock.ticker, 
+                                price: currentPrice 
+                              })}
+                              disabled={enterPositionMutation.isPending}
+                              data-testid={`button-enter-${stock.ticker}`}
+                            >
+                              Enter
+                            </Button>
+                          )}
+                          {inPosition && (
+                            <Badge variant="outline" className="text-[10px]">
+                              In Position
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
     </div>

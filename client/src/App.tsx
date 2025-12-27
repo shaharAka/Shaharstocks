@@ -14,7 +14,6 @@ import { AnnouncementBell } from "@/components/announcement-bell";
 import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { TutorialManager } from "@/components/TutorialManager";
 import { Onboarding } from "@/components/onboarding";
-import { BugReportButton } from "@/components/bug-report-button";
 import { HelpCircle, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Portfolio from "@/pages/portfolio";
@@ -123,7 +122,6 @@ function AuthenticatedApp() {
             </div>
           </div>
           <div className="flex items-center gap-0.5 md:gap-2">
-            <BugReportButton />
             <Button
               size="icon"
               variant="ghost"

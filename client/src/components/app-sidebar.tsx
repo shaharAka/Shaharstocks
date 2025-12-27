@@ -1,7 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Activity,
   ShieldCheck,
   Lightbulb,
   Star,
@@ -81,19 +80,11 @@ export function AppSidebar() {
       collapsible="icon" 
       className="border-r-0 bg-[oklch(var(--notebook-page))]"
     >
-      <SidebarHeader className="p-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded bg-primary flex-shrink-0">
-            <Activity className="h-4 w-4 text-primary-foreground" />
-          </div>
-          <span className="text-sm font-semibold group-data-[collapsible=icon]:hidden truncate">
-            signal2
-          </span>
-          <SidebarTrigger 
-            className="h-6 w-6 ml-auto flex-shrink-0 group-data-[collapsible=icon]:hidden" 
-            data-testid="button-sidebar-toggle" 
-          />
-        </div>
+      <SidebarHeader className="p-2">
+        <SidebarTrigger 
+          className="h-6 w-6 group-data-[collapsible=icon]:hidden" 
+          data-testid="button-sidebar-toggle" 
+        />
       </SidebarHeader>
       
       <SidebarContent className="book-tab-rail">

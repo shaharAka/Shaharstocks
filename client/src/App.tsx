@@ -15,7 +15,7 @@ import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { TutorialManager } from "@/components/TutorialManager";
 import { Onboarding } from "@/components/onboarding";
 import { BugReportButton } from "@/components/bug-report-button";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Portfolio from "@/pages/portfolio";
 import Opportunities from "@/pages/opportunities";
@@ -114,8 +114,16 @@ function AuthenticatedApp() {
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between px-2 py-2 md:px-4 bg-[oklch(var(--notebook-page))] shrink-0">
-            <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
-            <div className="flex items-center gap-1 md:gap-2 ml-auto">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded bg-primary flex-shrink-0">
+                  <Activity className="h-4 w-4 text-primary-foreground" />
+                </div>
+                <span className="text-sm font-semibold">signal2</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 md:gap-2">
               <BugReportButton />
               <Button
                 size="icon"

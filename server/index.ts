@@ -1635,21 +1635,33 @@ function startAnalysisReconciliationJob() {
       
       let requeuedCount = 0;
       let skippedCount = 0;
+      let repairedCount = 0;
       
       for (const stock of incompleteStocks) {
         try {
-          // enqueueAnalysisJob already checks for existing pending/processing jobs
-          // It will skip if there's already an active job for this ticker
-          await storage.enqueueAnalysisJob(stock.ticker, "reconciliation", "low");
-          requeuedCount++;
-          log(`[Reconciliation] Re-queued ${stock.ticker} (micro: ${stock.microAnalysisCompleted}, macro: ${stock.macroAnalysisCompleted}, combined: ${stock.combinedAnalysisCompleted})`);
+          // First check if this ticker already has a completed analysis in stock_analyses
+          const existingAnalysis = await storage.getStockAnalysis(stock.ticker);
+          
+          if (existingAnalysis && existingAnalysis.status === 'completed') {
+            // Analysis already exists - just repair the per-user flags without re-queuing
+            await storage.markStockAnalysisPhaseComplete(stock.ticker, 'micro');
+            await storage.markStockAnalysisPhaseComplete(stock.ticker, 'macro');
+            await storage.markStockAnalysisPhaseComplete(stock.ticker, 'combined');
+            repairedCount++;
+            log(`[Reconciliation] Repaired flags for ${stock.ticker} (analysis already completed)`);
+          } else {
+            // No completed analysis - queue for analysis
+            await storage.enqueueAnalysisJob(stock.ticker, "reconciliation", "low");
+            requeuedCount++;
+            log(`[Reconciliation] Re-queued ${stock.ticker} (micro: ${stock.microAnalysisCompleted}, macro: ${stock.macroAnalysisCompleted}, combined: ${stock.combinedAnalysisCompleted})`);
+          }
         } catch (error) {
           skippedCount++;
-          console.error(`[Reconciliation] Error re-queuing ${stock.ticker}:`, error);
+          console.error(`[Reconciliation] Error processing ${stock.ticker}:`, error);
         }
       }
       
-      log(`[Reconciliation] Job complete: re-queued ${requeuedCount}, skipped ${skippedCount}`);
+      log(`[Reconciliation] Job complete: repaired ${repairedCount}, re-queued ${requeuedCount}, skipped ${skippedCount}`);
     } catch (error) {
       console.error("[Reconciliation] Error in reconciliation job:", error);
     } finally {

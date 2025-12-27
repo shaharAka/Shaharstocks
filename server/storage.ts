@@ -73,6 +73,12 @@ import {
   type DailyBrief,
   type InsertDailyBrief,
   type StockCandlesticks,
+  type Opportunity,
+  type InsertOpportunity,
+  type OpportunityBatch,
+  type InsertOpportunityBatch,
+  type UserOpportunityRejection,
+  type InsertUserOpportunityRejection,
   type InsertStockCandlesticks,
   type SystemSettings,
   type InsertSystemSettings,
@@ -113,6 +119,9 @@ import {
   followedStocks,
   dailyBriefs,
   systemSettings,
+  opportunities,
+  opportunityBatches,
+  userOpportunityRejections,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, inArray, lt, isNull, or } from "drizzle-orm";
@@ -195,6 +204,28 @@ export interface IStorage {
   getOpeninsiderConfig(): Promise<OpeninsiderConfig | undefined>;
   createOrUpdateOpeninsiderConfig(config: Partial<InsertOpeninsiderConfig>): Promise<OpeninsiderConfig>;
   updateOpeninsiderSyncStatus(error?: string): Promise<void>;
+
+  // Global Opportunities (unified for all users)
+  getOpportunities(options?: { 
+    cadence?: 'daily' | 'hourly' | 'all';
+    userId?: string; // If provided, filters out rejected opportunities for this user
+    ticker?: string;
+  }): Promise<Opportunity[]>;
+  getOpportunity(id: string): Promise<Opportunity | undefined>;
+  getOpportunityByTransaction(ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Opportunity | undefined>;
+  createOpportunity(opportunity: InsertOpportunity): Promise<Opportunity>;
+  updateOpportunity(id: string, updates: Partial<Opportunity>): Promise<Opportunity | undefined>;
+  deleteOpportunity(id: string): Promise<boolean>;
+  
+  // Opportunity Batches (track fetch runs)
+  createOpportunityBatch(batch: InsertOpportunityBatch): Promise<OpportunityBatch>;
+  getLatestBatch(cadence: 'daily' | 'hourly'): Promise<OpportunityBatch | undefined>;
+  
+  // User Opportunity Rejections
+  rejectOpportunity(userId: string, opportunityId: string): Promise<UserOpportunityRejection>;
+  unrejectOpportunity(userId: string, opportunityId: string): Promise<boolean>;
+  getUserRejections(userId: string): Promise<UserOpportunityRejection[]>;
+  isOpportunityRejected(userId: string, opportunityId: string): Promise<boolean>;
 
   // What-If Backtest Jobs
   getBacktestJobs(userId: string): Promise<BacktestJob[]>;
@@ -1605,6 +1636,149 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(openinsiderConfig.id, existing.id));
     }
+  }
+
+  // Global Opportunities (unified for all users)
+  async getOpportunities(options?: { 
+    cadence?: 'daily' | 'hourly' | 'all';
+    userId?: string;
+    ticker?: string;
+  }): Promise<Opportunity[]> {
+    const conditions: any[] = [];
+    
+    // Filter by cadence
+    if (options?.cadence && options.cadence !== 'all') {
+      conditions.push(eq(opportunities.cadence, options.cadence));
+    }
+    
+    // Filter by ticker
+    if (options?.ticker) {
+      conditions.push(eq(opportunities.ticker, options.ticker));
+    }
+    
+    // Get opportunities
+    let query = db.select().from(opportunities);
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    const results = await query.orderBy(desc(opportunities.createdAt));
+    
+    // If userId provided, filter out rejected opportunities
+    if (options?.userId) {
+      const rejections = await this.getUserRejections(options.userId);
+      const rejectedIds = new Set(rejections.map(r => r.opportunityId));
+      return results.filter(opp => !rejectedIds.has(opp.id));
+    }
+    
+    return results;
+  }
+
+  async getOpportunity(id: string): Promise<Opportunity | undefined> {
+    const [result] = await db.select().from(opportunities).where(eq(opportunities.id, id));
+    return result;
+  }
+
+  async getOpportunityByTransaction(ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Opportunity | undefined> {
+    const [result] = await db.select().from(opportunities).where(
+      and(
+        eq(opportunities.ticker, ticker),
+        eq(opportunities.insiderTradeDate, insiderTradeDate),
+        eq(opportunities.insiderName, insiderName),
+        eq(opportunities.recommendation, recommendation)
+      )
+    );
+    return result;
+  }
+
+  async createOpportunity(opportunity: InsertOpportunity): Promise<Opportunity> {
+    const [result] = await db.insert(opportunities).values(opportunity).returning();
+    return result;
+  }
+
+  async updateOpportunity(id: string, updates: Partial<Opportunity>): Promise<Opportunity | undefined> {
+    const [result] = await db
+      .update(opportunities)
+      .set({ ...updates, lastUpdated: sql`now()` })
+      .where(eq(opportunities.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteOpportunity(id: string): Promise<boolean> {
+    const result = await db.delete(opportunities).where(eq(opportunities.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Opportunity Batches
+  async createOpportunityBatch(batch: InsertOpportunityBatch): Promise<OpportunityBatch> {
+    const [result] = await db.insert(opportunityBatches).values(batch).returning();
+    return result;
+  }
+
+  async getLatestBatch(cadence: 'daily' | 'hourly'): Promise<OpportunityBatch | undefined> {
+    const [result] = await db
+      .select()
+      .from(opportunityBatches)
+      .where(eq(opportunityBatches.cadence, cadence))
+      .orderBy(desc(opportunityBatches.fetchedAt))
+      .limit(1);
+    return result;
+  }
+
+  // User Opportunity Rejections
+  async rejectOpportunity(userId: string, opportunityId: string): Promise<UserOpportunityRejection> {
+    const [result] = await db
+      .insert(userOpportunityRejections)
+      .values({ userId, opportunityId })
+      .onConflictDoNothing()
+      .returning();
+    
+    // If conflict (already rejected), fetch existing
+    if (!result) {
+      const [existing] = await db.select().from(userOpportunityRejections).where(
+        and(
+          eq(userOpportunityRejections.userId, userId),
+          eq(userOpportunityRejections.opportunityId, opportunityId)
+        )
+      );
+      return existing;
+    }
+    return result;
+  }
+
+  async unrejectOpportunity(userId: string, opportunityId: string): Promise<boolean> {
+    const result = await db
+      .delete(userOpportunityRejections)
+      .where(
+        and(
+          eq(userOpportunityRejections.userId, userId),
+          eq(userOpportunityRejections.opportunityId, opportunityId)
+        )
+      )
+      .returning();
+    return result.length > 0;
+  }
+
+  async getUserRejections(userId: string): Promise<UserOpportunityRejection[]> {
+    return await db
+      .select()
+      .from(userOpportunityRejections)
+      .where(eq(userOpportunityRejections.userId, userId));
+  }
+
+  async isOpportunityRejected(userId: string, opportunityId: string): Promise<boolean> {
+    const [result] = await db
+      .select()
+      .from(userOpportunityRejections)
+      .where(
+        and(
+          eq(userOpportunityRejections.userId, userId),
+          eq(userOpportunityRejections.opportunityId, opportunityId)
+        )
+      );
+    return !!result;
   }
 
   // What-If Backtest Jobs

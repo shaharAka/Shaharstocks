@@ -14,13 +14,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -35,8 +28,10 @@ import {
   Search,
   ArrowRight,
   Briefcase,
-  SortAsc,
   HelpCircle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -63,14 +58,16 @@ type FollowedStock = {
   companyName?: string;
 };
 
-type SortOption = "pnl" | "pnlPercent" | "value";
+type SortField = "ticker" | "entry" | "current" | "qty" | "pnl" | "pnlPercent";
+type SortDirection = "asc" | "desc";
 
 export default function InPosition() {
   const { toast } = useToast();
   const { user } = useUser();
   const [, setLocation] = useLocation();
   const [tickerSearch, setTickerSearch] = useState("");
-  const [sortBy, setSortBy] = useState<SortOption>("pnl");
+  const [sortField, setSortField] = useState<SortField>("pnl");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [closeDialog, setCloseDialog] = useState<{ open: boolean; holding: PortfolioHolding | null }>({
     open: false,
     holding: null,
@@ -129,23 +126,63 @@ export default function InPosition() {
     return { pnl, pnlPercent, currentPrice };
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection(field === "ticker" ? "asc" : "desc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-4 w-4 ml-1" />;
+    return sortDirection === "asc" ? 
+      <ArrowUp className="h-4 w-4 ml-1" /> : 
+      <ArrowDown className="h-4 w-4 ml-1" />;
+  };
+
   const sortedHoldings = useMemo(() => {
     return [...filteredHoldings].sort((a, b) => {
       const pnlA = calculatePnL(a);
       const pnlB = calculatePnL(b);
+      let compareA: any;
+      let compareB: any;
       
-      switch (sortBy) {
+      switch (sortField) {
+        case "ticker":
+          compareA = a.ticker;
+          compareB = b.ticker;
+          break;
+        case "entry":
+          compareA = parseFloat(a.averagePurchasePrice);
+          compareB = parseFloat(b.averagePurchasePrice);
+          break;
+        case "current":
+          compareA = pnlA.currentPrice;
+          compareB = pnlB.currentPrice;
+          break;
+        case "qty":
+          compareA = a.quantity;
+          compareB = b.quantity;
+          break;
         case "pnl":
-          return pnlB.pnl - pnlA.pnl;
+          compareA = pnlA.pnl;
+          compareB = pnlB.pnl;
+          break;
         case "pnlPercent":
-          return pnlB.pnlPercent - pnlA.pnlPercent;
-        case "value":
-          return (pnlB.currentPrice * b.quantity) - (pnlA.currentPrice * a.quantity);
+          compareA = pnlA.pnlPercent;
+          compareB = pnlB.pnlPercent;
+          break;
         default:
           return 0;
       }
+      
+      if (compareA < compareB) return sortDirection === "asc" ? -1 : 1;
+      if (compareA > compareB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
     });
-  }, [filteredHoldings, stockPrices, sortBy]);
+  }, [filteredHoldings, stockPrices, sortField, sortDirection]);
 
   const totalPnL = useMemo(() => {
     return filteredHoldings.reduce((sum, h) => {
@@ -218,32 +255,16 @@ export default function InPosition() {
         </div>
       </div>
 
-      {/* Search and Controls Row - Matches Opportunities */}
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search ticker..."
-            value={tickerSearch}
-            onChange={(e) => setTickerSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-positions"
-          />
-        </div>
-        
-        <div className="w-full sm:w-48">
-          <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger data-testid="select-sort-positions">
-              <SortAsc className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pnl">P&L Amount</SelectItem>
-              <SelectItem value="pnlPercent">P&L Percent</SelectItem>
-              <SelectItem value="value">Position Value</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Search Row - Matches Opportunities */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search ticker..."
+          value={tickerSearch}
+          onChange={(e) => setTickerSearch(e.target.value)}
+          className="pl-9"
+          data-testid="input-search-positions"
+        />
       </div>
 
       {/* Stats Bar - Matches Opportunities */}
@@ -283,82 +304,152 @@ export default function InPosition() {
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[100px]">Ticker</TableHead>
-                <TableHead className="text-right w-[80px]">Entry</TableHead>
-                <TableHead className="text-right w-[80px]">Current</TableHead>
-                <TableHead className="text-right w-[60px]">Qty</TableHead>
-                <TableHead className="text-right w-[100px]">P&L</TableHead>
-                <TableHead className="text-right w-[80px]">P&L %</TableHead>
-                <TableHead className="w-[100px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedHoldings.map((holding) => {
-                const { pnl, pnlPercent, currentPrice } = calculatePnL(holding);
-                const entryPrice = parseFloat(holding.averagePurchasePrice);
-                const isPositive = pnl >= 0;
+        <div className="rounded-md border max-h-[calc(100vh-16rem)] overflow-hidden flex flex-col">
+          <div className="overflow-x-auto overflow-y-auto flex-1">
+            <Table className="text-xs">
+              <TableHeader className="sticky top-0 bg-background z-[1]">
+                <TableRow>
+                  <TableHead className="min-w-[60px] px-0.5 sm:px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("ticker")}
+                      className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
+                      data-testid="sort-ticker"
+                    >
+                      Ticker
+                      <SortIcon field="ticker" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[55px] px-0.5 sm:px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("entry")}
+                      className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
+                      data-testid="sort-entry"
+                    >
+                      Entry
+                      <SortIcon field="entry" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[55px] px-0.5 sm:px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("current")}
+                      className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
+                      data-testid="sort-current"
+                    >
+                      <span className="hidden sm:inline">Current</span>
+                      <span className="sm:hidden">Now</span>
+                      <SortIcon field="current" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right hidden sm:table-cell min-w-[40px] px-0.5 sm:px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("qty")}
+                      className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
+                      data-testid="sort-qty"
+                    >
+                      Qty
+                      <SortIcon field="qty" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[60px] px-0.5 sm:px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("pnl")}
+                      className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
+                      data-testid="sort-pnl"
+                    >
+                      P&L
+                      <SortIcon field="pnl" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[55px] px-0.5 sm:px-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSort("pnlPercent")}
+                      className="px-0.5 sm:px-1 h-7 text-[10px] sm:text-xs"
+                      data-testid="sort-pnl-percent"
+                    >
+                      <span className="hidden sm:inline">P&L %</span>
+                      <span className="sm:hidden">%</span>
+                      <SortIcon field="pnlPercent" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="w-[70px] px-1 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedHoldings.map((holding) => {
+                  const { pnl, pnlPercent, currentPrice } = calculatePnL(holding);
+                  const entryPrice = parseFloat(holding.averagePurchasePrice);
+                  const isPositive = pnl >= 0;
 
-                return (
-                  <TableRow 
-                    key={holding.id} 
-                    className="hover-elevate cursor-pointer" 
-                    onClick={() => setLocation(`/ticker/${holding.ticker}?from=in-position`)}
-                    data-testid={`row-position-${holding.ticker}`}
-                  >
-                    <TableCell className="font-mono font-medium">
-                      <div className="flex items-center gap-1.5">
-                        <Briefcase className="h-3 w-3 text-primary" />
-                        {holding.ticker}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">
-                      ${entryPrice.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      ${currentPrice.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {holding.quantity}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className={cn(
-                        "font-mono font-medium",
-                        isPositive ? "text-success" : "text-destructive"
-                      )}>
-                        {isPositive ? "+" : ""}${pnl.toFixed(2)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className={cn(
-                        "flex items-center justify-end gap-0.5",
-                        isPositive ? "text-success" : "text-destructive"
-                      )}>
-                        {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        <span className="font-mono">
-                          {isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%
+                  return (
+                    <TableRow 
+                      key={holding.id} 
+                      className="cursor-pointer hover-elevate h-10" 
+                      onClick={() => setLocation(`/ticker/${holding.ticker}?from=in-position`)}
+                      data-testid={`row-position-${holding.ticker}`}
+                    >
+                      <TableCell className="font-medium font-mono py-1 px-0.5 sm:px-1 text-[11px] sm:text-xs">
+                        <div className="flex items-center gap-0.5 sm:gap-1.5">
+                          <Briefcase className="h-2.5 sm:h-3 w-2.5 sm:w-3 text-primary" />
+                          <span>{holding.ticker}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground py-1 px-0.5 sm:px-1 text-[10px] sm:text-xs">
+                        ${entryPrice.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono py-1 px-0.5 sm:px-1 text-[10px] sm:text-xs">
+                        ${currentPrice.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono py-1 px-0.5 sm:px-1 text-[10px] sm:text-xs hidden sm:table-cell">
+                        {holding.quantity}
+                      </TableCell>
+                      <TableCell className="text-right py-1 px-0.5 sm:px-1">
+                        <span className={cn(
+                          "font-mono font-medium text-[10px] sm:text-xs",
+                          isPositive ? "text-success" : "text-destructive"
+                        )}>
+                          {isPositive ? "+" : ""}${pnl.toFixed(2)}
                         </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="h-7 px-3 text-xs"
-                        onClick={() => handleClosePosition(holding)}
-                        data-testid={`button-close-${holding.ticker}`}
-                      >
-                        Close
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="text-right py-1 px-0.5 sm:px-1">
+                        <div className={cn(
+                          "flex items-center justify-end gap-0.5 text-[10px] sm:text-xs",
+                          isPositive ? "text-success" : "text-destructive"
+                        )}>
+                          {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          <span className="font-mono">
+                            {isPositive ? "+" : ""}{pnlPercent.toFixed(1)}%
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right py-1 px-1" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => handleClosePosition(holding)}
+                          data-testid={`button-close-${holding.ticker}`}
+                        >
+                          Close
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 

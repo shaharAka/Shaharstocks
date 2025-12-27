@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
-  SidebarHeader,
   SidebarFooter,
   SidebarTrigger,
   useSidebar,
@@ -78,15 +77,9 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon" 
-      className="border-r-0 bg-[oklch(var(--notebook-page))]"
+      variant="floating"
+      className="border-r-0 bg-transparent pt-2"
     >
-      <SidebarHeader className="p-2">
-        <SidebarTrigger 
-          className="h-6 w-6 group-data-[collapsible=icon]:hidden" 
-          data-testid="button-sidebar-toggle" 
-        />
-      </SidebarHeader>
-      
       <SidebarContent className="book-tab-rail">
         <nav className="flex flex-col">
           {menuItems.map((item) => {

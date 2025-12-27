@@ -192,53 +192,41 @@ export default function Following() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Page Header - Matches Opportunities */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-primary" />
-            <h1 className="text-xl md:text-2xl font-semibold" data-testid="text-page-title">
-              Following
-            </h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Stocks you're watching for potential entry
-          </p>
+      {/* Header with inline search */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Star className="h-5 w-5 text-primary" />
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
+            Following
+          </h1>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6">
+                <HelpCircle className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p className="text-xs">
+                Stocks you've chosen to follow from Opportunities. 
+                Enter a position when ready to track P&L.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+          <span className="text-sm text-muted-foreground ml-2" data-testid="text-following-count">
+            ({followedStocks.length})
+          </span>
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <HelpCircle className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="left" className="max-w-xs">
-            <p className="text-xs">
-              Stocks you've chosen to follow from Opportunities. 
-              Enter a position when ready to track P&L.
-            </p>
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
-      {/* Search and Controls Row - Matches Opportunities */}
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+        
+        {/* Compact inline search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="Search ticker or company..."
+            placeholder="Search..."
             value={tickerSearch}
             onChange={(e) => setTickerSearch(e.target.value)}
-            className="pl-9"
+            className="pl-8 h-8 w-32 text-sm"
             data-testid="input-search-following"
           />
-        </div>
-      </div>
-
-      {/* Stats Bar - Matches Opportunities */}
-      <div className="flex gap-4 text-sm items-center">
-        <div>
-          <span className="text-muted-foreground">Total Following: </span>
-          <span className="font-medium" data-testid="text-following-count">{followedStocks.length}</span>
         </div>
       </div>
 

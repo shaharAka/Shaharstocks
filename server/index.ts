@@ -981,6 +981,13 @@ function startUnifiedOpportunitiesFetchJob() {
       log(`  • Filtered (market cap): ${filteredMarketCap}`);
       log(`  • Filtered (no quote): ${filteredNoQuote}`);
       
+      // Store batch stats for the popup to display
+      await storage.updateOpportunityBatchStats(batch.id, {
+        added: createdCount,
+        rejected: filteredMarketCap + filteredNoQuote,
+        duplicates: duplicatesSkipped
+      });
+      
       await storage.updateOpeninsiderSyncStatus();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

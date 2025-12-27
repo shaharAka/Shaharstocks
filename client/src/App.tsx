@@ -98,7 +98,7 @@ function AuthenticatedApp() {
   }
 
   const style = {
-    "--sidebar-width": "14rem",
+    "--sidebar-width": "9rem",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -113,7 +113,7 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full unified-surface">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between px-2 py-2 md:px-4 border-b border-[oklch(var(--notebook-ruled-line)/0.3)] bg-[oklch(var(--notebook-page))] shrink-0">
+          <header className="flex items-center justify-between px-2 py-2 md:px-4 bg-[oklch(var(--notebook-page))] shrink-0">
             <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
             <div className="flex items-center gap-1 md:gap-2 ml-auto">
               <BugReportButton />

@@ -18,46 +18,17 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNewStocksCount } from "@/hooks/use-new-stocks-count";
 import { useUser } from "@/contexts/UserContext";
 import { useWebSocket } from "@/hooks/use-websocket";
 
 const menuItems = [
-  {
-    title: "Opportunities",
-    description: "Insider transactions",
-    url: "/opportunities",
-    icon: Lightbulb,
-    testId: "link-opportunities",
-  },
-  {
-    title: "Following",
-    description: "Your watchlist",
-    url: "/following",
-    icon: Star,
-    testId: "link-following",
-  },
-  {
-    title: "In Position",
-    description: "Active trades",
-    url: "/in-position",
-    icon: TrendingUp,
-    testId: "link-in-position",
-  },
-  {
-    title: "Portfolio",
-    description: "Holdings & P&L",
-    url: "/portfolio",
-    icon: PieChart,
-    testId: "link-portfolio",
-  },
-  {
-    title: "Community",
-    description: "Discussion",
-    url: "/community",
-    icon: Users,
-    testId: "link-community",
-  },
+  { title: "Opportunities", url: "/opportunities", icon: Lightbulb, testId: "link-opportunities" },
+  { title: "Following", url: "/following", icon: Star, testId: "link-following" },
+  { title: "In Position", url: "/in-position", icon: TrendingUp, testId: "link-in-position" },
+  { title: "Portfolio", url: "/portfolio", icon: PieChart, testId: "link-portfolio" },
+  { title: "Community", url: "/community", icon: Users, testId: "link-community" },
 ];
 
 export function AppSidebar() {
@@ -108,121 +79,149 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon" 
-      className="border-r-0 bg-[oklch(var(--notebook-page))]"
+      className="border-r-0 bg-transparent"
     >
-      <SidebarHeader className="p-4 border-b border-[oklch(var(--notebook-ruled-line)/0.2)]">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary flex-shrink-0">
-              <Activity className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div className="group-data-[collapsible=icon]:hidden min-w-0">
-              <h1 className="text-base font-semibold truncate">signal2</h1>
-              <p className="text-xs text-muted-foreground truncate">Trading Notebook</p>
-            </div>
+      <SidebarHeader className="p-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary flex-shrink-0">
+            <Activity className="h-4 w-4 text-primary-foreground" />
           </div>
+          <span className="text-sm font-semibold group-data-[collapsible=icon]:hidden truncate">
+            signal2
+          </span>
           <SidebarTrigger 
-            className="h-8 w-8 flex-shrink-0 group-data-[collapsible=icon]:hidden" 
+            className="h-6 w-6 ml-auto flex-shrink-0 group-data-[collapsible=icon]:hidden" 
             data-testid="button-sidebar-toggle" 
           />
         </div>
       </SidebarHeader>
       
-      <SidebarContent className="p-2">
-        <nav className="space-y-1">
+      <SidebarContent className="px-2 py-1">
+        <nav className="space-y-0.5">
           {menuItems.map((item) => {
             const itemPath = item.url.split('?')[0];
             const isPageActive = currentPath === itemPath || 
                                   (itemPath === "/opportunities" && (currentPath === "/" || currentPath === "/recommendations"));
             const badgeCount = getBadgeCount(item.url);
             
-            return (
+            const linkContent = (
               <Link
-                key={item.title}
                 href={item.url}
                 onClick={handleNavClick}
                 data-testid={item.testId}
-                data-active={isPageActive}
                 className={cn(
-                  "section-link block rounded-sm",
-                  isCollapsed && "flex items-center justify-center p-2"
+                  "flex items-center gap-2 px-2 py-1.5 rounded-sm text-sm transition-colors",
+                  "hover:bg-[oklch(var(--notebook-ruled-line)/0.2)]",
+                  isPageActive && "bg-[oklch(var(--notebook-ruled-line)/0.15)] border-l-2 border-primary -ml-0.5 pl-[calc(0.5rem+2px)]",
+                  !isPageActive && "border-l-2 border-transparent -ml-0.5 pl-[calc(0.5rem+2px)]",
+                  isCollapsed && "justify-center px-0 py-2"
                 )}
               >
-                <div className="flex items-center gap-3">
-                  <item.icon className={cn(
-                    "h-4 w-4 flex-shrink-0",
-                    isPageActive ? "text-primary" : "text-muted-foreground"
-                  )} />
-                  {!isCollapsed && (
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={cn(
-                          "section-link-title",
-                          isPageActive && "text-primary"
-                        )}>
-                          {item.title}
-                        </span>
-                        {badgeCount !== null && (
-                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground">
-                            {badgeCount}
-                          </span>
-                        )}
-                      </div>
-                      <span className="section-link-desc">{item.description}</span>
-                    </div>
-                  )}
-                </div>
+                <item.icon className={cn(
+                  "h-4 w-4 flex-shrink-0",
+                  isPageActive ? "text-primary" : "text-muted-foreground"
+                )} />
+                {!isCollapsed && (
+                  <>
+                    <span className={cn(
+                      "truncate text-xs",
+                      isPageActive ? "text-foreground font-medium" : "text-muted-foreground"
+                    )}>
+                      {item.title}
+                    </span>
+                    {badgeCount !== null && (
+                      <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                        {badgeCount}
+                      </span>
+                    )}
+                  </>
+                )}
               </Link>
             );
+
+            if (isCollapsed) {
+              return (
+                <Tooltip key={item.title}>
+                  <TooltipTrigger asChild>
+                    {linkContent}
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="flex items-center gap-2">
+                    {item.title}
+                    {badgeCount !== null && (
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                        {badgeCount}
+                      </span>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+
+            return <div key={item.title}>{linkContent}</div>;
           })}
         </nav>
 
         {user?.isAdmin && (
           <>
-            <div className="h-px bg-[oklch(var(--notebook-ruled-line)/0.2)] my-3" />
-            <Link
-              href="/admin"
-              onClick={handleNavClick}
-              data-testid="link-admin"
-              data-active={location === "/admin"}
-              className={cn(
-                "section-link block rounded-sm",
-                isCollapsed && "flex items-center justify-center p-2"
-              )}
-            >
-              <div className="flex items-center gap-3">
+            <div className="h-px bg-[oklch(var(--notebook-ruled-line)/0.2)] my-2" />
+            {isCollapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    href="/admin"
+                    onClick={handleNavClick}
+                    data-testid="link-admin"
+                    className={cn(
+                      "flex items-center justify-center py-2 rounded-sm transition-colors",
+                      "hover:bg-[oklch(var(--notebook-ruled-line)/0.2)]",
+                      location === "/admin" && "bg-[oklch(var(--notebook-ruled-line)/0.15)]"
+                    )}
+                  >
+                    <ShieldCheck className={cn(
+                      "h-4 w-4",
+                      location === "/admin" ? "text-primary" : "text-muted-foreground"
+                    )} />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">Admin</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link
+                href="/admin"
+                onClick={handleNavClick}
+                data-testid="link-admin"
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 rounded-sm text-sm transition-colors",
+                  "hover:bg-[oklch(var(--notebook-ruled-line)/0.2)]",
+                  location === "/admin" && "bg-[oklch(var(--notebook-ruled-line)/0.15)] border-l-2 border-primary -ml-0.5 pl-[calc(0.5rem+2px)]",
+                  location !== "/admin" && "border-l-2 border-transparent -ml-0.5 pl-[calc(0.5rem+2px)]"
+                )}
+              >
                 <ShieldCheck className={cn(
                   "h-4 w-4 flex-shrink-0",
                   location === "/admin" ? "text-primary" : "text-muted-foreground"
                 )} />
-                {!isCollapsed && (
-                  <div className="flex-1 min-w-0">
-                    <span className={cn(
-                      "section-link-title",
-                      location === "/admin" && "text-primary"
-                    )}>
-                      Admin
-                    </span>
-                    <span className="section-link-desc">Backoffice</span>
-                  </div>
-                )}
-              </div>
-            </Link>
+                <span className={cn(
+                  "truncate text-xs",
+                  location === "/admin" ? "text-foreground font-medium" : "text-muted-foreground"
+                )}>
+                  Admin
+                </span>
+              </Link>
+            )}
           </>
         )}
       </SidebarContent>
       
-      <SidebarFooter className="p-2 border-t border-[oklch(var(--notebook-ruled-line)/0.2)]">
+      <SidebarFooter className="p-2">
         {isCollapsed ? (
           <SidebarTrigger 
-            className="h-8 w-8 mx-auto" 
+            className="h-6 w-6 mx-auto" 
             data-testid="button-sidebar-expand" 
           />
         ) : (
-          <div className="text-xs text-muted-foreground text-center px-2">
-            <div className="font-mono" data-testid="text-version">
-              v{versionInfo?.version || "1.0.0"}
-            </div>
+          <div className="text-[10px] text-muted-foreground text-center font-mono" data-testid="text-version">
+            v{versionInfo?.version || "1.0.0"}
           </div>
         )}
       </SidebarFooter>

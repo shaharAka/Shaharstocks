@@ -81,60 +81,48 @@ export function AppSidebar() {
       collapsible="icon" 
       className="border-r-0 bg-transparent"
     >
-      <SidebarHeader className="p-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary flex-shrink-0">
-            <Activity className="h-4 w-4 text-primary-foreground" />
+      <SidebarHeader className="p-2 pb-0">
+        <div className="flex items-center gap-1.5 px-1">
+          <div className="flex h-6 w-6 items-center justify-center rounded bg-primary flex-shrink-0">
+            <Activity className="h-3.5 w-3.5 text-primary-foreground" />
           </div>
-          <span className="text-sm font-semibold group-data-[collapsible=icon]:hidden truncate">
+          <span className="text-xs font-semibold group-data-[collapsible=icon]:hidden truncate">
             signal2
           </span>
           <SidebarTrigger 
-            className="h-6 w-6 ml-auto flex-shrink-0 group-data-[collapsible=icon]:hidden" 
+            className="h-5 w-5 ml-auto flex-shrink-0 group-data-[collapsible=icon]:hidden" 
             data-testid="button-sidebar-toggle" 
           />
         </div>
       </SidebarHeader>
       
-      <SidebarContent className="px-2 py-1">
-        <nav className="space-y-0.5">
+      <SidebarContent className="book-tab-rail mt-2">
+        <nav className="flex flex-col gap-0.5 pr-0">
           {menuItems.map((item) => {
             const itemPath = item.url.split('?')[0];
             const isPageActive = currentPath === itemPath || 
                                   (itemPath === "/opportunities" && (currentPath === "/" || currentPath === "/recommendations"));
             const badgeCount = getBadgeCount(item.url);
             
-            const linkContent = (
+            const tabContent = (
               <Link
                 href={item.url}
                 onClick={handleNavClick}
                 data-testid={item.testId}
+                data-active={isPageActive}
                 className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded-sm text-sm transition-colors",
-                  "hover:bg-[oklch(var(--notebook-ruled-line)/0.2)]",
-                  isPageActive && "bg-[oklch(var(--notebook-ruled-line)/0.15)] border-l-2 border-primary -ml-0.5 pl-[calc(0.5rem+2px)]",
-                  !isPageActive && "border-l-2 border-transparent -ml-0.5 pl-[calc(0.5rem+2px)]",
-                  isCollapsed && "justify-center px-0 py-2"
+                  "book-tab",
+                  isCollapsed && "justify-center px-2"
                 )}
               >
-                <item.icon className={cn(
-                  "h-4 w-4 flex-shrink-0",
-                  isPageActive ? "text-primary" : "text-muted-foreground"
-                )} />
+                <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
                 {!isCollapsed && (
-                  <>
-                    <span className={cn(
-                      "truncate text-xs",
-                      isPageActive ? "text-foreground font-medium" : "text-muted-foreground"
-                    )}>
-                      {item.title}
-                    </span>
-                    {badgeCount !== null && (
-                      <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-                        {badgeCount}
-                      </span>
-                    )}
-                  </>
+                  <span className="truncate flex-1">{item.title}</span>
+                )}
+                {badgeCount !== null && !isCollapsed && (
+                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium text-primary-foreground">
+                    {badgeCount}
+                  </span>
                 )}
               </Link>
             );
@@ -143,12 +131,12 @@ export function AppSidebar() {
               return (
                 <Tooltip key={item.title}>
                   <TooltipTrigger asChild>
-                    {linkContent}
+                    {tabContent}
                   </TooltipTrigger>
                   <TooltipContent side="right" className="flex items-center gap-2">
                     {item.title}
                     {badgeCount !== null && (
-                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium text-primary-foreground">
                         {badgeCount}
                       </span>
                     )}
@@ -157,13 +145,13 @@ export function AppSidebar() {
               );
             }
 
-            return <div key={item.title}>{linkContent}</div>;
+            return <div key={item.title}>{tabContent}</div>;
           })}
         </nav>
 
         {user?.isAdmin && (
           <>
-            <div className="h-px bg-[oklch(var(--notebook-ruled-line)/0.2)] my-2" />
+            <div className="flex-1" />
             {isCollapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -171,16 +159,10 @@ export function AppSidebar() {
                     href="/admin"
                     onClick={handleNavClick}
                     data-testid="link-admin"
-                    className={cn(
-                      "flex items-center justify-center py-2 rounded-sm transition-colors",
-                      "hover:bg-[oklch(var(--notebook-ruled-line)/0.2)]",
-                      location === "/admin" && "bg-[oklch(var(--notebook-ruled-line)/0.15)]"
-                    )}
+                    data-active={location === "/admin"}
+                    className="book-tab justify-center px-2"
                   >
-                    <ShieldCheck className={cn(
-                      "h-4 w-4",
-                      location === "/admin" ? "text-primary" : "text-muted-foreground"
-                    )} />
+                    <ShieldCheck className="h-3.5 w-3.5" />
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">Admin</TooltipContent>
@@ -190,37 +172,25 @@ export function AppSidebar() {
                 href="/admin"
                 onClick={handleNavClick}
                 data-testid="link-admin"
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded-sm text-sm transition-colors",
-                  "hover:bg-[oklch(var(--notebook-ruled-line)/0.2)]",
-                  location === "/admin" && "bg-[oklch(var(--notebook-ruled-line)/0.15)] border-l-2 border-primary -ml-0.5 pl-[calc(0.5rem+2px)]",
-                  location !== "/admin" && "border-l-2 border-transparent -ml-0.5 pl-[calc(0.5rem+2px)]"
-                )}
+                data-active={location === "/admin"}
+                className="book-tab"
               >
-                <ShieldCheck className={cn(
-                  "h-4 w-4 flex-shrink-0",
-                  location === "/admin" ? "text-primary" : "text-muted-foreground"
-                )} />
-                <span className={cn(
-                  "truncate text-xs",
-                  location === "/admin" ? "text-foreground font-medium" : "text-muted-foreground"
-                )}>
-                  Admin
-                </span>
+                <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate flex-1">Admin</span>
               </Link>
             )}
           </>
         )}
       </SidebarContent>
       
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-1">
         {isCollapsed ? (
           <SidebarTrigger 
-            className="h-6 w-6 mx-auto" 
+            className="h-5 w-5 mx-auto" 
             data-testid="button-sidebar-expand" 
           />
         ) : (
-          <div className="text-[10px] text-muted-foreground text-center font-mono" data-testid="text-version">
+          <div className="text-[9px] text-muted-foreground text-center font-mono" data-testid="text-version">
             v{versionInfo?.version || "1.0.0"}
           </div>
         )}

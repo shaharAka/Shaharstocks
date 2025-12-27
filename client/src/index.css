@@ -335,37 +335,60 @@
     background-color: oklch(var(--notebook-tab-active));
   }
   
-  /* Unified surface - sidebar and content share same background */
-  .unified-surface {
+  /* Book page surface - shared by sidebar tabs and content */
+  .book-page {
     background-color: oklch(var(--notebook-page));
   }
   
-  /* Section link styling - clean, minimal */
-  .section-link {
+  /* Book tab - looks like a physical tab sticking out */
+  .book-tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-right: -1px;
+    background-color: oklch(var(--notebook-tab-inactive));
+    border: 1px solid oklch(var(--notebook-ruled-line) / 0.3);
+    border-right: none;
+    border-radius: 0.25rem 0 0 0.25rem;
+    font-size: 0.75rem;
+    color: oklch(var(--muted-foreground));
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+  
+  .book-tab:hover {
+    background-color: oklch(var(--notebook-ruled-line) / 0.2);
+  }
+  
+  /* Active tab merges with the content page */
+  .book-tab[data-active="true"] {
+    background-color: oklch(var(--notebook-page));
+    border-right-color: oklch(var(--notebook-page));
+    color: oklch(var(--foreground));
+    font-weight: 500;
+    z-index: 1;
+  }
+  
+  /* Extend active tab to cover the border */
+  .book-tab[data-active="true"]::after {
+    content: "";
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    right: -2px;
+    width: 3px;
+    background-color: oklch(var(--notebook-page));
+  }
+  
+  /* Tab rail container */
+  .book-tab-rail {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
-    padding: 0.75rem 1rem;
-    border-left: 2px solid transparent;
-    transition: all 0.15s ease;
-  }
-  
-  .section-link:hover {
-    background-color: oklch(var(--notebook-ruled-line) / 0.15);
-  }
-  
-  .section-link[data-active="true"] {
-    border-left-color: oklch(var(--primary));
-    background-color: oklch(var(--notebook-ruled-line) / 0.1);
-  }
-  
-  .section-link-title {
-    font-weight: 500;
-    font-size: 0.875rem;
-  }
-  
-  .section-link-desc {
-    font-size: 0.7rem;
-    opacity: 0.6;
+    gap: 0.25rem;
+    padding: 0.5rem 0;
+    border-right: 1px solid oklch(var(--notebook-ruled-line) / 0.3);
+    background-color: oklch(var(--notebook-tab-inactive) / 0.5);
   }
 }

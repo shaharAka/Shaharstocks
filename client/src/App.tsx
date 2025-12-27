@@ -98,7 +98,7 @@ function AuthenticatedApp() {
   }
 
   const style = {
-    "--sidebar-width": "9rem",
+    "--sidebar-width": "7rem",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -110,7 +110,7 @@ function AuthenticatedApp() {
         onOpenChange={() => {}} 
         onComplete={() => {}}
       />
-      <div className="flex h-screen w-full unified-surface">
+      <div className="flex h-screen w-full book-page">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between px-2 py-2 md:px-4 bg-[oklch(var(--notebook-page))] shrink-0">

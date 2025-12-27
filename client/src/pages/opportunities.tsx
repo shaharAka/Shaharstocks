@@ -406,88 +406,81 @@ export default function Opportunities() {
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-7xl">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-xl md:text-2xl font-semibold" data-testid="text-page-title">
-              {getTerm("opportunities")}
-            </h1>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-6 w-6"
-                  tabIndex={0}
-                  aria-label="Learn how opportunities work"
-                  data-testid="button-help-opportunities"
-                >
-                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-sm p-4 space-y-3 text-left">
-                <p className="font-semibold text-sm">How the Board Works</p>
-                <div className="space-y-2 text-xs">
-                  <p><strong>High Signal:</strong> Stocks with AI score 70+ showing strong opportunity</p>
-                  <p><strong>Recent:</strong> Mid-range scores (40-69) from the last 2 days</p>
-                  <p><strong>Processing:</strong> Awaiting AI analysis</p>
-                  <p><strong>Community:</strong> Stocks with high user engagement</p>
-                  <p><strong>Rejected:</strong> Stocks you've dismissed</p>
-                </div>
-                <div className="pt-2 border-t space-y-1 text-xs text-muted-foreground">
-                  <p>Stocks are automatically removed after 10-14 days unless you follow them.</p>
-                  <p>Low-confidence signals (score {"<"} 40) are auto-rejected.</p>
-                </div>
-              </TooltipContent>
-            </Tooltip>
+      {/* Header with inline filters */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
+            {getTerm("opportunities")}
+          </h1>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6"
+                tabIndex={0}
+                aria-label="Learn how opportunities work"
+                data-testid="button-help-opportunities"
+              >
+                <HelpCircle className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-sm p-4 space-y-3 text-left">
+              <p className="font-semibold text-sm">How the Board Works</p>
+              <div className="space-y-2 text-xs">
+                <p><strong>High Signal:</strong> Stocks with AI score 70+ showing strong opportunity</p>
+                <p><strong>Recent:</strong> Mid-range scores (40-69) from the last 2 days</p>
+                <p><strong>Processing:</strong> Awaiting AI analysis</p>
+                <p><strong>Community:</strong> Stocks with high user engagement</p>
+                <p><strong>Rejected:</strong> Stocks you've dismissed</p>
+              </div>
+              <div className="pt-2 border-t space-y-1 text-xs text-muted-foreground">
+                <p>Stocks are automatically removed after 10-14 days unless you follow them.</p>
+                <p>Low-confidence signals (score {"<"} 40) are auto-rejected.</p>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        
+        {/* Compact inline filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search..."
+              value={tickerSearch}
+              onChange={(e) => setTickerSearch(e.target.value)}
+              className="pl-8 h-8 w-32 text-sm"
+              data-testid="input-search"
+            />
           </div>
-          <p className="text-sm text-muted-foreground">
-            {getTerm("opportunitiesDescription")}
-          </p>
-        </div>
-      </div>
-
-      {/* Search, Filters, and Controls - Consolidated Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search ticker or company..."
-            value={tickerSearch}
-            onChange={(e) => setTickerSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search"
-          />
-        </div>
-        
-        <div className="flex items-center justify-between gap-2 border rounded-md px-3 h-9 w-full sm:w-48">
-          <Label htmlFor="show-all-toggle" className="text-sm font-medium cursor-pointer whitespace-nowrap flex-1">
-            {showAllOpportunities ? "All" : "Buy Only"}
-          </Label>
-          <Switch
-            id="show-all-toggle"
-            checked={showAllOpportunities}
-            onCheckedChange={handleShowAllOpportunitiesChange}
-            data-testid="toggle-show-all"
-          />
-        </div>
-        
-        <div className="w-full sm:w-48">
+          
+          <div className="flex items-center gap-1.5 border rounded-md px-2 h-8">
+            <Label htmlFor="show-all-toggle" className="text-xs font-medium cursor-pointer whitespace-nowrap">
+              {showAllOpportunities ? "All" : "Buy"}
+            </Label>
+            <Switch
+              id="show-all-toggle"
+              checked={showAllOpportunities}
+              onCheckedChange={handleShowAllOpportunitiesChange}
+              className="scale-75"
+              data-testid="toggle-show-all"
+            />
+          </div>
+          
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger data-testid="select-sort">
-              <SortAsc className="h-4 w-4 mr-2" />
+            <SelectTrigger className="h-8 w-32 text-xs" data-testid="select-sort">
+              <SortAsc className="h-3.5 w-3.5 mr-1" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="signal">Signal Strength</SelectItem>
-              <SelectItem value="daysFromTrade">Most Recent</SelectItem>
+              <SelectItem value="signal">Signal</SelectItem>
+              <SelectItem value="daysFromTrade">Recent</SelectItem>
               <SelectItem value="marketCap">Market Cap</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
-
 
       {/* Stats Bar */}
       <div className="flex gap-4 text-sm items-center justify-between">

@@ -220,7 +220,6 @@ export default function InPosition() {
       {/* Header with inline search */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Briefcase className="h-5 w-5 text-primary" />
           <h1 className="text-xl font-semibold whitespace-nowrap" data-testid="text-page-title">
             In Position
           </h1>

@@ -20,6 +20,7 @@ import { signupLimiter, loginLimiter, resendVerificationLimiter } from "./middle
 import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "./utils/emailValidation";
 import { sendVerificationEmail, notifySuperAdminsNewSignup, notifySuperAdminsFirstPayment, sendBugReport } from "./emailService";
 import { isGoogleConfigured, generateState, getGoogleAuthUrl, handleGoogleCallback } from "./googleAuthService";
+import { runTickerDailyBriefGeneration } from "./jobs/generateTickerDailyBriefs";
 
 /**
  * Check if US stock market is currently open
@@ -352,6 +353,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching AI models:", error);
       res.status(500).json({ error: "Failed to fetch AI models" });
+    }
+  });
+
+  // Admin: Manually trigger daily brief generation
+  app.post("/api/admin/generate-daily-briefs", requireAdmin, async (req, res) => {
+    try {
+      console.log("[Admin] Manually triggering daily brief generation...");
+      await runTickerDailyBriefGeneration(storage);
+      
+      // Get count of briefs generated today
+      const today = new Date().toISOString().split('T')[0];
+      const opportunities = await storage.getOpportunities({ cadence: 'all' });
+      const tickerSet = new Set(opportunities.map(o => o.ticker.toUpperCase()));
+      const tickers = Array.from(tickerSet);
+      
+      let generatedCount = 0;
+      for (const ticker of tickers.slice(0, 20)) {
+        const brief = await storage.getLatestTickerBrief(ticker);
+        if (brief && brief.briefDate === today) {
+          generatedCount++;
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `Daily brief generation completed`,
+        briefsGenerated: generatedCount,
+        totalTickers: tickers.length
+      });
+    } catch (error) {
+      console.error("Error generating daily briefs:", error);
+      res.status(500).json({ error: "Failed to generate daily briefs" });
     }
   });
 

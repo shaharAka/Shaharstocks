@@ -25,8 +25,6 @@ import {
   MessageSquare,
   Star,
   SlidersHorizontal,
-  LayoutGrid,
-  LayoutList,
   Pin,
   PinOff,
   HelpCircle,
@@ -58,7 +56,6 @@ type StockWithUserStatus = Stock & {
 
 type SortOption = "signal" | "daysFromTrade" | "marketCap";
 type FunnelSection = "worthExploring";
-type ViewMode = "cards" | "table";
 
 type GroupedStock = {
   ticker: string;
@@ -101,7 +98,6 @@ export default function Opportunities() {
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
   const [fetchConfigOpen, setFetchConfigOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
 
   // Selection handlers
   const toggleSelection = (ticker: string) => {
@@ -579,27 +575,6 @@ export default function Opportunities() {
             </SelectContent>
           </Select>
         </div>
-        
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === "table" ? "default" : "outline"}
-            size="icon"
-            onClick={() => setViewMode("table")}
-            data-testid="button-view-table"
-            title="Table view"
-          >
-            <LayoutList className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === "cards" ? "default" : "outline"}
-            size="icon"
-            onClick={() => setViewMode("cards")}
-            data-testid="button-view-cards"
-            title="Card view"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
 
 
@@ -709,17 +684,17 @@ export default function Opportunities() {
         )}
       </div>
 
-      {/* Opportunities List */}
+      {/* Opportunities List - Table View */}
       {opportunities.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <p className="text-muted-foreground">
-                No {getTerm("opportunities")} match your current filters.
-              </p>
-            </CardContent>
-          </Card>
-        ) : viewMode === "table" ? (
-          <StockTable
+        <Card>
+          <CardContent className="p-8 text-center">
+            <p className="text-muted-foreground">
+              No {getTerm("opportunities")} match your current filters.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <StockTable
           stocks={opportunities}
           users={users}
           commentCounts={commentCounts}
@@ -734,176 +709,6 @@ export default function Opportunities() {
             setExplorerOpen(true);
           }}
         />
-      ) : (
-        <div className="space-y-6">
-          {opportunities.map((stock) => (
-            <div key={stock.ticker} className="space-y-3">
-              {/* Company Header */}
-              <div className="flex items-center gap-3">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  {stock.ticker}
-                  <a
-                    href={`https://finance.yahoo.com/quote/${stock.ticker}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </h2>
-                {stock.companyName !== stock.ticker && (
-                  <span className="text-sm text-muted-foreground">{stock.companyName}</span>
-                )}
-                {(stock as any)._groupedData?.transactionCount > 1 && (
-                  <Badge variant="outline" className="ml-auto">
-                    {(stock as any)._groupedData.transactionCount} transactions
-                  </Badge>
-                )}
-              </div>
-
-              {/* Transaction Cards */}
-              <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {((stock as any)._groupedData?.allTransactions || [stock]).map((transaction: StockWithUserStatus) => {
-                  const aiScore = (stock as any).integratedScore ?? (stock as any).aiScore ?? null;
-                  const daysSinceTrade = getDaysFromBuy(transaction.insiderTradeDate);
-                  
-                  const compositeKey = `${transaction.ticker}-${transaction.insiderName}-${transaction.insiderTradeDate}`;
-
-                  return (
-                    <Card 
-                      key={transaction.id || compositeKey} 
-                      className="hover-elevate relative cursor-pointer"
-                      onClick={() => {
-                        setExplorerStock(transaction);
-                        setExplorerOpen(true);
-                      }}
-                      data-testid={`card-opportunity-${compositeKey}`}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base flex items-center gap-2">
-                              <span className="truncate" data-testid={`text-insider-${compositeKey}`}>
-                                {transaction.insiderName || "Insider"}
-                              </span>
-                            </CardTitle>
-                            {transaction.insiderTitle && (
-                              <p className="text-xs text-muted-foreground truncate mt-1">
-                                {transaction.insiderTitle}
-                              </p>
-                            )}
-                            {transaction.insiderTradeDate && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Trade: {new Date(transaction.insiderTradeDate).toLocaleDateString()}
-                              </p>
-                            )}
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              followMutation.mutate(stock.ticker);
-                            }}
-                            className="shrink-0"
-                            data-testid={`button-follow-${stock.ticker}`}
-                          >
-                            {stock.isFollowing ? (
-                              <Star className="h-4 w-4 fill-current" />
-                            ) : (
-                              <Star className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {/* 2-Week Trend Chart */}
-                        <div className="h-16 -mx-2">
-                          <CandlestickChartCell ticker={stock.ticker} height={64} />
-                        </div>
-
-                        {/* Price Info */}
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-muted-foreground">Current Price:</span>
-                          <span className="font-medium">${transaction.currentPrice}</span>
-                        </div>
-
-                        {/* Market Cap */}
-                        {transaction.marketCap && (
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">Market Cap:</span>
-                            <span className="font-medium">{transaction.marketCap}</span>
-                          </div>
-                        )}
-
-                        {/* Insider Price & Quantity */}
-                        {transaction.insiderPrice && transaction.insiderQuantity && (
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">Insider Trade:</span>
-                            <span className="font-medium text-xs">
-                              {transaction.insiderQuantity.toLocaleString()} @ ${transaction.insiderPrice}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Transaction Type */}
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-muted-foreground">{getTerm("transactionType")}:</span>
-                          <Badge variant={transaction.recommendation?.toLowerCase().includes("buy") ? "default" : "destructive"}>
-                            {getTerm(transaction.recommendation?.toLowerCase().includes("buy") ? "insiderPurchase" : "insiderSale")}
-                          </Badge>
-                        </div>
-
-                        {/* Days Since Trade */}
-                        {daysSinceTrade > 0 && (
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">Days from Trade:</span>
-                            <span className="font-medium" data-testid={`text-days-${transaction.ticker}`}>
-                              {daysSinceTrade}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* AI Score with Tooltip */}
-                        {aiScore !== null && (
-                          <div className="space-y-1">
-                            <div className="flex justify-between items-center text-sm">
-                              <span className="text-muted-foreground">Signal Score:</span>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Badge 
-                                    className={cn(
-                                      "font-mono transition-all border-0 cursor-help",
-                                      aiScore >= 90 && "bg-amber-500 text-white text-sm font-bold shadow-md dark:bg-amber-600",
-                                      aiScore >= 70 && aiScore < 90 && "bg-amber-100 text-amber-700 text-xs font-semibold dark:bg-amber-950 dark:text-amber-400",
-                                      aiScore >= 50 && aiScore < 70 && "bg-secondary text-secondary-foreground text-xs",
-                                      aiScore < 50 && "bg-secondary text-muted-foreground text-xs opacity-60"
-                                    )}
-                                    data-testid={`badge-score-${stock.ticker}`}
-                                  >
-                                    {aiScore}/100
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent side="left" className="text-xs">
-                                  {getSignalTooltip(aiScore, transaction.recommendation || "")}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {transaction.recommendation?.toLowerCase().includes("buy") 
-                                ? "Likelihood of price appreciation" 
-                                : "Likelihood of price decline"}
-                            </p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
       )}
 
       <StockExplorer

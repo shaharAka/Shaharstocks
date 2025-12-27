@@ -62,8 +62,7 @@ export function AnalysisStatusPopup() {
   return (
     <div 
       className={cn(
-        "fixed bottom-4 z-50 min-w-[260px] max-w-[300px]",
-        "left-4 md:left-[calc(var(--sidebar-width,11rem)+1.5rem)]",
+        "fixed bottom-4 right-4 z-50 min-w-[280px] max-w-[320px]",
         "bg-card border border-border rounded-lg shadow-lg",
         "animate-in slide-in-from-bottom-5 fade-in duration-300"
       )}

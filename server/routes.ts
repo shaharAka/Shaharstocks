@@ -4042,6 +4042,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // GLOBAL OPPORTUNITIES ROUTES
+  // ============================================
+  
+  // Get opportunities - tier-based filtering (daily for free, hourly for pro)
+  app.get("/api/opportunities", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+      
+      // Determine cadence based on subscription tier
+      // Pro = active subscription, trial users also get pro access during trial period
+      const isPro = user.subscriptionStatus === 'active' || 
+                    (user.subscriptionStatus === 'trial' && user.trialEndsAt && new Date(user.trialEndsAt) > new Date());
+      const cadence = isPro ? 'all' : 'daily'; // Pro users see all opportunities (daily + hourly), free users only daily
+      
+      // Fetch opportunities filtered by user rejections
+      const opportunities = await storage.getOpportunities({
+        cadence: cadence as 'daily' | 'hourly' | 'all',
+        userId: req.session.userId
+      });
+      
+      res.json({
+        opportunities,
+        tier: isPro ? 'pro' : 'free',
+        cadence
+      });
+    } catch (error) {
+      console.error("Get opportunities error:", error);
+      res.status(500).json({ error: "Failed to fetch opportunities" });
+    }
+  });
+  
+  // Get single opportunity by ID
+  app.get("/api/opportunities/:id", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const opportunity = await storage.getOpportunity(req.params.id);
+      if (!opportunity) {
+        return res.status(404).json({ error: "Opportunity not found" });
+      }
+      
+      // Check if user rejected this opportunity
+      const isRejected = await storage.isOpportunityRejected(req.session.userId, req.params.id);
+      
+      res.json({ ...opportunity, isRejected });
+    } catch (error) {
+      console.error("Get opportunity error:", error);
+      res.status(500).json({ error: "Failed to fetch opportunity" });
+    }
+  });
+  
+  // Reject an opportunity (hide from user's view)
+  app.post("/api/opportunities/:id/reject", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const opportunity = await storage.getOpportunity(req.params.id);
+      if (!opportunity) {
+        return res.status(404).json({ error: "Opportunity not found" });
+      }
+      
+      const rejection = await storage.rejectOpportunity(req.session.userId, req.params.id);
+      res.json({ success: true, rejection });
+    } catch (error) {
+      console.error("Reject opportunity error:", error);
+      res.status(500).json({ error: "Failed to reject opportunity" });
+    }
+  });
+  
+  // Unreject an opportunity (restore to user's view)
+  app.delete("/api/opportunities/:id/reject", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const success = await storage.unrejectOpportunity(req.session.userId, req.params.id);
+      res.json({ success });
+    } catch (error) {
+      console.error("Unreject opportunity error:", error);
+      res.status(500).json({ error: "Failed to unreject opportunity" });
+    }
+  });
+  
+  // Get user's rejected opportunities
+  app.get("/api/opportunities/user/rejections", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const rejections = await storage.getUserRejections(req.session.userId);
+      res.json(rejections);
+    } catch (error) {
+      console.error("Get rejections error:", error);
+      res.status(500).json({ error: "Failed to fetch rejections" });
+    }
+  });
+
   // Telegram Configuration routes
   app.get("/api/telegram/config", async (req, res) => {
     try {

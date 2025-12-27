@@ -212,7 +212,7 @@ export interface IStorage {
     ticker?: string;
   }): Promise<Opportunity[]>;
   getOpportunity(id: string): Promise<Opportunity | undefined>;
-  getOpportunityByTransaction(ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Opportunity | undefined>;
+  getOpportunityByTransaction(ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string, cadence?: string): Promise<Opportunity | undefined>;
   createOpportunity(opportunity: InsertOpportunity): Promise<Opportunity>;
   updateOpportunity(id: string, updates: Partial<Opportunity>): Promise<Opportunity | undefined>;
   deleteOpportunity(id: string): Promise<boolean>;
@@ -1646,10 +1646,18 @@ export class DatabaseStorage implements IStorage {
   }): Promise<Opportunity[]> {
     const conditions: any[] = [];
     
-    // Filter by cadence
-    if (options?.cadence && options.cadence !== 'all') {
-      conditions.push(eq(opportunities.cadence, options.cadence));
+    // Filter by cadence:
+    // - 'daily': Only daily opportunities (free tier users)
+    // - 'hourly': Only hourly opportunities (would miss daily)
+    // - 'all': Both daily AND hourly opportunities (pro tier users)
+    if (options?.cadence === 'daily') {
+      // Free tier: only daily opportunities
+      conditions.push(eq(opportunities.cadence, 'daily'));
+    } else if (options?.cadence === 'hourly') {
+      // Only hourly (rare use case)
+      conditions.push(eq(opportunities.cadence, 'hourly'));
     }
+    // 'all' or undefined: no cadence filter, returns both daily AND hourly
     
     // Filter by ticker
     if (options?.ticker) {
@@ -1680,15 +1688,21 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getOpportunityByTransaction(ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string): Promise<Opportunity | undefined> {
-    const [result] = await db.select().from(opportunities).where(
-      and(
-        eq(opportunities.ticker, ticker),
-        eq(opportunities.insiderTradeDate, insiderTradeDate),
-        eq(opportunities.insiderName, insiderName),
-        eq(opportunities.recommendation, recommendation)
-      )
-    );
+  async getOpportunityByTransaction(ticker: string, insiderTradeDate: string, insiderName: string, recommendation: string, cadence?: string): Promise<Opportunity | undefined> {
+    const conditions = [
+      eq(opportunities.ticker, ticker),
+      eq(opportunities.insiderTradeDate, insiderTradeDate),
+      eq(opportunities.insiderName, insiderName),
+      eq(opportunities.recommendation, recommendation)
+    ];
+    
+    // If cadence specified, only check for duplicates within that cadence
+    // This allows same transaction to exist in both daily and hourly batches
+    if (cadence) {
+      conditions.push(eq(opportunities.cadence, cadence));
+    }
+    
+    const [result] = await db.select().from(opportunities).where(and(...conditions));
     return result;
   }
 

@@ -262,7 +262,7 @@ export default function TickerDetail() {
 
   if (stockLoading) {
     return (
-      <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-6 space-y-6 max-w-7xl">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -271,7 +271,7 @@ export default function TickerDetail() {
 
   if (!stock) {
     return (
-      <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-6 max-w-7xl">
         <Card>
           <CardContent className="p-8 text-center">
             <p className="text-muted-foreground">Stock not found</p>
@@ -296,7 +296,7 @@ export default function TickerDetail() {
   const newsItems = (stock as any).news || [];
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-7xl">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">

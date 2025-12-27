@@ -124,7 +124,7 @@ export default function CommunityDiscussion() {
 
   if (stocksLoading) {
     return (
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl">
         <Skeleton className="h-8 w-48 mb-2" />
         <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -144,7 +144,7 @@ export default function CommunityDiscussion() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 md:space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 md:space-y-8 max-w-7xl">
       {/* Header */}
       <div className="flex items-center gap-3">
         <MessageSquare className="h-6 w-6 md:h-8 md:w-8 text-primary" />

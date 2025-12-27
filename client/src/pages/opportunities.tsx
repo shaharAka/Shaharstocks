@@ -456,7 +456,7 @@ export default function Opportunities() {
 
   if (isLoading) {
     return (
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl">
         <Skeleton className="h-8 w-48 mb-2" />
         <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -477,7 +477,7 @@ export default function Opportunities() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-7xl">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>

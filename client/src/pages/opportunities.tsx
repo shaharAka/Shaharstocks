@@ -57,7 +57,7 @@ type StockWithUserStatus = Stock & {
 };
 
 type SortOption = "signal" | "daysFromTrade" | "marketCap";
-type FunnelSection = "all" | "worthExploring" | "recents" | "processing" | "communityPicks" | "rejected";
+type FunnelSection = "worthExploring";
 type ViewMode = "cards" | "table";
 
 type GroupedStock = {
@@ -96,7 +96,7 @@ export default function Opportunities() {
   const [sortBy, setSortBy] = useState<SortOption>("signal");
   const [tickerSearch, setTickerSearch] = useState("");
   const [showAllOpportunities, setShowAllOpportunities] = useState(currentUser?.showAllOpportunities ?? false);
-  const [funnelSection, setFunnelSection] = useState<FunnelSection>("all");
+  const [funnelSection] = useState<FunnelSection>("worthExploring");
   const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
@@ -396,82 +396,19 @@ export default function Opportunities() {
 
     const groupedArray = Array.from(grouped.values());
 
-    // Categorize into funnel sections
-    const sections: Record<FunnelSection, GroupedStock[]> = {
-      all: [],
-      processing: [],
-      worthExploring: [],
-      recents: [],
-      communityPicks: [],
-      rejected: [],
-    };
-
-    groupedArray.forEach(group => {
+    // Filter to high signal only (score >= 70)
+    const highSignalStocks = groupedArray.filter(group => {
       const score = group.highestScore;
       const isUserRejected = group.latestTransaction.userStatus === "rejected";
-      const recommendation = group.latestTransaction.recommendation?.toLowerCase();
-      const isBuy = recommendation?.includes("buy");
-      const isSell = recommendation?.includes("sell");
       
-      // Processing: No AI score yet
-      if (score === null) {
-        sections.processing.push(group);
-        return;
-      }
-
-      // User rejected stocks always go to rejected only
-      if (isUserRejected) {
-        sections.rejected.push(group);
-        return;
-      }
-
-      // Check if user has recently viewed this stock
-      const isRecentlyViewed = viewedTickers.includes(group.latestTransaction.ticker);
-
-      // Check if auto-rejected (low score with single transaction)
-      const isAutoRejected = score < 40 && group.transactionCount === 1;
-
-      // Auto-rejected stocks go to rejected section
-      if (isAutoRejected) {
-        sections.rejected.push(group);
-        return;
-      }
-
-      // All non-rejected stocks with scores go to "all" section
-      sections.all.push(group);
-
-      // SELL opportunity logic (unified signal scale: higher = better opportunity)
-      if (isSell) {
-        // High Signal: Score >= 70 (high confidence SELL opportunity)
-        if (score >= 70) {
-          sections.worthExploring.push(group);
-        }
-        // Recently Viewed: User has viewed this stock
-        else if (isRecentlyViewed) {
-          sections.recents.push(group);
-        }
-      }
-      // BUY opportunity logic (unified signal scale: higher = better opportunity)
-      else if (isBuy) {
-        // High Signal: Score >= 70 (includes both light amber 70-89 and bold amber 90-100)
-        if (score >= 70) {
-          sections.worthExploring.push(group);
-        }
-        // Recently Viewed: User has viewed this stock
-        else if (isRecentlyViewed) {
-          sections.recents.push(group);
-        }
-      }
-
-      // Community Picks: Only stocks with high engagement (comments >= threshold)
-      const minEngagement = openinsiderConfig?.minCommunityEngagement ?? 10;
+      // Skip stocks without scores or rejected stocks
+      if (score === null || isUserRejected) return false;
       
-      if (group.communityScore >= minEngagement) {
-        sections.communityPicks.push(group);
-      }
+      // Only include high signal stocks (score >= 70)
+      return score >= 70;
     });
 
-    // Sort each section
+    // Sort stocks
     const sortGroupedStocks = (groups: GroupedStock[]) => {
       return [...groups].sort((a, b) => {
         if (sortBy === "signal") {
@@ -496,15 +433,12 @@ export default function Opportunities() {
       });
     };
 
-    sections.all = sortGroupedStocks(sections.all);
-    sections.processing = sortGroupedStocks(sections.processing);
-    sections.worthExploring = sortGroupedStocks(sections.worthExploring);
-    sections.recents = sortGroupedStocks(sections.recents);
-    sections.rejected = sortGroupedStocks(sections.rejected);
-    sections.communityPicks = sortGroupedStocks(sections.communityPicks);
+    const sections: Record<FunnelSection, GroupedStock[]> = {
+      worthExploring: sortGroupedStocks(highSignalStocks),
+    };
 
     return { groupedStocks: groupedArray, funnelSections: sections };
-  }, [stocks, analyses, sortBy, tickerSearch, showAllOpportunities, followedStocks, users, commentCounts, openinsiderConfig, viewedTickers]);
+  }, [stocks, analyses, sortBy, tickerSearch, showAllOpportunities, followedStocks, users, commentCounts, openinsiderConfig]);
 
   // Get current section's stocks and flatten for rendering
   const groupedOpportunities = funnelSections[funnelSection] || [];
@@ -668,57 +602,6 @@ export default function Opportunities() {
         </div>
       </div>
 
-      {/* Funnel Section Filters */}
-      <div className="flex flex-wrap gap-2 shrink-0 mb-2">
-        <Badge
-          variant={funnelSection === "all" ? "default" : "outline"}
-          className="cursor-pointer hover-elevate active-elevate-2"
-          onClick={() => setFunnelSection("all")}
-          data-testid="filter-all"
-        >
-          All ({funnelSections.all?.length || 0})
-        </Badge>
-        <Badge
-          variant={funnelSection === "worthExploring" ? "default" : "outline"}
-          className="cursor-pointer hover-elevate active-elevate-2"
-          onClick={() => setFunnelSection("worthExploring")}
-          data-testid="filter-worth-exploring"
-        >
-          High Signal ({funnelSections.worthExploring?.length || 0})
-        </Badge>
-        <Badge
-          variant={funnelSection === "recents" ? "default" : "outline"}
-          className="cursor-pointer hover-elevate active-elevate-2"
-          onClick={() => setFunnelSection("recents")}
-          data-testid="filter-recents"
-        >
-          Viewed ({funnelSections.recents?.length || 0})
-        </Badge>
-        <Badge
-          variant={funnelSection === "processing" ? "default" : "outline"}
-          className="cursor-pointer hover-elevate active-elevate-2"
-          onClick={() => setFunnelSection("processing")}
-          data-testid="filter-processing"
-        >
-          Processing ({funnelSections.processing?.length || 0})
-        </Badge>
-        <Badge
-          variant={funnelSection === "communityPicks" ? "default" : "outline"}
-          className="cursor-pointer hover-elevate active-elevate-2"
-          onClick={() => setFunnelSection("communityPicks")}
-          data-testid="filter-community"
-        >
-          Community ({funnelSections.communityPicks?.length || 0})
-        </Badge>
-        <Badge
-          variant={funnelSection === "rejected" ? "destructive" : "outline"}
-          className="cursor-pointer hover-elevate active-elevate-2"
-          onClick={() => setFunnelSection("rejected")}
-          data-testid="filter-rejected"
-        >
-          Rejected ({funnelSections.rejected?.length || 0})
-        </Badge>
-      </div>
 
       {/* Stats Bar */}
       <div className="flex gap-4 text-sm items-center justify-between shrink-0 mb-4">

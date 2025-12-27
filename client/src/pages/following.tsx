@@ -117,6 +117,10 @@ export default function Following() {
     },
   });
 
+  const hasPosition = (ticker: string) => {
+    return holdings.some((h: any) => h.ticker === ticker && h.quantity > 0 && !h.isSimulated);
+  };
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -134,13 +138,16 @@ export default function Following() {
   };
 
   const filteredStocks = useMemo(() => {
-    if (!tickerSearch.trim()) return followedStocks;
+    // First filter out stocks that are in position (those belong on In Position page)
+    const watchingOnly = followedStocks.filter(s => !hasPosition(s.ticker));
+    
+    if (!tickerSearch.trim()) return watchingOnly;
     const search = tickerSearch.toUpperCase();
-    return followedStocks.filter(s => 
+    return watchingOnly.filter(s => 
       s.ticker.includes(search) || 
       s.companyName?.toUpperCase().includes(search)
     );
-  }, [followedStocks, tickerSearch]);
+  }, [followedStocks, tickerSearch, holdings]);
 
   const sortedStocks = useMemo(() => {
     return [...filteredStocks].sort((a, b) => {
@@ -173,10 +180,6 @@ export default function Following() {
       return 0;
     });
   }, [filteredStocks, sortField, sortDirection]);
-
-  const hasPosition = (ticker: string) => {
-    return holdings.some((h: any) => h.ticker === ticker && h.quantity > 0 && !h.isSimulated);
-  };
 
   if (isLoading) {
     return (
@@ -212,7 +215,7 @@ export default function Following() {
             </TooltipContent>
           </Tooltip>
           <span className="text-sm text-muted-foreground ml-2" data-testid="text-following-count">
-            ({followedStocks.length})
+            ({filteredStocks.length})
           </span>
         </div>
         
@@ -229,7 +232,7 @@ export default function Following() {
         </div>
       </div>
 
-      {followedStocks.length === 0 ? (
+      {sortedStocks.length === 0 ? (
         <Card className="bg-notebook-page">
           <CardContent className="p-8 text-center">
             <Star className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />

@@ -3421,14 +3421,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get followed stocks count for sidebar badge
+  // Get followed stocks count for sidebar badge (excludes stocks with active positions)
   app.get("/api/followed-stocks/count", async (req, res) => {
     try {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
-      res.json(followedStocks.length);
+      const holdings = await storage.getPortfolioHoldings(req.session.userId, false);
+      const positionTickers = new Set(holdings.filter(h => h.quantity > 0).map(h => h.ticker));
+      // Count only stocks that are NOT in position
+      const watchingCount = followedStocks.filter(s => !positionTickers.has(s.ticker)).length;
+      res.json(watchingCount);
     } catch (error) {
       console.error("Get followed stocks count error:", error);
       res.status(500).json({ error: "Failed to fetch count" });

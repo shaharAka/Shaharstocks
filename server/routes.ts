@@ -4178,10 +4178,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ fetchedAt: new Date().toISOString(), cadence: isPro ? 'hourly' : 'daily', opportunityCount: 0 });
       }
       
+      const fetchedAtStr = latestBatch.fetchedAt instanceof Date 
+        ? latestBatch.fetchedAt.toISOString() 
+        : latestBatch.fetchedAt;
+      
       res.json({
         id: latestBatch.id,
         cadence: latestBatch.cadence,
-        fetchedAt: latestBatch.fetchedAt,
+        fetchedAt: fetchedAtStr,
         opportunityCount: latestBatch.count
       });
     } catch (error) {

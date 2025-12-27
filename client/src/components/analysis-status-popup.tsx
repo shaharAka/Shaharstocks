@@ -19,9 +19,9 @@ type OpportunitiesResponse = {
 };
 
 type BatchInfo = {
-  id: string;
+  id?: string;
   cadence: 'daily' | 'hourly';
-  fetchedAt: string;
+  fetchedAt: string | Date;
   opportunityCount: number;
 };
 
@@ -45,36 +45,35 @@ export function AnalysisStatusPopup() {
 
   const { data: latestBatch } = useQuery<BatchInfo>({
     queryKey: ["/api/opportunities/latest-batch"],
-    staleTime: 60 * 1000,
-    retry: false,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
   });
 
   const tier = opportunitiesResponse?.tier || 'free';
   const isPro = tier === 'pro';
 
-  const calculateCountdown = (lastFetchStr: string | undefined, userIsPro: boolean) => {
-    if (!lastFetchStr) {
+  const calculateCountdown = (lastFetch: string | Date | undefined, userIsPro: boolean) => {
+    if (!lastFetch) {
       return { countdown: userIsPro ? '--:--' : '--:--:--' };
     }
     
-    const lastFetch = new Date(lastFetchStr);
+    const fetchDate = typeof lastFetch === 'string' ? new Date(lastFetch) : lastFetch;
+    if (isNaN(fetchDate.getTime())) {
+      return { countdown: userIsPro ? '--:--' : '--:--:--' };
+    }
+    
     const now = new Date();
     
     let nextUpdate: Date;
     if (userIsPro) {
-      nextUpdate = new Date(lastFetch.getTime() + 60 * 60 * 1000);
+      nextUpdate = new Date(fetchDate.getTime() + 60 * 60 * 1000);
       while (nextUpdate <= now) {
         nextUpdate = new Date(nextUpdate.getTime() + 60 * 60 * 1000);
       }
     } else {
-      nextUpdate = new Date(lastFetch);
+      nextUpdate = new Date(now);
       nextUpdate.setUTCDate(nextUpdate.getUTCDate() + 1);
       nextUpdate.setUTCHours(0, 0, 0, 0);
-      if (nextUpdate <= now) {
-        nextUpdate = new Date(now);
-        nextUpdate.setUTCDate(nextUpdate.getUTCDate() + 1);
-        nextUpdate.setUTCHours(0, 0, 0, 0);
-      }
     }
     
     const diffMs = Math.max(0, nextUpdate.getTime() - now.getTime());
@@ -129,11 +128,14 @@ export function AnalysisStatusPopup() {
   const activeJobs = (stats?.pending ?? 0) + (stats?.processing ?? 0);
   const isProcessing = activeJobs > 0;
 
+  const POPUP_WIDTH = "w-[200px]";
+
   if (minimized) {
     return (
       <div 
         className={cn(
           "fixed bottom-4 right-4 z-50",
+          POPUP_WIDTH,
           "bg-card border border-border rounded-lg shadow-lg",
           "animate-in slide-in-from-bottom-2 fade-in duration-200"
         )}
@@ -141,19 +143,23 @@ export function AnalysisStatusPopup() {
       >
         <button
           onClick={() => setMinimized(false)}
-          className="flex items-center gap-2 p-2 hover-elevate rounded-lg"
+          className="flex items-center justify-between w-full gap-2 p-2 hover-elevate rounded-lg"
           data-testid="button-expand-status-popup"
         >
-          {isProcessing && (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              <span className="text-xs font-medium">{activeJobs}</span>
-              <span className="text-muted-foreground">|</span>
-            </>
-          )}
-          <Timer className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-mono text-xs">{displayCountdown}</span>
-          <Maximize2 className="h-3 w-3 text-muted-foreground" />
+          <div className="flex items-center gap-2">
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                <span className="text-xs font-medium">{activeJobs}</span>
+              </>
+            ) : (
+              <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-muted-foreground">{displayCountdown}</span>
+            <Maximize2 className="h-3 w-3 text-muted-foreground" />
+          </div>
         </button>
       </div>
     );
@@ -162,7 +168,8 @@ export function AnalysisStatusPopup() {
   return (
     <div 
       className={cn(
-        "fixed bottom-4 right-4 z-50 min-w-[260px] max-w-[300px]",
+        "fixed bottom-4 right-4 z-50",
+        POPUP_WIDTH,
         "bg-card border border-border rounded-lg shadow-lg",
         "animate-in slide-in-from-bottom-5 fade-in duration-300"
       )}

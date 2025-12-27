@@ -113,7 +113,7 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between px-2 py-2 md:px-4 border-b bg-background shrink-0">
+          <header className="flex items-center justify-between px-2 py-2 md:px-4 border-b bg-background shrink-0 sticky top-0 z-10">
             <SidebarTrigger className="md:hidden h-10 w-10" data-testid="button-mobile-menu" />
             <div className="flex items-center gap-1 md:gap-2 ml-auto">
               <BugReportButton />
@@ -134,9 +134,11 @@ function AuthenticatedApp() {
               <ThemeToggle />
             </div>
           </header>
-          <main className="flex-1 overflow-auto notebook-page">
-            <TrialStatusBanner />
-            <Router />
+          <main className="flex-1 overflow-auto notebook-page flex justify-center">
+            <div className="w-full max-w-2xl">
+              <TrialStatusBanner />
+              <Router />
+            </div>
           </main>
         </div>
       </div>

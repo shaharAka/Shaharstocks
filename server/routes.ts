@@ -4152,6 +4152,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch rejections" });
     }
   });
+  
+  // Get latest opportunity batch info (for countdown timer)
+  app.get("/api/opportunities/latest-batch", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+      
+      // Determine user tier
+      const isPro = user.subscriptionStatus === 'active' || 
+                    (user.subscriptionStatus === 'trial' && user.trialEndsAt && new Date(user.trialEndsAt) > new Date());
+      
+      // Get latest batch based on user tier (pro gets most recent of any type, free gets latest daily)
+      const latestBatch = isPro 
+        ? await storage.getLatestBatch('hourly') ?? await storage.getLatestBatch('daily')
+        : await storage.getLatestBatch('daily');
+      
+      if (!latestBatch) {
+        return res.json({ fetchedAt: new Date().toISOString(), cadence: isPro ? 'hourly' : 'daily', opportunityCount: 0 });
+      }
+      
+      res.json({
+        id: latestBatch.id,
+        cadence: latestBatch.cadence,
+        fetchedAt: latestBatch.fetchedAt,
+        opportunityCount: latestBatch.count
+      });
+    } catch (error) {
+      console.error("Get latest batch error:", error);
+      res.status(500).json({ error: "Failed to fetch latest batch info" });
+    }
+  });
 
   // Telegram Configuration routes
   app.get("/api/telegram/config", async (req, res) => {

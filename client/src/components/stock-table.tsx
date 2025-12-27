@@ -114,6 +114,30 @@ export function StockTable({
     return daysDiff;
   };
 
+  // Format market cap for display
+  const formatMarketCap = (marketCap: string | null): string => {
+    if (!marketCap) return "-";
+    
+    // Remove any existing suffix and convert to number
+    const cleanValue = marketCap.replace(/[^0-9.]/g, "");
+    const numValue = parseFloat(cleanValue);
+    
+    if (isNaN(numValue)) return marketCap;
+    
+    // Format based on size
+    if (numValue >= 1e12) {
+      return `$${(numValue / 1e12).toFixed(1)}T`;
+    } else if (numValue >= 1e9) {
+      return `$${(numValue / 1e9).toFixed(1)}B`;
+    } else if (numValue >= 1e6) {
+      return `$${(numValue / 1e6).toFixed(1)}M`;
+    } else if (numValue >= 1e3) {
+      return `$${(numValue / 1e3).toFixed(1)}K`;
+    } else {
+      return `$${numValue.toFixed(0)}`;
+    }
+  };
+
   // Check if user has a position in a stock
   const hasPosition = (ticker: string): boolean => {
     return holdings.some(h => h.ticker === ticker && h.quantity > 0);
@@ -522,8 +546,8 @@ export function StockTable({
                 <TableCell className="text-right font-mono text-muted-foreground hidden xl:table-cell py-1 px-1">
                   {insiderPrice ? `$${insiderPrice.toFixed(2)}` : "-"}
                 </TableCell>
-                <TableCell className="text-right text-muted-foreground hidden xl:table-cell py-1 px-1">
-                  {stock.marketCap || "-"}
+                <TableCell className="text-right text-muted-foreground text-xs hidden xl:table-cell py-1 px-1 font-mono">
+                  {formatMarketCap(stock.marketCap)}
                 </TableCell>
                 <TableCell className="hidden lg:table-cell py-1 px-1">
                   {stock.insiderTradeDate && (

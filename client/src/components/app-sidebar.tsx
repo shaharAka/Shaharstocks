@@ -77,7 +77,7 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon" 
-      className="border-r-0 bg-[oklch(var(--notebook-page))] sidebar-below-header"
+      className="border-r-0 bg-[oklch(var(--notebook-page))] sidebar-below-header sidebar-floating"
     >
       <SidebarContent className="book-tab-rail">
         <nav className="flex flex-col">

@@ -330,6 +330,15 @@ export const stockAnalyses = pgTable("stock_analyses", {
     summary: string;
   }>(),
   scorecardVersion: text("scorecard_version"), // Version of scorecard config used (e.g., "1.0")
+  // Unified AI Report Fields (Day-0 + Daily Briefs)
+  aiPlaybook: text("ai_playbook"), // The initial playbook text (merged Day-0 analysis)
+  aiStance: text("ai_stance"), // Current recommended action: "ENTER", "WATCH", "AVOID"
+  currentSignalScore: integer("current_signal_score"), // Daily-updated signal score (0-100), may differ from integratedScore
+  stopLoss: decimal("stop_loss", { precision: 12, scale: 2 }), // Recommended stop loss price level
+  profitTarget: decimal("profit_target", { precision: 12, scale: 2 }), // Recommended profit target price level
+  stopLossPercent: decimal("stop_loss_percent", { precision: 5, scale: 2 }), // Stop loss as % below entry (e.g., -7.00)
+  profitTargetPercent: decimal("profit_target_percent", { precision: 5, scale: 2 }), // Profit target as % above entry (e.g., +15.00)
+  lastDailyBriefAt: timestamp("last_daily_brief_at"), // When the last daily brief was generated
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1234,6 +1243,53 @@ export const dailyBriefs = pgTable("daily_briefs", {
 export const insertDailyBriefSchema = createInsertSchema(dailyBriefs).omit({ id: true, createdAt: true });
 export type InsertDailyBrief = z.infer<typeof insertDailyBriefSchema>;
 export type DailyBrief = typeof dailyBriefs.$inferSelect;
+
+// Global Ticker Daily Briefs - Per-ticker daily analysis that updates signal scores
+// NOT per-user - this is shared global data that tracks 7-day history
+export const tickerDailyBriefs = pgTable("ticker_daily_briefs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticker: text("ticker").notNull(),
+  briefDate: text("brief_date").notNull(), // YYYY-MM-DD format
+  
+  // Price data at time of brief
+  priceSnapshot: decimal("price_snapshot", { precision: 12, scale: 2 }).notNull(),
+  priceChange: decimal("price_change", { precision: 12, scale: 2 }), // vs previous close
+  priceChangePercent: decimal("price_change_percent", { precision: 10, scale: 2 }),
+  priceSinceInsider: decimal("price_since_insider", { precision: 10, scale: 2 }), // % change since insider trade
+  
+  // Signal Score Evolution
+  previousSignalScore: integer("previous_signal_score"), // Score before this brief
+  newSignalScore: integer("new_signal_score").notNull(), // Score after this brief
+  scoreChange: integer("score_change"), // Delta: newSignalScore - previousSignalScore
+  scoreChangeReason: text("score_change_reason"), // AI explanation for score change
+  
+  // Updated Stance
+  stance: text("stance").notNull(), // "ENTER", "WATCH", "AVOID"
+  stanceChanged: boolean("stance_changed").default(false), // Did stance change from previous?
+  
+  // Brief Content
+  briefText: text("brief_text").notNull(), // The daily analysis text
+  keyUpdates: jsonb("key_updates").$type<string[]>().default([]), // Key changes/updates noted
+  
+  // Data Sources Used
+  newInsiderTransactions: boolean("new_insider_transactions").default(false), // Were there new insider trades?
+  newsImpact: text("news_impact"), // "positive", "negative", "neutral", "none"
+  priceActionAssessment: text("price_action_assessment"), // Brief on price movement
+  
+  // Stop Loss / Profit Target Updates
+  stopLossHit: boolean("stop_loss_hit").default(false), // Did price hit stop loss?
+  profitTargetHit: boolean("profit_target_hit").default(false), // Did price hit profit target?
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  tickerDateUnique: uniqueIndex("ticker_daily_brief_unique_idx").on(table.ticker, table.briefDate),
+  tickerIdx: index("ticker_daily_briefs_ticker_idx").on(table.ticker),
+  dateIdx: index("ticker_daily_briefs_date_idx").on(table.briefDate),
+}));
+
+export const insertTickerDailyBriefSchema = createInsertSchema(tickerDailyBriefs).omit({ id: true, createdAt: true });
+export type InsertTickerDailyBrief = z.infer<typeof insertTickerDailyBriefSchema>;
+export type TickerDailyBrief = typeof tickerDailyBriefs.$inferSelect;
 
 // Glossary Terms - Financial terminology database for tooltip hints
 export const glossaryTerms = pgTable("glossary_terms", {

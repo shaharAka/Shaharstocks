@@ -14,6 +14,7 @@ import { AnnouncementBell } from "@/components/announcement-bell";
 import { TrialStatusBanner } from "@/components/trial-status-banner";
 import { TutorialManager } from "@/components/TutorialManager";
 import { Onboarding } from "@/components/onboarding";
+import { AnalysisStatusPopup } from "@/components/analysis-status-popup";
 import { HelpCircle, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Portfolio from "@/pages/portfolio";
@@ -146,6 +147,7 @@ function AuthenticatedApp() {
             <Router />
           </main>
         </div>
+        <AnalysisStatusPopup />
       </div>
     </SidebarProvider>
   );

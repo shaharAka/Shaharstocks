@@ -1758,13 +1758,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateOpportunityBatchStats(batchId: string, stats: { added: number; rejected: number; duplicates: number }): Promise<void> {
-    await db
-      .update(opportunityBatches)
-      .set({
-        count: stats.added,
-        metadata: sql`COALESCE(${opportunityBatches.metadata}, '{}'::jsonb) || ${JSON.stringify({ stats })}::jsonb`
-      })
-      .where(eq(opportunityBatches.id, batchId));
+    const statsJson = JSON.stringify({ stats });
+    await db.execute(sql`
+      UPDATE opportunity_batches 
+      SET count = ${stats.added},
+          metadata = COALESCE(metadata, '{}'::jsonb) || ${statsJson}::jsonb
+      WHERE id = ${batchId}
+    `);
   }
 
   async getLatestBatchWithStats(): Promise<OpportunityBatch | undefined> {

@@ -1,16 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Minimize2, Maximize2, Loader2, CheckCircle, XCircle, Clock, Timer, Zap } from "lucide-react";
+import { Minimize2, Maximize2, CheckCircle, XCircle, Timer, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
-
-type QueueStats = {
-  pending: number;
-  processing: number;
-  completed: number;
-  failed: number;
-};
 
 type OpportunitiesResponse = {
   opportunities: any[];
@@ -23,20 +16,16 @@ type BatchInfo = {
   cadence: 'daily' | 'hourly';
   fetchedAt: string | Date;
   opportunityCount: number;
+  stats?: {
+    added: number;
+    rejected: number;
+    duplicates: number;
+  };
 };
 
 export function AnalysisStatusPopup() {
   const [minimized, setMinimized] = useState(false);
-  const [lastCompleted, setLastCompleted] = useState(0);
-  const [lastFailed, setLastFailed] = useState(0);
-  const [recentlyAdded, setRecentlyAdded] = useState(0);
-  const [recentlyRejected, setRecentlyRejected] = useState(0);
   const [, setLocation] = useLocation();
-
-  const { data: stats } = useQuery<QueueStats>({
-    queryKey: ["/api/analysis-jobs/stats"],
-    refetchInterval: 3000,
-  });
 
   const { data: opportunitiesResponse } = useQuery<OpportunitiesResponse>({
     queryKey: ["/api/opportunities"],
@@ -57,7 +46,6 @@ export function AnalysisStatusPopup() {
     let nextUpdate: Date;
     
     if (userIsPro) {
-      // Pro users: next fetch is at the top of the next hour
       if (lastFetch) {
         const fetchDate = typeof lastFetch === 'string' ? new Date(lastFetch) : lastFetch;
         if (!isNaN(fetchDate.getTime())) {
@@ -66,19 +54,16 @@ export function AnalysisStatusPopup() {
             nextUpdate = new Date(nextUpdate.getTime() + 60 * 60 * 1000);
           }
         } else {
-          // Invalid date - calculate from current time to next hour
           nextUpdate = new Date(now);
           nextUpdate.setMinutes(0, 0, 0);
           nextUpdate.setHours(nextUpdate.getHours() + 1);
         }
       } else {
-        // No last fetch - calculate from current time to next hour
         nextUpdate = new Date(now);
         nextUpdate.setMinutes(0, 0, 0);
         nextUpdate.setHours(nextUpdate.getHours() + 1);
       }
     } else {
-      // Free users: next fetch is at midnight UTC
       nextUpdate = new Date(now);
       nextUpdate.setUTCDate(nextUpdate.getUTCDate() + 1);
       nextUpdate.setUTCHours(0, 0, 0, 0);
@@ -110,31 +95,8 @@ export function AnalysisStatusPopup() {
     return () => clearInterval(interval);
   }, [latestBatch?.fetchedAt, isPro]);
 
-  useEffect(() => {
-    if (stats) {
-      if (stats.completed > lastCompleted && lastCompleted > 0) {
-        setRecentlyAdded(prev => prev + (stats.completed - lastCompleted));
-      }
-      if (stats.failed > lastFailed && lastFailed > 0) {
-        setRecentlyRejected(prev => prev + (stats.failed - lastFailed));
-      }
-      setLastCompleted(stats.completed);
-      setLastFailed(stats.failed);
-    }
-  }, [stats, lastCompleted, lastFailed]);
-
-  useEffect(() => {
-    if (stats && (stats.pending === 0 && stats.processing === 0)) {
-      const timer = setTimeout(() => {
-        setRecentlyAdded(0);
-        setRecentlyRejected(0);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [stats]);
-
-  const activeJobs = (stats?.pending ?? 0) + (stats?.processing ?? 0);
-  const isProcessing = activeJobs > 0;
+  const batchStats = latestBatch?.stats;
+  const hasStats = batchStats !== undefined;
 
   const POPUP_WIDTH = "w-[200px]";
 
@@ -155,13 +117,9 @@ export function AnalysisStatusPopup() {
           data-testid="button-expand-status-popup"
         >
           <div className="flex items-center gap-2">
-            {isProcessing ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                <span className="text-xs font-medium">{activeJobs}</span>
-              </>
-            ) : (
-              <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+            <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+            {hasStats && batchStats.added > 0 && (
+              <span className="text-xs font-medium text-success">+{batchStats.added}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -185,14 +143,8 @@ export function AnalysisStatusPopup() {
     >
       <div className="flex items-center justify-between p-2.5 border-b border-border/50">
         <div className="flex items-center gap-2">
-          {isProcessing ? (
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          ) : (
-            <Timer className="h-4 w-4 text-muted-foreground" />
-          )}
-          <span className="font-medium text-sm">
-            {isProcessing ? "Analyzing" : "Status"}
-          </span>
+          <Timer className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium text-sm">Last Scan</span>
         </div>
         <Button
           size="icon"
@@ -206,49 +158,33 @@ export function AnalysisStatusPopup() {
       </div>
       
       <div className="p-2.5 space-y-1.5">
-        {isProcessing && (
+        {hasStats && (
           <>
             <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
-                <span>In Queue</span>
+              <div className={cn("flex items-center gap-2", batchStats.added > 0 ? "text-success" : "text-muted-foreground")}>
+                <CheckCircle className="h-3.5 w-3.5" />
+                <span>Added</span>
               </div>
-              <span className="font-mono font-medium text-xs">{stats?.pending ?? 0}</span>
+              <span className={cn("font-mono font-medium text-xs", batchStats.added > 0 ? "text-success" : "text-muted-foreground")}>
+                {batchStats.added > 0 ? `+${batchStats.added}` : "0"}
+              </span>
             </div>
-            
+
             <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-primary">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Processing</span>
+              <div className={cn("flex items-center gap-2", batchStats.rejected > 0 ? "text-destructive" : "text-muted-foreground")}>
+                <XCircle className="h-3.5 w-3.5" />
+                <span>Rejected</span>
               </div>
-              <span className="font-mono font-medium text-xs">{stats?.processing ?? 0}</span>
+              <span className={cn("font-mono font-medium text-xs", batchStats.rejected > 0 ? "text-destructive" : "text-muted-foreground")}>
+                {batchStats.rejected}
+              </span>
             </div>
-
-            {recentlyAdded > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2 text-success">
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  <span>Added</span>
-                </div>
-                <span className="font-mono font-medium text-xs text-success">+{recentlyAdded}</span>
-              </div>
-            )}
-
-            {recentlyRejected > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2 text-destructive">
-                  <XCircle className="h-3.5 w-3.5" />
-                  <span>Rejected</span>
-                </div>
-                <span className="font-mono font-medium text-xs text-destructive">{recentlyRejected}</span>
-              </div>
-            )}
           </>
         )}
 
         <div className={cn(
           "flex items-center justify-between text-xs",
-          isProcessing && "pt-1.5 border-t border-border/50"
+          hasStats && "pt-1.5 border-t border-border/50"
         )}>
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Timer className="h-3 w-3" />

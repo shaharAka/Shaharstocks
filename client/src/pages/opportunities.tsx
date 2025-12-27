@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +36,6 @@ import { type Stock, type User } from "@shared/schema";
 import { getTerm } from "@/lib/compliance";
 import { useUser } from "@/contexts/UserContext";
 import { StockTable } from "@/components/stock-table";
-import { StockExplorer } from "@/components/stock-explorer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CandlestickChartCell } from "@/components/candlestick-chart-cell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -88,14 +88,13 @@ const getSignalTooltip = (score: number, recommendation: string): string => {
 export default function Opportunities() {
   const { toast } = useToast();
   const { user: currentUser } = useUser();
+  const [, setLocation] = useLocation();
   
   // State management
   const [sortBy, setSortBy] = useState<SortOption>("signal");
   const [tickerSearch, setTickerSearch] = useState("");
   const [showAllOpportunities, setShowAllOpportunities] = useState(currentUser?.showAllOpportunities ?? false);
   const [funnelSection] = useState<FunnelSection>("worthExploring");
-  const [explorerStock, setExplorerStock] = useState<Stock | null>(null);
-  const [explorerOpen, setExplorerOpen] = useState(false);
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
   const [fetchConfigOpen, setFetchConfigOpen] = useState(false);
 
@@ -207,7 +206,6 @@ export default function Opportunities() {
         title: "Stock Followed",
         description: "Day-0 AI analysis has been queued for this stock",
       });
-      setExplorerOpen(false);
     },
     onError: (error: any) => {
       const message = error.message?.includes("already following") 
@@ -233,7 +231,6 @@ export default function Opportunities() {
         title: "Opportunity Rejected",
         description: "This opportunity has been hidden",
       });
-      setExplorerOpen(false);
     },
     onError: () => {
       toast({
@@ -705,20 +702,10 @@ export default function Opportunities() {
           viewedTickers={viewedTickers}
           preserveOrder={true}
           onStockClick={(stock) => {
-            setExplorerStock(stock);
-            setExplorerOpen(true);
+            setLocation(`/ticker/${stock.ticker}?from=opportunities`);
           }}
         />
       )}
-
-      <StockExplorer
-        stock={explorerStock}
-        open={explorerOpen}
-        onOpenChange={setExplorerOpen}
-        onFollow={(stock) => followMutation.mutate(stock.ticker)}
-        onReject={(stock) => rejectMutation.mutate(stock.ticker)}
-        users={users}
-      />
 
       <Dialog open={fetchConfigOpen} onOpenChange={setFetchConfigOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-auto">

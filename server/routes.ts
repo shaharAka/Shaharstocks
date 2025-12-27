@@ -4224,6 +4224,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "OpenInsider is not configured or disabled" });
       }
 
+      // Check if this is an onboarding fetch (first-time user)
+      const user = await storage.getUser(req.session.userId);
+      const isOnboarding = user && !user.initialDataFetched;
+      
+      // For onboarding, use a smaller limit (50) to complete quickly
+      // Regular fetches can use the full configured limit
+      const effectiveFetchLimit = isOnboarding ? Math.min(config.fetchLimit || 50, 50) : (config.fetchLimit || 50);
+      
+      if (isOnboarding) {
+        console.log(`[OpeninsiderFetch] ONBOARDING MODE: Using reduced limit of ${effectiveFetchLimit} for faster first-time fetch`);
+      }
+
       // Build filters from config
       const filters: {
         insiderTitles?: string[];
@@ -4247,7 +4259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Log all active filters for debugging (split into stage-1 and stage-2)
       console.log(`[OpeninsiderFetch] ====== STAGE 1: Python Scraper Filters ======`);
-      console.log(`[OpeninsiderFetch] Fetch limit: ${config.fetchLimit || 50}`);
+      console.log(`[OpeninsiderFetch] Fetch limit: ${effectiveFetchLimit}${isOnboarding ? ' (onboarding reduced)' : ''}`);
       console.log(`[OpeninsiderFetch] Insider titles: ${filters.insiderTitles ? filters.insiderTitles.join(', ') : 'ALL'}`);
       console.log(`[OpeninsiderFetch] Min transaction value: ${filters.minTransactionValue ? '$' + filters.minTransactionValue.toLocaleString() : 'NONE'}`);
       console.log(`[OpeninsiderFetch] Previous day only: ${filters.previousDayOnly}`);
@@ -4260,12 +4272,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[OpeninsiderFetch] User ${req.session.userId}: Fetching both purchases AND sales...`);
       const [purchasesResponse, salesResponse] = await Promise.all([
         openinsiderService.fetchInsiderPurchases(
-          config.fetchLimit || 50,
+          effectiveFetchLimit,
           Object.keys(filters).length > 0 ? filters : undefined,
           "P"
         ),
         openinsiderService.fetchInsiderSales(
-          config.fetchLimit || 50,
+          effectiveFetchLimit,
           Object.keys(filters).length > 0 ? filters : undefined
         )
       ]);

@@ -38,7 +38,7 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
 - **Daily Stock Briefs**: Lightweight daily trading reports for followed stocks with position-aware single-scenario display. Users can toggle between "Watching" and "In Position" modes.
 - **Intelligent Notification System**: Real-time, deduplicated alerts for high-value trading opportunities with distinct UI badging.
 - **Position Tracking with P&L Calculation**: Users can close positions with calculated P&L, displayed as total realized gains/losses on the dashboard.
-- **Onboarding Flow**: 4-step onboarding with automatic data fetching, visual feedback for fetch status, and educational content.
+- **Onboarding Flow**: 4-step onboarding with automatic data fetching, visual feedback for fetch status, and educational content. Uses a reduced fetch limit (50 max) during onboarding for faster completion.
 - **Tutorial System**: Manual-only tutorials, triggered by user interaction, with enhanced element targeting and simplified content.
 - **AI Analysis UX**: Compact signal badge in overview, detailed AI Playbook in a dedicated tab, amber gradient system for signal strength, and plain language.
 - **Fetch Configuration**: Simplified dialog for data ingestion settings, defaulting to daily refresh, with display preferences managed on the Opportunities page.

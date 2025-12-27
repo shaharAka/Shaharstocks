@@ -9,7 +9,7 @@
 
 import OpenAI from "openai";
 import type { TechnicalIndicators, NewsSentiment, PriceNewsCorrelation } from "./stockService";
-import { getAIProvider, generateWithFallback, type AIProviderConfig, type AIProvider, type ChatMessage, type AICompletionOptions } from "./aiProvider";
+import { generateWithFallback, type AIProviderConfig, type ChatMessage, type AICompletionOptions } from "./aiProvider";
 import { 
   generateScoringRubricPrompt, 
   scorecardConfig, 
@@ -158,13 +158,6 @@ class AIAnalysisService {
    */
   getProviderConfig(): AIProviderConfig {
     return currentProviderConfig;
-  }
-
-  /**
-   * Get the AI provider instance based on current configuration
-   */
-  private getProvider(): AIProvider {
-    return getAIProvider(currentProviderConfig);
   }
 
   /**

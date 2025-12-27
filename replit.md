@@ -30,7 +30,12 @@ The UI/UX utilizes shadcn/ui (New York style), Radix UI primitives, and Tailwind
   1. **Signal Score (1-100)**: Relevance of insider transaction to 1-2 week profit opportunity
   2. **Playbook**: Actionable guidance with specific data references and clear ENTER/WATCH/AVOID recommendations
   Multi-provider architecture supports OpenAI GPT and Google Gemini with admin-configurable runtime switching. Macro analysis factor optionally adjusts the final score. When refreshing analysis, previous results are deleted and recalculated fresh.
-  - **Automatic Fallback**: When Gemini quota is exhausted (429/RESOURCE_EXHAUSTED errors), automatically falls back to OpenAI gpt-5.2. The `generateWithFallback()` function handles this transparently across all AI analysis services.
+  - **Automatic Fallback Chain**: When a model fails (quota/rate limit), automatically tries the next model in order:
+    1. gemini-3-pro-preview (primary)
+    2. gpt-5.2
+    3. gemini-3-flash-preview
+    4. gpt-5
+  The `generateWithFallback()` function handles this transparently across all AI analysis services.
 - **Automated Recommendation Management**: Hourly job filters and removes old pending BUY recommendations and options deals.
 - **Collaboration**: Multi-user system with stock-specific comment threads and recommendation filtering.
 - **Adaptive Stock Fetching**: Stock fetch limits adjust based on user onboarding and configuration, with customizable OpenInsider filters.

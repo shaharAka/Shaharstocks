@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { MacroAnalysis, InsertMacroAnalysis } from "@shared/schema";
-import { getAIProvider, generateWithFallback, type AIProviderConfig, type ChatMessage } from "./aiProvider";
+import { generateWithFallback, type AIProviderConfig, type ChatMessage } from "./aiProvider";
 
 // Using OpenAI API for macro analysis (deprecated, using provider interface now)
 const openai = new OpenAI({

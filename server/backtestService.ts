@@ -4,7 +4,7 @@ import { openinsiderService } from "./openinsiderService";
 import { finnhubService } from "./finnhubService";
 import type { BacktestJob } from "@shared/schema";
 import OpenAI from "openai";
-import { getAIProvider, generateWithFallback, type AIProviderConfig, type ChatMessage } from "./aiProvider";
+import { generateWithFallback, type AIProviderConfig, type ChatMessage } from "./aiProvider";
 
 // Initialize OpenAI for backtesting analysis (deprecated, using provider interface)
 const openai = new OpenAI({

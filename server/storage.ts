@@ -219,7 +219,9 @@ export interface IStorage {
   
   // Opportunity Batches (track fetch runs)
   createOpportunityBatch(batch: InsertOpportunityBatch): Promise<OpportunityBatch>;
+  updateOpportunityBatchStats(batchId: string, stats: { added: number; rejected: number; duplicates: number }): Promise<void>;
   getLatestBatch(cadence: 'daily' | 'hourly'): Promise<OpportunityBatch | undefined>;
+  getLatestBatchWithStats(): Promise<OpportunityBatch | undefined>;
   
   // User Opportunity Rejections
   rejectOpportunity(userId: string, opportunityId: string): Promise<UserOpportunityRejection>;
@@ -1750,6 +1752,25 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(opportunityBatches)
       .where(eq(opportunityBatches.cadence, cadence))
+      .orderBy(desc(opportunityBatches.fetchedAt))
+      .limit(1);
+    return result;
+  }
+
+  async updateOpportunityBatchStats(batchId: string, stats: { added: number; rejected: number; duplicates: number }): Promise<void> {
+    await db
+      .update(opportunityBatches)
+      .set({
+        count: stats.added,
+        metadata: sql`COALESCE(${opportunityBatches.metadata}, '{}'::jsonb) || ${JSON.stringify({ stats })}::jsonb`
+      })
+      .where(eq(opportunityBatches.id, batchId));
+  }
+
+  async getLatestBatchWithStats(): Promise<OpportunityBatch | undefined> {
+    const [result] = await db
+      .select()
+      .from(opportunityBatches)
       .orderBy(desc(opportunityBatches.fetchedAt))
       .limit(1);
     return result;

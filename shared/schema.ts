@@ -102,6 +102,11 @@ export const opportunityBatches = pgTable("opportunity_batches", {
       insiderTitles?: string[];
     };
     duration?: number; // Fetch duration in ms
+    stats?: {
+      added: number; // Stocks that passed the funnel and were added
+      rejected: number; // Stocks that didn't pass (market cap, no quote, etc.)
+      duplicates: number; // Already existed in this cadence
+    };
   }>(),
 });
 

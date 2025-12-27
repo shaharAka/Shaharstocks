@@ -4182,11 +4182,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? latestBatch.fetchedAt.toISOString() 
         : latestBatch.fetchedAt;
       
+      // Extract stats from metadata
+      const stats = latestBatch.metadata?.stats;
+      
       res.json({
         id: latestBatch.id,
         cadence: latestBatch.cadence,
         fetchedAt: fetchedAtStr,
-        opportunityCount: latestBatch.count
+        opportunityCount: latestBatch.count,
+        stats: stats ? {
+          added: stats.added,
+          rejected: stats.rejected,
+          duplicates: stats.duplicates
+        } : undefined
       });
     } catch (error) {
       console.error("Get latest batch error:", error);

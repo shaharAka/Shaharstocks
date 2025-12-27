@@ -3198,7 +3198,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "entryPrice must be a positive number" });
       }
       
+      // Update the followed stock's position flag
       await storage.toggleStockPosition(ticker, req.session.userId, hasEnteredPosition, entryPrice);
+      
+      // Also manage portfolio holdings to sync with In Position page
+      if (hasEnteredPosition && entryPrice) {
+        // Check if a holding already exists for this ticker
+        const existingHoldings = await storage.getPortfolioHoldings(req.session.userId, false);
+        const existingHolding = existingHoldings.find(h => h.ticker === ticker && h.quantity > 0);
+        
+        if (!existingHolding) {
+          // Create a new portfolio holding
+          await storage.createPortfolioHolding({
+            userId: req.session.userId,
+            ticker,
+            quantity: 1,
+            averagePurchasePrice: entryPrice.toString(),
+            isSimulated: false,
+          });
+        }
+      } else if (!hasEnteredPosition) {
+        // When exiting position, find and close/delete any existing holdings
+        const existingHoldings = await storage.getPortfolioHoldings(req.session.userId, false);
+        const existingHolding = existingHoldings.find(h => h.ticker === ticker && h.quantity > 0);
+        
+        if (existingHolding) {
+          // Delete the holding (user can use close-position for P&L tracking)
+          await storage.deletePortfolioHolding(existingHolding.id);
+        }
+      }
+      
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Toggle position error:", error);

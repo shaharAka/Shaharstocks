@@ -178,9 +178,9 @@ export default function InPosition() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="flex flex-col h-full p-4 md:p-6">
       {/* Page Header - Matches Opportunities */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 shrink-0 mb-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Briefcase className="h-5 w-5 text-primary" />
@@ -218,7 +218,7 @@ export default function InPosition() {
       </div>
 
       {/* Search and Controls Row - Matches Opportunities */}
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3 shrink-0 mb-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -246,7 +246,7 @@ export default function InPosition() {
       </div>
 
       {/* Stats Bar - Matches Opportunities */}
-      <div className="flex gap-4 text-sm items-center">
+      <div className="flex gap-4 text-sm items-center shrink-0 mb-4">
         <div>
           <span className="text-muted-foreground">Total Positions: </span>
           <span className="font-medium" data-testid="text-positions-count">{activeHoldings.length}</span>
@@ -265,8 +265,10 @@ export default function InPosition() {
         )}
       </div>
 
-      {activeHoldings.length === 0 ? (
-        <Card className="bg-notebook-page">
+      {/* Content - Scrollable Area */}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {activeHoldings.length === 0 ? (
+          <Card className="bg-notebook-page">
           <CardContent className="p-8 text-center">
             <Briefcase className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             <h3 className="text-lg font-medium mb-2">No active positions</h3>
@@ -354,7 +356,8 @@ export default function InPosition() {
             </TableBody>
           </Table>
         </div>
-      )}
+        )}
+      </div>
 
       <Dialog open={closeDialog.open} onOpenChange={(open) => setCloseDialog({ ...closeDialog, open })}>
         <DialogContent>

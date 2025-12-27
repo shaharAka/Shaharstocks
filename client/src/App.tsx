@@ -143,7 +143,7 @@ function AuthenticatedApp() {
         </header>
         <div className="flex flex-1 min-h-0">
           <AppSidebar />
-          <main className="flex-1 overflow-auto notebook-page">
+          <main className="flex-1 overflow-hidden notebook-page">
             <TrialStatusBanner />
             <Router />
           </main>

@@ -4250,6 +4250,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract stats from metadata
       const stats = latestBatch.metadata?.stats;
       
+      // Get queue stats to show active processing status
+      const queueStats = await storage.getQueueStats();
+      const isProcessing = queueStats.pending > 0 || queueStats.processing > 0;
+      
       res.json({
         id: latestBatch.id,
         cadence: latestBatch.cadence,
@@ -4259,7 +4263,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           added: stats.added,
           rejected: stats.rejected,
           duplicates: stats.duplicates
-        } : undefined
+        } : undefined,
+        queueStats: {
+          pending: queueStats.pending,
+          processing: queueStats.processing,
+          isProcessing
+        }
       });
     } catch (error) {
       console.error("Get latest batch error:", error);

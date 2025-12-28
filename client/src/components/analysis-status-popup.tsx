@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Minimize2, Maximize2, CheckCircle, XCircle, Timer, Zap } from "lucide-react";
+import { Minimize2, Maximize2, CheckCircle, XCircle, Timer, Zap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -21,6 +21,11 @@ type BatchInfo = {
     rejected: number;
     duplicates: number;
   };
+  queueStats?: {
+    pending: number;
+    processing: number;
+    isProcessing: boolean;
+  };
 };
 
 export function AnalysisStatusPopup() {
@@ -34,9 +39,17 @@ export function AnalysisStatusPopup() {
 
   const { data: latestBatch } = useQuery<BatchInfo>({
     queryKey: ["/api/opportunities/latest-batch"],
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 5 * 1000,
+    refetchInterval: (query) => {
+      // Poll faster when actively processing
+      const isProcessing = query.state.data?.queueStats?.isProcessing;
+      return isProcessing ? 3 * 1000 : 30 * 1000;
+    },
   });
+
+  const isScanning = latestBatch?.queueStats?.isProcessing ?? false;
+  const pendingCount = latestBatch?.queueStats?.pending ?? 0;
+  const processingCount = latestBatch?.queueStats?.processing ?? 0;
 
   const tier = opportunitiesResponse?.tier || 'free';
   const isPro = tier === 'pro';
@@ -117,9 +130,18 @@ export function AnalysisStatusPopup() {
           data-testid="button-expand-status-popup"
         >
           <div className="flex items-center gap-2">
-            <Timer className="h-3.5 w-3.5 text-muted-foreground" />
-            {hasStats && batchStats.added > 0 && (
-              <span className="text-xs font-medium text-success">+{batchStats.added}</span>
+            {isScanning ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 text-amber-500 animate-spin" />
+                <span className="text-xs font-medium text-amber-500">{pendingCount + processingCount}</span>
+              </>
+            ) : (
+              <>
+                <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+                {hasStats && batchStats.added > 0 && (
+                  <span className="text-xs font-medium text-success">+{batchStats.added}</span>
+                )}
+              </>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -143,8 +165,17 @@ export function AnalysisStatusPopup() {
     >
       <div className="flex items-center justify-between p-2.5 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <Timer className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium text-sm">Last Scan</span>
+          {isScanning ? (
+            <>
+              <Loader2 className="h-4 w-4 text-amber-500 animate-spin" />
+              <span className="font-medium text-sm text-amber-500">Scanning...</span>
+            </>
+          ) : (
+            <>
+              <Timer className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium text-sm">Last Scan</span>
+            </>
+          )}
         </div>
         <Button
           size="icon"
@@ -158,7 +189,29 @@ export function AnalysisStatusPopup() {
       </div>
       
       <div className="p-2.5 space-y-1.5">
-        {hasStats && (
+        {isScanning ? (
+          <>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-amber-500">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Analyzing</span>
+              </div>
+              <span className="font-mono font-medium text-xs text-amber-500">
+                {processingCount}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Timer className="h-3.5 w-3.5" />
+                <span>In Queue</span>
+              </div>
+              <span className="font-mono font-medium text-xs text-muted-foreground">
+                {pendingCount}
+              </span>
+            </div>
+          </>
+        ) : hasStats && (
           <>
             <div className="flex items-center justify-between text-sm">
               <div className={cn("flex items-center gap-2", batchStats.added > 0 ? "text-success" : "text-muted-foreground")}>
@@ -184,7 +237,7 @@ export function AnalysisStatusPopup() {
 
         <div className={cn(
           "flex items-center justify-between text-xs",
-          hasStats && "pt-1.5 border-t border-border/50"
+          (isScanning || hasStats) && "pt-1.5 border-t border-border/50"
         )}>
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Timer className="h-3 w-3" />

@@ -537,18 +537,18 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           {/* Main Playbook/Recommendation - with financial term highlighting */}
           {analysis.recommendation && (
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p className="text-sm sm:text-base leading-relaxed whitespace-pre-line" data-testid="text-playbook">
+              <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line" data-testid="text-playbook">
                 <HighlightedText text={analysis.recommendation} />
-              </p>
+              </div>
             </div>
           )}
 
           {/* Summary if no playbook but has summary */}
           {!analysis.recommendation && analysis.summary && (
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p className="text-sm sm:text-base leading-relaxed" data-testid="text-summary">
+              <div className="text-sm sm:text-base leading-relaxed" data-testid="text-summary">
                 <HighlightedText text={analysis.summary} />
-              </p>
+              </div>
             </div>
           )}
 

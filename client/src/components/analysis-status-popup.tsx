@@ -211,7 +211,7 @@ export function AnalysisStatusPopup() {
               </span>
             </div>
           </>
-        ) : hasStats && (
+        ) : hasStats ? (
           <>
             <div className="flex items-center justify-between text-sm">
               <div className={cn("flex items-center gap-2", batchStats.added > 0 ? "text-success" : "text-muted-foreground")}>
@@ -233,6 +233,10 @@ export function AnalysisStatusPopup() {
               </span>
             </div>
           </>
+        ) : (
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>Waiting for next scan</span>
+          </div>
         )}
 
         <div className={cn(

@@ -138,7 +138,7 @@ export default function Opportunities() {
   }, [currentUser?.showAllOpportunities]);
 
   // Fetch unified global opportunities - filtered by user tier on server
-  const { data: opportunitiesResponse, isLoading } = useQuery<{
+  const { data: opportunitiesResponse, isLoading, error: opportunitiesError } = useQuery<{
     opportunities: Opportunity[];
     tier: 'pro' | 'free';
     cadence: string;
@@ -148,9 +148,19 @@ export default function Opportunities() {
     refetchOnWindowFocus: true,
   });
   
+  // Debug logging
+  useEffect(() => {
+    console.log('[OpportunitiesPage] Response:', opportunitiesResponse);
+    console.log('[OpportunitiesPage] Loading:', isLoading);
+    if (opportunitiesError) {
+      console.error('[OpportunitiesPage] Error:', opportunitiesError);
+    }
+  }, [opportunitiesResponse, isLoading, opportunitiesError]);
+  
   // Convert opportunities to stock-like format
   const stocks = useMemo(() => {
     if (!opportunitiesResponse?.opportunities) return [];
+    console.log('[OpportunitiesPage] Converting', opportunitiesResponse.opportunities.length, 'opportunities to stocks');
     return opportunitiesResponse.opportunities.map(opportunityToStock);
   }, [opportunitiesResponse]);
 

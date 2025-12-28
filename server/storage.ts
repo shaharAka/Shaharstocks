@@ -1655,6 +1655,7 @@ export class DatabaseStorage implements IStorage {
     userId?: string;
     ticker?: string;
   }): Promise<Opportunity[]> {
+    console.log('[Storage.getOpportunities] Called with options:', options);
     const conditions: any[] = [];
     
     // Filter by cadence:
@@ -1679,6 +1680,7 @@ export class DatabaseStorage implements IStorage {
     const twelvesDaysAgo = new Date();
     twelvesDaysAgo.setDate(twelvesDaysAgo.getDate() - 12);
     const cutoffDateStr = twelvesDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
+    console.log('[Storage.getOpportunities] 12-day cutoff:', cutoffDateStr);
     conditions.push(sql`${opportunities.insiderTradeDate} >= ${cutoffDateStr}`);
     
     // Get opportunities
@@ -1689,6 +1691,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     const results = await query.orderBy(desc(opportunities.createdAt));
+    console.log('[Storage.getOpportunities] Raw results count:', results.length);
     
     // If userId provided, filter out rejected opportunities and followed tickers
     if (options?.userId) {
@@ -1698,11 +1701,14 @@ export class DatabaseStorage implements IStorage {
       ]);
       const rejectedIds = new Set(rejections.map(r => r.opportunityId));
       const followedTickers = new Set(followedStocksList.map(f => f.ticker.toUpperCase()));
+      console.log('[Storage.getOpportunities] Rejections:', rejectedIds.size, 'Followed tickers:', Array.from(followedTickers));
       
-      return results.filter(opp => 
+      const filtered = results.filter(opp => 
         !rejectedIds.has(opp.id) && 
         !followedTickers.has(opp.ticker.toUpperCase())
       );
+      console.log('[Storage.getOpportunities] After filtering:', filtered.length);
+      return filtered;
     }
     
     return results;

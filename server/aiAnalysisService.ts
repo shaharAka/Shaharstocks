@@ -242,9 +242,9 @@ Primary Transaction:
 - Current Price: ${insiderTradingStrength.currentPrice}
 - Total Value: ${insiderTradingStrength.totalValue}
 
-Recent Transactions (Top 5):
-${insiderTradingStrength.allTransactions.slice(0, 5).map((t, idx) => 
-  `${idx + 1}. ${t.direction.toUpperCase()} - ${t.insiderName} (${t.insiderTitle}): ${t.quantityStr} @ ${t.price} on ${t.date}`
+All Recent Transactions:
+${insiderTradingStrength.allTransactions.map((t, idx) => 
+  `${idx + 1}. ${t.direction.toUpperCase()} - ${t.insiderName} (${t.insiderTitle}): ${t.quantityStr} @ ${t.price} on ${t.date} (Value: ${t.value})`
 ).join('\n')}
 
 Signal Summary: ${insiderTradingStrength.buyCount} BUY, ${insiderTradingStrength.sellCount} SELL (Total: ${insiderTradingStrength.totalTransactions})

@@ -2593,28 +2593,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all stock analyses (returns null scores for stocks with active jobs to show them as "processing")
-  // Use ?all=true to get all analyses (for opportunities page), otherwise returns only user's followed stocks
   app.get("/api/stock-analyses", async (req, res) => {
     try {
       if (!req.session.userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
+      // Get current user's stocks to filter analyses
+      const userStocks = await storage.getStocks(req.session.userId);
+      const userTickers = new Set(userStocks.map(s => s.ticker));
+      
       // Get all analyses
       const allAnalyses = await storage.getAllStockAnalyses();
       
-      // Check if requesting all analyses (for opportunities page) or just user's stocks
-      const includeAll = req.query.all === 'true';
-      
-      let filteredAnalyses = allAnalyses;
-      
-      if (!includeAll) {
-        // Get current user's stocks to filter analyses
-        const userStocks = await storage.getStocks(req.session.userId);
-        const userTickers = new Set(userStocks.map(s => s.ticker));
-        // Filter to only user's tickers
-        filteredAnalyses = allAnalyses.filter(a => userTickers.has(a.ticker));
-      }
+      // Filter to only user's tickers
+      const userAnalyses = allAnalyses.filter(a => userTickers.has(a.ticker));
       
       // Get tickers with active jobs (pending or processing)
       const activeJobs = await db
@@ -2629,7 +2622,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Return analyses with null scores for tickers with active jobs
       // This makes those stocks show as "processing" in the UI while preserving the ticker
-      const analyses = filteredAnalyses.map(a => {
+      const analyses = userAnalyses.map(a => {
         if (activeJobTickers.has(a.ticker)) {
           // Return clean processing object with only ticker and status
           return {

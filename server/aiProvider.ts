@@ -72,11 +72,14 @@ async function callOpenAI(
 ): Promise<string> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   
+  // Newer OpenAI models (gpt-4o, gpt-5, etc.) use max_completion_tokens instead of max_tokens
+  const maxTokens = options?.maxTokens ?? 4000;
+  
   const response = await client.chat.completions.create({
     model,
     messages: messages.map(m => ({ role: m.role, content: m.content })),
     temperature: options?.temperature ?? 0.3,
-    max_tokens: options?.maxTokens ?? 4000,
+    max_completion_tokens: maxTokens,
     response_format: options?.responseFormat === "json" ? { type: "json_object" } : undefined
   });
   

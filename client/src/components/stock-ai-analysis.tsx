@@ -27,6 +27,12 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { StockAnalysis } from "@shared/schema";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -731,12 +737,144 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         </div>
       </div>
 
-      {/* Analysis Timestamp */}
-      {analysis.analyzedAt && (
-        <div className="text-xs text-muted-foreground text-center">
-          Last analyzed: {new Date(analysis.analyzedAt).toLocaleString()}
-        </div>
-      )}
+      {/* Advanced Section - Collapsible for technical details */}
+      <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="advanced">
+          <AccordionTrigger className="text-sm" data-testid="button-toggle-advanced">
+            Advanced Details
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4 pt-2">
+            
+            {/* Technical Analysis */}
+            {analysis.technicalAnalysisScore != null && (
+              <Card>
+                <CardHeader className="p-3 sm:p-4 pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>Technical Indicators</span>
+                    <Badge variant={
+                      analysis.technicalAnalysisScore >= 70 ? 'default' :
+                      analysis.technicalAnalysisScore >= 40 ? 'secondary' : 'destructive'
+                    }>
+                      {analysis.technicalAnalysisScore}/100
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-3 sm:p-4 pt-0 space-y-3">
+                  {analysis.technicalAnalysisTrend && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-muted-foreground">Trend:</span>
+                      <Badge variant={
+                        analysis.technicalAnalysisTrend === 'bullish' ? 'default' :
+                        analysis.technicalAnalysisTrend === 'bearish' ? 'destructive' : 'secondary'
+                      } className="capitalize text-xs">
+                        {analysis.technicalAnalysisTrend}
+                      </Badge>
+                      {analysis.technicalAnalysisMomentum && (
+                        <>
+                          <span className="text-xs text-muted-foreground">Momentum:</span>
+                          <Badge variant="outline" className="capitalize text-xs">
+                            {analysis.technicalAnalysisMomentum}
+                          </Badge>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {analysis.technicalAnalysisSignals && analysis.technicalAnalysisSignals.length > 0 && (
+                    <ul className="space-y-1">
+                      {analysis.technicalAnalysisSignals.slice(0, 3).map((signal: string, index: number) => (
+                        <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
+                          <span className="shrink-0">•</span>
+                          <span className="flex-1">{signal}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Sentiment Analysis */}
+            {analysis.sentimentAnalysisScore != null && (
+              <Card>
+                <CardHeader className="p-3 sm:p-4 pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>News Sentiment</span>
+                    <Badge variant={
+                      analysis.sentimentAnalysisScore >= 70 ? 'default' :
+                      analysis.sentimentAnalysisScore >= 40 ? 'secondary' : 'destructive'
+                    }>
+                      {analysis.sentimentAnalysisScore}/100
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-3 sm:p-4 pt-0 space-y-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {analysis.sentimentAnalysisTrend && (
+                      <>
+                        <span className="text-xs text-muted-foreground">Sentiment:</span>
+                        <Badge variant={
+                          analysis.sentimentAnalysisTrend === 'positive' ? 'default' :
+                          analysis.sentimentAnalysisTrend === 'negative' ? 'destructive' : 'secondary'
+                        } className="capitalize text-xs">
+                          {analysis.sentimentAnalysisTrend}
+                        </Badge>
+                      </>
+                    )}
+                    {analysis.sentimentAnalysisNewsVolume && (
+                      <>
+                        <span className="text-xs text-muted-foreground">Volume:</span>
+                        <Badge variant="outline" className="capitalize text-xs">
+                          {analysis.sentimentAnalysisNewsVolume}
+                        </Badge>
+                      </>
+                    )}
+                  </div>
+
+                  {analysis.sentimentAnalysisKeyThemes && analysis.sentimentAnalysisKeyThemes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysis.sentimentAnalysisKeyThemes.slice(0, 5).map((theme: string, index: number) => (
+                        <Badge key={index} variant="secondary" className="text-[10px]">
+                          {theme}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Financial Health */}
+            {analysis.financialHealthScore != null && (
+              <Card>
+                <CardHeader className="p-3 sm:p-4 pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span>Financial Health</span>
+                    <Badge variant={
+                      analysis.financialHealthScore >= 70 ? 'default' :
+                      analysis.financialHealthScore >= 40 ? 'secondary' : 'destructive'
+                    }>
+                      {analysis.financialHealthScore}/100
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-3 sm:p-4 pt-0">
+                  <div className="text-xs text-muted-foreground">
+                    Fundamental analysis based on profitability, liquidity, and growth metrics.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Analysis Timestamp */}
+            {analysis.analyzedAt && (
+              <div className="text-xs text-muted-foreground text-center pt-2">
+                Last analyzed: {new Date(analysis.analyzedAt).toLocaleString()}
+              </div>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }

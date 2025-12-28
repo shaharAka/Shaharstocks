@@ -4247,9 +4247,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? latestBatch.fetchedAt.toISOString() 
         : latestBatch.fetchedAt;
       
-      // Extract stats from metadata
-      const stats = latestBatch.metadata?.stats;
-      console.log(`[LatestBatch] Batch ${latestBatch.id}, metadata:`, latestBatch.metadata, 'stats:', stats);
+      // Extract stats from metadata (Drizzle may return JSONB as string)
+      let metadata = latestBatch.metadata;
+      if (typeof metadata === 'string') {
+        try {
+          metadata = JSON.parse(metadata);
+        } catch (e) {
+          console.error('[LatestBatch] Failed to parse metadata:', e);
+          metadata = null;
+        }
+      }
+      const stats = metadata?.stats;
+      console.log(`[LatestBatch] Batch ${latestBatch.id}, parsed metadata:`, metadata, 'stats:', stats);
       
       // Get queue stats to show active processing status
       const queueStats = await storage.getQueueStats();

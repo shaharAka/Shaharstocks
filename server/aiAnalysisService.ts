@@ -76,6 +76,25 @@ export interface FinancialAnalysis {
     leverage: string;
     growth: string;
   };
+  entryTiming?: {
+    status: "early" | "optimal" | "late" | "missed";
+    priceMoveSinceInsider: string;
+    daysOld: number;
+    assessment: string;
+  };
+  sectorAnalysis?: {
+    sector: string;
+    sectorOutlook: "bullish" | "bearish" | "neutral";
+    sectorNote: string;
+  };
+  tradeParameters?: {
+    entryPrice: number;
+    stopLoss: number;
+    stopLossPercent: number;
+    profitTarget: number;
+    profitTargetPercent: number;
+    riskRewardRatio: number;
+  };
   risks: string[];
   opportunities: string[];
   recommendation: string;

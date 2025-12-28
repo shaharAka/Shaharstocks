@@ -403,6 +403,11 @@ class QueueWorker {
         sectorName: analysis.sectorAnalysis?.sector,
         sectorOutlook: analysis.sectorAnalysis?.sectorOutlook,
         sectorNote: analysis.sectorAnalysis?.sectorNote,
+        // Trade Parameters (Stop Loss & Profit Target)
+        stopLoss: analysis.tradeParameters?.stopLoss ? String(analysis.tradeParameters.stopLoss) : undefined,
+        profitTarget: analysis.tradeParameters?.profitTarget ? String(analysis.tradeParameters.profitTarget) : undefined,
+        stopLossPercent: analysis.tradeParameters?.stopLossPercent ? String(analysis.tradeParameters.stopLossPercent) : undefined,
+        profitTargetPercent: analysis.tradeParameters?.profitTargetPercent ? String(analysis.tradeParameters.profitTargetPercent) : undefined,
       });
 
       // Mark all phases complete (for backward compatibility with UI)

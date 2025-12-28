@@ -373,6 +373,14 @@ Return ONLY this JSON (no markdown):
   },
   "risks": ["List 2-4 specific risks with data backing"],
   "opportunities": ["List 2-3 potential catalysts"],
+  "tradeParameters": {
+    "entryPrice": current stock price as number (use the current price provided),
+    "stopLoss": recommended stop loss price as number (typically 5-10% below entry for buys, above for sells),
+    "stopLossPercent": stop loss as percentage from entry (negative number like -7.5),
+    "profitTarget": recommended profit target price as number (typically 10-20% above entry for buys, below for sells),
+    "profitTargetPercent": profit target as percentage from entry (positive number like 15.0),
+    "riskRewardRatio": ratio of potential profit to potential loss (e.g., 2.0 means 2:1 reward to risk)
+  },
   "recommendation": "${isBuy ? 'BUY NOW / WATCH / AVOID' : 'SHORT NOW / WATCH / AVOID'} - 2-sentence action. State your position as an investor and WHY based on the data."
 }
 

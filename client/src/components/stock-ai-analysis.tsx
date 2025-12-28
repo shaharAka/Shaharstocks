@@ -525,7 +525,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
         </div>
       </div>
 
-      {/* Section 3: AI Playbook - The main recommendation */}
+      {/* Section 3: AI Playbook - The main recommendation with trade levels */}
       <Card>
         <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
           <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
@@ -533,7 +533,7 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
             AI Playbook
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-3 sm:p-6 pt-0">
+        <CardContent className="p-3 sm:p-6 pt-0 space-y-4">
           {/* Main Playbook/Recommendation - with financial term highlighting */}
           {analysis.recommendation && (
             <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -555,60 +555,37 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           {!analysis.recommendation && !analysis.summary && (
             <p className="text-sm text-muted-foreground italic">No playbook available</p>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Trade Levels Card - Stop Loss & Profit Target */}
-      <Card>
-        <CardHeader className="p-3 sm:p-4 pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Target className="h-4 w-4 text-muted-foreground" />
-            Trade Levels
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 sm:p-4 pt-0">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Stop Loss */}
-            <div className="p-3 rounded-lg border bg-red-500/5 border-red-500/20">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
-                <span className="text-xs font-medium uppercase text-muted-foreground">Stop Loss</span>
-              </div>
+          {/* Trade Levels - inline with playbook */}
+          <div className="flex items-center gap-6 pt-3 border-t text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Stop:</span>
               {analysis.stopLoss && !isNaN(parseFloat(analysis.stopLoss)) ? (
-                <>
-                  <span className="text-lg font-bold text-red-600 dark:text-red-400" data-testid="text-stop-loss">
-                    ${parseFloat(analysis.stopLoss).toFixed(2)}
-                  </span>
+                <span className="font-mono font-medium" data-testid="text-stop-loss">
+                  ${parseFloat(analysis.stopLoss).toFixed(2)}
                   {analysis.stopLossPercent && !isNaN(parseFloat(analysis.stopLossPercent)) && (
-                    <span className="text-xs text-muted-foreground ml-2">
+                    <span className="text-muted-foreground ml-1">
                       ({parseFloat(analysis.stopLossPercent).toFixed(1)}%)
                     </span>
                   )}
-                </>
+                </span>
               ) : (
-                <span className="text-sm text-muted-foreground italic">Re-analyze to generate</span>
+                <span className="text-muted-foreground italic">—</span>
               )}
             </div>
-
-            {/* Profit Target */}
-            <div className="p-3 rounded-lg border bg-green-500/5 border-green-500/20">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-xs font-medium uppercase text-muted-foreground">Profit Target</span>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Target:</span>
               {analysis.profitTarget && !isNaN(parseFloat(analysis.profitTarget)) ? (
-                <>
-                  <span className="text-lg font-bold text-green-600 dark:text-green-400" data-testid="text-profit-target">
-                    ${parseFloat(analysis.profitTarget).toFixed(2)}
-                  </span>
+                <span className="font-mono font-medium" data-testid="text-profit-target">
+                  ${parseFloat(analysis.profitTarget).toFixed(2)}
                   {analysis.profitTargetPercent && !isNaN(parseFloat(analysis.profitTargetPercent)) && (
-                    <span className="text-xs text-muted-foreground ml-2">
+                    <span className="text-muted-foreground ml-1">
                       (+{parseFloat(analysis.profitTargetPercent).toFixed(1)}%)
                     </span>
                   )}
-                </>
+                </span>
               ) : (
-                <span className="text-sm text-muted-foreground italic">Re-analyze to generate</span>
+                <span className="text-muted-foreground italic">—</span>
               )}
             </div>
           </div>

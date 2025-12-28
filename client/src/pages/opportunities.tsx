@@ -336,13 +336,15 @@ export default function Opportunities() {
     });
 
     // Enrich with AI scores and following status
+    // integratedScore is the primary score from AI analysis
     const enriched = filtered.map(stock => {
       const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
       const daysSinceTrade = getDaysFromBuy(stock.insiderTradeDate);
+      // Use integratedScore as the primary score (this is the AI-generated signal score)
+      const signalScore = analysis?.integratedScore ?? analysis?.confidenceScore ?? null;
       return {
         ...stock,
-        integratedScore: analysis?.integratedScore ?? null,
-        aiScore: analysis?.aiScore ?? null,
+        signalScore,
         daysSinceTrade,
         isFollowing: followedTickers.has(stock.ticker),
       };
@@ -351,7 +353,7 @@ export default function Opportunities() {
     // Group by ticker to get highest score per ticker
     const grouped = new Map<string, typeof enriched[0] & { highestScore: number | null }>();
     enriched.forEach(stock => {
-      const score = stock.integratedScore ?? stock.aiScore;
+      const score = stock.signalScore;
       const existing = grouped.get(stock.ticker);
       
       if (!existing) {

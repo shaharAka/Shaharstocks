@@ -4249,6 +4249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Extract stats from metadata
       const stats = latestBatch.metadata?.stats;
+      console.log(`[LatestBatch] Batch ${latestBatch.id}, metadata:`, latestBatch.metadata, 'stats:', stats);
       
       // Get queue stats to show active processing status
       const queueStats = await storage.getQueueStats();

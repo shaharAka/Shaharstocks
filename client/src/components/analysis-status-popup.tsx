@@ -37,7 +37,7 @@ export function AnalysisStatusPopup() {
     staleTime: 60 * 1000,
   });
 
-  const { data: latestBatch } = useQuery<BatchInfo>({
+  const { data: latestBatch, error: batchError } = useQuery<BatchInfo>({
     queryKey: ["/api/opportunities/latest-batch"],
     staleTime: 5 * 1000,
     refetchInterval: (query) => {
@@ -46,6 +46,16 @@ export function AnalysisStatusPopup() {
       return isProcessing ? 3 * 1000 : 30 * 1000;
     },
   });
+
+  // Debug logging
+  useEffect(() => {
+    if (latestBatch) {
+      console.log('[AnalysisPopup] Batch data:', latestBatch);
+    }
+    if (batchError) {
+      console.error('[AnalysisPopup] Batch error:', batchError);
+    }
+  }, [latestBatch, batchError]);
 
   const isScanning = latestBatch?.queueStats?.isProcessing ?? false;
   const pendingCount = latestBatch?.queueStats?.pending ?? 0;

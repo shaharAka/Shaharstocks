@@ -555,30 +555,63 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
           {!analysis.recommendation && !analysis.summary && (
             <p className="text-sm text-muted-foreground italic">No playbook available</p>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Stop Loss / Profit Target - actionable levels */}
-          {(analysis.stopLoss || analysis.profitTarget) && (
-            <div className="mt-4 pt-4 border-t flex flex-wrap gap-4">
-              {analysis.stopLoss && (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-500" />
-                  <span className="text-sm text-muted-foreground">Stop Loss:</span>
-                  <span className="text-sm font-semibold text-red-600 dark:text-red-400" data-testid="text-stop-loss">
+      {/* Trade Levels Card - Stop Loss & Profit Target */}
+      <Card>
+        <CardHeader className="p-3 sm:p-4 pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Target className="h-4 w-4 text-muted-foreground" />
+            Trade Levels
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-3 sm:p-4 pt-0">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Stop Loss */}
+            <div className="p-3 rounded-lg border bg-red-500/5 border-red-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2 h-2 rounded-full bg-red-500" />
+                <span className="text-xs font-medium uppercase text-muted-foreground">Stop Loss</span>
+              </div>
+              {analysis.stopLoss && !isNaN(parseFloat(analysis.stopLoss)) ? (
+                <>
+                  <span className="text-lg font-bold text-red-600 dark:text-red-400" data-testid="text-stop-loss">
                     ${parseFloat(analysis.stopLoss).toFixed(2)}
                   </span>
-                </div>
-              )}
-              {analysis.profitTarget && (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-sm text-muted-foreground">Profit Target:</span>
-                  <span className="text-sm font-semibold text-green-600 dark:text-green-400" data-testid="text-profit-target">
-                    ${parseFloat(analysis.profitTarget).toFixed(2)}
-                  </span>
-                </div>
+                  {analysis.stopLossPercent && !isNaN(parseFloat(analysis.stopLossPercent)) && (
+                    <span className="text-xs text-muted-foreground ml-2">
+                      ({parseFloat(analysis.stopLossPercent).toFixed(1)}%)
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground italic">Re-analyze to generate</span>
               )}
             </div>
-          )}
+
+            {/* Profit Target */}
+            <div className="p-3 rounded-lg border bg-green-500/5 border-green-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-xs font-medium uppercase text-muted-foreground">Profit Target</span>
+              </div>
+              {analysis.profitTarget && !isNaN(parseFloat(analysis.profitTarget)) ? (
+                <>
+                  <span className="text-lg font-bold text-green-600 dark:text-green-400" data-testid="text-profit-target">
+                    ${parseFloat(analysis.profitTarget).toFixed(2)}
+                  </span>
+                  {analysis.profitTargetPercent && !isNaN(parseFloat(analysis.profitTargetPercent)) && (
+                    <span className="text-xs text-muted-foreground ml-2">
+                      (+{parseFloat(analysis.profitTargetPercent).toFixed(1)}%)
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground italic">Re-analyze to generate</span>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

@@ -403,11 +403,15 @@ class QueueWorker {
         sectorName: analysis.sectorAnalysis?.sector,
         sectorOutlook: analysis.sectorAnalysis?.sectorOutlook,
         sectorNote: analysis.sectorAnalysis?.sectorNote,
-        // Trade Parameters (Stop Loss & Profit Target)
-        stopLoss: analysis.tradeParameters?.stopLoss ? String(analysis.tradeParameters.stopLoss) : undefined,
-        profitTarget: analysis.tradeParameters?.profitTarget ? String(analysis.tradeParameters.profitTarget) : undefined,
-        stopLossPercent: analysis.tradeParameters?.stopLossPercent ? String(analysis.tradeParameters.stopLossPercent) : undefined,
-        profitTargetPercent: analysis.tradeParameters?.profitTargetPercent ? String(analysis.tradeParameters.profitTargetPercent) : undefined,
+        // Trade Parameters (Stop Loss & Profit Target) - validate as numbers before saving
+        stopLoss: typeof analysis.tradeParameters?.stopLoss === 'number' && isFinite(analysis.tradeParameters.stopLoss) 
+          ? String(analysis.tradeParameters.stopLoss) : undefined,
+        profitTarget: typeof analysis.tradeParameters?.profitTarget === 'number' && isFinite(analysis.tradeParameters.profitTarget)
+          ? String(analysis.tradeParameters.profitTarget) : undefined,
+        stopLossPercent: typeof analysis.tradeParameters?.stopLossPercent === 'number' && isFinite(analysis.tradeParameters.stopLossPercent)
+          ? String(analysis.tradeParameters.stopLossPercent) : undefined,
+        profitTargetPercent: typeof analysis.tradeParameters?.profitTargetPercent === 'number' && isFinite(analysis.tradeParameters.profitTargetPercent)
+          ? String(analysis.tradeParameters.profitTargetPercent) : undefined,
       });
 
       // Mark all phases complete (for backward compatibility with UI)

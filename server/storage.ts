@@ -134,7 +134,6 @@ import { eventDispatcher } from "./eventDispatcher";
 export interface IStorage {
   // Stocks (Per-user tenant isolation)
   getStocks(userId: string): Promise<Stock[]>;
-  getStocksByStatus(userId: string, status: string): Promise<Stock[]>;
   getStocksByUserStatus(userId: string, status: string): Promise<Stock[]>;
   getStock(userId: string, ticker: string): Promise<Stock | undefined>;
   getAnyStockForTicker(ticker: string): Promise<Stock | undefined>; // Global: Get ANY stock record for ticker (for extracting shared metadata like industry)
@@ -814,14 +813,6 @@ export class DatabaseStorage implements IStorage {
     console.log(`[CLEANUP] Rejected stocks cleanup completed in ${elapsedMs}ms - Deleted ${result.count} stocks`);
     
     return result;
-  }
-
-  async getStocksByStatus(userId: string, status: string): Promise<Stock[]> {
-    // CRITICAL: Filter by userId for tenant isolation
-    return await db.select().from(stocks).where(and(
-      eq(stocks.userId, userId),
-      eq(stocks.recommendationStatus, status)
-    ));
   }
 
   async getStocksByUserStatus(userId: string, status: string): Promise<Stock[]> {
@@ -4123,4 +4114,42 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Create a hybrid storage that uses StorageFacade for most methods
+// but delegates getStocksWithUserStatus to DatabaseStorage
+import { StorageFacade } from "./repositories/storageFacade";
+
+class HybridStorage extends StorageFacade {
+  private legacyStorage: DatabaseStorage;
+
+  constructor() {
+    super();
+    this.legacyStorage = new DatabaseStorage();
+  }
+
+  // Delegate getStocksWithUserStatus to DatabaseStorage (complex method, not yet migrated)
+  async getStocksWithUserStatus(userId: string, limit: number = 100): Promise<any[]> {
+    return this.legacyStorage.getStocksWithUserStatus(userId, limit);
+  }
+}
+
+// Create base storage instance
+const baseStorage = new HybridStorage();
+
+// Wrap with caching layer if Redis is available
+let storage: HybridStorage;
+if (process.env.ENABLE_CACHE === "true" || process.env.REDIS_URL) {
+  try {
+    // Dynamically import cached storage wrapper
+    const { CachedStorage } = await import("./cache/cachedStorage");
+    storage = new CachedStorage(baseStorage) as any as HybridStorage;
+    logger.info("[Storage] Caching layer enabled");
+  } catch (error) {
+    logger.warn("[Storage] Failed to enable caching layer, using base storage", error);
+    storage = baseStorage;
+  }
+} else {
+  storage = baseStorage;
+}
+
+// Export storage instance (with or without caching)
+export { storage };

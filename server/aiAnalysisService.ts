@@ -22,10 +22,10 @@ import {
   determineConfidence
 } from "./scoring/scorecardConfig";
 
-// Default OpenAI client for backwards compatibility
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Default OpenAI client for backwards compatibility (only if API key is available)
+const openai = process.env.OPENAI_API_KEY 
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
 // Current AI provider configuration (will be loaded from database)
 let currentProviderConfig: AIProviderConfig = { provider: "openai" };

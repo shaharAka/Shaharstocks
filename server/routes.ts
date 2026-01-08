@@ -16,7 +16,7 @@ import { openinsiderService } from "./openinsiderService";
 import { createRequireAdmin } from "./session";
 import { verifyPayPalWebhook, cancelPayPalSubscription, getSubscriptionTransactions } from "./paypalService";
 import { aiAnalysisService } from "./aiAnalysisService";
-import { signupLimiter, loginLimiter, resendVerificationLimiter } from "./middleware/rateLimiter";
+import { authRateLimiter, registrationRateLimiter, emailVerificationRateLimiter } from "./middleware/rateLimiter";
 import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "./utils/emailValidation";
 import { sendVerificationEmail, notifySuperAdminsNewSignup, notifySuperAdminsFirstPayment, sendBugReport } from "./emailService";
 import { isGoogleConfigured, generateState, getGoogleAuthUrl, handleGoogleCallback } from "./googleAuthService";
@@ -500,7 +500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/login", loginLimiter, async (req, res) => {
+  app.post("/api/auth/login", authRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       if (!email || !password) {
@@ -590,7 +590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/signup", signupLimiter, async (req, res) => {
+  app.post("/api/auth/signup", registrationRateLimiter, async (req, res) => {
     try {
       const { name, email, password } = req.body;
       if (!name || !email || !password) {
@@ -739,7 +739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Resend verification email
-  app.post("/api/auth/resend-verification", resendVerificationLimiter, async (req, res) => {
+  app.post("/api/auth/resend-verification", emailVerificationRateLimiter, async (req, res) => {
     try {
       const { email } = req.body;
       
@@ -852,9 +852,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store state in session for verification
       req.session.googleOAuthState = state;
       
-      const hostname = req.hostname || req.get('host')?.split(':')[0] || '';
-      const protocol = req.protocol || 'https';
-      const redirectUri = `${protocol}://${hostname}/api/auth/google/callback`;
+      // Get full host including port (e.g., localhost:5002)
+      const host = req.get('host') || req.hostname || 'localhost';
+      // For localhost, use http; otherwise use the request protocol or default to https
+      const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : (req.protocol || 'https');
+      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
       
       console.log(`[Google OAuth] Generated redirect URI: ${redirectUri}`);
       
@@ -889,9 +891,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clear the state
       delete req.session.googleOAuthState;
 
-      const hostname = req.hostname || req.get('host')?.split(':')[0] || '';
-      const protocol = req.protocol || 'https';
-      const redirectUri = `${protocol}://${hostname}/api/auth/google/callback`;
+      // Get full host including port (e.g., localhost:5002)
+      const host = req.get('host') || req.hostname || 'localhost';
+      // For localhost, use http; otherwise use the request protocol or default to https
+      const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : (req.protocol || 'https');
+      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
 
       // Exchange code for tokens and get user info
       const googleUser = await handleGoogleCallback(code, redirectUri);

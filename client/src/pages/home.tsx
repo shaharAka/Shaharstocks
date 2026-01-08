@@ -1,8 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, Brain, Zap, Bell, TrendingUp } from "lucide-react";
+import { useLocation } from "wouter";
 
 export default function Home() {
+  const [, setLocation] = useLocation();
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="fixed top-0 left-0 right-0 h-16 md:h-20 border-b bg-background/80 backdrop-blur-sm z-50">
@@ -11,9 +14,22 @@ export default function Home() {
             <BarChart3 className="w-6 h-6 md:w-8 md:h-8 text-primary" />
             <span className="text-lg md:text-xl font-semibold">signal2</span>
           </div>
-          <Button variant="default" data-testid="button-get-started">
-            Get Started
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={() => setLocation("/login")}
+              data-testid="button-login"
+            >
+              Login
+            </Button>
+            <Button 
+              variant="default" 
+              onClick={() => setLocation("/signup")}
+              data-testid="button-get-started"
+            >
+              Get Started
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -80,11 +96,21 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button size="lg" variant="default" data-testid="button-hero-primary">
+              <Button 
+                size="lg" 
+                variant="default" 
+                onClick={() => setLocation("/signup")}
+                data-testid="button-hero-primary"
+              >
                 Start Analyzing
               </Button>
-              <Button size="lg" variant="outline" data-testid="button-hero-secondary">
-                Learn More
+              <Button 
+                size="lg" 
+                variant="outline" 
+                onClick={() => setLocation("/login")}
+                data-testid="button-hero-secondary"
+              >
+                Login
               </Button>
             </div>
           </div>

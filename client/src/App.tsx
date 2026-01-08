@@ -17,49 +17,97 @@ import { Onboarding } from "@/components/onboarding";
 import { AnalysisStatusPopup } from "@/components/analysis-status-popup";
 import { HelpCircle, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import Portfolio from "@/pages/portfolio";
-import Opportunities from "@/pages/opportunities";
-import Following from "@/pages/following";
-import InPosition from "@/pages/in-position";
-import Community from "@/pages/community";
-import FeatureSuggestions from "@/pages/community-feature-suggestions";
-import Trading from "@/pages/trading";
-import Settings from "@/pages/settings";
-import AdminPage from "@/pages/admin";
-import TickerDetail from "@/pages/ticker-detail";
-import Login from "@/pages/login";
-import Signup from "@/pages/signup";
-import Terms from "@/pages/terms";
-import VerifyEmail from "@/pages/verify-email";
-import NotFound from "@/pages/not-found";
-import { useEffect, useState } from "react";
+import {
+  Portfolio,
+  Opportunities,
+  Following,
+  InPosition,
+  Community,
+  FeatureSuggestions,
+  Trading,
+  Settings,
+  AdminPage,
+  TickerDetail,
+  Login,
+  Signup,
+  Terms,
+  VerifyEmail,
+  NotFound,
+} from "@/pages";
+import Home from "@/pages/home";
+import { LoadingFallback } from "@/components/LoadingFallback";
+import { useEffect, useState, Suspense } from "react";
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/login" component={Login} />
-      <Route path="/signup" component={Signup} />
-      <Route path="/verify-email" component={VerifyEmail} />
-      <Route path="/terms" component={Terms} />
-      <Route path="/" component={Opportunities} />
-      <Route path="/opportunities" component={Opportunities} />
-      <Route path="/following" component={Following} />
-      <Route path="/in-position" component={InPosition} />
-      <Route path="/portfolio" component={Portfolio} />
-      <Route path="/community" component={Community} />
-      <Route path="/community/discussion" component={Community} />
-      <Route path="/community/feature-suggestions" component={FeatureSuggestions} />
-      <Route path="/ticker/:ticker" component={TickerDetail} />
-      <Route path="/trading" component={Trading} />
-      <Route path="/admin" component={AdminPage} />
-      <Route path="/settings" component={Settings} />
-      {/* Legacy redirects for backwards compatibility */}
-      <Route path="/recommendations" component={Opportunities} />
-      <Route path="/purchase" component={Opportunities} />
-      <Route path="/dashboard" component={Following} />
-      <Route path="/watchlist" component={Portfolio} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<LoadingFallback />}>
+      <Switch>
+        <Route path="/login">
+          <Login />
+        </Route>
+        <Route path="/signup">
+          <Signup />
+        </Route>
+        <Route path="/verify-email">
+          <VerifyEmail />
+        </Route>
+        <Route path="/terms">
+          <Terms />
+        </Route>
+        <Route path="/">
+          <Home />
+        </Route>
+        <Route path="/opportunities">
+          <Opportunities />
+        </Route>
+        <Route path="/following">
+          <Following />
+        </Route>
+        <Route path="/in-position">
+          <InPosition />
+        </Route>
+        <Route path="/portfolio">
+          <Portfolio />
+        </Route>
+        <Route path="/community">
+          <Community />
+        </Route>
+        <Route path="/community/discussion">
+          <Community />
+        </Route>
+        <Route path="/community/feature-suggestions">
+          <FeatureSuggestions />
+        </Route>
+        <Route path="/ticker/:ticker">
+          <TickerDetail />
+        </Route>
+        <Route path="/trading">
+          <Trading />
+        </Route>
+        <Route path="/admin">
+          <AdminPage />
+        </Route>
+        <Route path="/settings">
+          <Settings />
+        </Route>
+        {/* Legacy redirects for backwards compatibility */}
+        <Route path="/recommendations">
+          <Opportunities />
+        </Route>
+        <Route path="/purchase">
+          <Opportunities />
+        </Route>
+        <Route path="/dashboard">
+          <Following />
+        </Route>
+        <Route path="/watchlist">
+          <Portfolio />
+        </Route>
+        <Route>
+          <NotFound />
+        </Route>
+      </Switch>
+    </Suspense>
   );
 }
 
@@ -69,8 +117,10 @@ function AuthenticatedApp() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/verify-email" && location !== "/terms") {
-      setLocation("/login");
+    // Don't redirect if user is on public pages (login, signup, home, terms, verify-email)
+    const publicPages = ["/login", "/signup", "/verify-email", "/terms", "/"];
+    if (!isLoading && !user && !publicPages.includes(location)) {
+      setLocation("/");
     }
   }, [user, isLoading, location, setLocation]);
 
@@ -89,11 +139,13 @@ function AuthenticatedApp() {
     );
   }
 
-  if (!user && location !== "/login" && location !== "/signup" && location !== "/verify-email" && location !== "/terms") {
+  // Show public pages (home, login, signup, etc.) for unauthenticated users
+  const publicPages = ["/", "/login", "/signup", "/verify-email", "/terms"];
+  if (!user && !publicPages.includes(location)) {
     return null;
   }
 
-  if (location === "/login" || location === "/signup" || location === "/verify-email" || location === "/terms") {
+  if (publicPages.includes(location)) {
     return <Router />;
   }
 

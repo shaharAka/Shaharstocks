@@ -5,24 +5,39 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: [],
-    include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['server/**/*.ts'],
       exclude: [
-        'server/index.ts',
-        'server/vite.ts',
+        'node_modules/',
+        'dist/',
+        '**/*.config.*',
         '**/*.d.ts',
-        '**/node_modules/**',
+        '**/tests/',
+        '**/test-utils/',
+        '**/*.test.ts',
+        '**/*.spec.ts',
+        'server/routes/**', // Routes are integration tested
+        'server/index.ts', // Entry point
+        'server/vite.ts', // Vite-specific
       ],
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 70,
+        statements: 70,
+      },
     },
+    include: ['**/*.{test,spec}.{js,ts,tsx}'],
+    testTimeout: 10000,
+    // Setup files
+    setupFiles: ['./server/tests/setup.ts'],
   },
   resolve: {
     alias: {
-      '@shared': path.resolve(__dirname, './shared'),
       '@': path.resolve(__dirname, './client/src'),
+      '@shared': path.resolve(__dirname, './shared'),
+      '@server': path.resolve(__dirname, './server'),
     },
   },
 });

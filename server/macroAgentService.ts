@@ -3,9 +3,10 @@ import type { MacroAnalysis, InsertMacroAnalysis } from "@shared/schema";
 import { generateWithFallback, type AIProviderConfig, type ChatMessage } from "./aiProvider";
 
 // Using OpenAI API for macro analysis (deprecated, using provider interface now)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Only initialize if API key is available
+const openai = process.env.OPENAI_API_KEY 
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
 // Current AI provider configuration (shared with aiAnalysisService)
 let currentProviderConfig: AIProviderConfig = { provider: "openai" };

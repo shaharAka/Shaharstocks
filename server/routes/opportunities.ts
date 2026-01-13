@@ -1,17 +1,18 @@
 import type { Express } from "express";
 import { storage } from "../storage";
+import { verifyFirebaseToken } from "../middleware/firebaseAuth";
 
 export function registerOpportunitiesRoutes(app: Express) {
-  app.get("/api/opportunities", async (req, res) => {
+  app.get("/api/opportunities", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session?.userId) {
-        console.log('[Opportunities] Not authenticated - no session userId');
+      if (!req.user) {
+        console.log('[Opportunities] Not authenticated - no user');
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
-        console.log('[Opportunities] User not found for id:', req.session.userId);
+        console.log('[Opportunities] User not found for id:', req.user.userId);
         return res.status(401).json({ error: "User not found" });
       }
       
@@ -26,7 +27,7 @@ export function registerOpportunitiesRoutes(app: Express) {
       // Fetch opportunities filtered by user rejections
       const opportunities = await storage.getOpportunities({
         cadence: cadence as 'daily' | 'hourly' | 'all',
-        userId: req.session.userId
+        userId: req.user.userId
       });
       
       console.log(`[Opportunities] Returning ${opportunities.length} opportunities`);
@@ -43,13 +44,13 @@ export function registerOpportunitiesRoutes(app: Express) {
   });
 
   // Get user's rejected opportunities - MUST be before :id route
-  app.get("/api/opportunities/user/rejections", async (req, res) => {
+  app.get("/api/opportunities/user/rejections", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session?.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const rejections = await storage.getUserRejections(req.session.userId);
+      const rejections = await storage.getUserRejections(req.user.userId);
       res.json(rejections);
     } catch (error) {
       console.error("Get rejections error:", error);
@@ -58,13 +59,13 @@ export function registerOpportunitiesRoutes(app: Express) {
   });
   
   // Get latest opportunity batch info (for countdown timer) - MUST be before :id route
-  app.get("/api/opportunities/latest-batch", async (req, res) => {
+  app.get("/api/opportunities/latest-batch", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session?.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
         return res.status(401).json({ error: "User not found" });
       }
@@ -126,9 +127,9 @@ export function registerOpportunitiesRoutes(app: Express) {
   });
   
   // Get single opportunity by ID - MUST be after specific routes
-  app.get("/api/opportunities/:id", async (req, res) => {
+  app.get("/api/opportunities/:id", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session?.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -138,7 +139,7 @@ export function registerOpportunitiesRoutes(app: Express) {
       }
       
       // Check if user rejected this opportunity
-      const isRejected = await storage.isOpportunityRejected(req.session.userId, req.params.id);
+      const isRejected = await storage.isOpportunityRejected(req.user.userId, req.params.id);
       
       res.json({ ...opportunity, isRejected });
     } catch (error) {
@@ -148,9 +149,9 @@ export function registerOpportunitiesRoutes(app: Express) {
   });
   
   // Reject an opportunity (hide from user's view)
-  app.post("/api/opportunities/:id/reject", async (req, res) => {
+  app.post("/api/opportunities/:id/reject", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session?.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -159,7 +160,7 @@ export function registerOpportunitiesRoutes(app: Express) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
       
-      const rejection = await storage.rejectOpportunity(req.session.userId, req.params.id);
+      const rejection = await storage.rejectOpportunity(req.user.userId, req.params.id);
       res.json({ success: true, rejection });
     } catch (error) {
       console.error("Reject opportunity error:", error);
@@ -168,13 +169,13 @@ export function registerOpportunitiesRoutes(app: Express) {
   });
   
   // Unreject an opportunity (restore to user's view)
-  app.delete("/api/opportunities/:id/reject", async (req, res) => {
+  app.delete("/api/opportunities/:id/reject", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session?.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const success = await storage.unrejectOpportunity(req.session.userId, req.params.id);
+      const success = await storage.unrejectOpportunity(req.user.userId, req.params.id);
       res.json({ success });
     } catch (error) {
       console.error("Unreject opportunity error:", error);

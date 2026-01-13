@@ -24,20 +24,20 @@ export function useNewStocksCount(showAllOpportunities: boolean = false) {
   const { data: stocks = [] } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    refetchOnWindowFocus: true, // Refresh when user returns to tab
+    refetchOnWindowFocus: false, // Disable refetch on window focus
   });
 
   const { data: analyses = [] } = useQuery<any[]>({
     queryKey: ["/api/stock-analyses"],
     staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // Disable refetch on window focus
   });
 
   const { data: viewedTickers = [] } = useQuery<string[]>({
     queryKey: ["/api/stock-views", user?.id],
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // Disable refetch on window focus
   });
 
   // Group stocks by ticker (same as Purchase page does)

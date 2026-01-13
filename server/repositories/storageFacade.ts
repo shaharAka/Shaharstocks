@@ -870,6 +870,10 @@ export class StorageFacade implements IStorage {
     return this.user.getUserByGoogleSub(googleSub);
   }
 
+  async getUserByFirebaseUid(firebaseUid: string) {
+    return this.user.getUserByFirebaseUid(firebaseUid);
+  }
+
   async getUserByVerificationToken(token: string) {
     return this.user.getUserByVerificationToken(token);
   }

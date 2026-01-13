@@ -16,21 +16,21 @@ export async function runPriceUpdate(storage: IStorage): Promise<void> {
   try {
     // Skip if market is closed
     if (!isMarketOpen()) {
-      log("[PriceUpdate] Market is closed, skipping stock price update");
+      log.info("[PriceUpdate] Market is closed, skipping stock price update");
       return;
     }
     
-    log("[PriceUpdate] Starting stock price update job...");
+    log.info("[PriceUpdate] Starting stock price update job...");
     
     // Get unique pending tickers across all users (per-user isolation)
     const tickers = await storage.getAllUniquePendingTickers();
 
     if (tickers.length === 0) {
-      log("[PriceUpdate] No pending stocks to update");
+      log.info("[PriceUpdate] No pending stocks to update");
       return;
     }
 
-    log(`[PriceUpdate] Updating prices for ${tickers.length} unique pending tickers across all users`);
+    log.info(`[PriceUpdate] Updating prices for ${tickers.length} unique pending tickers across all users`);
 
     // Fetch quotes, market cap, company info, and news for all pending stocks
     const stockData = await finnhubService.getBatchStockData(tickers);
@@ -56,12 +56,12 @@ export async function runPriceUpdate(storage: IStorage): Promise<void> {
         });
         if (updatedCount > 0) {
           successCount++;
-          log(`[PriceUpdate] Updated ${ticker}: ${updatedCount} instances across users`);
+          log.info(`[PriceUpdate] Updated ${ticker}: ${updatedCount} instances across users`);
         }
       }
     }
 
-    log(`[PriceUpdate] Successfully updated ${successCount}/${tickers.length} tickers`);
+    log.info(`[PriceUpdate] Successfully updated ${successCount}/${tickers.length} tickers`);
   } catch (error) {
     console.error("[PriceUpdate] Error updating stock prices:", error);
   }
@@ -82,5 +82,5 @@ export function startPriceUpdateJob(storage: IStorage): void {
     runPriceUpdate(storage);
   }, FIVE_MINUTES);
   
-  log("[PriceUpdate] Background job started - updating every 5 minutes");
+  log.info("[PriceUpdate] Background job started - updating every 5 minutes");
 }

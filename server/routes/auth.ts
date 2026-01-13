@@ -6,37 +6,43 @@ import {
   emailVerificationRateLimiter,
   registrationRateLimiter 
 } from "../middleware/rateLimiter";
-import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "../utils/emailValidation";
-import { sendVerificationEmail, notifySuperAdminsNewSignup, sendBugReport } from "../emailService";
-import { isGoogleConfigured, generateState, getGoogleAuthUrl, handleGoogleCallback } from "../googleAuthService";
+import { isDisposableEmail } from "../utils/emailValidation";
+import { notifySuperAdminsNewSignup, sendBugReport } from "../emailService";
 import { fetchInitialDataForUser } from "./utils";
+import { verifyIdToken } from "../firebaseAdmin";
+import { verifyFirebaseToken } from "../middleware/firebaseAuth";
 
 export function registerAuthRoutes(app: Express) {
   // User authentication routes
-  app.get("/api/auth/current-user", async (req, res) => {
+  // GET /api/auth/current-user - Get current user from Firebase token
+  app.get("/api/auth/current-user", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
-        return res.json({ user: null });
+      if (!req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
       }
-      const user = await storage.getUser(req.session.userId);
+      
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
-        req.session.userId = undefined;
-        return res.json({ user: null });
+        return res.status(404).json({ error: "User not found" });
       }
-      res.json({ user });
+      
+      // Remove sensitive fields
+      const { passwordHash, ...safeUser } = user;
+      res.json({ user: safeUser });
     } catch (error) {
+      console.error("Get current user error:", error);
       res.status(500).json({ error: "Failed to get current user" });
     }
   });
 
   // Trial status endpoint
-  app.get("/api/auth/trial-status", async (req, res) => {
+  app.get("/api/auth/trial-status", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -81,34 +87,97 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
+  // POST /api/auth/login - Verify Firebase ID token and return user
   app.post("/api/auth/login", authRateLimiter, async (req, res) => {
     try {
-      const { email, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required" });
-      }
+      const { idToken } = req.body;
       
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(401).json({ error: "Invalid email or password" });
+      if (!idToken) {
+        return res.status(400).json({ error: "ID token is required" });
       }
 
-      // Check if user has a password (Google-only users don't have passwords)
-      if (!user.passwordHash) {
+      // Verify Firebase ID token
+      let decodedToken;
+      try {
+        decodedToken = await verifyIdToken(idToken);
+      } catch (error: any) {
         return res.status(401).json({ 
-          error: "This account uses Google Sign-In. Please sign in with Google.",
-          authProvider: user.authProvider 
+          error: "Invalid or expired token. Please sign in again.",
+          code: "TOKEN_INVALID"
         });
       }
 
-      // Verify password
-      const bcrypt = await import("bcryptjs");
-      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-      if (!isValidPassword) {
-        return res.status(401).json({ error: "Invalid email or password" });
+      const firebaseUid = decodedToken.uid;
+      const email = decodedToken.email;
+      const emailVerified = decodedToken.email_verified || false;
+      const name = decodedToken.name || email?.split("@")[0] || "User";
+      const picture = decodedToken.picture;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email is required in token" });
       }
 
-      // Check email verification
+      // Check if user exists in database
+      let user = await storage.getUserByFirebaseUid(firebaseUid);
+      
+      if (!user) {
+        // User doesn't exist - check if email exists (migration case)
+        const existingUser = await storage.getUserByEmail(email);
+        if (existingUser) {
+          // Link Firebase UID to existing user
+          user = await storage.updateUser(existingUser.id, {
+            firebaseUid,
+            authProvider: decodedToken.firebase?.sign_in_provider === "google.com" ? "firebase_google" : "firebase_email",
+            emailVerified: emailVerified || existingUser.emailVerified,
+            googlePicture: picture || existingUser.googlePicture,
+          });
+        } else {
+          // New user - create account
+          const avatarColors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
+          const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
+          
+          const now = new Date();
+          const trialEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+          user = await storage.createUser({
+            name,
+            email,
+            firebaseUid,
+            avatarColor,
+            authProvider: decodedToken.firebase?.sign_in_provider === "google.com" ? "firebase_google" : "firebase_email",
+            emailVerified: emailVerified,
+            subscriptionStatus: emailVerified ? "trial" : "pending_verification",
+            trialEndsAt: emailVerified ? trialEndsAt : undefined,
+            subscriptionStartDate: emailVerified ? now : undefined,
+            googlePicture: picture,
+          });
+
+          // Notify super admins of new signup
+          storage.getSuperAdminUsers().then(async (superAdmins) => {
+            const adminEmails = superAdmins.map(a => a.email);
+            if (adminEmails.length > 0) {
+              await notifySuperAdminsNewSignup({
+                adminEmails,
+                userName: name,
+                userEmail: email,
+                signupMethod: decodedToken.firebase?.sign_in_provider === "google.com" ? "google" : "email",
+              });
+            }
+          }).catch(err => console.error("Failed to notify super admins of signup:", err));
+        }
+      } else {
+        // Update user info from token (in case email/name changed in Firebase)
+        user = await storage.updateUser(user.id, {
+          emailVerified: emailVerified || user.emailVerified,
+          googlePicture: picture || user.googlePicture,
+        }) || user;
+      }
+
+      if (!user) {
+        return res.status(500).json({ error: "Failed to create or retrieve user" });
+      }
+
+      // Check email verification (Firebase handles this, but we check our DB status)
       if (!user.emailVerified) {
         return res.status(403).json({ 
           error: "Please verify your email before logging in. Check your inbox for the verification link.",
@@ -119,13 +188,11 @@ export function registerAuthRoutes(app: Express) {
 
       // Check subscription status - allow trial and active users
       if (user.subscriptionStatus === "trial") {
-        // Only check trial expiration for users with a trialEndsAt date
         if (user.trialEndsAt) {
           const now = new Date();
           const trialEnd = new Date(user.trialEndsAt);
           
           if (now > trialEnd) {
-            // Trial expired - update status and block login
             await storage.updateUser(user.id, { subscriptionStatus: "expired" });
             return res.status(403).json({ 
               error: "Your free trial has expired. Please subscribe to continue.",
@@ -134,11 +201,9 @@ export function registerAuthRoutes(app: Express) {
             });
           }
         }
-        // Trial still active or no expiration date - allow login
       } else if (user.subscriptionStatus === "active") {
         // Active subscription - allow login
       } else {
-        // Inactive, cancelled, or expired - block login
         return res.status(403).json({ 
           error: user.subscriptionStatus === "expired" 
             ? "Your free trial has expired. Please subscribe to continue."
@@ -148,22 +213,12 @@ export function registerAuthRoutes(app: Express) {
         });
       }
 
-      req.session.userId = user.id;
-      
-      // Explicitly save session before sending response to ensure cookie is set
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.status(500).json({ error: "Failed to save session" });
-        }
+      // Remove sensitive fields
+      const { passwordHash, ...safeUser } = user;
         
         res.json({ 
-          user: {
-            ...user,
-            passwordHash: undefined, // Don't send password hash to client
-          },
+        user: safeUser,
           subscriptionStatus: user.subscriptionStatus
-        });
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -171,15 +226,35 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
+  // POST /api/auth/signup - Create user account from Firebase ID token
+  // Note: Frontend should call Firebase createUserWithEmailAndPassword first, then send idToken here
   app.post("/api/auth/signup", registrationRateLimiter, async (req, res) => {
     try {
-      const { name, email, password } = req.body;
-      if (!name || !email || !password) {
-        return res.status(400).json({ error: "Name, email, and password are required" });
+      const { idToken, name } = req.body;
+      
+      if (!idToken) {
+        return res.status(400).json({ error: "ID token is required" });
       }
 
-      if (password.length < 8) {
-        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      // Verify Firebase ID token
+      let decodedToken;
+      try {
+        decodedToken = await verifyIdToken(idToken);
+      } catch (error: any) {
+        return res.status(401).json({ 
+          error: "Invalid or expired token. Please sign up again.",
+          code: "TOKEN_INVALID"
+        });
+      }
+
+      const firebaseUid = decodedToken.uid;
+      const email = decodedToken.email;
+      const emailVerified = decodedToken.email_verified || false;
+      const displayName = name || decodedToken.name || email?.split("@")[0] || "User";
+      const picture = decodedToken.picture;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email is required in token" });
       }
 
       // Check for disposable email domains
@@ -188,61 +263,61 @@ export function registerAuthRoutes(app: Express) {
         return res.status(400).json({ error: "Disposable email addresses are not allowed. Please use a permanent email address." });
       }
 
-      const existingUser = await storage.getUserByEmail(email);
+      // Check if user already exists
+      const existingUser = await storage.getUserByFirebaseUid(firebaseUid);
       if (existingUser) {
-        return res.status(400).json({ error: "Email already in use" });
+        return res.status(400).json({ error: "Account already exists. Please sign in instead." });
       }
 
-      // Hash password
-      const bcrypt = await import("bcryptjs");
-      const passwordHash = await bcrypt.hash(password, 10);
+      // Check if email is already in use (migration case)
+      const existingEmailUser = await storage.getUserByEmail(email);
+      if (existingEmailUser) {
+        // Link Firebase UID to existing user
+        const updatedUser = await storage.updateUser(existingEmailUser.id, {
+          firebaseUid,
+          authProvider: decodedToken.firebase?.sign_in_provider === "google.com" ? "firebase_google" : "firebase_email",
+          emailVerified: emailVerified || existingEmailUser.emailVerified,
+          googlePicture: picture || existingEmailUser.googlePicture,
+        });
+        
+        if (updatedUser) {
+          return res.json({ 
+            success: true,
+            message: "Account linked successfully!",
+            user: updatedUser
+          });
+        }
+      }
 
+      // Create new user
       const avatarColors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
       const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
 
-      // Generate verification token
-      const verificationToken = generateVerificationToken();
-      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      const now = new Date();
+      const trialEndsAt = emailVerified ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) : undefined; // 30 days
 
       const newUser = await storage.createUser({
-        name,
+        name: displayName,
         email,
-        passwordHash,
+        firebaseUid,
         avatarColor,
-        emailVerified: false,
-        emailVerificationToken: verificationToken,
-        emailVerificationExpiry: verificationExpiry,
-        subscriptionStatus: "pending_verification", // Start with pending
+        authProvider: decodedToken.firebase?.sign_in_provider === "google.com" ? "firebase_google" : "firebase_email",
+        emailVerified: emailVerified,
+        subscriptionStatus: emailVerified ? "trial" : "pending_verification",
+        trialEndsAt,
+        subscriptionStartDate: emailVerified ? now : undefined,
+        googlePicture: picture,
       });
-
-      // Send verification email
-      // Check for production: Replit uses REPLIT_DEPLOYMENT=1, or NODE_ENV=production
-      const isProduction = process.env.REPLIT_DEPLOYMENT === "1" || process.env.NODE_ENV === "production";
-      const baseUrl = isProduction 
-        ? `https://${req.get('host')}`
-        : `http://${req.get('host')}`;
-      const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
-      
-      const emailSent = await sendVerificationEmail({
-        to: email,
-        name,
-        verificationUrl,
-      });
-
-      if (!emailSent) {
-        console.error(`[Signup] Failed to send verification email to ${email}`);
-        // Don't fail signup, but log the error
-      }
 
       // Create admin notification for super admins
       try {
         await storage.createAdminNotification({
           type: "user_signup",
-          title: "New User Signup (Pending Verification)",
-          message: `${name} (${email}) has signed up and is pending email verification`,
+          title: emailVerified ? "New User Signup" : "New User Signup (Pending Verification)",
+          message: `${displayName} (${email}) has signed up${emailVerified ? "" : " and is pending email verification"}`,
           metadata: {
             userId: newUser.id,
-            userName: name,
+            userName: displayName,
             userEmail: email,
           },
           isRead: false,
@@ -257,18 +332,23 @@ export function registerAuthRoutes(app: Express) {
         if (adminEmails.length > 0) {
           await notifySuperAdminsNewSignup({
             adminEmails,
-            userName: name,
+            userName: displayName,
             userEmail: email,
-            signupMethod: 'email',
+            signupMethod: decodedToken.firebase?.sign_in_provider === "google.com" ? "google" : "email",
           });
         }
       }).catch(err => console.error("Failed to notify super admins of signup:", err));
 
-      // Don't log them in - they need to verify email first
+      // Remove sensitive fields
+      const { passwordHash, ...safeUser } = newUser;
+
       res.json({ 
         success: true,
-        message: "Account created! Please check your email to verify your account.",
-        email: email
+        message: emailVerified 
+          ? "Account created successfully! Welcome to signal2."
+          : "Account created! Please verify your email to continue.",
+        user: safeUser,
+        emailVerified
       });
     } catch (error) {
       console.error("Signup error:", error);
@@ -349,8 +429,8 @@ export function registerAuthRoutes(app: Express) {
       await storage.updateVerificationToken(user.id, verificationToken, verificationExpiry);
 
       // Send verification email
-      // Check for production: Replit uses REPLIT_DEPLOYMENT=1, or NODE_ENV=production
-      const isProduction = process.env.REPLIT_DEPLOYMENT === "1" || process.env.NODE_ENV === "production";
+      // Check for production: Cloud Run sets NODE_ENV=production
+      const isProduction = process.env.NODE_ENV === "production";
       const baseUrl = isProduction 
         ? `https://${req.get('host')}`
         : `http://${req.get('host')}`;
@@ -378,13 +458,13 @@ export function registerAuthRoutes(app: Express) {
   });
 
   // Bug report endpoint
-  app.post("/api/bug-report", async (req, res) => {
+  app.post("/api/bug-report", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
         return res.status(401).json({ error: "User not found" });
       }
@@ -416,181 +496,18 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  // Google OAuth: Check if configured
-  app.get("/api/auth/google/configured", (req, res) => {
-    res.json({ configured: isGoogleConfigured() });
-  });
-
-  // Google OAuth: Get authorization URL
-  app.get("/api/auth/google/url", (req, res) => {
-    try {
-      if (!isGoogleConfigured()) {
-        return res.status(503).json({ error: "Google Sign-In is not configured" });
-      }
-
-      const state = generateState();
-      
-      // Store state in session for verification
-      req.session.googleOAuthState = state;
-      
-      // Get full host including port (e.g., localhost:5002)
-      const host = req.get('host') || req.hostname || 'localhost';
-      // For localhost, use http; otherwise use the request protocol or default to https
-      const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : (req.protocol || 'https');
-      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
-      
-      // Enhanced logging for debugging
-      console.log(`[Google OAuth] Request details:`, {
-        hostHeader: req.get('host'),
-        hostname: req.hostname,
-        protocol: req.protocol,
-        originalUrl: req.originalUrl,
-        headers: {
-          host: req.headers.host,
-          'x-forwarded-host': req.headers['x-forwarded-host'],
-          'x-forwarded-proto': req.headers['x-forwarded-proto'],
-        },
-        generatedRedirectUri: redirectUri
-      });
-      
-      const authUrl = getGoogleAuthUrl(redirectUri, state);
-      
-      res.json({ url: authUrl, redirectUri: redirectUri }); // Include redirectUri in response for debugging
-    } catch (error) {
-      console.error("[Google OAuth] Failed to generate auth URL:", error);
-      res.status(500).json({ error: "Failed to initialize Google Sign-In" });
-    }
-  });
-
-  // Google OAuth: Callback handler
-  app.get("/api/auth/google/callback", async (req, res) => {
-    try {
-      const { code, state, error: oauthError } = req.query;
-      
-      if (oauthError) {
-        console.error("[Google OAuth] Error from Google:", oauthError);
-        return res.redirect("/login?error=google_auth_failed");
-      }
-
-      if (!code || typeof code !== "string") {
-        return res.redirect("/login?error=missing_code");
-      }
-
-      // Verify state to prevent CSRF
-      if (!state || state !== req.session.googleOAuthState) {
-        return res.redirect("/login?error=invalid_state");
-      }
-      
-      // Clear the state
-      delete req.session.googleOAuthState;
-
-      // Get full host including port (e.g., localhost:5002)
-      const host = req.get('host') || req.hostname || 'localhost';
-      // For localhost, use http; otherwise use the request protocol or default to https
-      const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : (req.protocol || 'https');
-      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
-
-      // Exchange code for tokens and get user info
-      const googleUser = await handleGoogleCallback(code, redirectUri);
-      
-      // Check if user exists by Google sub ID
-      let user = await storage.getUserByGoogleSub(googleUser.sub);
-      
-      if (!user) {
-        // Check if user exists by email (linking case)
-        user = await storage.getUserByEmail(googleUser.email);
-        
-        if (user) {
-          // Link Google account to existing email user
-          await storage.linkGoogleAccount(user.id, googleUser.sub, googleUser.picture);
-          
-          // If they had pending verification, mark as verified since Google verified the email
-          if (!user.emailVerified) {
-            await storage.updateUser(user.id, { 
-              emailVerified: true,
-              subscriptionStatus: user.subscriptionStatus === "pending_verification" ? "trial" : user.subscriptionStatus,
-              trialEndsAt: user.subscriptionStatus === "pending_verification" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : user.trialEndsAt,
-            });
-          }
-        } else {
-          // Create new user with Google account
-          const avatarColors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4"];
-          const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
-          
-          user = await storage.createGoogleUser({
-            name: googleUser.name,
-            email: googleUser.email,
-            googleSub: googleUser.sub,
-            googlePicture: googleUser.picture,
-            avatarColor,
-            authProvider: "google",
-            emailVerified: true, // Google already verified the email
-            subscriptionStatus: "trial",
-            trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day trial
-          });
-
-          // Send email notification to super admins for new Google signup (fire and forget)
-          storage.getSuperAdminUsers().then(async (superAdmins) => {
-            const adminEmails = superAdmins.map(a => a.email);
-            if (adminEmails.length > 0) {
-              const { notifySuperAdminsNewSignup } = await import("../emailService");
-              await notifySuperAdminsNewSignup({
-                adminEmails,
-                userName: googleUser.name,
-                userEmail: googleUser.email,
-                signupMethod: 'google',
-              });
-            }
-          }).catch(err => console.error("Failed to notify super admins of Google signup:", err));
-        }
-      }
-
-      // Check subscription status before allowing login
-      if (user.subscriptionStatus === "expired") {
-        return res.redirect("/login?error=trial_expired");
-      }
-
-      if (user.subscriptionStatus !== "trial" && user.subscriptionStatus !== "active") {
-        return res.redirect("/login?error=subscription_required");
-      }
-
-      // Set session
-      req.session.userId = user.id;
-      
-      req.session.save((err) => {
-        if (err) {
-          console.error("[Google OAuth] Session save error:", err);
-          return res.redirect("/login?error=session_error");
-        }
-        
-        // Redirect to home on success
-        res.redirect("/?login=success&provider=google");
-      });
-    } catch (error) {
-      console.error("[Google OAuth] Callback error:", error);
-      res.redirect("/login?error=google_auth_failed");
-    }
-  });
-
+  // POST /api/auth/logout - No server-side session, Firebase handles client-side
+  // This endpoint is kept for compatibility but doesn't do anything
   app.post("/api/auth/logout", async (req, res) => {
-    try {
-      req.session.destroy((err) => {
-        if (err) {
-          return res.status(500).json({ error: "Failed to logout" });
-        }
-        res.json({ success: true });
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to logout" });
-    }
+    res.json({ success: true, message: "Logged out successfully" });
   });
 
-  app.post("/api/auth/mark-onboarding-complete", async (req, res) => {
+  app.post("/api/auth/mark-onboarding-complete", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      await storage.markUserHasSeenOnboarding(req.session.userId);
+      await storage.markUserHasSeenOnboarding(req.user.userId);
       res.json({ success: true });
     } catch (error) {
       console.error("Mark onboarding complete error:", error);

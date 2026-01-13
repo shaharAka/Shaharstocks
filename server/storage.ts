@@ -254,6 +254,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByGoogleSub(googleSub: string): Promise<User | undefined>;
+  getUserByFirebaseUid(firebaseUid: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   createGoogleUser(user: {
@@ -1947,6 +1948,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByFirebaseUid(firebaseUid: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.firebaseUid, firebaseUid));
+    return user;
+  }
+
   async getUserByVerificationToken(token: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
     return user;
@@ -3522,12 +3528,12 @@ export class DatabaseStorage implements IStorage {
     // Use FOR UPDATE SKIP LOCKED to get next available job atomically
     // Priority order: high > normal > low, then oldest first
     const result = await db.execute(sql`
-      UPDATE ${aiAnalysisJobs}
+      UPDATE ai_analysis_jobs
       SET status = 'processing',
           started_at = NOW()
       WHERE id = (
         SELECT id
-        FROM ${aiAnalysisJobs}
+        FROM ai_analysis_jobs
         WHERE status = 'pending'
           AND scheduled_at <= NOW()
         ORDER BY
@@ -3689,7 +3695,7 @@ export class DatabaseStorage implements IStorage {
     const timeoutInterval = `${Math.floor(timeoutMs / 1000)} seconds`;
     
     const result = await db.execute(sql`
-      UPDATE ${aiAnalysisJobs}
+      UPDATE ai_analysis_jobs
       SET status = 'pending',
           started_at = NULL,
           retry_count = retry_count + 1

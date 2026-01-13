@@ -1,8 +1,8 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -13,6 +13,8 @@ import { TrendingUp, ArrowLeft, CheckCircle2, ShieldAlert, Zap, TrendingUpIcon }
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import signalBackground from "@assets/moving_signal_boomerang_slow.gif";
+import { auth } from "@/lib/firebase";
+import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -44,30 +46,53 @@ export default function Signup() {
   const [userEmail, setUserEmail] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  // Check if Google OAuth is configured
-  const { data: googleConfigured } = useQuery<{ configured: boolean }>({
-    queryKey: ["/api/auth/google/configured"],
-  });
-
   const handleGoogleSignUp = async () => {
     try {
       setGoogleLoading(true);
-      const response = await fetch("/api/auth/google/url");
-      const data = await response.json();
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const idToken = await result.user.getIdToken();
       
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to initialize Google Sign-Up");
+      // Send token to backend to create user account
+      await handleFirebaseSignup(idToken, result.user.displayName || undefined);
+    } catch (error: any) {
+      console.error("Google sign-up error:", error);
+      let errorMessage = "Failed to sign up with Google";
+      
+      if (error.code === "auth/popup-closed-by-user") {
+        errorMessage = "Sign-up popup was closed";
+      } else if (error.code === "auth/popup-blocked") {
+        errorMessage = "Popup was blocked. Please allow popups for this site.";
+      } else if (error.code === "auth/network-request-failed") {
+        errorMessage = "Network error. Please check your connection.";
+      } else if (error.code === "auth/email-already-in-use") {
+        errorMessage = "An account with this email already exists. Please sign in instead.";
       }
       
-      // Redirect to Google OAuth
-      window.location.href = data.url;
-    } catch (error: any) {
       toast({
         title: "Google Sign-Up Error",
-        description: error.message || "Failed to start Google Sign-Up",
+        description: errorMessage,
         variant: "destructive",
       });
       setGoogleLoading(false);
+    }
+  };
+
+  const handleFirebaseSignup = async (idToken: string, name?: string) => {
+    try {
+      const response = await apiRequest("POST", "/api/auth/signup", { idToken, name });
+      const data = await response.json();
+      
+      setSignupSuccess(true);
+      setUserEmail(data.user?.email || "");
+      
+      toast({
+        title: "Account Created!",
+        description: data.message || "Welcome to signal2!",
+      });
+    } catch (error: any) {
+      const errorData = error.errorData || { error: error.message || "Sign up failed" };
+      throw new Error(errorData.error || "Sign up failed");
     }
   };
 
@@ -84,20 +109,56 @@ export default function Signup() {
 
   const signupMutation = useMutation({
     mutationFn: async (data: SignupForm) => {
-      const response = await apiRequest("POST", "/api/auth/signup", {
-        name: data.name,
-        email: data.email,
-        password: data.password,
-      });
-      return response.json();
+      try {
+        // Create user with Firebase
+        const result = await createUserWithEmailAndPassword(auth, data.email, data.password);
+        const idToken = await result.user.getIdToken();
+        
+        // Send token to backend to create user account
+        const response = await apiRequest("POST", "/api/auth/signup", {
+          idToken,
+          name: data.name,
+        });
+        return await response.json();
+      } catch (error: any) {
+        let errorMessage = "Sign up failed";
+        
+        // Map Firebase error codes to user-friendly messages
+        if (error.code === "auth/email-already-in-use") {
+          errorMessage = "An account with this email already exists. Please sign in instead.";
+        } else if (error.code === "auth/invalid-email") {
+          errorMessage = "Invalid email address";
+        } else if (error.code === "auth/weak-password") {
+          errorMessage = "Password is too weak. Please use a stronger password.";
+        } else if (error.code === "auth/network-request-failed") {
+          errorMessage = "Network error. Please check your connection.";
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        // Check if backend returned specific error
+        if (error.errorData) {
+          errorMessage = error.errorData.error || errorMessage;
+        }
+        
+        throw new Error(errorMessage);
+      }
     },
-    onSuccess: async (data: { success: boolean; message: string; email: string }) => {
+    onSuccess: async (data: { success: boolean; message: string; user?: any; emailVerified?: boolean }) => {
       setSignupSuccess(true);
-      setUserEmail(data.email);
+      setUserEmail(data.user?.email || "");
+      
       toast({
         title: "Account Created!",
-        description: data.message,
+        description: data.message || "Welcome to signal2!",
       });
+      
+      // If email is already verified (e.g., Google sign-up), redirect to login
+      if (data.emailVerified) {
+        setTimeout(() => {
+          setLocation("/login");
+        }, 2000);
+      }
     },
     onError: (error: Error) => {
       toast({

@@ -56,6 +56,22 @@ class QueueWorker {
       return;
     }
 
+    // Verify database connection before starting
+    try {
+      const { db } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      // Test query to verify table exists
+      await db.execute(sql`SELECT 1 FROM ai_analysis_jobs LIMIT 1`);
+      console.log("[QueueWorker] Database connection verified");
+    } catch (error: any) {
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        console.warn("[QueueWorker] ⚠️  ai_analysis_jobs table not ready, will retry in process loop");
+      } else {
+        console.error("[QueueWorker] Database connection check failed:", error);
+        // Don't throw - let the process loop handle retries
+      }
+    }
+
     this.running = true;
     console.log("[QueueWorker] Starting AI analysis queue worker...");
     console.log("[QueueWorker] Initializing process loop...");
@@ -96,8 +112,13 @@ class QueueWorker {
         console.log(`[QueueWorker] 🔄 Reset ${resetCount} stuck processing job(s)`);
       }
       return resetCount;
-    } catch (error) {
-      console.error("[QueueWorker] Error cleaning up stuck jobs:", error);
+    } catch (error: any) {
+      // Handle database errors gracefully - don't spam logs for missing tables
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        console.warn("[QueueWorker] ⚠️  Database table not ready for cleanup, skipping...");
+      } else {
+        console.error("[QueueWorker] Error cleaning up stuck jobs:", error);
+      }
       return 0;
     }
   }
@@ -131,9 +152,16 @@ class QueueWorker {
           // Max concurrent jobs reached, wait a bit
           await this.sleep(this.pollInterval);
         }
-      } catch (error) {
-        console.error("[QueueWorker] ❌ Error in process loop:", error);
-        await this.sleep(this.pollInterval);
+      } catch (error: any) {
+        // Handle database connection errors gracefully
+        if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+          console.warn("[QueueWorker] ⚠️  Database table not ready, waiting...", error.message);
+          // Wait longer if table doesn't exist (might be a migration issue)
+          await this.sleep(5000);
+        } else {
+          console.error("[QueueWorker] ❌ Error in process loop:", error);
+          await this.sleep(this.pollInterval);
+        }
       }
     }
     console.log("[QueueWorker] 🛑 Process loop ended");

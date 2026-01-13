@@ -148,12 +148,12 @@ export class AiAnalysisJobRepository extends BaseRepository implements IAiAnalys
     // Use FOR UPDATE SKIP LOCKED to get next available job atomically
     // Priority order: high > normal > low, then oldest first
     const result = await this.db.execute(sql`
-      UPDATE ${aiAnalysisJobs}
+      UPDATE ai_analysis_jobs
       SET status = 'processing',
           started_at = NOW()
       WHERE id = (
         SELECT id
-        FROM ${aiAnalysisJobs}
+        FROM ai_analysis_jobs
         WHERE status = 'pending'
           AND scheduled_at <= NOW()
         ORDER BY
@@ -313,7 +313,7 @@ export class AiAnalysisJobRepository extends BaseRepository implements IAiAnalys
     const timeoutInterval = `${Math.floor(timeoutMs / 1000)} seconds`;
     
     const result = await this.db.execute(sql`
-      UPDATE ${aiAnalysisJobs}
+      UPDATE ai_analysis_jobs
       SET status = 'pending',
           started_at = NULL,
           retry_count = retry_count + 1

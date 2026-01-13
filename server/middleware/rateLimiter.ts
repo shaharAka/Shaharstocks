@@ -128,12 +128,13 @@ export const globalApiRateLimiter = createRateLimiter({
 
 /**
  * Strict rate limiter for authentication endpoints
- * 5 requests per 15 minutes per IP
+ * In development: 50 requests per 15 minutes per IP (more lenient)
+ * In production: 5 requests per 15 minutes per IP
  */
 export const authRateLimiter = createRateLimiter({
-  points: 5,
+  points: process.env.NODE_ENV === "production" ? 5 : 50, // More lenient in development
   duration: 15 * 60, // 15 minutes
-  blockDuration: 30 * 60, // Block for 30 minutes
+  blockDuration: process.env.NODE_ENV === "production" ? 30 * 60 : 60, // Shorter block in development
   message: "Too many authentication attempts. Please try again later.",
 });
 

@@ -1,19 +1,21 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
-import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
-import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
 import { log } from "./logger";
-
-const viteLogger = createLogger();
+// Note: vite imports are done inside functions to avoid dependency in production builds
 
 // Legacy log function - now uses structured logger
 // Kept for backward compatibility during migration
 export { log };
 
 export async function setupVite(app: Express, server: Server) {
+  // Dynamically import vite only when needed (development mode)
+  const { createServer: createViteServer, createLogger } = await import("vite");
+  const viteConfig = await import("../vite.config");
+  const viteLogger = createLogger();
+  
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -21,7 +23,7 @@ export async function setupVite(app: Express, server: Server) {
   };
 
   const vite = await createViteServer({
-    ...viteConfig,
+    ...viteConfig.default,
     configFile: false,
     customLogger: {
       ...viteLogger,

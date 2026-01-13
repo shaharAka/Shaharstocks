@@ -5,7 +5,7 @@
 
 set -e
 
-PROJECT_ID="intellimap-482411"
+PROJECT_ID="signal2-479718"
 
 if [ $# -lt 2 ]; then
   echo "Usage: $0 <CLIENT_ID> <CLIENT_SECRET>"

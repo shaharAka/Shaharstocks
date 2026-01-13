@@ -1,14 +1,15 @@
 import type { Express } from "express";
 import { storage } from "../storage";
+import { verifyFirebaseToken } from "../middleware/firebaseAuth";
 
 export function registerPortfolioRoutes(app: Express) {
   // Get positions count
-  app.get("/api/positions/count", async (req, res) => {
+  app.get("/api/positions/count", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const holdings = await storage.getPortfolioHoldings(req.session.userId, false);
+      const holdings = await storage.getPortfolioHoldings(req.user.userId, false);
       const activePositions = holdings.filter(h => h.quantity > 0);
       res.json(activePositions.length);
     } catch (error) {
@@ -18,12 +19,12 @@ export function registerPortfolioRoutes(app: Express) {
   });
 
   // Get total P&L for user's portfolio
-  app.get("/api/portfolio/total-pnl", async (req, res) => {
+  app.get("/api/portfolio/total-pnl", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const totalPnl = await storage.getTotalPnL(req.session.userId);
+      const totalPnl = await storage.getTotalPnL(req.user.userId);
       res.json({ totalPnl });
     } catch (error) {
       console.error("Get total P&L error:", error);
@@ -32,22 +33,22 @@ export function registerPortfolioRoutes(app: Express) {
   });
 
   // Portfolio routes
-  app.get("/api/portfolio/holdings", async (req, res) => {
+  app.get("/api/portfolio/holdings", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const isSimulated = req.query.simulated === "true";
-      const holdings = await storage.getPortfolioHoldings(req.session.userId, isSimulated ? true : false);
+      const holdings = await storage.getPortfolioHoldings(req.user.userId, isSimulated ? true : false);
       res.json(holdings);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch portfolio holdings" });
     }
   });
 
-  app.post("/api/portfolio/holdings", async (req, res) => {
+  app.post("/api/portfolio/holdings", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -58,7 +59,7 @@ export function registerPortfolioRoutes(app: Express) {
       }
       
       const holding = await storage.createPortfolioHolding({
-        userId: req.session.userId,
+        userId: req.user.userId,
         ticker: ticker.toUpperCase(),
         quantity,
         averagePurchasePrice,
@@ -72,14 +73,14 @@ export function registerPortfolioRoutes(app: Express) {
     }
   });
 
-  app.get("/api/portfolio/holdings/:id", async (req, res) => {
+  app.get("/api/portfolio/holdings/:id", verifyFirebaseToken, async (req, res) => {
     try {
       // CRITICAL SECURITY: Verify authentication and ownership
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const holding = await storage.getPortfolioHolding(req.params.id, req.session.userId);
+      const holding = await storage.getPortfolioHolding(req.params.id, req.user.userId);
       if (!holding) {
         return res.status(404).json({ error: "Holding not found" });
       }
@@ -89,15 +90,15 @@ export function registerPortfolioRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/portfolio/holdings/:id", async (req, res) => {
+  app.delete("/api/portfolio/holdings/:id", verifyFirebaseToken, async (req, res) => {
     try {
       // CRITICAL SECURITY: Verify authentication and ownership before deletion
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
       // Verify ownership before deleting
-      const holding = await storage.getPortfolioHolding(req.params.id, req.session.userId);
+      const holding = await storage.getPortfolioHolding(req.params.id, req.user.userId);
       if (!holding) {
         return res.status(404).json({ error: "Holding not found" });
       }

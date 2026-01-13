@@ -24,7 +24,7 @@ signal2 uses PayPal subscriptions for user authentication. Users must have an ac
 
 1. Go to PayPal Developer Dashboard
 2. Navigate to your app settings
-3. Add webhook URL: `https://your-domain.replit.app/api/webhooks/paypal`
+3. Add webhook URL: `https://signal2.studio/api/webhooks/paypal`
 4. Subscribe to these events:
    - `BILLING.SUBSCRIPTION.ACTIVATED`
    - `BILLING.SUBSCRIPTION.CANCELLED`

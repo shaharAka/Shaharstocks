@@ -1,7 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
+import fs from "fs";
+import path from "path";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic } from "./vite";
 import { log } from "./logger";
+// Note: setupVite and serveStatic are dynamically imported to avoid vite dependency in production
 import { initSentry, sentryErrorHandler, sentryTracingHandler, sentryRequestHandler, captureError } from "./sentry";
 import * as Sentry from "@sentry/node";
 import { storage } from "./storage";
@@ -25,10 +27,11 @@ import { startDailyBriefJob } from "./jobs/dailyBrief";
 import { startUnverifiedUserCleanupJob } from "./jobs/unverifiedUserCleanup";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
-import { sessionMiddleware } from "./session";
+// Session middleware removed - using Firebase JWT tokens instead
 import { queueWorker } from "./queueWorker";
 import { websocketManager } from "./websocketServer";
 import { initializeQueueSystem } from "./queue";
+import { initializeFirebaseAdmin } from "./firebaseAdmin";
 
 // Feature flags
 const ENABLE_TELEGRAM = process.env.ENABLE_TELEGRAM === "true";
@@ -38,7 +41,7 @@ initSentry();
 
 const app = express();
 
-// Trust proxy for correct protocol/host detection behind Replit's reverse proxy
+// Trust proxy for correct protocol/host detection behind Cloud Run's load balancer
 app.set('trust proxy', 1);
 
 declare module 'http' {
@@ -53,8 +56,7 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
-// Add session middleware
-app.use(sessionMiddleware);
+// Session middleware removed - using Firebase JWT tokens for stateless authentication
 
 // Add Sentry tracing handler (after session middleware)
 app.use(sentryTracingHandler());
@@ -94,67 +96,11 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize default configuration
-  await storage.initializeDefaults();
-  log.info("Server starting with session-based admin authentication...", "server");
-  
-  // Initialize AI provider configuration from database
-  try {
-    const settings = await storage.getSystemSettings();
-    if (settings?.aiProvider) {
-      const { setMacroProviderConfig } = await import("./macroAgentService");
-      const { setBacktestProviderConfig } = await import("./backtestService");
-      const { clearProviderCache } = await import("./aiProvider");
-      
-      const config = { 
-        provider: settings.aiProvider as "openai" | "gemini", 
-        model: settings.aiModel || undefined 
-      };
-      
-      aiAnalysisService.setProviderConfig(config);
-      setMacroProviderConfig(config);
-      setBacktestProviderConfig(config);
-      clearProviderCache();
-      
-      log.info(`AI provider initialized: ${settings.aiProvider}${settings.aiModel ? ` (model: ${settings.aiModel})` : ""}`, "server");
-    } else {
-      log.info("AI provider using default: OpenAI", "server");
-    }
-  } catch (err) {
-    log.error(`AI provider initialization skipped: ${(err as Error).message}`, err, "server");
-  }
-  
-  // Initialize Telegram services only if feature flag is enabled
-  if (ENABLE_TELEGRAM) {
-    // Initialize Telegram client if configured
-    await telegramService.initialize().catch(err => {
-      log.warn(`Telegram service initialization skipped: ${err.message}`, "server");
-    });
-
-    // Initialize Telegram notification bot if configured
-    await telegramNotificationService.initialize().catch(err => {
-      log.warn(`Telegram notification service initialization skipped: ${err.message}`, "server");
-    });
-  } else {
-    log.info("Telegram integration disabled via feature flag", "server");
-  }
+  // Start server listening FIRST to avoid Cloud Run timeout
+  // Then initialize services in the background
+  log.info("Server starting...", "server");
   
   const server = await registerRoutes(app);
-
-  // Initialize WebSocket server for real-time updates
-  await websocketManager.initialize(server);
-
-  // Initialize BullMQ job queue system (replaces setInterval jobs)
-  let useQueueSystem = false;
-  try {
-    await initializeQueueSystem(storage);
-    log.info("Job queue system initialized", "server");
-    useQueueSystem = true;
-  } catch (error) {
-    log.error("Failed to initialize job queue system, falling back to setInterval", error, "server");
-    // Fall back to old setInterval jobs if Redis is not available
-    log.warn("Using legacy setInterval job scheduling", "server");
-  }
 
   // Sentry error handler (must be before other error handlers)
   app.use(sentryErrorHandler());
@@ -180,6 +126,12 @@ app.use((req, res, next) => {
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
+    // Dynamically import vite-dev only in development to avoid dependency in production
+    // Using Function constructor to create a truly dynamic import that esbuild can't analyze
+    const viteDevPath = "./vite-dev";
+    const viteDevModule = await new Function("path", "return import(path)")(viteDevPath);
+    const { setupVite } = viteDevModule;
+    
     // Add middleware to bypass Vite for API routes
     app.use('/api/*', (req, res, next) => {
       // If we get here, it means no API route matched - return 404
@@ -192,7 +144,41 @@ app.use((req, res, next) => {
     
     await setupVite(app, server);
   } else {
-    serveStatic(app);
+    // Serve static files in production (no vite dependency)
+    // Inlined here to avoid needing to bundle vite-prod.ts
+    // Use process.cwd() to get the app root, then resolve to dist/public
+    // In Docker/Cloud Run, this will be /app, so dist/public will be /app/dist/public
+    const distPath = path.resolve(process.cwd(), "dist", "public");
+    
+    if (!fs.existsSync(distPath)) {
+      log.error(`Could not find the build directory: ${distPath}`, undefined, "server");
+      throw new Error(
+        `Could not find the build directory: ${distPath}, make sure to build the client first`,
+      );
+    }
+    
+    log.info(`Serving static files from: ${distPath}`, "server");
+    
+    // Serve static files with proper caching headers for Cloud Run
+    app.use(express.static(distPath, {
+      maxAge: '1y', // Cache static assets for 1 year
+      etag: true, // Enable ETag for better caching
+      lastModified: true, // Enable Last-Modified headers
+    }));
+    
+    // Fall through to index.html for client-side routing (SPA)
+    // But only for non-API routes
+    app.get("*", (req, res, next) => {
+      // Skip API routes
+      if (req.path.startsWith("/api")) {
+        return next();
+      }
+      // Don't cache index.html - always serve fresh for client updates
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
@@ -204,65 +190,136 @@ app.use((req, res, next) => {
     log.info(`serving on port ${port}`, "server");
   });
 
-  // Only start setInterval jobs if queue system is not available
-  if (!useQueueSystem) {
-    log.info("Starting legacy setInterval jobs", "server");
-    
-    // Start automatic stock price updates every 5 minutes
-    startPriceUpdateJob(storage);
-  
-  // Start daily cleanup of stale pending stocks (> 10 days old)
-  startCleanupScheduler(storage);
-  
-  // Start daily ticker brief generation for global opportunities (score evolution tracking)
-  startTickerDailyBriefScheduler(storage);
-  
-  // Start automatic candlestick data fetching for purchase candidates (once a day)
-  startCandlestickDataJob(storage);
-  
-  // Start automatic holdings price history updates every 5 minutes
-  startHoldingsPriceHistoryJob(storage);
-  
-  // Start automatic Telegram message fetching every hour (only if enabled)
-  if (ENABLE_TELEGRAM) {
-    startTelegramFetchJob(storage);
-  }
-  
-  // Start automatic OpenInsider data fetching every hour (legacy per-user system)
-  startOpeninsiderFetchJob(storage);
-  
-  // Start unified global opportunities fetch (new system)
-  // TODO: Extract unifiedOpportunities job - currently still inline
-  startUnifiedOpportunitiesFetchJob();
-  
-  // Start automatic cleanup of old recommendations (older than 2 weeks)
-  startRecommendationCleanupJob(storage);
-  
-  // Start automatic trading rule evaluation for simulated holdings only
-  startSimulatedRuleExecutionJob(storage);
-  
-  // Start automatic AI analysis for new purchase candidates
-  startAIAnalysisJob(storage);
-  
-  // Start the AI analysis queue worker
-  queueWorker.start();
-  log("[QueueWorker] AI Analysis queue worker started");
-  
-  // Start hourly reconciliation job to re-queue incomplete analyses
-  startAnalysisReconciliationJob(storage);
-  
-  // Start daily brief generation job for followed stocks
-  startDailyBriefJob(storage);
-  
-    // Start automatic cleanup of unverified users after 48 hours
-    startUnverifiedUserCleanupJob(storage);
-  } else {
-    log.info("Queue system active - setInterval jobs skipped", "server");
-  }
+  // Initialize services in the background (non-blocking)
+  // This allows the server to start quickly and avoid Cloud Run timeout
+  (async () => {
+    try {
+      // Initialize default configuration
+      await storage.initializeDefaults();
+      log.info("Default configuration initialized", "server");
+      
+      // Initialize AI provider configuration from database
+      try {
+        const settings = await storage.getSystemSettings();
+        if (settings?.aiProvider) {
+          const { setMacroProviderConfig } = await import("./macroAgentService");
+          const { setBacktestProviderConfig } = await import("./backtestService");
+          const { clearProviderCache } = await import("./aiProvider");
+          
+          const config = { 
+            provider: settings.aiProvider as "openai" | "gemini", 
+            model: settings.aiModel || undefined 
+          };
+          
+          aiAnalysisService.setProviderConfig(config);
+          setMacroProviderConfig(config);
+          setBacktestProviderConfig(config);
+          clearProviderCache();
+          
+          log.info(`AI provider initialized: ${settings.aiProvider}${settings.aiModel ? ` (model: ${settings.aiModel})` : ""}`, "server");
+        } else {
+          log.info("AI provider using default: OpenAI", "server");
+        }
+      } catch (err) {
+        log.error(`AI provider initialization skipped: ${(err as Error).message}`, err, "server");
+      }
+      
+      // Initialize Telegram services only if feature flag is enabled
+      if (ENABLE_TELEGRAM) {
+        // Initialize Telegram client if configured
+        await telegramService.initialize().catch(err => {
+          log.warn(`Telegram service initialization skipped: ${err.message}`, "server");
+        });
 
-  // Start the AI analysis queue worker (separate from BullMQ system)
-  queueWorker.start();
-  log.info("[QueueWorker] AI Analysis queue worker started", "server");
+        // Initialize Telegram notification bot if configured
+        await telegramNotificationService.initialize().catch(err => {
+          log.warn(`Telegram notification service initialization skipped: ${err.message}`, "server");
+        });
+      } else {
+        log.info("Telegram integration disabled via feature flag", "server");
+      }
+
+      // Initialize WebSocket server for real-time updates
+      await websocketManager.initialize(server);
+
+      // Initialize BullMQ job queue system (replaces setInterval jobs)
+      let useQueueSystem = false;
+      try {
+        await initializeQueueSystem(storage);
+        log.info("Job queue system initialized", "server");
+        useQueueSystem = true;
+      } catch (error) {
+        log.error("Failed to initialize job queue system, falling back to setInterval", error, "server");
+        // Fall back to old setInterval jobs if Redis is not available
+        log.warn("Using legacy setInterval job scheduling", "server");
+      }
+
+      // Only start setInterval jobs if queue system is not available
+      if (!useQueueSystem) {
+        log.info("Starting legacy setInterval jobs", "server");
+        
+        // Start automatic stock price updates every 5 minutes
+        startPriceUpdateJob(storage);
+      
+        // Start daily cleanup of stale pending stocks (> 10 days old)
+        startCleanupScheduler(storage);
+        
+        // Start daily ticker brief generation for global opportunities (score evolution tracking)
+        startTickerDailyBriefScheduler(storage);
+        
+        // Start automatic candlestick data fetching for purchase candidates (once a day)
+        startCandlestickDataJob(storage);
+        
+        // Start automatic holdings price history updates every 5 minutes
+        startHoldingsPriceHistoryJob(storage);
+        
+        // Start automatic Telegram message fetching every hour (only if enabled)
+        if (ENABLE_TELEGRAM) {
+          startTelegramFetchJob(storage);
+        }
+        
+        // Start automatic OpenInsider data fetching every hour (legacy per-user system)
+        startOpeninsiderFetchJob(storage);
+        
+        // Start unified global opportunities fetch (new system)
+        // TODO: Extract unifiedOpportunities job - currently still inline
+        startUnifiedOpportunitiesFetchJob();
+        
+        // Start automatic cleanup of old recommendations (older than 2 weeks)
+        startRecommendationCleanupJob(storage);
+        
+        // Start automatic trading rule evaluation for simulated holdings only
+        startSimulatedRuleExecutionJob(storage);
+        
+        // Start automatic AI analysis for new purchase candidates
+        startAIAnalysisJob(storage);
+        
+        // Start hourly reconciliation job to re-queue incomplete analyses
+        startAnalysisReconciliationJob(storage);
+        
+        // Start daily brief generation job for followed stocks
+        startDailyBriefJob(storage);
+        
+        // Start automatic cleanup of unverified users after 48 hours
+        startUnverifiedUserCleanupJob(storage);
+      } else {
+        log.info("Queue system active - setInterval jobs skipped", "server");
+      }
+
+      // Start the AI analysis queue worker (with delay to ensure DB is ready)
+      // Wait a bit for database connection to be fully established
+      setTimeout(async () => {
+        try {
+          await queueWorker.start();
+          log.info("[QueueWorker] AI Analysis queue worker started", "server");
+        } catch (error) {
+          log.error("[QueueWorker] Failed to start queue worker", error, "server");
+        }
+      }, 2000); // 2 second delay
+    } catch (error) {
+      log.error("Error during background initialization", error, "server");
+    }
+  })();
 })();
 
 /**

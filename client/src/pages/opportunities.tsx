@@ -164,7 +164,7 @@ export default function Opportunities() {
     return opportunitiesResponse.opportunities.map(opportunityToStock);
   }, [opportunitiesResponse]);
 
-  // Fetch AI analyses - poll every 30 seconds to catch completed AI jobs while user is on page
+  // Fetch AI analyses - poll less frequently to reduce server load
   // Use ?all=true to get analyses for ALL tickers (needed for opportunities filtering)
   const { data: analyses = [] } = useQuery<any[]>({
     queryKey: ["/api/stock-analyses", { all: true }],
@@ -173,9 +173,9 @@ export default function Opportunities() {
       if (!res.ok) throw new Error("Failed to fetch analyses");
       return res.json();
     },
-    staleTime: 30 * 1000, // Consider fresh for 30 seconds
-    refetchOnWindowFocus: true,
-    refetchInterval: 60 * 1000, // Poll every 60 seconds for AI analysis completion
+    staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
+    refetchOnWindowFocus: false, // Disable refetch on window focus
+    refetchInterval: 2 * 60 * 1000, // Poll every 2 minutes instead of 60 seconds
   });
 
   // Fetch users

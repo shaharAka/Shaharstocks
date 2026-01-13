@@ -27,11 +27,11 @@ export async function runSimulatedRuleExecution(storage: IStorage): Promise<void
   try {
     // Skip if market is closed
     if (!isMarketOpen()) {
-      log("[SimRuleExec] Market is closed, skipping rule evaluation");
+      log.info("[SimRuleExec] Market is closed, skipping rule evaluation");
       return;
     }
     
-    log("[SimRuleExec] Evaluating trading rules for simulated holdings...");
+    log.info("[SimRuleExec] Evaluating trading rules for simulated holdings...");
     
     // Get all users and their trading rules
     const users = await storage.getUsers();
@@ -47,7 +47,7 @@ export async function runSimulatedRuleExecution(storage: IStorage): Promise<void
     const enabledRules = allRulesArray.filter(rule => rule.enabled);
     
     if (enabledRules.length === 0) {
-      log("[SimRuleExec] No enabled rules to evaluate");
+      log.info("[SimRuleExec] No enabled rules to evaluate");
       return;
     }
     
@@ -55,7 +55,7 @@ export async function runSimulatedRuleExecution(storage: IStorage): Promise<void
     const holdings = allHoldingsArray;
     
     if (holdings.length === 0) {
-      log("[SimRuleExec] No simulated holdings to evaluate");
+      log.info("[SimRuleExec] No simulated holdings to evaluate");
       return;
     }
     
@@ -153,7 +153,7 @@ export async function runSimulatedRuleExecution(storage: IStorage): Promise<void
             });
             
             executedCount++;
-            log(`[SimRuleExec] Executed rule "${rule.name}" for ${holding.ticker}: Sold ${quantityToSell} shares at $${currentPrice.toFixed(2)} (triggered by ${condition.metric})`);
+            log.info(`[SimRuleExec] Executed rule "${rule.name}" for ${holding.ticker}: Sold ${quantityToSell} shares at $${currentPrice.toFixed(2)} (triggered by ${condition.metric})`);
             
             // Send Telegram notification if available (only if feature enabled)
             if (ENABLE_TELEGRAM && telegramNotificationService) {
@@ -168,7 +168,7 @@ export async function runSimulatedRuleExecution(storage: IStorage): Promise<void
                 `Total: $${total.toFixed(2)}`;
               
               await telegramNotificationService.sendMessage(message).catch((err: Error) => {
-                log(`[SimRuleExec] Failed to send Telegram notification: ${err.message}`);
+                log.info(`[SimRuleExec] Failed to send Telegram notification: ${err.message}`);
               });
             }
           }
@@ -177,9 +177,9 @@ export async function runSimulatedRuleExecution(storage: IStorage): Promise<void
     }
     
     if (executedCount > 0) {
-      log(`[SimRuleExec] Executed ${executedCount} simulated trades based on trading rules`);
+      log.info(`[SimRuleExec] Executed ${executedCount} simulated trades based on trading rules`);
     } else {
-      log("[SimRuleExec] No rule conditions met");
+      log.info("[SimRuleExec] No rule conditions met");
     }
   } catch (error) {
     console.error("[SimRuleExec] Error evaluating rules:", error);
@@ -201,5 +201,5 @@ export function startSimulatedRuleExecutionJob(storage: IStorage): void {
     runSimulatedRuleExecution(storage);
   }, FIVE_MINUTES);
   
-  log("[SimRuleExec] Background job started - evaluating rules for simulated holdings every 5 minutes");
+  log.info("[SimRuleExec] Background job started - evaluating rules for simulated holdings every 5 minutes");
 }

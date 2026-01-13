@@ -13,13 +13,12 @@ import { telegramNotificationService } from "./telegramNotificationService";
 import { backtestService } from "./backtestService";
 import { finnhubService } from "./finnhubService";
 import { openinsiderService } from "./openinsiderService";
-import { createRequireAdmin } from "./session";
+import { verifyFirebaseToken, requireAdmin } from "./middleware/firebaseAuth";
 import { verifyPayPalWebhook, cancelPayPalSubscription, getSubscriptionTransactions } from "./paypalService";
 import { aiAnalysisService } from "./aiAnalysisService";
 import { authRateLimiter, registrationRateLimiter, emailVerificationRateLimiter } from "./middleware/rateLimiter";
-import { isDisposableEmail, generateVerificationToken, isTokenExpired } from "./utils/emailValidation";
-import { sendVerificationEmail, notifySuperAdminsNewSignup, notifySuperAdminsFirstPayment, sendBugReport } from "./emailService";
-import { isGoogleConfigured, generateState, getGoogleAuthUrl, handleGoogleCallback } from "./googleAuthService";
+import { isDisposableEmail } from "./utils/emailValidation";
+import { notifySuperAdminsNewSignup, notifySuperAdminsFirstPayment, sendBugReport } from "./emailService";
 import { runTickerDailyBriefGeneration } from "./jobs/generateTickerDailyBriefs";
 
 /**
@@ -206,8 +205,68 @@ async function fetchInitialDataForUser(userId: string): Promise<void> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Create admin middleware with storage dependency
-  const requireAdmin = createRequireAdmin(storage);
+  
+  // TEMPORARY: One-time admin promotion endpoint
+  // This allows promoting the first admin user without requiring existing admin access
+  // TODO: Remove this after creating the first admin
+  app.post("/api/setup/promote-admin", async (req, res) => {
+    try {
+      const { email, secret } = req.body;
+      
+      // Simple security: require a secret token (set via environment variable)
+      const requiredSecret = process.env.ADMIN_PROMOTION_SECRET || "temporary-setup-secret-change-me";
+      if (secret !== requiredSecret) {
+        return res.status(403).json({ error: "Invalid secret" });
+      }
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Check if there are already any admins
+      const existingAdmins = await storage.getSuperAdminUsers();
+      if (existingAdmins.length > 0) {
+        return res.status(403).json({ 
+          error: "Admin users already exist. Use the admin panel to promote users.",
+          hint: "This endpoint is only for initial setup when no admins exist."
+        });
+      }
+
+      const updatedUser = await storage.updateUser(user.id, {
+        isAdmin: true,
+        isSuperAdmin: true,
+        emailVerified: true,
+        subscriptionStatus: "active",
+        subscriptionStartDate: new Date(),
+      });
+
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Failed to update user" });
+      }
+
+      res.json({ 
+        success: true,
+        message: "User promoted to super admin",
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          isAdmin: updatedUser.isAdmin,
+          isSuperAdmin: updatedUser.isSuperAdmin,
+          emailVerified: updatedUser.emailVerified,
+          subscriptionStatus: updatedUser.subscriptionStatus,
+        }
+      });
+    } catch (error) {
+      console.error("Admin promotion error:", error);
+      res.status(500).json({ error: "Failed to promote user to admin" });
+    }
+  });
   
   // Feature flags endpoint
   app.get("/api/feature-flags", async (req, res) => {
@@ -249,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.updateSystemSettings({
         appVersion: appVersion.trim(),
         releaseNotes: releaseNotes?.trim() || null,
-        lastUpdatedBy: req.session.userId,
+        lastUpdatedBy: req.user.userId,
       });
       
       res.json({
@@ -305,7 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.updateSystemSettings({
         aiProvider: provider,
         aiModel: model || null,
-        lastUpdatedBy: req.session.userId,
+        lastUpdatedBy: req.user.userId,
       });
       
       // Clear the provider cache so the new provider is used
@@ -388,31 +447,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User authentication routes
-  app.get("/api/auth/current-user", async (req, res) => {
-    try {
-      if (!req.session.userId) {
-        return res.json({ user: null });
-      }
-      const user = await storage.getUser(req.session.userId);
-      if (!user) {
-        req.session.userId = undefined;
-        return res.json({ user: null });
-      }
-      res.json({ user });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to get current user" });
-    }
-  });
+  // User authentication routes - Note: /api/auth/current-user is handled in auth.ts with verifyFirebaseToken
 
   // Trial status endpoint
-  app.get("/api/auth/trial-status", async (req, res) => {
+  app.get("/api/auth/trial-status", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -457,13 +501,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/user/progress", async (req, res) => {
+  app.get("/api/user/progress", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const progress = await storage.getUserProgress(req.session.userId);
+      const progress = await storage.getUserProgress(req.user.userId);
       res.json(progress);
     } catch (error) {
       console.error("Get user progress error:", error);
@@ -471,13 +515,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/user/complete-onboarding", async (req, res) => {
+  app.post("/api/user/complete-onboarding", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      await storage.completeUserOnboarding(req.session.userId);
+      await storage.completeUserOnboarding(req.user.userId);
       res.json({ message: "Onboarding completed successfully" });
     } catch (error) {
       console.error("Complete onboarding error:", error);
@@ -485,14 +529,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/user/tutorial/:id/complete", async (req, res) => {
+  app.post("/api/user/tutorial/:id/complete", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
       const tutorialId = req.params.id;
-      await storage.completeTutorial(req.session.userId, tutorialId);
+      await storage.completeTutorial(req.user.userId, tutorialId);
       res.json({ message: "Tutorial marked as completed" });
     } catch (error) {
       console.error("Complete tutorial error:", error);
@@ -500,503 +544,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/login", authRateLimiter, async (req, res) => {
+  // Auth routes (login, signup, email verification, etc.) are handled in routes/auth.ts with Firebase
+  // Old bcrypt-based routes and Google OAuth routes removed
+
+  app.post("/api/auth/mark-onboarding-complete", verifyFirebaseToken, async (req, res) => {
     try {
-      const { email, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required" });
-      }
-      
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(401).json({ error: "Invalid email or password" });
-      }
-
-      // Check if user has a password (Google-only users don't have passwords)
-      if (!user.passwordHash) {
-        return res.status(401).json({ 
-          error: "This account uses Google Sign-In. Please sign in with Google.",
-          authProvider: user.authProvider 
-        });
-      }
-
-      // Verify password
-      const bcrypt = await import("bcryptjs");
-      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-      if (!isValidPassword) {
-        return res.status(401).json({ error: "Invalid email or password" });
-      }
-
-      // Check email verification
-      if (!user.emailVerified) {
-        return res.status(403).json({ 
-          error: "Please verify your email before logging in. Check your inbox for the verification link.",
-          emailVerificationRequired: true,
-          email: user.email
-        });
-      }
-
-      // Check subscription status - allow trial and active users
-      if (user.subscriptionStatus === "trial") {
-        // Only check trial expiration for users with a trialEndsAt date
-        if (user.trialEndsAt) {
-          const now = new Date();
-          const trialEnd = new Date(user.trialEndsAt);
-          
-          if (now > trialEnd) {
-            // Trial expired - update status and block login
-            await storage.updateUser(user.id, { subscriptionStatus: "expired" });
-            return res.status(403).json({ 
-              error: "Your free trial has expired. Please subscribe to continue.",
-              subscriptionStatus: "expired",
-              trialExpired: true
-            });
-          }
-        }
-        // Trial still active or no expiration date - allow login
-      } else if (user.subscriptionStatus === "active") {
-        // Active subscription - allow login
-      } else {
-        // Inactive, cancelled, or expired - block login
-        return res.status(403).json({ 
-          error: user.subscriptionStatus === "expired" 
-            ? "Your free trial has expired. Please subscribe to continue."
-            : "Subscription required",
-          subscriptionStatus: user.subscriptionStatus,
-          trialExpired: user.subscriptionStatus === "expired"
-        });
-      }
-
-      req.session.userId = user.id;
-      
-      // Explicitly save session before sending response to ensure cookie is set
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.status(500).json({ error: "Failed to save session" });
-        }
-        
-        res.json({ 
-          user: {
-            ...user,
-            passwordHash: undefined, // Don't send password hash to client
-          },
-          subscriptionStatus: user.subscriptionStatus
-        });
-      });
-    } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ error: "Failed to login" });
-    }
-  });
-
-  app.post("/api/auth/signup", registrationRateLimiter, async (req, res) => {
-    try {
-      const { name, email, password } = req.body;
-      if (!name || !email || !password) {
-        return res.status(400).json({ error: "Name, email, and password are required" });
-      }
-
-      if (password.length < 8) {
-        return res.status(400).json({ error: "Password must be at least 8 characters" });
-      }
-
-      // Check for disposable email domains
-      if (isDisposableEmail(email)) {
-        console.log(`[Signup] Blocked disposable email: ${email}`);
-        return res.status(400).json({ error: "Disposable email addresses are not allowed. Please use a permanent email address." });
-      }
-
-      const existingUser = await storage.getUserByEmail(email);
-      if (existingUser) {
-        return res.status(400).json({ error: "Email already in use" });
-      }
-
-      // Hash password
-      const bcrypt = await import("bcryptjs");
-      const passwordHash = await bcrypt.hash(password, 10);
-
-      const avatarColors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
-      const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
-
-      // Generate verification token
-      const verificationToken = generateVerificationToken();
-      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-      const newUser = await storage.createUser({
-        name,
-        email,
-        passwordHash,
-        avatarColor,
-        emailVerified: false,
-        emailVerificationToken: verificationToken,
-        emailVerificationExpiry: verificationExpiry,
-        subscriptionStatus: "pending_verification", // Start with pending
-      });
-
-      // Send verification email
-      // Check for production: Replit uses REPLIT_DEPLOYMENT=1, or NODE_ENV=production
-      const isProduction = process.env.REPLIT_DEPLOYMENT === "1" || process.env.NODE_ENV === "production";
-      const baseUrl = isProduction 
-        ? `https://${req.get('host')}`
-        : `http://${req.get('host')}`;
-      const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
-      
-      const emailSent = await sendVerificationEmail({
-        to: email,
-        name,
-        verificationUrl,
-      });
-
-      if (!emailSent) {
-        console.error(`[Signup] Failed to send verification email to ${email}`);
-        // Don't fail signup, but log the error
-      }
-
-      // Create admin notification for super admins
-      try {
-        await storage.createAdminNotification({
-          type: "user_signup",
-          title: "New User Signup (Pending Verification)",
-          message: `${name} (${email}) has signed up and is pending email verification`,
-          metadata: {
-            userId: newUser.id,
-            userName: name,
-            userEmail: email,
-          },
-          isRead: false,
-        });
-      } catch (notifError) {
-        console.error("Failed to create admin notification for new signup:", notifError);
-      }
-
-      // Send email notification to super admins (fire and forget)
-      storage.getSuperAdminUsers().then(async (superAdmins) => {
-        const adminEmails = superAdmins.map(a => a.email);
-        if (adminEmails.length > 0) {
-          await notifySuperAdminsNewSignup({
-            adminEmails,
-            userName: name,
-            userEmail: email,
-            signupMethod: 'email',
-          });
-        }
-      }).catch(err => console.error("Failed to notify super admins of signup:", err));
-
-      // Don't log them in - they need to verify email first
-      res.json({ 
-        success: true,
-        message: "Account created! Please check your email to verify your account.",
-        email: email
-      });
-    } catch (error) {
-      console.error("Signup error:", error);
-      res.status(500).json({ error: "Failed to create account" });
-    }
-  });
-
-  // Email verification endpoint
-  app.get("/api/auth/verify-email", async (req, res) => {
-    try {
-      const { token } = req.query;
-      
-      if (!token || typeof token !== 'string') {
-        return res.status(400).json({ error: "Invalid verification token" });
-      }
-
-      const user = await storage.getUserByVerificationToken(token);
-      
-      if (!user) {
-        return res.status(404).json({ error: "Invalid or expired verification link" });
-      }
-
-      if (user.emailVerified) {
-        return res.status(400).json({ error: "Email already verified" });
-      }
-
-      if (isTokenExpired(user.emailVerificationExpiry)) {
-        return res.status(400).json({ error: "Verification link has expired. Please request a new one." });
-      }
-
-      // Verify email and start trial
-      const verifiedUser = await storage.verifyUserEmail(user.id);
-      
-      if (!verifiedUser) {
-        return res.status(500).json({ error: "Failed to verify email" });
-      }
-
-      console.log(`[EmailVerification] User ${user.email} verified successfully`);
-      
-      res.json({ 
-        success: true,
-        message: "Email verified successfully! You can now log in.",
-        email: user.email
-      });
-    } catch (error) {
-      console.error("Email verification error:", error);
-      res.status(500).json({ error: "Failed to verify email" });
-    }
-  });
-
-  // Resend verification email
-  app.post("/api/auth/resend-verification", emailVerificationRateLimiter, async (req, res) => {
-    try {
-      const { email } = req.body;
-      
-      if (!email) {
-        return res.status(400).json({ error: "Email is required" });
-      }
-
-      const user = await storage.getUserByEmail(email);
-      
-      if (!user) {
-        // Don't reveal if email exists for security
-        return res.json({ 
-          success: true,
-          message: "If an account with that email exists, a verification email has been sent."
-        });
-      }
-
-      if (user.emailVerified) {
-        return res.status(400).json({ error: "Email is already verified" });
-      }
-
-      // Generate new token
-      const verificationToken = generateVerificationToken();
-      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-      
-      await storage.updateVerificationToken(user.id, verificationToken, verificationExpiry);
-
-      // Send verification email
-      // Check for production: Replit uses REPLIT_DEPLOYMENT=1, or NODE_ENV=production
-      const isProduction = process.env.REPLIT_DEPLOYMENT === "1" || process.env.NODE_ENV === "production";
-      const baseUrl = isProduction 
-        ? `https://${req.get('host')}`
-        : `http://${req.get('host')}`;
-      const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
-      
-      const emailSent = await sendVerificationEmail({
-        to: email,
-        name: user.name,
-        verificationUrl,
-      });
-
-      if (!emailSent) {
-        console.error(`[ResendVerification] Failed to send verification email to ${email}`);
-        return res.status(500).json({ error: "Failed to send verification email" });
-      }
-
-      res.json({ 
-        success: true,
-        message: "Verification email sent. Please check your inbox."
-      });
-    } catch (error) {
-      console.error("Resend verification error:", error);
-      res.status(500).json({ error: "Failed to resend verification email" });
-    }
-  });
-
-  // Bug report endpoint
-  app.post("/api/bug-report", async (req, res) => {
-    try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-
-      const user = await storage.getUser(req.session.userId);
-      if (!user) {
-        return res.status(401).json({ error: "User not found" });
-      }
-
-      const { subject, description, url, userAgent } = req.body;
-
-      if (!description || typeof description !== 'string' || description.trim().length === 0) {
-        return res.status(400).json({ error: "Description is required" });
-      }
-
-      const emailSent = await sendBugReport({
-        subject: subject || "Bug Report",
-        description: description.trim(),
-        reporterName: user.name,
-        reporterEmail: user.email,
-        url: url || "Unknown",
-        userAgent: userAgent || "Unknown",
-      });
-
-      if (!emailSent) {
-        return res.status(500).json({ error: "Failed to send bug report" });
-      }
-
-      console.log(`[BugReport] Report sent from ${user.email}: ${subject}`);
-      res.json({ success: true, message: "Bug report sent successfully" });
-    } catch (error) {
-      console.error("Bug report error:", error);
-      res.status(500).json({ error: "Failed to send bug report" });
-    }
-  });
-
-  // Google OAuth: Check if configured
-  app.get("/api/auth/google/configured", (req, res) => {
-    res.json({ configured: isGoogleConfigured() });
-  });
-
-  // Google OAuth: Get authorization URL
-  app.get("/api/auth/google/url", (req, res) => {
-    try {
-      if (!isGoogleConfigured()) {
-        return res.status(503).json({ error: "Google Sign-In is not configured" });
-      }
-
-      const state = generateState();
-      
-      // Store state in session for verification
-      req.session.googleOAuthState = state;
-      
-      // Get full host including port (e.g., localhost:5002)
-      const host = req.get('host') || req.hostname || 'localhost';
-      // For localhost, use http; otherwise use the request protocol or default to https
-      const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : (req.protocol || 'https');
-      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
-      
-      console.log(`[Google OAuth] Generated redirect URI: ${redirectUri}`);
-      
-      const authUrl = getGoogleAuthUrl(redirectUri, state);
-      
-      res.json({ url: authUrl });
-    } catch (error) {
-      console.error("[Google OAuth] Failed to generate auth URL:", error);
-      res.status(500).json({ error: "Failed to initialize Google Sign-In" });
-    }
-  });
-
-  // Google OAuth: Callback handler
-  app.get("/api/auth/google/callback", async (req, res) => {
-    try {
-      const { code, state, error: oauthError } = req.query;
-      
-      if (oauthError) {
-        console.error("[Google OAuth] Error from Google:", oauthError);
-        return res.redirect("/login?error=google_auth_failed");
-      }
-
-      if (!code || typeof code !== "string") {
-        return res.redirect("/login?error=missing_code");
-      }
-
-      // Verify state to prevent CSRF
-      if (!state || state !== req.session.googleOAuthState) {
-        return res.redirect("/login?error=invalid_state");
-      }
-      
-      // Clear the state
-      delete req.session.googleOAuthState;
-
-      // Get full host including port (e.g., localhost:5002)
-      const host = req.get('host') || req.hostname || 'localhost';
-      // For localhost, use http; otherwise use the request protocol or default to https
-      const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : (req.protocol || 'https');
-      const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
-
-      // Exchange code for tokens and get user info
-      const googleUser = await handleGoogleCallback(code, redirectUri);
-      
-      // Check if user exists by Google sub ID
-      let user = await storage.getUserByGoogleSub(googleUser.sub);
-      
-      if (!user) {
-        // Check if user exists by email (linking case)
-        user = await storage.getUserByEmail(googleUser.email);
-        
-        if (user) {
-          // Link Google account to existing email user
-          await storage.linkGoogleAccount(user.id, googleUser.sub, googleUser.picture);
-          
-          // If they had pending verification, mark as verified since Google verified the email
-          if (!user.emailVerified) {
-            await storage.updateUser(user.id, { 
-              emailVerified: true,
-              subscriptionStatus: user.subscriptionStatus === "pending_verification" ? "trial" : user.subscriptionStatus,
-              trialEndsAt: user.subscriptionStatus === "pending_verification" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : user.trialEndsAt,
-            });
-          }
-        } else {
-          // Create new user with Google account
-          const avatarColors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4"];
-          const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
-          
-          user = await storage.createGoogleUser({
-            name: googleUser.name,
-            email: googleUser.email,
-            googleSub: googleUser.sub,
-            googlePicture: googleUser.picture,
-            avatarColor,
-            authProvider: "google",
-            emailVerified: true, // Google already verified the email
-            subscriptionStatus: "trial",
-            trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day trial
-          });
-
-          // Send email notification to super admins for new Google signup (fire and forget)
-          storage.getSuperAdminUsers().then(async (superAdmins) => {
-            const adminEmails = superAdmins.map(a => a.email);
-            if (adminEmails.length > 0) {
-              await notifySuperAdminsNewSignup({
-                adminEmails,
-                userName: googleUser.name,
-                userEmail: googleUser.email,
-                signupMethod: 'google',
-              });
-            }
-          }).catch(err => console.error("Failed to notify super admins of Google signup:", err));
-        }
-      }
-
-      // Check subscription status before allowing login
-      if (user.subscriptionStatus === "expired") {
-        return res.redirect("/login?error=trial_expired");
-      }
-
-      if (user.subscriptionStatus !== "trial" && user.subscriptionStatus !== "active") {
-        return res.redirect("/login?error=subscription_required");
-      }
-
-      // Set session
-      req.session.userId = user.id;
-      
-      req.session.save((err) => {
-        if (err) {
-          console.error("[Google OAuth] Session save error:", err);
-          return res.redirect("/login?error=session_error");
-        }
-        
-        // Redirect to home on success
-        res.redirect("/?login=success&provider=google");
-      });
-    } catch (error) {
-      console.error("[Google OAuth] Callback error:", error);
-      res.redirect("/login?error=google_auth_failed");
-    }
-  });
-
-  app.post("/api/auth/logout", async (req, res) => {
-    try {
-      req.session.destroy((err) => {
-        if (err) {
-          return res.status(500).json({ error: "Failed to logout" });
-        }
-        res.json({ success: true });
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to logout" });
-    }
-  });
-
-  app.post("/api/auth/mark-onboarding-complete", async (req, res) => {
-    try {
-      if (!req.session.userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      await storage.markUserHasSeenOnboarding(req.session.userId);
+      await storage.markUserHasSeenOnboarding(req.user.userId);
       res.json({ success: true });
     } catch (error) {
       console.error("Mark onboarding complete error:", error);
@@ -1237,7 +793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/verify-email", requireAdmin, async (req, res) => {
     try {
       // Require super admin access
-      const adminUser = await storage.getUser(req.session.userId!);
+      const adminUser = await storage.getUser(req.user.userId!);
       if (!adminUser?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -1333,7 +889,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const archivedUser = await storage.archiveUser(user.id, req.session.userId!);
+      const archivedUser = await storage.archiveUser(user.id, req.user.userId!);
 
       // Update subscription status to cancelled
       if (user.paypalSubscriptionId) {
@@ -1450,7 +1006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate,
         monthsExtended: months,
         reason: reason || `Admin extended subscription by ${months} month(s)`,
-        createdBy: req.session.userId!,
+        createdBy: req.user.userId!,
       });
 
       const updatedUser = await storage.updateUserSubscriptionStatus(
@@ -1529,7 +1085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "completed",
         transactionId: `manual_${Date.now()}`,
         notes: notes || "Manual payment entry by admin",
-        createdBy: req.session.userId!,
+        createdBy: req.user.userId!,
       });
 
       res.json({
@@ -1546,11 +1102,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/users", async (req, res) => {
     try {
       // Only admin users can access the full user list
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      const currentUser = await storage.getUser(req.session.userId);
+      const currentUser = await storage.getUser(req.user.userId);
       if (!currentUser?.isAdmin) {
         return res.status(403).json({ error: "Admin access required" });
       }
@@ -1570,12 +1126,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/users/:id", async (req, res) => {
+  app.patch("/api/users/:id", verifyFirebaseToken, async (req, res) => {
     try {
       const { id } = req.params;
       const { name, email, showAllOpportunities } = req.body;
 
-      if (!req.session.userId || req.session.userId !== id) {
+      if (!req.user || req.user.userId !== id) {
         return res.status(403).json({ error: "Unauthorized" });
       }
 
@@ -1620,11 +1176,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", async (req, res) => {
+  app.delete("/api/users/:id", verifyFirebaseToken, async (req, res) => {
     try {
       const { id } = req.params;
 
-      if (!req.session.userId || req.session.userId !== id) {
+      if (!req.user || req.user.userId !== id) {
         return res.status(403).json({ error: "Unauthorized" });
       }
 
@@ -1658,13 +1214,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get subscription payment history
-  app.get("/api/subscriptions/transactions", async (req, res) => {
+  app.get("/api/subscriptions/transactions", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -1717,7 +1273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock routes - Per-user tenant isolation: all stocks are user-specific
   app.get("/api/stocks", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -1725,12 +1281,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // For user-specific statuses like "rejected"
       if (status === "rejected") {
-        const stocks = await storage.getStocksByUserStatus(req.session.userId, status as string);
+        const stocks = await storage.getStocksByUserStatus(req.user.userId, status as string);
         return res.json(stocks);
       }
       
       // All stocks are user-specific now
-      const stocks = await storage.getStocks(req.session.userId);
+      const stocks = await storage.getStocks(req.user.userId);
       res.json(stocks);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stocks" });
@@ -1740,15 +1296,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get stocks with user-specific statuses and AI analysis job progress
   app.get("/api/stocks/with-user-status", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         console.log("[with-user-status] No userId in session");
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      console.log(`[with-user-status] Fetching stocks for user ${req.session.userId}`);
+      console.log(`[with-user-status] Fetching stocks for user ${req.user.userId}`);
       
       // Get user to determine stock limit (500 during onboarding, otherwise user preference)
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -1758,7 +1314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[with-user-status] User onboarding status: ${user.hasSeenOnboarding}, limit: ${stockLimit}`);
       
       // Use the new storage method that includes user status and latest active job
-      const stocksWithStatus = await storage.getStocksWithUserStatus(req.session.userId, stockLimit);
+      const stocksWithStatus = await storage.getStocksWithUserStatus(req.user.userId, stockLimit);
       
       console.log(`[with-user-status] Found ${stocksWithStatus.length} stocks`);
       console.log(`[with-user-status] Pending stocks: ${stocksWithStatus.filter(s => s.userStatus === 'pending').length}`);
@@ -1780,16 +1336,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get top signal opportunities (high integrated score stocks)
   app.get("/api/stocks/top-signals", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
       // Get user's followed stocks to filter them out
-      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
+      const followedStocks = await storage.getUserFollowedStocks(req.user.userId);
       const followedTickers = new Set(followedStocks.map(fs => fs.ticker.toUpperCase()));
       
       // Get stocks with user status (includes analysis data)
-      const stocksWithStatus = await storage.getStocksWithUserStatus(req.session.userId, 100);
+      const stocksWithStatus = await storage.getStocksWithUserStatus(req.user.userId, 100);
       
       // Filter for high signals (score >= 70) and not already followed
       const highSignals = stocksWithStatus
@@ -1821,10 +1377,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/stocks/:ticker", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.getStock(req.session.userId, req.params.ticker);
+      const stock = await storage.getStock(req.user.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1846,10 +1402,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/stocks/:ticker", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.updateStock(req.session.userId, req.params.ticker, req.body);
+      const stock = await storage.updateStock(req.user.userId, req.params.ticker, req.body);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1861,10 +1417,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/stocks/:ticker", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const deleted = await storage.deleteStock(req.session.userId, req.params.ticker);
+      const deleted = await storage.deleteStock(req.user.userId, req.params.ticker);
       if (!deleted) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1877,10 +1433,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Diagnostic endpoint: Check candlestick data status (now in separate table)
   app.get("/api/stocks/diagnostics/candlesticks", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stocks = await storage.getStocks(req.session.userId);
+      const stocks = await storage.getStocks(req.user.userId);
       const pendingStocks = stocks.filter(s => s.recommendationStatus === "pending");
       
       // Note: Candlesticks are now in a separate shared table (stockCandlesticks)
@@ -1900,11 +1456,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Refresh stock data with real-time market prices
   app.post("/api/stocks/:ticker/refresh", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker;
-      const stock = await storage.getStock(req.session.userId, ticker);
+      const stock = await storage.getStock(req.user.userId, ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -1912,7 +1468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[StockAPI] Refreshing market data for ${ticker}...`);
       const marketData = await stockService.getComprehensiveData(ticker);
 
-      const updatedStock = await storage.updateStock(req.session.userId, ticker, {
+      const updatedStock = await storage.updateStock(req.user.userId, ticker, {
         currentPrice: marketData.currentPrice,
         previousClose: marketData.previousClose,
         marketCap: marketData.marketCap,
@@ -1932,10 +1488,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Refresh all pending stocks with market data
   app.post("/api/stocks/refresh-all", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stocks = await storage.getStocks(req.session.userId);
+      const stocks = await storage.getStocks(req.user.userId);
       const pendingStocks = stocks.filter(s => s.recommendationStatus === "pending");
 
       console.log(`[StockAPI] Refreshing ${pendingStocks.length} pending stocks...`);
@@ -1951,7 +1507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const stock of pendingStocks) {
         try {
           const marketData = await stockService.getComprehensiveData(stock.ticker);
-          await storage.updateStock(req.session.userId, stock.ticker, {
+          await storage.updateStock(req.user.userId, stock.ticker, {
             currentPrice: marketData.currentPrice,
             previousClose: marketData.previousClose,
             marketCap: marketData.marketCap,
@@ -1981,10 +1537,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Recommendation approval routes
   app.post("/api/stocks/:ticker/approve", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.getStock(req.session.userId, req.params.ticker);
+      const stock = await storage.getStock(req.user.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -2005,8 +1561,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Update user-specific stock status
-      await storage.ensureUserStockStatus(req.session.userId, req.params.ticker);
-      await storage.updateUserStockStatus(req.session.userId, req.params.ticker, {
+      await storage.ensureUserStockStatus(req.user.userId, req.params.ticker);
+      await storage.updateUserStockStatus(req.user.userId, req.params.ticker, {
         status: "approved",
         approvedAt: new Date()
       });
@@ -2049,13 +1605,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         priceHistory.push(initialPricePoint);
         
         // Update stock with new price history
-        await storage.updateStock(req.session.userId, stock.ticker, {
+        await storage.updateStock(req.user.userId, stock.ticker, {
           priceHistory,
         });
       }
 
       const trade = {
-        userId: req.session.userId,
+        userId: req.user.userId,
         ticker: stock.ticker,
         type: "buy" as const,
         quantity: purchaseQuantity,
@@ -2082,7 +1638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/:ticker/reject", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker.toUpperCase();
@@ -2092,7 +1648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[Reject] Cancelled any active analysis jobs for ${ticker}`);
 
       // Reject ALL transactions for this ticker (handles multiple transactions per ticker)
-      const result = await storage.rejectTickerForUser(req.session.userId, ticker);
+      const result = await storage.rejectTickerForUser(req.user.userId, ticker);
       
       console.log(`[Reject] Rejected ticker ${ticker} - updated ${result.stocksUpdated} stock entries`);
 
@@ -2110,20 +1666,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/stocks/:ticker/unreject", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      console.log(`[Unreject] Starting unreject for ${req.params.ticker} by user ${req.session.userId}`);
+      console.log(`[Unreject] Starting unreject for ${req.params.ticker} by user ${req.user.userId}`);
 
       // Only update user-specific status (not global stock status)
-      await storage.ensureUserStockStatus(req.session.userId, req.params.ticker);
-      const updatedUserStatus = await storage.updateUserStockStatus(req.session.userId, req.params.ticker, {
+      await storage.ensureUserStockStatus(req.user.userId, req.params.ticker);
+      const updatedUserStatus = await storage.updateUserStockStatus(req.user.userId, req.params.ticker, {
         status: "pending",
         rejectedAt: null
       });
 
-      console.log(`[Unreject] Successfully restored ${req.params.ticker} to pending status for user ${req.session.userId}`);
+      console.log(`[Unreject] Successfully restored ${req.params.ticker} to pending status for user ${req.user.userId}`);
       res.json({ status: "pending", userStatus: updatedUserStatus });
     } catch (error) {
       console.error("Unreject stock error:", error);
@@ -2133,10 +1689,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/:ticker/simulate", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const stock = await storage.getStock(req.session.userId, req.params.ticker);
+      const stock = await storage.getStock(req.user.userId, req.params.ticker);
       if (!stock) {
         return res.status(404).json({ error: "Stock not found" });
       }
@@ -2168,7 +1724,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               price: p.close
             }));
             
-            await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
+            await storage.updateStock(req.user.userId, stock.ticker, { priceHistory });
             console.log(`[Simulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
           }
         } catch (error) {
@@ -2200,20 +1756,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Update stock with new price history
-        await storage.updateStock(req.session.userId, stock.ticker, {
+        await storage.updateStock(req.user.userId, stock.ticker, {
           priceHistory,
         });
       }
 
       // Check if simulated holding already exists
-      const existingHolding = await storage.getPortfolioHoldingByTicker(req.session.userId, stock.ticker, true);
+      const existingHolding = await storage.getPortfolioHoldingByTicker(req.user.userId, stock.ticker, true);
       if (existingHolding) {
         return res.status(400).json({ error: "Simulated holding already exists for this stock" });
       }
 
       // Create simulated trade with the purchase date
       const trade = {
-        userId: req.session.userId,
+        userId: req.user.userId,
         ticker: stock.ticker,
         type: "buy" as const,
         quantity,
@@ -2227,11 +1783,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const createdTrade = await storage.createTrade(trade);
 
       // Get the created holding
-      const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, stock.ticker, true);
+      const holding = await storage.getPortfolioHoldingByTicker(req.user.userId, stock.ticker, true);
 
       // Update user-specific stock status to approved (simulated)
-      await storage.ensureUserStockStatus(req.session.userId, req.params.ticker);
-      await storage.updateUserStockStatus(req.session.userId, req.params.ticker, {
+      await storage.ensureUserStockStatus(req.user.userId, req.params.ticker);
+      await storage.updateUserStockStatus(req.user.userId, req.params.ticker, {
         status: "approved",
         approvedAt: new Date()
       });
@@ -2253,12 +1809,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/stocks/:ticker/simulate", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const { ticker } = req.params;
-      const deletedHoldings = await storage.deleteSimulatedHoldingsByTicker(req.session.userId, ticker);
-      const deletedTrades = await storage.deleteSimulatedTradesByTicker(req.session.userId, ticker);
+      const deletedHoldings = await storage.deleteSimulatedHoldingsByTicker(req.user.userId, ticker);
+      const deletedTrades = await storage.deleteSimulatedTradesByTicker(req.user.userId, ticker);
       
       res.json({ 
         message: `Removed simulated position for ${ticker} (${deletedHoldings} holding(s), ${deletedTrades} trade(s))`,
@@ -2278,7 +1834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-approve", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const validationResult = bulkTickersSchema.safeParse(req.body);
@@ -2292,7 +1848,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(req.session.userId, ticker);
+          const stock = await storage.getStock(req.user.userId, ticker);
           if (!stock) {
             errors.push(`${ticker}: not found`);
             continue;
@@ -2302,12 +1858,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const purchasePrice = parseFloat(stock.currentPrice);
           const purchaseQuantity = 10;
 
-          await storage.updateStock(req.session.userId, ticker, {
+          await storage.updateStock(req.user.userId, ticker, {
             recommendationStatus: "approved"
           });
 
           // Create holding
-          const existingHolding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
+          const existingHolding = await storage.getPortfolioHoldingByTicker(req.user.userId, ticker, false);
           if (existingHolding) {
             const currentAvg = parseFloat(existingHolding.averagePurchasePrice);
             const newAvg = ((currentAvg * existingHolding.quantity + purchasePrice * purchaseQuantity) / (existingHolding.quantity + purchaseQuantity)).toFixed(2);
@@ -2317,7 +1873,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           } else {
             await storage.createPortfolioHolding({
-              userId: req.session.userId,
+              userId: req.user.userId,
               ticker,
               quantity: purchaseQuantity,
               averagePurchasePrice: purchasePrice.toFixed(2),
@@ -2326,7 +1882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Create trade
           await storage.createTrade({
-            userId: req.session.userId,
+            userId: req.user.userId,
             ticker,
             type: "buy",
             quantity: purchaseQuantity,
@@ -2356,10 +1912,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-reject", async (req, res) => {
     try {
-      console.log("[BULK REJECT] Endpoint called. Session userId:", req.session.userId);
+      console.log("[BULK REJECT] Endpoint called. Session userId:", req.user.userId);
       console.log("[BULK REJECT] Request body:", JSON.stringify(req.body));
       
-      if (!req.session.userId) {
+      if (!req.user) {
         console.log("[BULK REJECT] No userId in session - returning 401");
         return res.status(401).json({ error: "Not authenticated" });
       }
@@ -2383,7 +1939,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.cancelAnalysisJobsForTicker(ticker);
           
           // Reject ALL transactions for this ticker (handles multiple transactions per ticker)
-          const result = await storage.rejectTickerForUser(req.session.userId, ticker);
+          const result = await storage.rejectTickerForUser(req.user.userId, ticker);
           console.log(`[BULK REJECT] Rejected ${ticker} - updated ${result.stocksUpdated} stock entries`);
 
           success++;
@@ -2408,7 +1964,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-refresh", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const validationResult = bulkTickersSchema.safeParse(req.body);
@@ -2422,7 +1978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(req.session.userId, ticker);
+          const stock = await storage.getStock(req.user.userId, ticker);
           if (!stock) {
             errors.push(`${ticker}: not found`);
             continue;
@@ -2432,7 +1988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit: 1 req/sec
           const quote = await finnhubService.getQuote(ticker);
           if (quote && quote.currentPrice) {
-            await storage.updateStock(req.session.userId, ticker, {
+            await storage.updateStock(req.user.userId, ticker, {
               currentPrice: quote.currentPrice.toFixed(2),
               previousClose: quote.previousClose?.toFixed(2) || stock.previousClose,
             });
@@ -2459,7 +2015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-analyze", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const validationResult = bulkTickersSchema.safeParse(req.body);
@@ -2472,7 +2028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let queuedCount = 0;
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(req.session.userId, ticker);
+          const stock = await storage.getStock(req.user.userId, ticker);
           if (stock && stock.recommendationStatus === "pending") {
             await storage.enqueueAnalysisJob(ticker, "manual", "high", true);
             queuedCount++;
@@ -2600,7 +2156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Use ?all=true to get all analyses (for opportunities page), otherwise returns only user's followed stocks
   app.get("/api/stock-analyses", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -2614,7 +2170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!includeAll) {
         // Get current user's stocks to filter analyses
-        const userStocks = await storage.getStocks(req.session.userId);
+        const userStocks = await storage.getStocks(req.user.userId);
         const userTickers = new Set(userStocks.map(s => s.ticker));
         // Filter to only user's tickers
         filteredAnalyses = allAnalyses.filter(a => userTickers.has(a.ticker));
@@ -2805,14 +2361,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk analyze all pending stocks for current user
   app.post("/api/stocks/analyze-all", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      console.log(`[Bulk AI Analysis] Starting bulk analysis for user ${req.session.userId}...`);
+      console.log(`[Bulk AI Analysis] Starting bulk analysis for user ${req.user.userId}...`);
       
       // Get user's pending purchase recommendations
-      const stocks = await storage.getStocks(req.session.userId);
+      const stocks = await storage.getStocks(req.user.userId);
       const pendingStocks = stocks.filter(
         stock => stock.recommendation?.toLowerCase() === "buy" && 
                  stock.recommendationStatus === "pending"
@@ -2826,7 +2382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      console.log(`[Bulk AI Analysis] Found ${pendingStocks.length} pending stocks for user ${req.session.userId}`);
+      console.log(`[Bulk AI Analysis] Found ${pendingStocks.length} pending stocks for user ${req.user.userId}`);
       
       // Queue all stocks for analysis (force re-analysis of existing jobs)
       let queuedCount = 0;
@@ -2863,14 +2419,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/:ticker/comments", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
       const validatedData = insertStockCommentSchema.parse({
         ...req.body,
         ticker: req.params.ticker,
-        userId: req.session.userId,
+        userId: req.user.userId,
       });
       const comment = await storage.createStockComment(validatedData);
       res.status(201).json(comment);
@@ -2892,10 +2448,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock follow routes
   app.get("/api/users/me/followed", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const followed = await storage.getUserFollowedStocks(req.session.userId);
+      const followed = await storage.getUserFollowedStocks(req.user.userId);
       res.json(followed);
     } catch (error) {
       console.error("Get user followed stocks error:", error);
@@ -2905,13 +2461,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/:ticker/follow", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker.toUpperCase();
       
       // Check if already following
-      const existingFollows = await storage.getUserFollowedStocks(req.session.userId);
+      const existingFollows = await storage.getUserFollowedStocks(req.user.userId);
       const alreadyFollowing = existingFollows.some(f => f.ticker === ticker);
       
       if (alreadyFollowing) {
@@ -2920,7 +2476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const validatedData = insertFollowedStockSchema.parse({
         ticker,
-        userId: req.session.userId,
+        userId: req.user.userId,
       });
       const follow = await storage.followStock(validatedData);
       
@@ -2956,7 +2512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[Follow] Stock ${ticker} is popular with ${followerCount} followers, creating notifications...`);
           
           // Get stock data for the notification (use current user's userId - stock data same across users in per-user model)
-          const stock = await storage.getStock(req.session.userId, ticker);
+          const stock = await storage.getStock(req.user.userId, ticker);
           const stockData = stock as any;
           
           // Notify all followers (including the one who just followed)
@@ -3002,7 +2558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Generate day-0 daily brief immediately with retry logic
-      const userId = req.session.userId; // Capture for use in async function
+      const userId = req.user.userId; // Capture for use in async function
       const generateDay0Brief = async (retryCount: number = 0): Promise<void> => {
         const maxRetries = 2;
         const retryDelayMs = 3000; // 3 seconds between retries
@@ -3214,10 +2770,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/stocks/:ticker/follow", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      await storage.unfollowStock(req.params.ticker.toUpperCase(), req.session.userId);
+      await storage.unfollowStock(req.params.ticker.toUpperCase(), req.user.userId);
       res.status(204).send();
     } catch (error) {
       console.error("Unfollow stock error:", error);
@@ -3227,7 +2783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/stocks/:ticker/position", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker.toUpperCase();
@@ -3243,19 +2799,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Update the followed stock's position flag
-      await storage.toggleStockPosition(ticker, req.session.userId, hasEnteredPosition, entryPrice);
+      await storage.toggleStockPosition(ticker, req.user.userId, hasEnteredPosition, entryPrice);
       
       // Also manage portfolio holdings to sync with In Position page
       if (hasEnteredPosition) {
         // Check if a holding already exists for this ticker
-        const existingHoldings = await storage.getPortfolioHoldings(req.session.userId, false);
+        const existingHoldings = await storage.getPortfolioHoldings(req.user.userId, false);
         const existingHolding = existingHoldings.find(h => h.ticker === ticker && h.quantity > 0);
         
         if (!existingHolding) {
           // Create a new portfolio holding, use entryPrice or default to 0
           const priceToUse = (entryPrice && entryPrice > 0) ? entryPrice : 0;
           await storage.createPortfolioHolding({
-            userId: req.session.userId,
+            userId: req.user.userId,
             ticker,
             quantity: 1,
             averagePurchasePrice: priceToUse.toString(),
@@ -3264,7 +2820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } else if (!hasEnteredPosition) {
         // When exiting position, find and close/delete any existing holdings
-        const existingHoldings = await storage.getPortfolioHoldings(req.session.userId, false);
+        const existingHoldings = await storage.getPortfolioHoldings(req.user.userId, false);
         const existingHolding = existingHoldings.find(h => h.ticker === ticker && h.quantity > 0);
         
         if (existingHolding) {
@@ -3288,7 +2844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/:ticker/close-position", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const ticker = req.params.ticker.toUpperCase();
@@ -3310,7 +2866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validQuantity = Math.floor(quantityNum);
       }
       
-      const result = await storage.closePosition(ticker, req.session.userId, sellPriceNum, validQuantity);
+      const result = await storage.closePosition(ticker, req.user.userId, sellPriceNum, validQuantity);
       res.status(200).json(result);
     } catch (error) {
       console.error("Close position error:", error);
@@ -3330,7 +2886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-follow", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const validationResult = bulkTickersSchema.safeParse(req.body);
@@ -3345,7 +2901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const upperTicker = ticker.toUpperCase();
           await storage.followStock({
             ticker: upperTicker,
-            userId: req.session.userId,
+            userId: req.user.userId,
           });
           followedCount++;
           
@@ -3407,10 +2963,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get followed stocks with current prices
   app.get("/api/followed-stocks-with-prices", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const followedStocks = await storage.getFollowedStocksWithPrices(req.session.userId);
+      const followedStocks = await storage.getFollowedStocksWithPrices(req.user.userId);
       res.json(followedStocks);
     } catch (error) {
       console.error("Get followed stocks with prices error:", error);
@@ -3421,10 +2977,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get followed stocks with status (includes job status, stance, alignment)
   app.get("/api/followed-stocks-with-status", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const followedStocks = await storage.getFollowedStocksWithStatus(req.session.userId);
+      const followedStocks = await storage.getFollowedStocksWithStatus(req.user.userId);
       res.json(followedStocks);
     } catch (error) {
       console.error("Get followed stocks with status error:", error);
@@ -3435,11 +2991,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get followed stocks count for sidebar badge (excludes stocks with active positions)
   app.get("/api/followed-stocks/count", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
-      const holdings = await storage.getPortfolioHoldings(req.session.userId, false);
+      const followedStocks = await storage.getUserFollowedStocks(req.user.userId);
+      const holdings = await storage.getPortfolioHoldings(req.user.userId, false);
       const positionTickers = new Set(holdings.filter(h => h.quantity > 0).map(h => h.ticker));
       // Count only stocks that are NOT in position
       const watchingCount = followedStocks.filter(s => !positionTickers.has(s.ticker)).length;
@@ -3453,10 +3009,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get active positions count for sidebar badge
   app.get("/api/positions/count", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const holdings = await storage.getPortfolioHoldings(req.session.userId, false);
+      const holdings = await storage.getPortfolioHoldings(req.user.userId, false);
       const activePositions = holdings.filter(h => h.quantity > 0);
       res.json(activePositions.length);
     } catch (error) {
@@ -3468,10 +3024,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get total P&L for user's portfolio
   app.get("/api/portfolio/total-pnl", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const totalPnl = await storage.getTotalPnL(req.session.userId);
+      const totalPnl = await storage.getTotalPnL(req.user.userId);
       res.json({ totalPnl });
     } catch (error) {
       console.error("Get total P&L error:", error);
@@ -3482,7 +3038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get daily briefs for a stock (lightweight daily reports for followed stocks)
   app.get("/api/stocks/:ticker/daily-briefs", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -3493,7 +3049,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if user follows this stock (normalize case on both sides)
-      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
+      const followedStocks = await storage.getUserFollowedStocks(req.user.userId);
       const isFollowing = followedStocks.some(fs => fs.ticker.toUpperCase() === tickerParam);
       
       if (!isFollowing) {
@@ -3501,7 +3057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Pass userId to ensure only user-specific briefs are returned
-      const briefs = await storage.getDailyBriefsForTicker(tickerParam, req.session.userId);
+      const briefs = await storage.getDailyBriefsForTicker(tickerParam, req.user.userId);
       res.json(briefs);
     } catch (error) {
       console.error("Get daily briefs error:", error);
@@ -3533,10 +3089,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock views routes
   app.post("/api/stocks/:ticker/view", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const view = await storage.markStockAsViewed(req.params.ticker, req.session.userId);
+      const view = await storage.markStockAsViewed(req.params.ticker, req.user.userId);
       res.status(201).json(view);
     } catch (error) {
       console.error("Mark stock as viewed error:", error);
@@ -3546,14 +3102,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stocks/bulk-view", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const { tickers } = req.body;
       if (!Array.isArray(tickers)) {
         return res.status(400).json({ error: "tickers must be an array" });
       }
-      await storage.markStocksAsViewed(tickers, req.session.userId);
+      await storage.markStocksAsViewed(tickers, req.user.userId);
       res.status(201).json({ success: true, count: tickers.length });
     } catch (error) {
       console.error("Bulk mark stocks as viewed error:", error);
@@ -3563,11 +3119,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/stock-views/:userId", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       // Ensure users can only access their own viewed stocks
-      if (req.params.userId !== req.session.userId) {
+      if (req.params.userId !== req.user.userId) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const viewedTickers = await storage.getUserStockViews(req.params.userId);
@@ -3581,10 +3137,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Tutorial routes
   app.get("/api/tutorials/:tutorialId/status", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const completed = await storage.hasCompletedTutorial(req.session.userId, req.params.tutorialId);
+      const completed = await storage.hasCompletedTutorial(req.user.userId, req.params.tutorialId);
       res.json({ completed });
     } catch (error) {
       console.error("Check tutorial status error:", error);
@@ -3594,10 +3150,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/tutorials/:tutorialId/complete", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      await storage.markTutorialAsCompleted(req.session.userId, req.params.tutorialId);
+      await storage.markTutorialAsCompleted(req.user.userId, req.params.tutorialId);
       res.status(201).json({ success: true });
     } catch (error) {
       console.error("Mark tutorial complete error:", error);
@@ -3607,10 +3163,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/tutorials/user", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const tutorials = await storage.getUserTutorials(req.session.userId);
+      const tutorials = await storage.getUserTutorials(req.user.userId);
       res.json(tutorials);
     } catch (error) {
       console.error("Get user tutorials error:", error);
@@ -3621,11 +3177,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Portfolio routes
   app.get("/api/portfolio/holdings", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const isSimulated = req.query.simulated === "true";
-      const holdings = await storage.getPortfolioHoldings(req.session.userId, isSimulated ? true : false);
+      const holdings = await storage.getPortfolioHoldings(req.user.userId, isSimulated ? true : false);
       res.json(holdings);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch portfolio holdings" });
@@ -3634,7 +3190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/portfolio/holdings", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -3645,7 +3201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const holding = await storage.createPortfolioHolding({
-        userId: req.session.userId,
+        userId: req.user.userId,
         ticker: ticker.toUpperCase(),
         quantity,
         averagePurchasePrice,
@@ -3662,11 +3218,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/portfolio/holdings/:id", async (req, res) => {
     try {
       // CRITICAL SECURITY: Verify authentication and ownership
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const holding = await storage.getPortfolioHolding(req.params.id, req.session.userId);
+      const holding = await storage.getPortfolioHolding(req.params.id, req.user.userId);
       if (!holding) {
         return res.status(404).json({ error: "Holding not found" });
       }
@@ -3679,12 +3235,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/portfolio/holdings/:id", async (req, res) => {
     try {
       // CRITICAL SECURITY: Verify authentication and ownership before deletion
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
       // Verify ownership before deleting
-      const holding = await storage.getPortfolioHolding(req.params.id, req.session.userId);
+      const holding = await storage.getPortfolioHolding(req.params.id, req.user.userId);
       if (!holding) {
         return res.status(404).json({ error: "Holding not found" });
       }
@@ -3703,11 +3259,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trade routes
   app.get("/api/trades", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const isSimulated = req.query.simulated === "true";
-      const trades = await storage.getTrades(req.session.userId, isSimulated ? true : false);
+      const trades = await storage.getTrades(req.user.userId, isSimulated ? true : false);
       res.json(trades);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch trades" });
@@ -3717,11 +3273,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/trades/:id", async (req, res) => {
     try {
       // CRITICAL SECURITY: Verify authentication and ownership
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const trade = await storage.getTrade(req.params.id, req.session.userId);
+      const trade = await storage.getTrade(req.params.id, req.user.userId);
       if (!trade) {
         return res.status(404).json({ error: "Trade not found" });
       }
@@ -3733,10 +3289,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/trades", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const validatedData = insertTradeSchema.parse({ ...req.body, userId: req.session.userId });
+      const validatedData = insertTradeSchema.parse({ ...req.body, userId: req.user.userId });
       const trade = await storage.createTrade(validatedData);
       res.status(201).json(trade);
     } catch (error) {
@@ -3751,10 +3307,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trading Rules routes
   app.get("/api/rules", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const rules = await storage.getTradingRules(req.session.userId);
+      const rules = await storage.getTradingRules(req.user.userId);
       res.json(rules);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch trading rules" });
@@ -3775,10 +3331,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/rules", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const validatedData = insertTradingRuleSchema.parse({ ...req.body, userId: req.session.userId });
+      const validatedData = insertTradingRuleSchema.parse({ ...req.body, userId: req.user.userId });
       const rule = await storage.createTradingRule(validatedData);
       res.status(201).json(rule);
     } catch (error) {
@@ -3993,7 +3549,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk simulate (create simulated holdings) endpoint
   app.post("/api/stocks/bulk-simulate", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const { tickers } = req.body;
@@ -4008,14 +3564,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create a simulated holding for each ticker
       for (const ticker of tickers) {
         try {
-          const stock = await storage.getStock(req.session.userId, ticker);
+          const stock = await storage.getStock(req.user.userId, ticker);
           if (!stock) {
             errors.push({ ticker, error: "Stock not found" });
             continue;
           }
 
           // Check if simulated holding already exists
-          const existingHolding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, true);
+          const existingHolding = await storage.getPortfolioHoldingByTicker(req.user.userId, ticker, true);
           if (existingHolding) {
             errors.push({ ticker, error: "Simulated holding already exists" });
             continue;
@@ -4048,7 +3604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   price: p.close
                 }));
                 
-                await storage.updateStock(req.session.userId, stock.ticker, { priceHistory });
+                await storage.updateStock(req.user.userId, stock.ticker, { priceHistory });
                 console.log(`[BulkSimulation] Fetched ${priceHistory.length} price points for ${stock.ticker}`);
               }
             } catch (error) {
@@ -4069,7 +3625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Create simulated trade with the purchase date
           const trade = await storage.createTrade({
-            userId: req.session.userId,
+            userId: req.user.userId,
             ticker,
             type: "buy",
             quantity,
@@ -4082,11 +3638,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           // Get the created holding (automatically created by trade)
-          const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, true);
+          const holding = await storage.getPortfolioHoldingByTicker(req.user.userId, ticker, true);
 
           // Update user-specific stock status to approved (simulated)
-          await storage.ensureUserStockStatus(req.session.userId, ticker);
-          await storage.updateUserStockStatus(req.session.userId, ticker, {
+          await storage.ensureUserStockStatus(req.user.userId, ticker);
+          await storage.updateUserStockStatus(req.user.userId, ticker, {
             status: "approved",
             approvedAt: new Date()
           });
@@ -4123,9 +3679,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
-        console.log('[Opportunities] User not found for id:', req.session.userId);
+        console.log('[Opportunities] User not found for id:', req.user.userId);
         return res.status(401).json({ error: "User not found" });
       }
       
@@ -4140,7 +3696,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fetch opportunities filtered by user rejections
       const opportunities = await storage.getOpportunities({
         cadence: cadence as 'daily' | 'hourly' | 'all',
-        userId: req.session.userId
+        userId: req.user.userId
       });
       
       console.log(`[Opportunities] Returning ${opportunities.length} opportunities`);
@@ -4163,7 +3719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const rejections = await storage.getUserRejections(req.session.userId);
+      const rejections = await storage.getUserRejections(req.user.userId);
       res.json(rejections);
     } catch (error) {
       console.error("Get rejections error:", error);
@@ -4178,7 +3734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user) {
         return res.status(401).json({ error: "User not found" });
       }
@@ -4252,7 +3808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if user rejected this opportunity
-      const isRejected = await storage.isOpportunityRejected(req.session.userId, req.params.id);
+      const isRejected = await storage.isOpportunityRejected(req.user.userId, req.params.id);
       
       res.json({ ...opportunity, isRejected });
     } catch (error) {
@@ -4273,7 +3829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Opportunity not found" });
       }
       
-      const rejection = await storage.rejectOpportunity(req.session.userId, req.params.id);
+      const rejection = await storage.rejectOpportunity(req.user.userId, req.params.id);
       res.json({ success: true, rejection });
     } catch (error) {
       console.error("Reject opportunity error:", error);
@@ -4288,7 +3844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
-      const success = await storage.unrejectOpportunity(req.session.userId, req.params.id);
+      const success = await storage.unrejectOpportunity(req.user.userId, req.params.id);
       res.json({ success });
     } catch (error) {
       console.error("Unreject opportunity error:", error);
@@ -4467,7 +4023,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/insider/history/:insiderName", async (req, res) => {
     try {
       // Require authentication
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
@@ -4554,7 +4110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/openinsider/fetch", async (req, res) => {
     try {
       // Per-user tenant isolation: Each user can fetch their own opportunity list with custom filters
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -4565,7 +4121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if this is an onboarding fetch (first-time user)
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       const isOnboarding = user && !user.initialDataFetched;
       
       // For onboarding, use a smaller limit (50) to complete quickly
@@ -4609,7 +4165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[OpeninsiderFetch] ==============================================`);
       
       // Fetch BOTH purchase and sale transactions for this user
-      console.log(`[OpeninsiderFetch] User ${req.session.userId}: Fetching both purchases AND sales...`);
+      console.log(`[OpeninsiderFetch] User ${req.user.userId}: Fetching both purchases AND sales...`);
       const [purchasesResponse, salesResponse] = await Promise.all([
         openinsiderService.fetchInsiderPurchases(
           effectiveFetchLimit,
@@ -4636,9 +4192,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filtered_by_insider_name: purchasesResponse.stats.filtered_by_insider_name + salesResponse.stats.filtered_by_insider_name,
       };
       
-      console.log(`[OpeninsiderFetch] User ${req.session.userId}: Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
-      console.log(`[OpeninsiderFetch] User ${req.session.userId}: BUY transactions: ${transactions.filter(t => t.recommendation === 'buy').length}`);
-      console.log(`[OpeninsiderFetch] User ${req.session.userId}: SELL transactions: ${transactions.filter(t => t.recommendation === 'sell').length}`);
+      console.log(`[OpeninsiderFetch] User ${req.user.userId}: Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
+      console.log(`[OpeninsiderFetch] User ${req.user.userId}: BUY transactions: ${transactions.filter(t => t.recommendation === 'buy').length}`);
+      console.log(`[OpeninsiderFetch] User ${req.user.userId}: SELL transactions: ${transactions.filter(t => t.recommendation === 'sell').length}`);
       
       const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
                                    stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 
@@ -4665,11 +4221,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const createdTickers: string[] = []; // Track newly created tickers for AI analysis
       
       // Step 1: Filter out existing transactions for this admin user (check composite key)
-      console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions for admin user ${req.session.userId}...`);
+      console.log(`[OpeninsiderFetch] Filtering ${transactions.length} transactions for admin user ${req.user.userId}...`);
       const newTransactions = [];
       for (const transaction of transactions) {
         const existingTransaction = await storage.getTransactionByCompositeKey(
-          req.session.userId!, // Admin user's stocks
+          req.user.userId!, // Admin user's stocks
           transaction.ticker,
           transaction.filingDate,
           transaction.insiderName,
@@ -4753,9 +4309,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Create stock recommendation for admin user only
-          console.log(`[OpeninsiderFetch] Creating stock for admin user ${req.session.userId}: ${transaction.ticker}...`);
+          console.log(`[OpeninsiderFetch] Creating stock for admin user ${req.user.userId}: ${transaction.ticker}...`);
           const newStock = await storage.createStock({
-            userId: req.session.userId!, // Admin user only
+            userId: req.user.userId!, // Admin user only
             ticker: transaction.ticker,
             companyName: transaction.companyName || transaction.ticker,
             currentPrice: quote.currentPrice.toString(),
@@ -4857,11 +4413,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Mark user's initial data as fetched if this is their first time
       // We do this regardless of createdCount to avoid the onboarding dialog reappearing
       // if all transactions were duplicates or filtered out
-      if (req.session.userId) {
-        const user = await storage.getUser(req.session.userId);
+      if (req.user.userId) {
+        const user = await storage.getUser(req.user.userId);
         if (user && !user.initialDataFetched) {
-          await storage.markUserInitialDataFetched(req.session.userId);
-          console.log(`[Onboarding] Marked user ${req.session.userId} initial data as fetched`);
+          await storage.markUserInitialDataFetched(req.user.userId);
+          console.log(`[Onboarding] Marked user ${req.user.userId} initial data as fetched`);
           // Note: AI analysis jobs already queued above for all created stocks
         }
       }
@@ -5045,15 +4601,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Record the trade in our database
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
       // Get current stock price to record in trades table
-      const stock = await storage.getStock(req.session.userId, ticker);
+      const stock = await storage.getStock(req.user.userId, ticker);
       const price = stock ? parseFloat(stock.currentPrice) : 0;
       await storage.createTrade({
-        userId: req.session.userId,
+        userId: req.user.userId,
         ticker,
         type: action,
         quantity,
@@ -5079,10 +4635,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // What-If Backtest Job routes
   app.get("/api/backtest/jobs", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const jobs = await storage.getBacktestJobs(req.session.userId);
+      const jobs = await storage.getBacktestJobs(req.user.userId);
       res.json(jobs);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch backtest jobs" });
@@ -5125,10 +4681,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { scope = "all_holdings", ticker } = req.body;
 
       // Fetch all scenarios to find the one we need
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const allJobs = await storage.getBacktestJobs(req.session.userId);
+      const allJobs = await storage.getBacktestJobs(req.user.userId);
       let scenario = null;
       
       for (const job of allJobs) {
@@ -5141,12 +4697,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Scenario not found" });
       }
 
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       // Convert scenario to trading rule
       const tradingRule = await storage.createTradingRule({
-        userId: req.session.userId,
+        userId: req.user.userId,
         name: scenario.name || "Imported Scenario",
         enabled: false, // Start disabled for safety
         scope: scope,
@@ -5181,11 +4737,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const sourceName = selectedDataSource === "telegram" ? "Telegram messages" : "OpenInsider trades";
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       const job = await storage.createBacktestJob({
-        userId: req.session.userId,
+        userId: req.user.userId,
         name: `Backtest ${messageCount} ${sourceName}`,
         dataSource: selectedDataSource,
         messageCount,
@@ -5368,11 +4924,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Notification routes
   app.get("/api/notifications", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const notifications = await storage.getNotifications(req.session.userId);
+      const notifications = await storage.getNotifications(req.user.userId);
       res.json(notifications);
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
@@ -5382,11 +4938,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/notifications/unread-count", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const count = await storage.getUnreadNotificationCount(req.session.userId);
+      const count = await storage.getUnreadNotificationCount(req.user.userId);
       res.json({ count });
     } catch (error) {
       console.error("Failed to fetch unread count:", error);
@@ -5396,11 +4952,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/notifications/:id/read", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const updated = await storage.markNotificationAsRead(req.params.id, req.session.userId);
+      const updated = await storage.markNotificationAsRead(req.params.id, req.user.userId);
       if (!updated) {
         return res.status(404).json({ error: "Notification not found or access denied" });
       }
@@ -5414,11 +4970,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/notifications/read-all", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const count = await storage.markAllNotificationsAsRead(req.session.userId);
+      const count = await storage.markAllNotificationsAsRead(req.user.userId);
       res.json({ count });
     } catch (error) {
       console.error("Failed to mark all notifications as read:", error);
@@ -5428,11 +4984,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/notifications/clear-all", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const count = await storage.clearAllNotifications(req.session.userId);
+      const count = await storage.clearAllNotifications(req.user.userId);
       res.json({ success: true, count });
     } catch (error) {
       console.error("Failed to clear all notifications:", error);
@@ -5443,11 +4999,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Announcements routes
   app.get("/api/announcements/all", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isAdmin) {
         return res.status(403).json({ error: "Admin access required" });
       }
@@ -5464,11 +5020,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/announcements", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const announcements = await storage.getAnnouncements(req.session.userId);
+      const announcements = await storage.getAnnouncements(req.user.userId);
       res.json(announcements);
     } catch (error) {
       console.error("Failed to fetch announcements:", error);
@@ -5478,11 +5034,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/announcements/unread-count", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const count = await storage.getUnreadAnnouncementCount(req.session.userId);
+      const count = await storage.getUnreadAnnouncementCount(req.user.userId);
       res.json({ count });
     } catch (error) {
       console.error("Failed to fetch unread announcement count:", error);
@@ -5492,7 +5048,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/announcements/mark-read", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
@@ -5501,7 +5057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "announcementId is required" });
       }
 
-      await storage.markAnnouncementAsRead(req.session.userId, announcementId);
+      await storage.markAnnouncementAsRead(req.user.userId, announcementId);
       res.json({ success: true });
     } catch (error) {
       console.error("Failed to mark announcement as read:", error);
@@ -5511,11 +5067,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/announcements/mark-all-read", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      await storage.markAllAnnouncementsAsRead(req.session.userId);
+      await storage.markAllAnnouncementsAsRead(req.user.userId);
       res.json({ success: true });
     } catch (error) {
       console.error("Failed to mark all announcements as read:", error);
@@ -5525,18 +5081,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/announcements", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isAdmin) {
         return res.status(403).json({ error: "Admin access required" });
       }
 
       const validatedData = insertAnnouncementSchema.parse({
         ...req.body,
-        createdBy: req.session.userId,
+        createdBy: req.user.userId,
       });
 
       const announcement = await storage.createAnnouncement(validatedData);
@@ -5549,11 +5105,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/announcements/:id", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isAdmin) {
         return res.status(403).json({ error: "Admin access required" });
       }
@@ -5572,11 +5128,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/announcements/:id/deactivate", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isAdmin) {
         return res.status(403).json({ error: "Admin access required" });
       }
@@ -5595,11 +5151,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/announcements/:id", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -5615,11 +5171,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin Notifications routes (for super admins only)
   app.get("/api/admin/notifications", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -5634,11 +5190,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/notifications/unread-count", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -5653,11 +5209,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/notifications/:id/read", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -5676,11 +5232,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/notifications/mark-all-read", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -5696,11 +5252,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin endpoint to regenerate daily briefs for all followed stocks
   app.post("/api/admin/regenerate-briefs", async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isAdmin) {
         return res.status(403).json({ error: "Admin access required" });
       }
@@ -5708,7 +5264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const today = new Date().toISOString().split('T')[0];
       
       // Get all followed tickers for this user
-      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
+      const followedStocks = await storage.getUserFollowedStocks(req.user.userId);
       const followedTickers = followedStocks.map(f => f.ticker);
       
       let generatedCount = 0;
@@ -5726,7 +5282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Get stock data for context and opportunity type
-          const stock = await storage.getStock(req.session.userId, ticker);
+          const stock = await storage.getStock(req.user.userId, ticker);
           const stockData = stock as any;
           const opportunityType = stockData?.recommendation?.toLowerCase().includes("sell") ? "sell" : "buy";
           const previousAnalysis = stockData?.overallRating ? {
@@ -5741,7 +5297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } : undefined;
           
           // Check if user owns this stock (real holdings only, not simulated)
-          const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
+          const holding = await storage.getPortfolioHoldingByTicker(req.user.userId, ticker, false);
           const userOwnsPosition = holding !== undefined && holding.quantity > 0;
           
           // Get recent news
@@ -5768,7 +5324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Create or update brief with BOTH scenarios
           await storage.createDailyBrief({
-            userId: req.session.userId,
+            userId: req.user.userId,
             ticker,
             briefDate: today,
             priceSnapshot: quote.price.toString(),

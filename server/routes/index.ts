@@ -9,7 +9,7 @@ import { registerSystemRoutes } from "./system";
 import { registerAuthRoutes } from "./auth";
 import { registerWebhookRoutes } from "./webhooks";
 import { registerUserRoutes } from "./users";
-import { createRequireAdmin } from "../session";
+import { requireAdmin } from "../middleware/firebaseAuth";
 import { storage } from "../storage";
 import { registerAdminRoutes } from "./admin";
 import { registerPortfolioRoutes } from "./portfolio";
@@ -39,7 +39,7 @@ const log = createLogger("routes");
  * Routes are available at both /api/v1/* (versioned) and /api/* (default v1)
  */
 export async function registerRoutes(app: Express): Promise<Server> {
-  const requireAdmin = createRequireAdmin(storage);
+  // Admin middleware is now requireAdmin from firebaseAuth (no storage dependency needed)
 
   // Apply API versioning middleware to all /api routes
   // This parses version from URL and sets req.apiVersion

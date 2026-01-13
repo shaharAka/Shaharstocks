@@ -10,12 +10,13 @@ import { getIbkrService } from "../ibkrService";
 import { backtestService } from "../backtestService";
 import { finnhubService } from "../finnhubService";
 import { aiAnalysisService } from "../aiAnalysisService";
+import { verifyFirebaseToken } from "../middleware/firebaseAuth";
 
 export function registerStockRoutes(app: Express) {
   // Stock routes - Per-user tenant isolation: all stocks are user-specific
-  app.get("/api/stocks", async (req, res) => {
+  app.get("/api/stocks", verifyFirebaseToken, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
       
@@ -23,12 +24,12 @@ export function registerStockRoutes(app: Express) {
       
       // For user-specific statuses like "rejected"
       if (status === "rejected") {
-        const stocks = await storage.getStocksByUserStatus(req.session.userId, status as string);
+        const stocks = await storage.getStocksByUserStatus(req.user.userId, status as string);
         return res.json(stocks);
       }
       
       // All stocks are user-specific now
-      const stocks = await storage.getStocks(req.session.userId);
+      const stocks = await storage.getStocks(req.user.userId);
       res.json(stocks);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch stocks" });

@@ -17,13 +17,13 @@ let isRunning = false; // Reentrancy guard
 export async function runAIAnalysis(storage: IStorage): Promise<void> {
   // Prevent overlapping runs
   if (isRunning) {
-    log("[AIAnalysis] Skipping - previous job still running");
+    log.info("[AIAnalysis] Skipping - previous job still running");
     return;
   }
   
   isRunning = true;
   try {
-    log("[AIAnalysis] Checking for stocks needing AI analysis...");
+    log.info("[AIAnalysis] Checking for stocks needing AI analysis...");
     
     // Get all users and their pending recommendations
     const users = await storage.getUsers();
@@ -44,13 +44,13 @@ export async function runAIAnalysis(storage: IStorage): Promise<void> {
     });
     
     if (pendingStocks.length === 0) {
-      log("[AIAnalysis] No pending stocks to analyze");
+      log.info("[AIAnalysis] No pending stocks to analyze");
       return;
     }
     
     const buyCount = pendingStocks.filter(s => s.recommendation === 'buy').length;
     const sellCount = pendingStocks.filter(s => s.recommendation === 'sell').length;
-    log(`[AIAnalysis] Found ${pendingStocks.length} pending stocks (${buyCount} buys, ${sellCount} sells), checking for missing analyses...`);
+    log.info(`[AIAnalysis] Found ${pendingStocks.length} pending stocks (${buyCount} buys, ${sellCount} sells), checking for missing analyses...`);
     
     let analyzedCount = 0;
     let skippedCount = 0;
@@ -79,7 +79,7 @@ export async function runAIAnalysis(storage: IStorage): Promise<void> {
         await storage.updateStockAnalysisStatus(stock.ticker, "analyzing");
         
         // Fetch fundamental data from Alpha Vantage
-        log(`[AIAnalysis] Running multi-signal analysis for ${stock.ticker}...`);
+        log.info(`[AIAnalysis] Running multi-signal analysis for ${stock.ticker}...`);
         const [companyOverview, balanceSheet, incomeStatement, cashFlow, dailyPrices] = await Promise.all([
           stockService.getCompanyOverview(stock.ticker),
           stockService.getBalanceSheet(stock.ticker),
@@ -97,7 +97,7 @@ export async function runAIAnalysis(storage: IStorage): Promise<void> {
         const priceNewsCorrelation = stockService.analyzePriceNewsCorrelation(dailyPrices, newsSentiment);
         
         // Fetch SEC EDGAR filing data and comprehensive fundamentals (with error handling for graceful degradation)
-        log(`[AIAnalysis] Fetching SEC filings and comprehensive fundamentals for ${stock.ticker}...`);
+        log.info(`[AIAnalysis] Fetching SEC filings and comprehensive fundamentals for ${stock.ticker}...`);
         
         let secFilingData = null;
         let comprehensiveFundamentals = null;
@@ -246,7 +246,7 @@ export async function runAIAnalysis(storage: IStorage): Promise<void> {
         });
         
         analyzedCount++;
-        log(`[AIAnalysis] Successfully analyzed ${stock.ticker} (Score: ${analysis.financialHealth.score}/100, Rating: ${analysis.overallRating})`);
+        log.info(`[AIAnalysis] Successfully analyzed ${stock.ticker} (Score: ${analysis.financialHealth.score}/100, Rating: ${analysis.overallRating})`);
         
         // Add a small delay to avoid overwhelming the API
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -259,7 +259,7 @@ export async function runAIAnalysis(storage: IStorage): Promise<void> {
       }
     }
     
-    log(`[AIAnalysis] Job complete: analyzed ${analyzedCount}, skipped ${skippedCount}, errors ${errorCount}`);
+    log.info(`[AIAnalysis] Job complete: analyzed ${analyzedCount}, skipped ${skippedCount}, errors ${errorCount}`);
   } catch (error) {
     console.error("[AIAnalysis] Error in AI analysis job:", error);
   } finally {
@@ -282,5 +282,5 @@ export function startAIAnalysisJob(storage: IStorage): void {
     runAIAnalysis(storage);
   }, TEN_MINUTES);
   
-  log("[AIAnalysis] Background job started - analyzing new stocks every 10 minutes");
+  log.info("[AIAnalysis] Background job started - analyzing new stocks every 10 minutes");
 }

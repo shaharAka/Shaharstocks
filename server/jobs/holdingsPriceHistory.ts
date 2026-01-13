@@ -15,11 +15,11 @@ export async function runHoldingsPriceHistoryUpdate(storage: IStorage): Promise<
   try {
     // Skip if market is closed
     if (!isMarketOpen()) {
-      log("[HoldingsHistory] Market is closed, skipping price update");
+      log.info("[HoldingsHistory] Market is closed, skipping price update");
       return;
     }
     
-    log("[HoldingsHistory] Starting holdings price history update...");
+    log.info("[HoldingsHistory] Starting holdings price history update...");
     
     // Get all users and their holdings
     const users = await storage.getUsers();
@@ -31,14 +31,14 @@ export async function runHoldingsPriceHistoryUpdate(storage: IStorage): Promise<
     const holdings = allHoldings;
     
     if (holdings.length === 0) {
-      log("[HoldingsHistory] No holdings to update");
+      log.info("[HoldingsHistory] No holdings to update");
       return;
     }
 
     // Get unique tickers from holdings
     const tickerSet = new Set(holdings.map(h => h.ticker));
     const tickers = Array.from(tickerSet);
-    log(`[HoldingsHistory] Updating price history for ${tickers.length} tickers`);
+    log.info(`[HoldingsHistory] Updating price history for ${tickers.length} tickers`);
 
     // Fetch current prices for all tickers
     const quotes = await finnhubService.getBatchQuotes(tickers);
@@ -80,7 +80,7 @@ export async function runHoldingsPriceHistoryUpdate(storage: IStorage): Promise<
       successCount++;
     }
 
-    log(`[HoldingsHistory] Successfully updated ${successCount}/${tickers.length} stocks with new price points`);
+    log.info(`[HoldingsHistory] Successfully updated ${successCount}/${tickers.length} stocks with new price points`);
   } catch (error) {
     console.error("[HoldingsHistory] Error updating holdings price history:", error);
   }
@@ -101,5 +101,5 @@ export function startHoldingsPriceHistoryJob(storage: IStorage): void {
     runHoldingsPriceHistoryUpdate(storage);
   }, FIVE_MINUTES);
   
-  log("[HoldingsHistory] Background job started - updating price history every 5 minutes");
+  log.info("[HoldingsHistory] Background job started - updating price history every 5 minutes");
 }

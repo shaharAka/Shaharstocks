@@ -34,15 +34,24 @@ Then access at: `http://localhost:3000`
 
 ### Environment Variables
 
-Make sure you have the required environment variables set:
+Make sure you have the required environment variables set. Copy `.env.example` to `.env` and fill in your values:
 
-- `DATABASE_URL` - PostgreSQL connection string (required)
-- `SESSION_SECRET` - Secret for session cookies
-- `REDIS_URL` - Redis connection (optional, for queue system)
-- `SENTRY_DSN` - Sentry error tracking (optional)
-- `VITE_SENTRY_DSN` - Frontend Sentry (optional)
+**Required:**
+- `DATABASE_URL` - PostgreSQL connection string
+- `SESSION_SECRET` - Secret for session cookies (minimum 32 characters)
+- `RESEND_API_KEY` - Resend API key for sending emails
+- `RESEND_FROM_EMAIL` - Email address to send from
+- `GEMINI_API_KEY` - Google Gemini API key (or `OPENAI_API_KEY`)
 
-See `.env.example` or check your environment setup.
+**Optional:**
+- `OPENAI_API_KEY` - OpenAI API key (if not using Gemini)
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
+- `REDIS_URL` - Redis connection (for queue system)
+- `SENTRY_DSN` - Sentry error tracking
+- `VITE_SENTRY_DSN` - Frontend Sentry
+
+See `.env.example` for the complete list of environment variables.
 
 ## 📱 What You'll See
 

@@ -31,6 +31,15 @@ export class CachedStorage implements IStorage {
     return this.storage.getUserByEmail(email);
   }
 
+  async getUserByFirebaseUid(firebaseUid: string): Promise<any> {
+    // Cache Firebase UID lookups (stable identifier)
+    return this.cache.getOrSet(
+      `user:firebase:${firebaseUid}`,
+      () => this.storage.getUserByFirebaseUid(firebaseUid),
+      cache.DEFAULT_TTL.USER
+    );
+  }
+
   // Cache stocks (most expensive query)
   async getStocks(userId: string): Promise<any[]> {
     return cache.getOrSet(

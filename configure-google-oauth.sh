@@ -5,7 +5,7 @@
 
 set -e
 
-PROJECT_ID="intellimap-482411"
+PROJECT_ID="signal2-479718"
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)" 2>/dev/null || echo "")
 
 echo "🔐 Google OAuth Configuration Helper"

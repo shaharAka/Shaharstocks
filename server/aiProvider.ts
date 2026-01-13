@@ -70,7 +70,10 @@ async function callOpenAI(
   messages: ChatMessage[],
   options?: AICompletionOptions
 ): Promise<string> {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY not set");
+  
+  const client = new OpenAI({ apiKey });
   
   // Newer OpenAI models (gpt-4o, gpt-5, etc.) use max_completion_tokens instead of max_tokens
   const maxTokens = options?.maxTokens ?? 4000;

@@ -1,23 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
+  // Base URL for the app (defaults to '/' for Cloud Run root deployment)
+  // Can be overridden with VITE_BASE_URL environment variable if needed
+  base: process.env.VITE_BASE_URL || '/',
+  
   plugins: [
     react(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer(),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
   ],
   resolve: {
     alias: {
@@ -30,6 +21,18 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Optimize for production deployment
+    minify: 'esbuild',
+    sourcemap: false, // Disable sourcemaps in production for smaller bundle
+    rollupOptions: {
+      output: {
+        // Better chunking for Cloud Run deployment
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+        },
+      },
+    },
   },
   server: {
     fs: {
@@ -37,4 +40,8 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
+  // Environment variables that should be available in the client
+  // All VITE_* variables are injected at build time
+  // Make sure these are set in Cloud Run environment or build process
+  envPrefix: 'VITE_',
 });

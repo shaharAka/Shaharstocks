@@ -1,4 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
+import { useEffect, Suspense, useRef } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -17,70 +18,211 @@ import { Onboarding } from "@/components/onboarding";
 import { AnalysisStatusPopup } from "@/components/analysis-status-popup";
 import { HelpCircle, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import Portfolio from "@/pages/portfolio";
-import Opportunities from "@/pages/opportunities";
-import Following from "@/pages/following";
-import InPosition from "@/pages/in-position";
-import Community from "@/pages/community";
-import FeatureSuggestions from "@/pages/community-feature-suggestions";
-import Trading from "@/pages/trading";
-import Settings from "@/pages/settings";
-import AdminPage from "@/pages/admin";
-import TickerDetail from "@/pages/ticker-detail";
-import Login from "@/pages/login";
-import Signup from "@/pages/signup";
-import Terms from "@/pages/terms";
-import VerifyEmail from "@/pages/verify-email";
-import NotFound from "@/pages/not-found";
-import { useEffect, useState } from "react";
+import {
+  Portfolio,
+  Opportunities,
+  Following,
+  InPosition,
+  Community,
+  FeatureSuggestions,
+  Trading,
+  Settings,
+  AdminPage,
+  TickerDetail,
+  Login,
+  Signup,
+  Terms,
+  VerifyEmail,
+  NotFound,
+} from "@/pages";
+import { LoadingFallback } from "@/components/LoadingFallback";
+
+// #region agent log
+const logDebug = (location: string, message: string, data: any, hypothesisId: string) => {
+  const logData = {location,message,data,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId};
+  console.log(`[DEBUG ${hypothesisId}]`, location, message, data);
+  fetch('http://127.0.0.1:7243/ingest/9504a544-9592-4c7b-afe6-b49cb5e62f9f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch((e)=>console.error('Log fetch failed:',e));
+};
+// #endregion
 
 function Router() {
+  // #region agent log
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+  logDebug('App.tsx:Router', 'Router render', { renderCount: renderCount.current }, 'H1');
+  // #endregion
+  
   return (
-    <Switch>
-      <Route path="/login" component={Login} />
-      <Route path="/signup" component={Signup} />
-      <Route path="/verify-email" component={VerifyEmail} />
-      <Route path="/terms" component={Terms} />
-      <Route path="/" component={Opportunities} />
-      <Route path="/opportunities" component={Opportunities} />
-      <Route path="/following" component={Following} />
-      <Route path="/in-position" component={InPosition} />
-      <Route path="/portfolio" component={Portfolio} />
-      <Route path="/community" component={Community} />
-      <Route path="/community/discussion" component={Community} />
-      <Route path="/community/feature-suggestions" component={FeatureSuggestions} />
-      <Route path="/ticker/:ticker" component={TickerDetail} />
-      <Route path="/trading" component={Trading} />
-      <Route path="/admin" component={AdminPage} />
-      <Route path="/settings" component={Settings} />
-      {/* Legacy redirects for backwards compatibility */}
-      <Route path="/recommendations" component={Opportunities} />
-      <Route path="/purchase" component={Opportunities} />
-      <Route path="/dashboard" component={Following} />
-      <Route path="/watchlist" component={Portfolio} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<LoadingFallback />}>
+      <Switch>
+        <Route path="/login">
+          <Login />
+        </Route>
+        {/* Root path (/) shows login page directly */}
+        <Route path="/">
+          <Login />
+        </Route>
+        <Route path="/signup">
+          <Signup />
+        </Route>
+        <Route path="/verify-email">
+          <VerifyEmail />
+        </Route>
+        <Route path="/terms">
+          <Terms />
+        </Route>
+        <Route path="/opportunities">
+          <Opportunities />
+        </Route>
+        <Route path="/following">
+          <Following />
+        </Route>
+        <Route path="/in-position">
+          <InPosition />
+        </Route>
+        <Route path="/portfolio">
+          <Portfolio />
+        </Route>
+        <Route path="/community">
+          <Community />
+        </Route>
+        <Route path="/community/discussion">
+          <Community />
+        </Route>
+        <Route path="/community/feature-suggestions">
+          <FeatureSuggestions />
+        </Route>
+        <Route path="/ticker/:ticker">
+          <TickerDetail />
+        </Route>
+        <Route path="/trading">
+          <Trading />
+        </Route>
+        <Route path="/admin">
+          <AdminPage />
+        </Route>
+        <Route path="/settings">
+          <Settings />
+        </Route>
+        {/* Legacy redirects for backwards compatibility */}
+        <Route path="/recommendations">
+          <Opportunities />
+        </Route>
+        <Route path="/purchase">
+          <Opportunities />
+        </Route>
+        <Route path="/dashboard">
+          <Following />
+        </Route>
+        <Route path="/watchlist">
+          <Portfolio />
+        </Route>
+        <Route>
+          <NotFound />
+        </Route>
+      </Switch>
+    </Suspense>
   );
 }
 
 function AuthenticatedApp() {
-  const { user, isLoading, experienceState } = useUser();
+  // ALL HOOKS MUST BE CALLED FIRST - before any conditional logic or early returns
+  const { user, isLoading } = useUser();
   const [location, setLocation] = useLocation();
-  const [showOnboarding, setShowOnboarding] = useState(false);
-
+  
+  // #region agent log
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+  logDebug('App.tsx:AuthenticatedApp', 'AuthenticatedApp render', { renderCount: renderCount.current }, 'H1');
+  
   useEffect(() => {
-    if (!isLoading && !user && location !== "/login" && location !== "/signup" && location !== "/verify-email" && location !== "/terms") {
-      setLocation("/login");
-    }
-  }, [user, isLoading, location, setLocation]);
+    logDebug('App.tsx:AuthenticatedApp', 'Auth state changed', { user: user?.id, isLoading, location }, 'H1');
+  }, [user?.id, isLoading, location]);
+  // #endregion
 
+  // Public pages that don't require authentication
+  // NOTE: "/" (root) shows login page - authenticated users will be redirected
+  const publicPages = ["/", "/login", "/signup", "/verify-email", "/terms"];
+  const isPublicPage = publicPages.includes(location);
+  const isRoot = location === "/";
+
+  // Handle redirects based on authentication state
   useEffect(() => {
-    const shouldShowOnboarding = experienceState === "onboarding_pending";
-    if (shouldShowOnboarding !== showOnboarding) {
-      setShowOnboarding(shouldShowOnboarding);
+    // Only redirect when we have determined the user state (not loading)
+    if (isLoading) {
+      logDebug('App.tsx:AuthenticatedApp', 'Skipping redirect - still loading', { location }, 'H1');
+      return;
     }
-  }, [experienceState, showOnboarding]);
 
+    // ROOT PATH (/): Shows login page, but if user is authenticated, redirect to dashboard
+    if (isRoot && user) {
+      // Authenticated user on root: redirect to dashboard
+      const storedRedirect = sessionStorage.getItem("loginRedirect");
+      const redirectTo = storedRedirect || "/following";
+      
+      if (storedRedirect) {
+        sessionStorage.removeItem("loginRedirect");
+      }
+      
+      logDebug('App.tsx:AuthenticatedApp', 'Root path - redirecting authenticated user to dashboard', { 
+        redirectTo, 
+        userId: user.id,
+        timestamp: Date.now()
+      }, 'H1');
+      
+      setLocation(redirectTo);
+      return;
+    }
+    // If not authenticated on root, show login page (no redirect needed)
+
+    // If user is logged in and on a public page, redirect to dashboard
+    if (user && isPublicPage) {
+      // Check if there's a stored redirect from login (set by login.tsx after successful login)
+      const storedRedirect = sessionStorage.getItem("loginRedirect");
+      const redirectTo = storedRedirect || "/following";
+      
+      // Clear the stored redirect immediately to prevent loops
+      if (storedRedirect) {
+        sessionStorage.removeItem("loginRedirect");
+      }
+      
+      logDebug('App.tsx:AuthenticatedApp', 'Redirecting authenticated user from public page', { 
+        location, 
+        redirectTo, 
+        hadStoredRedirect: !!storedRedirect, 
+        userId: user.id,
+        userEmail: user.email,
+        timestamp: Date.now()
+      }, 'H1');
+      
+      // Use setTimeout to ensure this happens after React has processed the state update
+      setTimeout(() => {
+        logDebug('App.tsx:AuthenticatedApp', 'Executing redirect', { redirectTo }, 'H1');
+        setLocation(redirectTo);
+      }, 0);
+      return;
+    }
+
+    // If no user and on a protected route, redirect to login with return URL
+    if (!user && !isPublicPage) {
+      logDebug('App.tsx:AuthenticatedApp', 'Redirecting unauthenticated user to login', { 
+        location,
+        isLoading,
+        timestamp: Date.now()
+      }, 'H1');
+      setLocation(`/login?redirect=${encodeURIComponent(location)}`);
+      return;
+    }
+    
+    // Log when no redirect is needed
+    logDebug('App.tsx:AuthenticatedApp', 'No redirect needed', { 
+      hasUser: !!user,
+      isPublicPage,
+      location 
+    }, 'H1');
+  }, [user, isLoading, location, isPublicPage, isRoot, setLocation]);
+
+  // Show loading state while checking authentication
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -89,25 +231,51 @@ function AuthenticatedApp() {
     );
   }
 
-  if (!user && location !== "/login" && location !== "/signup" && location !== "/verify-email" && location !== "/terms") {
-    return null;
+  // ROOT PATH: If authenticated, show redirecting message (will redirect to dashboard)
+  // If not authenticated, show login page (handled by Router)
+  if (isRoot && user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground">Redirecting to dashboard...</div>
+      </div>
+    );
   }
 
-  if (location === "/login" || location === "/signup" || location === "/verify-email" || location === "/terms") {
+  // If user is logged in and on a public page, show redirecting message
+  if (user && isPublicPage) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground">Redirecting...</div>
+      </div>
+    );
+  }
+
+  // If no user and on a protected route, show redirecting message
+  if (!user && !isPublicPage) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground">Redirecting to login...</div>
+      </div>
+    );
+  }
+
+  // Show public pages for unauthenticated users
+  if (!user) {
     return <Router />;
   }
 
+  // Authenticated user - show full app with sidebar
   const style = {
     "--sidebar-width": "11rem",
     "--sidebar-width-icon": "3rem",
     "--header-height": "3rem",
-  };
+  } as React.CSSProperties;
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
+    <SidebarProvider style={style}>
       <TutorialManager />
       <Onboarding 
-        open={showOnboarding} 
+        open={false} 
         onOpenChange={() => {}} 
         onComplete={() => {}}
       />
@@ -154,6 +322,22 @@ function AuthenticatedApp() {
 }
 
 function App() {
+  // #region agent log
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+  logDebug('App.tsx:App', 'App root render - VERSION 2 (Login at Root)', { renderCount: renderCount.current }, 'H1');
+  console.log("App.tsx LOADED - VERSION 2 (Login at Root)");
+  // #endregion
+  
+  // #region agent log
+  useEffect(() => {
+    logDebug('App.tsx:App', 'App mounted', {}, 'H1');
+    return () => {
+      logDebug('App.tsx:App', 'App unmounting', {}, 'H1');
+    };
+  }, []);
+  // #endregion
+  
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light">

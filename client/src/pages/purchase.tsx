@@ -127,19 +127,19 @@ export default function Purchase() {
     }
   }, [currentUser?.showAllOpportunities]);
 
-  // Fetch opportunities - refresh on window focus and after stale time
+  // Fetch opportunities - refresh less frequently
   const { data: stocks, isLoading, refetch } = useQuery<StockWithUserStatus[]>({
     queryKey: ["/api/stocks/with-user-status"],
     staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // Disable refetch on window focus
   });
 
-  // Fetch AI analyses - poll every 30 seconds to catch completed AI jobs while user is on page
+  // Fetch AI analyses - poll less frequently to reduce server load
   const { data: analyses = [] } = useQuery<any[]>({
     queryKey: ["/api/stock-analyses"],
-    staleTime: 30 * 1000, // Consider fresh for 30 seconds
-    refetchOnWindowFocus: true,
-    refetchInterval: 60 * 1000, // Poll every 60 seconds for AI analysis completion
+    staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
+    refetchOnWindowFocus: false, // Disable refetch on window focus
+    refetchInterval: 2 * 60 * 1000, // Poll every 2 minutes instead of 60 seconds
   });
 
   // Fetch users

@@ -4,6 +4,10 @@ import type { IncomingMessage } from 'http';
 import { parse as parseCookie } from 'cookie';
 import { sessionMiddleware } from './session';
 import { eventDispatcher, type DomainEvent } from './eventDispatcher';
+import { getClusteringStatus } from './websocket/clusterAdapter';
+import { createLogger } from './logger';
+
+const log = createLogger('websocket');
 
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
@@ -14,8 +18,20 @@ class WebSocketManager {
   private wss: WebSocketServer | null = null;
   private userConnections = new Map<string, Set<AuthenticatedWebSocket>>();
 
-  initialize(server: HttpServer) {
+  async initialize(server: HttpServer) {
     this.wss = new WebSocketServer({ noServer: true });
+    
+    // Check clustering availability
+    const clusteringStatus = await getClusteringStatus();
+    if (clusteringStatus.available) {
+      log.info('Redis available for WebSocket clustering', {
+        enabled: clusteringStatus.enabled,
+        implementation: clusteringStatus.implementation,
+      });
+      log.info('Note: WebSocket clustering not yet implemented. See server/websocket/README-CLUSTERING.md for details.');
+    } else {
+      log.info('Redis not available - WebSocket running in single-instance mode');
+    }
 
     // Handle WebSocket upgrade with session authentication
     server.on('upgrade', (request: IncomingMessage, socket, head) => {
@@ -44,7 +60,7 @@ class WebSocketManager {
     // Handle WebSocket connections
     this.wss.on('connection', (ws: AuthenticatedWebSocket) => {
       const userId = ws.userId!;
-      console.log(`[WebSocket] User ${userId} connected`);
+      log.info(`User connected`, { userId });
 
       // Add to user connections map
       if (!this.userConnections.has(userId)) {
@@ -62,20 +78,20 @@ class WebSocketManager {
       ws.on('message', (message) => {
         try {
           const data = JSON.parse(message.toString());
-          console.log(`[WebSocket] Received from user ${userId}:`, data);
+          log.debug(`Received message from user`, { userId, data });
           
           // Handle client events (e.g., ping, acks)
           if (data.type === 'ping') {
             ws.send(JSON.stringify({ type: 'pong' }));
           }
         } catch (error) {
-          console.error('[WebSocket] Error parsing message:', error);
+          log.error('Error parsing WebSocket message', error, { userId });
         }
       });
 
       // Handle disconnection
       ws.on('close', () => {
-        console.log(`[WebSocket] User ${userId} disconnected`);
+        log.info(`User disconnected`, { userId });
         this.userConnections.get(userId)?.delete(ws);
         if (this.userConnections.get(userId)?.size === 0) {
           this.userConnections.delete(userId);
@@ -91,7 +107,7 @@ class WebSocketManager {
       this.wss?.clients.forEach((ws) => {
         const authWs = ws as AuthenticatedWebSocket;
         if (!authWs.isAlive) {
-          console.log(`[WebSocket] Terminating dead connection for user ${authWs.userId}`);
+          log.warn(`Terminating dead connection`, { userId: authWs.userId });
           return authWs.terminate();
         }
         authWs.isAlive = false;
@@ -106,7 +122,10 @@ class WebSocketManager {
     // Subscribe to domain events
     this.subscribeToEvents();
 
-    console.log('[WebSocket] Server initialized');
+    log.info('WebSocket server initialized', {
+      clusteringAvailable: clusteringStatus.available,
+      clusteringEnabled: clusteringStatus.enabled,
+    });
   }
 
   private authenticateConnection(

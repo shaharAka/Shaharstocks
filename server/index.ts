@@ -1,6 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
+import fs from "fs";
+import path from "path";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { log } from "./logger";
+// Note: setupVite and serveStatic are dynamically imported to avoid vite dependency in production
+import { initSentry, sentryErrorHandler, sentryTracingHandler, sentryRequestHandler, captureError } from "./sentry";
+import * as Sentry from "@sentry/node";
 import { storage } from "./storage";
 import { telegramService } from "./telegram";
 import { finnhubService } from "./finnhubService";
@@ -9,18 +14,34 @@ import { openinsiderService } from "./openinsiderService";
 import { aiAnalysisService } from "./aiAnalysisService";
 import { startCleanupScheduler } from "./jobs/cleanupStaleStocks";
 import { startTickerDailyBriefScheduler } from "./jobs/generateTickerDailyBriefs";
+import { startPriceUpdateJob } from "./jobs/priceUpdate";
+import { startCandlestickDataJob } from "./jobs/candlestickData";
+import { startHoldingsPriceHistoryJob } from "./jobs/holdingsPriceHistory";
+import { startTelegramFetchJob } from "./jobs/telegramFetch";
+import { startOpeninsiderFetchJob } from "./jobs/openinsiderFetch";
+import { startRecommendationCleanupJob } from "./jobs/recommendationCleanup";
+import { startSimulatedRuleExecutionJob } from "./jobs/simulatedRuleExecution";
+import { startAIAnalysisJob } from "./jobs/aiAnalysis";
+import { startAnalysisReconciliationJob } from "./jobs/analysisReconciliation";
+import { startDailyBriefJob } from "./jobs/dailyBrief";
+import { startUnverifiedUserCleanupJob } from "./jobs/unverifiedUserCleanup";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
-import { sessionMiddleware } from "./session";
+// Session middleware removed - using Firebase JWT tokens instead
 import { queueWorker } from "./queueWorker";
 import { websocketManager } from "./websocketServer";
+import { initializeQueueSystem } from "./queue";
+import { initializeFirebaseAdmin } from "./firebaseAdmin";
 
 // Feature flags
 const ENABLE_TELEGRAM = process.env.ENABLE_TELEGRAM === "true";
 
+// Initialize Sentry before setting up middleware
+initSentry();
+
 const app = express();
 
-// Trust proxy for correct protocol/host detection behind Replit's reverse proxy
+// Trust proxy for correct protocol/host detection behind Cloud Run's load balancer
 app.set('trust proxy', 1);
 
 declare module 'http' {
@@ -35,8 +56,14 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
-// Add session middleware
-app.use(sessionMiddleware);
+// Session middleware removed - using Firebase JWT tokens for stateless authentication
+
+// Add Sentry tracing handler (after session middleware)
+app.use(sentryTracingHandler());
+
+// Add global API rate limiting (after session middleware to access req.session)
+import { globalApiRateLimiter } from "./middleware/rateLimiter";
+app.use("/api", globalApiRateLimiter);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -61,7 +88,7 @@ app.use((req, res, next) => {
         logLine = logLine.slice(0, 79) + "…";
       }
 
-      log(logLine);
+      log.info(logLine, "api");
     }
   });
 
@@ -69,69 +96,42 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize default configuration
-  await storage.initializeDefaults();
-  log("Server starting with session-based admin authentication...");
-  
-  // Initialize AI provider configuration from database
-  try {
-    const settings = await storage.getSystemSettings();
-    if (settings?.aiProvider) {
-      const { setMacroProviderConfig } = await import("./macroAgentService");
-      const { setBacktestProviderConfig } = await import("./backtestService");
-      const { clearProviderCache } = await import("./aiProvider");
-      
-      const config = { 
-        provider: settings.aiProvider as "openai" | "gemini", 
-        model: settings.aiModel || undefined 
-      };
-      
-      aiAnalysisService.setProviderConfig(config);
-      setMacroProviderConfig(config);
-      setBacktestProviderConfig(config);
-      clearProviderCache();
-      
-      log(`AI provider initialized: ${settings.aiProvider}${settings.aiModel ? ` (model: ${settings.aiModel})` : ""}`);
-    } else {
-      log("AI provider using default: OpenAI");
-    }
-  } catch (err) {
-    log(`AI provider initialization skipped: ${(err as Error).message}`);
-  }
-  
-  // Initialize Telegram services only if feature flag is enabled
-  if (ENABLE_TELEGRAM) {
-    // Initialize Telegram client if configured
-    await telegramService.initialize().catch(err => {
-      log(`Telegram service initialization skipped: ${err.message}`);
-    });
-
-    // Initialize Telegram notification bot if configured
-    await telegramNotificationService.initialize().catch(err => {
-      log(`Telegram notification service initialization skipped: ${err.message}`);
-    });
-  } else {
-    log("Telegram integration disabled via feature flag");
-  }
+  // Start server listening FIRST to avoid Cloud Run timeout
+  // Then initialize services in the background
+  log.info("Server starting...", "server");
   
   const server = await registerRoutes(app);
 
-  // Initialize WebSocket server for real-time updates
-  websocketManager.initialize(server);
-  log("[WebSocket] Real-time update server initialized");
+  // Sentry error handler (must be before other error handlers)
+  app.use(sentryErrorHandler());
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Capture error in Sentry before handling
+    captureError(err, {
+      request: {
+        method: _req.method,
+        url: _req.url,
+        headers: _req.headers,
+      },
+    });
+
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
+    log.error("Unhandled error", err, "express");
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
+    // Dynamically import vite-dev only in development to avoid dependency in production
+    // Using Function constructor to create a truly dynamic import that esbuild can't analyze
+    const viteDevPath = "./vite-dev";
+    const viteDevModule = await new Function("path", "return import(path)")(viteDevPath);
+    const { setupVite } = viteDevModule;
+    
     // Add middleware to bypass Vite for API routes
     app.use('/api/*', (req, res, next) => {
       // If we get here, it means no API route matched - return 404
@@ -144,7 +144,41 @@ app.use((req, res, next) => {
     
     await setupVite(app, server);
   } else {
-    serveStatic(app);
+    // Serve static files in production (no vite dependency)
+    // Inlined here to avoid needing to bundle vite-prod.ts
+    // Use process.cwd() to get the app root, then resolve to dist/public
+    // In Docker/Cloud Run, this will be /app, so dist/public will be /app/dist/public
+    const distPath = path.resolve(process.cwd(), "dist", "public");
+    
+    if (!fs.existsSync(distPath)) {
+      log.error(`Could not find the build directory: ${distPath}`, undefined, "server");
+      throw new Error(
+        `Could not find the build directory: ${distPath}, make sure to build the client first`,
+      );
+    }
+    
+    log.info(`Serving static files from: ${distPath}`, "server");
+    
+    // Serve static files with proper caching headers for Cloud Run
+    app.use(express.static(distPath, {
+      maxAge: '1y', // Cache static assets for 1 year
+      etag: true, // Enable ETag for better caching
+      lastModified: true, // Enable Last-Modified headers
+    }));
+    
+    // Fall through to index.html for client-side routing (SPA)
+    // But only for non-API routes
+    app.get("*", (req, res, next) => {
+      // Skip API routes
+      if (req.path.startsWith("/api")) {
+        return next();
+      }
+      // Don't cache index.html - always serve fresh for client updates
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
@@ -152,653 +186,141 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
+  server.listen(port, "0.0.0.0", () => {
+    log.info(`serving on port ${port}`, "server");
   });
 
-  // Start automatic stock price updates every 5 minutes
-  startPriceUpdateJob();
-  
-  // Start daily cleanup of stale pending stocks (> 10 days old)
-  startCleanupScheduler(storage);
-  
-  // Start daily ticker brief generation for global opportunities (score evolution tracking)
-  startTickerDailyBriefScheduler(storage);
-  
-  // Start automatic candlestick data fetching for purchase candidates (once a day)
-  startCandlestickDataJob();
-  
-  // Start automatic holdings price history updates every 5 minutes
-  startHoldingsPriceHistoryJob();
-  
-  // Start automatic Telegram message fetching every hour (only if enabled)
-  if (ENABLE_TELEGRAM) {
-    startTelegramFetchJob();
-  }
-  
-  // Start automatic OpenInsider data fetching every hour (legacy per-user system)
-  startOpeninsiderFetchJob();
-  
-  // Start unified global opportunities fetch (new system)
-  startUnifiedOpportunitiesFetchJob();
-  
-  // Start automatic cleanup of old recommendations (older than 2 weeks)
-  startRecommendationCleanupJob();
-  
-  // Start automatic trading rule evaluation for simulated holdings only
-  startSimulatedRuleExecutionJob();
-  
-  // Start automatic AI analysis for new purchase candidates
-  startAIAnalysisJob();
-  
-  // Start the AI analysis queue worker
-  queueWorker.start();
-  log("[QueueWorker] AI Analysis queue worker started");
-  
-  // Start hourly reconciliation job to re-queue incomplete analyses
-  startAnalysisReconciliationJob();
-  
-  // Start daily brief generation job for followed stocks
-  startDailyBriefJob();
-  
-  // Start automatic cleanup of unverified users after 48 hours
-  startUnverifiedUserCleanupJob();
-})();
-
-/**
- * Background job to update stock prices every 5 minutes
- * Only updates stocks with pending "Buy" recommendations
- */
-function startPriceUpdateJob() {
-  const FIVE_MINUTES = 5 * 60 * 1000;
-
-  async function updateStockPrices() {
+  // Initialize services in the background (non-blocking)
+  // This allows the server to start quickly and avoid Cloud Run timeout
+  (async () => {
     try {
-      // Skip if market is closed
-      if (!isMarketOpen()) {
-        log("[PriceUpdate] Market is closed, skipping stock price update");
-        return;
-      }
+      // Initialize default configuration
+      await storage.initializeDefaults();
+      log.info("Default configuration initialized", "server");
       
-      log("[PriceUpdate] Starting stock price update job...");
-      
-      // Get unique pending tickers across all users (per-user isolation)
-      const tickers = await storage.getAllUniquePendingTickers();
-
-      if (tickers.length === 0) {
-        log("[PriceUpdate] No pending stocks to update");
-        return;
-      }
-
-      log(`[PriceUpdate] Updating prices for ${tickers.length} unique pending tickers across all users`);
-
-      // Fetch quotes, market cap, company info, and news for all pending stocks
-      const stockData = await finnhubService.getBatchStockData(tickers);
-
-      // Update each ticker globally (across all users) with shared market data
-      let successCount = 0;
-      for (const ticker of tickers) {
-        const data = stockData.get(ticker);
-        if (data) {
-          // Update all instances of this ticker (across all users) with the same market data
-          const updatedCount = await storage.updateStocksByTickerGlobally(ticker, {
-            currentPrice: data.quote.currentPrice.toString(),
-            previousClose: data.quote.previousClose.toString(),
-            marketCap: data.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-            description: data.companyInfo?.description || null,
-            industry: data.companyInfo?.industry || null,
-            country: data.companyInfo?.country || null,
-            webUrl: data.companyInfo?.webUrl || null,
-            ipo: data.companyInfo?.ipo || null,
-            news: data.news || [],
-            insiderSentimentMspr: data.insiderSentiment?.mspr.toString() || null,
-            insiderSentimentChange: data.insiderSentiment?.change.toString() || null,
-          });
-          if (updatedCount > 0) {
-            successCount++;
-            log(`[PriceUpdate] Updated ${ticker}: ${updatedCount} instances across users`);
-          }
-        }
-      }
-
-      log(`[PriceUpdate] Successfully updated ${successCount}/${tickers.length} tickers`);
-    } catch (error) {
-      console.error("[PriceUpdate] Error updating stock prices:", error);
-    }
-  }
-
-  // Run immediately on startup
-  updateStockPrices().catch(err => {
-    console.error("[PriceUpdate] Initial update failed:", err);
-  });
-
-  // Then run every 5 minutes
-  setInterval(updateStockPrices, FIVE_MINUTES);
-  log("[PriceUpdate] Background job started - updating every 5 minutes");
-}
-
-/**
- * Background job to fetch 2 weeks of candlestick data for all pending purchase recommendations
- * Runs once a day (after market close)
- */
-function startCandlestickDataJob() {
-  const ONE_DAY = 24 * 60 * 60 * 1000;
-
-  async function fetchCandlestickData() {
-    try {
-      log("[CandlestickData] Starting candlestick data fetch job...");
-      
-      // Get unique tickers that need candlestick data (shared table - one record per ticker)
-      const tickers = await storage.getAllTickersNeedingCandlestickData();
-
-      if (tickers.length === 0) {
-        log("[CandlestickData] No stocks need candlestick data");
-        return;
-      }
-
-      log(`[CandlestickData] Fetching candlestick data for ${tickers.length} unique tickers (shared storage)`);
-
-      // Import stockService here to avoid circular dependencies
-      const { stockService } = await import('./stockService.js');
-
-      // Fetch candlestick data for each ticker (with rate limiting handled by stockService)
-      let successCount = 0;
-      let errorCount = 0;
-      const errors: { ticker: string; error: string }[] = [];
-      
-      for (const ticker of tickers) {
-        try {
-          log(`[CandlestickData] Fetching data for ${ticker}...`);
-          const candlesticks = await stockService.getCandlestickData(ticker);
+      // Initialize AI provider configuration from database
+      try {
+        const settings = await storage.getSystemSettings();
+        if (settings?.aiProvider) {
+          const { setMacroProviderConfig } = await import("./macroAgentService");
+          const { setBacktestProviderConfig } = await import("./backtestService");
+          const { clearProviderCache } = await import("./aiProvider");
           
-          if (candlesticks && candlesticks.length > 0) {
-            // Upsert into shared stockCandlesticks table (one record per ticker, reused across all users)
-            await storage.upsertCandlesticks(ticker, candlesticks.map(c => ({
-              date: c.date,
-              open: c.open,
-              high: c.high,
-              low: c.low,
-              close: c.close,
-              volume: c.volume
-            })));
-            log(`[CandlestickData] ✓ ${ticker} - fetched ${candlesticks.length} days, stored in shared table`);
-            successCount++;
-          } else {
-            log(`[CandlestickData] ⚠️ ${ticker} - no candlestick data returned`);
-            errorCount++;
-            errors.push({ ticker, error: "No data returned from API" });
-          }
-        } catch (error: any) {
-          errorCount++;
-          const errorMsg = error.message || String(error);
-          errors.push({ ticker, error: errorMsg });
-          console.error(`[CandlestickData] ✗ ${ticker} - Error: ${errorMsg}`);
+          const config = { 
+            provider: settings.aiProvider as "openai" | "gemini", 
+            model: settings.aiModel || undefined 
+          };
+          
+          aiAnalysisService.setProviderConfig(config);
+          setMacroProviderConfig(config);
+          setBacktestProviderConfig(config);
+          clearProviderCache();
+          
+          log.info(`AI provider initialized: ${settings.aiProvider}${settings.aiModel ? ` (model: ${settings.aiModel})` : ""}`, "server");
+        } else {
+          log.info("AI provider using default: OpenAI", "server");
         }
+      } catch (err) {
+        log.error(`AI provider initialization skipped: ${(err as Error).message}`, err, "server");
       }
-
-      log(`[CandlestickData] Successfully updated ${successCount}/${tickers.length} tickers`);
       
-      if (errorCount > 0) {
-        log(`[CandlestickData] Failed to fetch data for ${errorCount} stocks:`);
-        errors.forEach(({ ticker, error }) => {
-          log(`  - ${ticker}: ${error}`);
+      // Initialize Telegram services only if feature flag is enabled
+      if (ENABLE_TELEGRAM) {
+        // Initialize Telegram client if configured
+        await telegramService.initialize().catch(err => {
+          log.warn(`Telegram service initialization skipped: ${err.message}`, "server");
         });
-      }
-    } catch (error) {
-      console.error("[CandlestickData] Error in candlestick data job:", error);
-    }
-  }
 
-  // Run immediately on startup
-  fetchCandlestickData().catch(err => {
-    console.error("[CandlestickData] Initial fetch failed:", err);
-  });
-
-  // Then run once a day
-  setInterval(fetchCandlestickData, ONE_DAY);
-  log("[CandlestickData] Background job started - fetching once a day");
-}
-
-/**
- * Check if US stock market is currently open
- * Market hours: 9:30 AM - 4:00 PM ET, Monday-Friday
- */
-function isMarketOpen(): boolean {
-  const now = new Date();
-  
-  // Convert to Eastern Time
-  const etTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  
-  // Check if weekend
-  const day = etTime.getDay();
-  if (day === 0 || day === 6) {
-    return false; // Sunday or Saturday
-  }
-  
-  // Check market hours (9:30 AM - 4:00 PM ET)
-  const hours = etTime.getHours();
-  const minutes = etTime.getMinutes();
-  const timeInMinutes = hours * 60 + minutes;
-  
-  const marketOpen = 9 * 60 + 30;  // 9:30 AM
-  const marketClose = 16 * 60;     // 4:00 PM
-  
-  return timeInMinutes >= marketOpen && timeInMinutes < marketClose;
-}
-
-/**
- * Background job to update price history for all holdings (simulated and real)
- * Runs every 5 minutes to add new price points to the chart
- */
-function startHoldingsPriceHistoryJob() {
-  const FIVE_MINUTES = 5 * 60 * 1000;
-
-  async function updateHoldingsPriceHistory() {
-    try {
-      // Skip if market is closed
-      if (!isMarketOpen()) {
-        log("[HoldingsHistory] Market is closed, skipping price update");
-        return;
-      }
-      
-      log("[HoldingsHistory] Starting holdings price history update...");
-      
-      // Get all users and their holdings
-      const users = await storage.getUsers();
-      const allHoldings = [];
-      for (const user of users) {
-        const userHoldings = await storage.getPortfolioHoldings(user.id);
-        allHoldings.push(...userHoldings);
-      }
-      const holdings = allHoldings;
-      
-      if (holdings.length === 0) {
-        log("[HoldingsHistory] No holdings to update");
-        return;
+        // Initialize Telegram notification bot if configured
+        await telegramNotificationService.initialize().catch(err => {
+          log.warn(`Telegram notification service initialization skipped: ${err.message}`, "server");
+        });
+      } else {
+        log.info("Telegram integration disabled via feature flag", "server");
       }
 
-      // Get unique tickers from holdings
-      const tickerSet = new Set(holdings.map(h => h.ticker));
-      const tickers = Array.from(tickerSet);
-      log(`[HoldingsHistory] Updating price history for ${tickers.length} tickers`);
+      // Initialize WebSocket server for real-time updates
+      await websocketManager.initialize(server);
 
-      // Fetch current prices for all tickers
-      const quotes = await finnhubService.getBatchQuotes(tickers);
-      
-      // Current timestamp
-      const now = new Date().toISOString();
-      
-      let successCount = 0;
-      
-      // Update price history for each ticker (iterate users once, update their stocks)
-      for (const ticker of tickers) {
-        const quote = quotes.get(ticker);
-        if (!quote || !quote.currentPrice) {
-          continue;
-        }
+      // Initialize BullMQ job queue system (replaces setInterval jobs)
+      let useQueueSystem = false;
+      try {
+        await initializeQueueSystem(storage);
+        log.info("Job queue system initialized", "server");
+        useQueueSystem = true;
+      } catch (error) {
+        log.error("Failed to initialize job queue system, falling back to setInterval", error, "server");
+        // Fall back to old setInterval jobs if Redis is not available
+        log.warn("Using legacy setInterval job scheduling", "server");
+      }
 
-        // Update each user's stock with this ticker
-        for (const user of users) {
-          const userStocks = await storage.getStocks(user.id);
-          const stock = userStocks.find(s => s.ticker === ticker);
-          if (!stock) continue;
-
-          // Get existing price history
-          const priceHistory = stock.priceHistory || [];
-          
-          // Always add a new price point with current timestamp
-          priceHistory.push({
-            date: now,
-            price: quote.currentPrice,
-          });
-          
-          // Update this user's stock with new price history
-          await storage.updateStock(user.id, ticker, {
-            priceHistory,
-            currentPrice: quote.currentPrice.toString(),
-          });
+      // Only start setInterval jobs if queue system is not available
+      if (!useQueueSystem) {
+        log.info("Starting legacy setInterval jobs", "server");
+        
+        // Start automatic stock price updates every 5 minutes
+        startPriceUpdateJob(storage);
+      
+        // Start daily cleanup of stale pending stocks (> 10 days old)
+        startCleanupScheduler(storage);
+        
+        // Start daily ticker brief generation for global opportunities (score evolution tracking)
+        startTickerDailyBriefScheduler(storage);
+        
+        // Start automatic candlestick data fetching for purchase candidates (once a day)
+        startCandlestickDataJob(storage);
+        
+        // Start automatic holdings price history updates every 5 minutes
+        startHoldingsPriceHistoryJob(storage);
+        
+        // Start automatic Telegram message fetching every hour (only if enabled)
+        if (ENABLE_TELEGRAM) {
+          startTelegramFetchJob(storage);
         }
         
-        successCount++;
+        // Start automatic OpenInsider data fetching every hour (legacy per-user system)
+        startOpeninsiderFetchJob(storage);
+        
+        // Start unified global opportunities fetch (new system)
+        // TODO: Extract unifiedOpportunities job - currently still inline
+        startUnifiedOpportunitiesFetchJob();
+        
+        // Start automatic cleanup of old recommendations (older than 2 weeks)
+        startRecommendationCleanupJob(storage);
+        
+        // Start automatic trading rule evaluation for simulated holdings only
+        startSimulatedRuleExecutionJob(storage);
+        
+        // Start automatic AI analysis for new purchase candidates
+        startAIAnalysisJob(storage);
+        
+        // Start hourly reconciliation job to re-queue incomplete analyses
+        startAnalysisReconciliationJob(storage);
+        
+        // Start daily brief generation job for followed stocks
+        startDailyBriefJob(storage);
+        
+        // Start automatic cleanup of unverified users after 48 hours
+        startUnverifiedUserCleanupJob(storage);
+      } else {
+        log.info("Queue system active - setInterval jobs skipped", "server");
       }
 
-      log(`[HoldingsHistory] Successfully updated ${successCount}/${tickers.length} stocks with new price points`);
-    } catch (error) {
-      console.error("[HoldingsHistory] Error updating holdings price history:", error);
-    }
-  }
-
-  // Run immediately on startup
-  updateHoldingsPriceHistory().catch(err => {
-    console.error("[HoldingsHistory] Initial update failed:", err);
-  });
-
-  // Then run every 5 minutes
-  setInterval(updateHoldingsPriceHistory, FIVE_MINUTES);
-  log("[HoldingsHistory] Background job started - updating price history every 5 minutes");
-}
-
-/**
- * Background job to fetch new Telegram messages every hour
- */
-function startTelegramFetchJob() {
-  const ONE_HOUR = 60 * 60 * 1000;
-
-  async function fetchTelegramMessages() {
-    try {
-      log("[TelegramFetch] Starting Telegram message fetch job...");
-      
-      // Get Telegram config
-      const config = await storage.getTelegramConfig();
-      if (!config || !config.enabled) {
-        log("[TelegramFetch] Telegram is not configured or disabled, skipping");
-        return;
-      }
-
-      // Fetch recent messages (last 20)
-      const messages = await telegramService.fetchRecentMessages(config.channelUsername, 20);
-      log(`[TelegramFetch] Successfully fetched and processed ${messages.length} messages`);
-    } catch (error) {
-      console.error("[TelegramFetch] Error fetching Telegram messages:", error);
-    }
-  }
-
-  // Run immediately on startup
-  fetchTelegramMessages().catch(err => {
-    console.error("[TelegramFetch] Initial fetch failed:", err);
-  });
-
-  // Then run every hour
-  setInterval(fetchTelegramMessages, ONE_HOUR);
-  log("[TelegramFetch] Background job started - fetching every hour");
-}
-
-/**
- * Background job to fetch new OpenInsider data (hourly or daily based on config)
- * Trial users: daily refresh only, Paid subscribers: hourly refresh
- */
-function startOpeninsiderFetchJob() {
-  const ONE_HOUR = 60 * 60 * 1000;
-  const ONE_DAY = 24 * 60 * 60 * 1000;
-  
-  // Mutex to prevent concurrent job executions
-  let isJobRunning = false;
-
-  async function fetchOpeninsiderData() {
-    // Prevent concurrent executions
-    if (isJobRunning) {
-      log("[OpeninsiderFetch] Job already running, skipping this execution");
-      return;
-    }
-    isJobRunning = true;
-    
-    try {
-      log("[OpeninsiderFetch] Starting OpenInsider data fetch job...");
-      
-      // Get OpenInsider config
-      const config = await storage.getOpeninsiderConfig();
-      if (!config || !config.enabled) {
-        log("[OpeninsiderFetch] OpenInsider is not configured or disabled, skipping");
-        return;
-      }
-
-      // Build filters from config
-      const filters: {
-        insiderTitles?: string[];
-        minTransactionValue?: number;
-        previousDayOnly?: boolean;
-      } = {};
-      
-      if (config.insiderTitles && config.insiderTitles.length > 0) {
-        filters.insiderTitles = config.insiderTitles;
-      }
-      if (config.minTransactionValue) {
-        filters.minTransactionValue = config.minTransactionValue;
-      }
-      if (config.fetchPreviousDayOnly) {
-        filters.previousDayOnly = true;
-      }
-
-      // Get configurable backend filters
-      const optionsDealThreshold = config.optionsDealThresholdPercent ?? 15;
-      const minMarketCap = config.minMarketCap ?? 500;
-
-      // Fetch BOTH purchase and sale transactions
-      log(`[OpeninsiderFetch] Fetching both purchases AND sales...`);
-      const [purchasesResponse, salesResponse] = await Promise.all([
-        openinsiderService.fetchInsiderPurchases(
-          config.fetchLimit || 50,
-          Object.keys(filters).length > 0 ? filters : undefined,
-          "P"
-        ),
-        openinsiderService.fetchInsiderSales(
-          config.fetchLimit || 50,
-          Object.keys(filters).length > 0 ? filters : undefined
-        )
-      ]);
-      
-      // Merge transactions from both sources
-      const transactions = [...purchasesResponse.transactions, ...salesResponse.transactions];
-      
-      // Merge stats
-      const stage1Stats = {
-        total_rows_scraped: purchasesResponse.stats.total_rows_scraped + salesResponse.stats.total_rows_scraped,
-        filtered_not_purchase: purchasesResponse.stats.filtered_not_purchase + salesResponse.stats.filtered_not_purchase,
-        filtered_invalid_data: purchasesResponse.stats.filtered_invalid_data + salesResponse.stats.filtered_invalid_data,
-        filtered_by_date: purchasesResponse.stats.filtered_by_date + salesResponse.stats.filtered_by_date,
-        filtered_by_title: purchasesResponse.stats.filtered_by_title + salesResponse.stats.filtered_by_title,
-        filtered_by_transaction_value: purchasesResponse.stats.filtered_by_transaction_value + salesResponse.stats.filtered_by_transaction_value,
-        filtered_by_insider_name: purchasesResponse.stats.filtered_by_insider_name + salesResponse.stats.filtered_by_insider_name,
-      };
-      
-      log(`[OpeninsiderFetch] Fetched ${purchasesResponse.transactions.length} purchases + ${salesResponse.transactions.length} sales = ${transactions.length} total`);
-      
-      if (transactions.length === 0) {
-        log("[OpeninsiderFetch] No insider transactions found");
-        await storage.updateOpeninsiderSyncStatus();
-        return;
-      }
-
-      const totalStage1Filtered = stage1Stats.filtered_by_title + stage1Stats.filtered_by_transaction_value + 
-                                   stage1Stats.filtered_by_date + stage1Stats.filtered_not_purchase + 
-                                   stage1Stats.filtered_invalid_data;
-
-      log(`[OpeninsiderFetch] ======= STAGE 1: Python Scraper Filters =======`);
-      log(`[OpeninsiderFetch] Total rows scraped: ${stage1Stats.total_rows_scraped}`);
-      log(`[OpeninsiderFetch]   • Not a purchase / Invalid: ${stage1Stats.filtered_not_purchase + stage1Stats.filtered_invalid_data}`);
-      log(`[OpeninsiderFetch]   • Filtered by date: ${stage1Stats.filtered_by_date}`);
-      log(`[OpeninsiderFetch]   • Filtered by title: ${stage1Stats.filtered_by_title}`);
-      log(`[OpeninsiderFetch]   • Filtered by transaction value: ${stage1Stats.filtered_by_transaction_value}`);
-      log(`[OpeninsiderFetch] → Total Stage 1 filtered: ${totalStage1Filtered}`);
-      log(`[OpeninsiderFetch] → Returned ${transactions.length} matching transactions`);
-      log(`[OpeninsiderFetch] ===============================================`);
-
-      // Convert transactions to stock recommendations
-      let createdCount = 0;
-      let filteredMarketCap = 0;
-      let filteredOptionsDeals = 0;
-      let filteredNoQuote = 0;
-      let filteredDuplicates = 0;
-      const createdTickers = new Set<string>(); // Track unique tickers for AI analysis
-      
-      // Get only users who are eligible for data refresh based on subscription type
-      // Trial users: daily refresh only, Paid subscribers: hourly refresh
-      const users = await storage.getUsersEligibleForDataRefresh();
-      log(`[OpeninsiderFetch] ${users.length} users eligible for data refresh (trial: daily, paid: hourly)`);
-      
-      // IMMEDIATELY update lastDataRefresh for eligible users to prevent duplicate refreshes
-      // This happens BEFORE processing transactions to ensure eligibility is updated even if no stocks are created
-      if (users.length > 0) {
-        for (const user of users) {
-          await storage.updateUserLastDataRefresh(user.id);
-        }
-        log(`[OpeninsiderFetch] Updated lastDataRefresh for ${users.length} users at START of job`);
-      }
-      
-      for (const transaction of transactions) {
+      // Start the AI analysis queue worker (with delay to ensure DB is ready)
+      // Wait a bit for database connection to be fully established
+      setTimeout(async () => {
         try {
-          // Get current market price from Finnhub (once per transaction)
-          const quote = await finnhubService.getQuote(transaction.ticker);
-          if (!quote || !quote.currentPrice) {
-            filteredNoQuote++;
-            log(`[OpeninsiderFetch] Could not get quote for ${transaction.ticker}, skipping`);
-            continue;
-          }
-
-          // Fetch company profile, market cap, and news
-          const stockData = await finnhubService.getBatchStockData([transaction.ticker]);
-          const data = stockData.get(transaction.ticker);
-          
-          // Apply market cap filter
-          if (!data?.marketCap || data.marketCap < minMarketCap) {
-            filteredMarketCap++;
-            log(`[OpeninsiderFetch] ${transaction.ticker} market cap too low: $${data?.marketCap || 0}M (need >$${minMarketCap}M), skipping`);
-            continue;
-          }
-
-          // Apply options deal filter ONLY to BUY transactions
-          if (transaction.recommendation === "buy") {
-            const insiderPriceNum = transaction.price;
-            const thresholdPercent = optionsDealThreshold / 100;
-            if (optionsDealThreshold > 0 && insiderPriceNum < quote.currentPrice * thresholdPercent) {
-              filteredOptionsDeals++;
-              log(`[OpeninsiderFetch] ${transaction.ticker} likely options deal: insider price $${insiderPriceNum.toFixed(2)} < ${optionsDealThreshold}% of market $${quote.currentPrice.toFixed(2)}, skipping`);
-              continue;
-            }
-          }
-
-          // Create stock for ALL users (shared market data)
-          for (const user of users) {
-            // Check if transaction already exists for this user
-            const existingTransaction = await storage.getTransactionByCompositeKey(
-              user.id,
-              transaction.ticker,
-              transaction.filingDate,
-              transaction.insiderName,
-              transaction.recommendation
-            );
-            
-            if (existingTransaction) {
-              filteredDuplicates++;
-              continue;
-            }
-
-            // Create stock recommendation for this user
-            await storage.createStock({
-              userId: user.id,
-              ticker: transaction.ticker,
-              companyName: transaction.companyName || transaction.ticker,
-              currentPrice: quote.currentPrice.toString(),
-              previousClose: quote.previousClose?.toString() || quote.currentPrice.toString(),
-              insiderPrice: transaction.price.toString(),
-              insiderQuantity: transaction.quantity,
-              insiderTradeDate: transaction.filingDate,
-              insiderName: transaction.insiderName,
-              insiderTitle: transaction.insiderTitle,
-              recommendation: transaction.recommendation,
-              source: "openinsider",
-              confidenceScore: transaction.confidence || 75,
-              peRatio: null,
-              marketCap: data?.marketCap ? `$${Math.round(data.marketCap)}M` : null,
-              description: data?.companyInfo?.description || null,
-              industry: data?.companyInfo?.industry || null,
-              country: data?.companyInfo?.country || null,
-              webUrl: data?.companyInfo?.webUrl || null,
-              ipo: data?.companyInfo?.ipo || null,
-              news: data?.news || [],
-              insiderSentimentMspr: data?.insiderSentiment?.mspr.toString() || null,
-              insiderSentimentChange: data?.insiderSentiment?.change.toString() || null,
-              priceHistory: [],
-            });
-          }
-
-          createdCount++;
-          createdTickers.add(transaction.ticker);
-          log(`[OpeninsiderFetch] Created stock recommendation for ${transaction.ticker}`)
-
-          // Send Telegram notification using transaction data
-          if (ENABLE_TELEGRAM && telegramNotificationService.isReady()) {
-            try {
-              const notificationSent = await telegramNotificationService.sendStockAlert({
-                ticker: transaction.ticker,
-                companyName: transaction.companyName || transaction.ticker,
-                recommendation: transaction.recommendation || 'buy',
-                currentPrice: quote.currentPrice.toString(),
-                insiderPrice: transaction.price.toString(),
-                insiderQuantity: transaction.quantity,
-                confidenceScore: transaction.confidence || 75,
-              });
-              if (notificationSent) {
-                log(`[OpeninsiderFetch] Sent Telegram notification for ${transaction.ticker}`);
-              } else {
-                log(`[OpeninsiderFetch] Failed to send Telegram notification for ${transaction.ticker}`);
-              }
-            } catch (err) {
-              console.error(`[OpeninsiderFetch] Error sending Telegram notification for ${transaction.ticker}:`, err);
-            }
-          }
-        } catch (err) {
-          console.error(`[OpeninsiderFetch] Error processing ${transaction.ticker}:`, err);
+          await queueWorker.start();
+          log.info("[QueueWorker] AI Analysis queue worker started", "server");
+        } catch (error) {
+          log.error("[QueueWorker] Failed to start queue worker", error, "server");
         }
-      }
-
-      // Queue ONE AI analysis job per unique ticker (not per transaction)
-      if (createdTickers.size > 0) {
-        const uniqueTickersArray = Array.from(createdTickers);
-        log(`[OpeninsiderFetch] Queuing AI analysis for ${uniqueTickersArray.length} unique tickers...`);
-        for (const ticker of uniqueTickersArray) {
-          try {
-            await storage.enqueueAnalysisJob(ticker, "openinsider_fetch", "normal");
-            log(`[OpeninsiderFetch] ✓ Queued AI analysis for ${ticker}`);
-          } catch (error) {
-            console.error(`[OpeninsiderFetch] Failed to queue AI analysis for ${ticker}:`, error);
-          }
-        }
-      }
-
-      log(`\n[OpeninsiderFetch] ======= STAGE 2: Backend Post-Processing =======`);
-      log(`[OpeninsiderFetch] Starting with: ${transactions.length} transactions`);
-      log(`[OpeninsiderFetch]   ⊗ Duplicates: ${filteredDuplicates}`);
-      log(`[OpeninsiderFetch]   ⊗ Market cap < $${minMarketCap}M: ${filteredMarketCap}`);
-      log(`[OpeninsiderFetch]   ⊗ Options deals (< ${optionsDealThreshold}%): ${filteredOptionsDeals}`);
-      log(`[OpeninsiderFetch]   ⊗ No quote: ${filteredNoQuote}`);
-      log(`[OpeninsiderFetch] → Total Stage 2 filtered: ${filteredDuplicates + filteredMarketCap + filteredOptionsDeals + filteredNoQuote}`);
-      log(`[OpeninsiderFetch] ===============================================`);
-      log(`\n[OpeninsiderFetch] ✓ Successfully created ${createdCount} new recommendations (${createdTickers.size} unique tickers)\n`);
-      
-      await storage.updateOpeninsiderSyncStatus();
+      }, 2000); // 2 second delay
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("[OpeninsiderFetch] Error fetching OpenInsider data:", error);
-      await storage.updateOpeninsiderSyncStatus(errorMessage);
-    } finally {
-      // Release mutex
-      isJobRunning = false;
+      log.error("Error during background initialization", error, "server");
     }
-  }
-
-  // Run immediately on startup
-  fetchOpeninsiderData().catch(err => {
-    console.error("[OpeninsiderFetch] Initial fetch failed:", err);
-  });
-
-  // Determine interval based on config
-  async function getInterval() {
-    const config = await storage.getOpeninsiderConfig();
-    return config?.fetchInterval === "daily" ? ONE_DAY : ONE_HOUR;
-  }
-
-  // Set up interval job
-  getInterval().then(interval => {
-    setInterval(fetchOpeninsiderData, interval);
-    const intervalName = interval === ONE_DAY ? "daily" : "hourly";
-    log(`[OpeninsiderFetch] Background job started - fetching ${intervalName}`);
-  });
-}
+  })();
+})();
 
 /**
  * Background job to fetch unified global opportunities
@@ -807,6 +329,8 @@ function startOpeninsiderFetchJob() {
  * 
  * Unlike the old per-user stock system, this creates global opportunities
  * that are shared across all users, with per-user rejection filtering.
+ * 
+ * TODO: Extract this to server/jobs/unifiedOpportunities.ts
  */
 function startUnifiedOpportunitiesFetchJob() {
   const ONE_HOUR = 60 * 60 * 1000;

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,8 +11,10 @@ import { Link, useLocation, useSearch } from "wouter";
 import { Activity, AlertCircle, TrendingUpIcon, Zap, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import signalBackground from "@assets/moving_signal_boomerang_slow.gif";
+import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -21,30 +23,44 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
+// #region agent log
+const logDebug = (location: string, message: string, data: any, hypothesisId: string) => {
+  const logData = {location,message,data,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId};
+  console.log(`[DEBUG ${hypothesisId}]`, location, message, data);
+  fetch('http://127.0.0.1:7243/ingest/9504a544-9592-4c7b-afe6-b49cb5e62f9f',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logData)}).catch((e)=>console.error('Log fetch failed:',e));
+};
+// #endregion
+
 export default function Login() {
+  // #region agent log
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+  logDebug('login.tsx:Login', 'Login component render', { renderCount: renderCount.current, path: window.location.pathname }, 'H5');
+  // #endregion
+  
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const { toast } = useToast();
   const [googleLoading, setGoogleLoading] = useState(false);
+  
+  // #region agent log
+  useEffect(() => {
+    logDebug('login.tsx:Login', 'Login component mounted', { path: window.location.pathname }, 'H5');
+    return () => {
+      logDebug('login.tsx:Login', 'Login component unmounting', {}, 'H5');
+    };
+  }, []);
+  // #endregion
 
-  // Check if Google OAuth is configured
-  const { data: googleConfigured } = useQuery<{ configured: boolean }>({
-    queryKey: ["/api/auth/google/configured"],
-  });
-
-  // Handle URL error parameters from Google OAuth callback
+  // Handle URL error parameters
   useEffect(() => {
     const params = new URLSearchParams(searchString);
     const error = params.get("error");
     
     if (error) {
       const errorMessages: Record<string, string> = {
-        google_auth_failed: "Google sign-in failed. Please try again.",
-        missing_code: "Authentication was cancelled. Please try again.",
-        invalid_state: "Security check failed. Please try again.",
         trial_expired: "Your free trial has expired. Please subscribe to continue.",
         subscription_required: "An active subscription is required to access the dashboard.",
-        session_error: "Session error. Please try again.",
       };
       
       toast({
@@ -56,27 +72,47 @@ export default function Login() {
       // Clear the error from URL
       window.history.replaceState({}, "", "/login");
     }
-  }, [searchString, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchString]);
 
   const handleGoogleSignIn = async () => {
     try {
       setGoogleLoading(true);
-      const response = await fetch("/api/auth/google/url");
-      const data = await response.json();
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const idToken = await result.user.getIdToken();
       
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to initialize Google Sign-In");
+      // Send token to backend
+      await handleFirebaseLogin(idToken);
+    } catch (error: any) {
+      console.error("Google sign-in error:", error);
+      let errorMessage = "Failed to sign in with Google";
+      
+      if (error.code === "auth/popup-closed-by-user") {
+        errorMessage = "Sign-in popup was closed";
+      } else if (error.code === "auth/popup-blocked") {
+        errorMessage = "Popup was blocked. Please allow popups for this site.";
+      } else if (error.code === "auth/network-request-failed") {
+        errorMessage = "Network error. Please check your connection.";
       }
       
-      // Redirect to Google OAuth
-      window.location.href = data.url;
-    } catch (error: any) {
       toast({
         title: "Google Sign-In Error",
-        description: error.message || "Failed to start Google Sign-In",
+        description: errorMessage,
         variant: "destructive",
       });
       setGoogleLoading(false);
+    }
+  };
+
+  const handleFirebaseLogin = async (idToken: string) => {
+    try {
+      const response = await apiRequest("POST", "/api/auth/login", { idToken });
+      const data = await response.json();
+      await handleLoginSuccess(data);
+    } catch (error: any) {
+      const errorData = error.errorData || { error: error.message || "Login failed" };
+      throw new Error(errorData.error || "Login failed");
     }
   };
 
@@ -88,21 +124,7 @@ export default function Login() {
     },
   });
 
-  const loginMutation = useMutation({
-    mutationFn: async (data: LoginForm) => {
-      const response = await apiRequest("POST", "/api/auth/login", data);
-      if (!response.ok) {
-        const errorData = await response.json();
-        const error: any = new Error(errorData.error || "Login failed");
-        error.trialExpired = errorData.trialExpired;
-        error.subscriptionStatus = errorData.subscriptionStatus;
-        error.emailVerificationRequired = errorData.emailVerificationRequired;
-        error.email = errorData.email;
-        throw error;
-      }
-      return response.json();
-    },
-    onSuccess: async (data) => {
+  const handleLoginSuccess = async (data: any) => {
       if (data.subscriptionStatus === "inactive") {
         toast({
           title: "Subscription Required",
@@ -119,20 +141,120 @@ export default function Login() {
           : "You have successfully logged in.",
       });
       
-      // CRITICAL FIX: Force full page reload to prevent cross-user data contamination
-      // This ensures all React Query cache, component state, and ongoing queries are cleared
-      window.location.href = "/";
+      // Update React Query cache directly with user data from login response
+      // This ensures the user context is immediately updated without waiting for a refetch
+      if (data.user) {
+        logDebug('login.tsx:Login', 'Setting user data in React Query cache', { userId: data.user.id, email: data.user.email }, 'H5');
+        
+        // Set the query data with updatedAt to mark it as fresh
+        // This prevents immediate refetch
+        queryClient.setQueryData(["/api/auth/current-user"], { user: data.user }, {
+          updatedAt: Date.now()
+        });
+        
+        // Set query defaults to prevent refetch for a few seconds
+        queryClient.setQueryDefaults(["/api/auth/current-user"], {
+          staleTime: 10000, // Consider fresh for 10 seconds
+        });
+        
+        // Verify the data was set correctly
+        const cachedData = queryClient.getQueryData(["/api/auth/current-user"]);
+        const hasUser = !!(cachedData as any)?.user;
+        const cachedUserId = (cachedData as any)?.user?.id;
+        logDebug('login.tsx:Login', 'Verified cache update', { 
+          hasUser, 
+          cachedUserId,
+          matches: cachedUserId === data.user.id 
+        }, 'H5');
+        
+        // Check session cookie
+        const cookies = document.cookie;
+        const hasSessionCookie = cookies.includes('connect.sid');
+        logDebug('login.tsx:Login', 'Session cookie check', { 
+          hasSessionCookie,
+          cookieLength: cookies.length,
+          cookiePreview: cookies.substring(0, 100)
+        }, 'H5');
+      }
+      
+      // Invalidate dependent queries (like user progress) that depend on user being logged in
+      queryClient.invalidateQueries({ queryKey: ["/api/user/progress"] });
+      
+      // Check for redirect parameter in URL
+      const params = new URLSearchParams(searchString);
+      const redirectTo = params.get("redirect") || "/following";
+      
+      logDebug('login.tsx:Login', 'Preparing redirect', { redirectTo }, 'H5');
+      
+      // Store the intended destination in sessionStorage FIRST, before redirecting
+      // This ensures AuthenticatedApp can find it when it checks
+      sessionStorage.setItem("loginRedirect", redirectTo);
+      
+      // CRITICAL FIX: Instead of redirecting to / and waiting for AuthenticatedApp,
+      // directly redirect to the dashboard since we've already set the user in cache
+      // This avoids the intermediate landing page flash
+      // Use a small delay to ensure React Query has processed the cache update
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      // Directly redirect to the dashboard - AuthenticatedApp will handle it correctly
+      // because the user data is already in the cache
+      logDebug('login.tsx:Login', 'Redirecting directly to dashboard', { redirectTo }, 'H5');
+    setLocation(redirectTo);
+  };
+
+  const loginMutation = useMutation({
+    mutationFn: async (data: LoginForm) => {
+      try {
+        // Sign in with Firebase
+        const result = await signInWithEmailAndPassword(auth, data.email, data.password);
+        const idToken = await result.user.getIdToken();
+        
+        // Send token to backend
+        const response = await apiRequest("POST", "/api/auth/login", { idToken });
+        return await response.json();
+      } catch (error: any) {
+        let errorMessage = "Login failed";
+        
+        // Map Firebase error codes to user-friendly messages
+        if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+          errorMessage = "Invalid email or password";
+        } else if (error.code === "auth/invalid-email") {
+          errorMessage = "Invalid email address";
+        } else if (error.code === "auth/user-disabled") {
+          errorMessage = "This account has been disabled";
+        } else if (error.code === "auth/too-many-requests") {
+          errorMessage = "Too many failed attempts. Please try again later.";
+        } else if (error.code === "auth/network-request-failed") {
+          errorMessage = "Network error. Please check your connection.";
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        // Check if backend returned specific error
+        if (error.errorData) {
+          const errorData = error.errorData;
+          const loginError: any = new Error(errorData.error || errorMessage);
+          loginError.trialExpired = errorData.trialExpired;
+          loginError.subscriptionStatus = errorData.subscriptionStatus;
+          loginError.emailVerificationRequired = errorData.emailVerificationRequired;
+          loginError.email = errorData.email;
+          throw loginError;
+        }
+        
+        throw new Error(errorMessage);
+      }
+    },
+    onSuccess: async (data) => {
+      await handleLoginSuccess(data);
     },
     onError: (error: any) => {
       if (error.emailVerificationRequired) {
-        // Show special message for unverified emails
         toast({
           title: "Email Verification Required",
           description: error.message || "Please verify your email before logging in.",
           variant: "destructive",
         });
       } else if (error.trialExpired) {
-        // Show special message for expired trials
         toast({
           title: "Free Trial Expired",
           description: "Your 30-day trial has ended. Subscribe now to continue using signal2.",
@@ -189,7 +311,7 @@ export default function Login() {
           <CardHeader className="pb-2">
             <div className="flex items-center gap-3 mb-4">
               <Activity className="h-10 w-10 text-primary" />
-              <CardTitle className="text-4xl font-bold tracking-tight">signal2</CardTitle>
+              <CardTitle className="text-4xl font-bold tracking-tight">signal2 [LOGIN PAGE]</CardTitle>
             </div>
             <CardDescription className="text-lg text-foreground/80">
               Find high-conviction trades by following what insiders know
@@ -244,37 +366,33 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-          {googleConfigured?.configured && (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full gap-2 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200"
-                onClick={handleGoogleSignIn}
-                disabled={googleLoading}
-                data-testid="button-google-signin"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                {googleLoading ? "Connecting..." : "Continue with Google"}
-              </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full gap-2 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading}
+            data-testid="button-google-signin"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            {googleLoading ? "Connecting..." : "Continue with Google"}
+          </Button>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    Or continue with email
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">
+                Or continue with email
+              </span>
+            </div>
+          </div>
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

@@ -268,8 +268,9 @@ export default function FollowedDashboard() {
       const hasActiveJobs = query.state.data?.some((stock: any) => 
         stock.jobStatus === 'pending' || stock.jobStatus === 'processing'
       );
-      return hasActiveJobs ? 5000 : false;
+      return hasActiveJobs ? 30000 : false; // Poll every 30 seconds instead of 5
     },
+    staleTime: 30 * 1000, // Consider fresh for 30 seconds
     retry: false,
     meta: { ignoreError: true },
   });
@@ -284,7 +285,7 @@ export default function FollowedDashboard() {
   const { data: topOpportunities = [], isLoading: isLoadingOpportunities } = useQuery<StockWithAnalysis[]>({
     queryKey: ["/api/stocks/top-signals"],
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    refetchOnWindowFocus: true, // Refresh when user returns to tab
+    refetchOnWindowFocus: false, // Disable refetch on window focus
     retry: false,
     meta: { ignoreError: true },
   });

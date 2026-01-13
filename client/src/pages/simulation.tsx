@@ -114,8 +114,9 @@ export default function Simulation() {
       const hasActiveJobs = jobs.some((job: any) => 
         !["completed", "failed"].includes(job.status)
       );
-      return hasActiveJobs ? 5000 : false; // Poll every 5 seconds if jobs are active
+      return hasActiveJobs ? 30000 : false; // Poll every 30 seconds instead of 5
     },
+    staleTime: 30 * 1000, // Consider fresh for 30 seconds
   });
 
   const { data: telegramStatus } = useQuery<{ isConnected: boolean }>({

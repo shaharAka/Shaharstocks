@@ -7,9 +7,10 @@ import OpenAI from "openai";
 import { generateWithFallback, type AIProviderConfig, type ChatMessage } from "./aiProvider";
 
 // Initialize OpenAI for backtesting analysis (deprecated, using provider interface)
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Only initialize if API key is available
+const openai = process.env.OPENAI_API_KEY 
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
 // Current AI provider configuration
 let currentProviderConfig: AIProviderConfig = { provider: "openai" };

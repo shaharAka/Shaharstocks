@@ -707,11 +707,12 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash"), // Hashed password for authentication (nullable for OAuth users)
+  passwordHash: text("password_hash"), // DEPRECATED: Hashed password for authentication (nullable, kept for migration)
   avatarColor: text("avatar_color").notNull().default("#3b82f6"), // Hex color for avatar
-  // OAuth provider fields
-  authProvider: text("auth_provider").notNull().default("email"), // "email", "google"
-  googleSub: text("google_sub").unique(), // Google's unique user ID (sub claim)
+  // Authentication provider fields
+  authProvider: text("auth_provider").notNull().default("firebase_email"), // "firebase_email", "firebase_google" (migrated from "email", "google")
+  firebaseUid: text("firebase_uid").unique(), // Firebase Authentication UID (replaces passwordHash/googleSub)
+  googleSub: text("google_sub").unique(), // DEPRECATED: Google's unique user ID (kept for migration)
   googlePicture: text("google_picture"), // Google profile picture URL
   isAdmin: boolean("is_admin").notNull().default(false), // Admin users can access backoffice
   isSuperAdmin: boolean("is_super_admin").notNull().default(false), // Super admin users can delete announcements and perform elevated operations

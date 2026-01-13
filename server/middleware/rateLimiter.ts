@@ -1,51 +1,211 @@
-import rateLimit from 'express-rate-limit';
+/**
+ * Rate limiting middleware with Redis store
+ * Provides global and route-specific rate limiting
+ */
 
-// Aggressive rate limiting for signup to prevent automated abuse
-export const signupLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 3, // Limit each IP to 3 signup attempts per windowMs
-  message: 'Too many signup attempts from this IP, please try again after 15 minutes',
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  skipSuccessfulRequests: false, // Count successful requests
-  handler: (req, res) => {
-    console.log(`[RateLimit] Signup rate limit exceeded for IP: ${req.ip}`);
-    res.status(429).json({
-      error: 'Too many signup attempts. Please try again later.',
-      retryAfter: Math.ceil(15 * 60 / 60) + ' minutes'
+import { Request, Response, NextFunction } from "express";
+import { RateLimiterRedis, RateLimiterMemory } from "rate-limiter-flexible";
+import { getRedisConnection, isRedisConnected } from "../queue/connection";
+import { createLogger } from "../logger";
+
+const log = createLogger("rateLimiter");
+
+// Rate limiter instances cache
+const limiters = new Map<string, RateLimiterRedis | RateLimiterMemory>();
+
+/**
+ * Get or create a rate limiter
+ * Falls back to in-memory limiter if Redis is unavailable
+ */
+function getRateLimiter(
+  keyPrefix: string,
+  options: {
+    points: number; // Number of requests
+    duration: number; // Per duration in seconds
+    blockDuration?: number; // Block duration in seconds after limit exceeded
+  }
+): RateLimiterRedis | RateLimiterMemory {
+  const cacheKey = `${keyPrefix}:${options.points}:${options.duration}`;
+  
+  if (limiters.has(cacheKey)) {
+    return limiters.get(cacheKey)!;
+  }
+
+  let limiter: RateLimiterRedis | RateLimiterMemory;
+
+  if (isRedisConnected()) {
+    try {
+      const redisClient = getRedisConnection();
+      limiter = new RateLimiterRedis({
+        storeClient: redisClient,
+        keyPrefix,
+        points: options.points,
+        duration: options.duration,
+        blockDuration: options.blockDuration || options.duration,
+      });
+      log.info(`Created Redis-backed rate limiter: ${keyPrefix} (${options.points} requests per ${options.duration}s)`);
+    } catch (error) {
+      log.warn(`Failed to create Redis rate limiter, falling back to memory: ${keyPrefix}`, error);
+      limiter = new RateLimiterMemory({
+        keyPrefix,
+        points: options.points,
+        duration: options.duration,
+        blockDuration: options.blockDuration || options.duration,
+      });
+    }
+  } else {
+    log.warn(`Redis not available, using in-memory rate limiter: ${keyPrefix}`);
+    limiter = new RateLimiterMemory({
+      keyPrefix,
+      points: options.points,
+      duration: options.duration,
+      blockDuration: options.blockDuration || options.duration,
     });
-  },
+  }
+
+  limiters.set(cacheKey, limiter);
+  return limiter;
+}
+
+/**
+ * Create rate limiting middleware
+ */
+export function createRateLimiter(options: {
+  points: number;
+  duration: number;
+  blockDuration?: number;
+  keyGenerator?: (req: Request) => string;
+  skipSuccessfulRequests?: boolean;
+  skipFailedRequests?: boolean;
+  message?: string;
+}) {
+  const limiter = getRateLimiter("rl", {
+    points: options.points,
+    duration: options.duration,
+    blockDuration: options.blockDuration,
+  });
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Generate key (default: IP address, or custom keyGenerator)
+      const key = options.keyGenerator 
+        ? options.keyGenerator(req)
+        : req.ip || req.socket.remoteAddress || "unknown";
+
+      // Consume a point
+      await limiter.consume(key);
+
+      // If we get here, request is allowed
+      next();
+    } catch (rateLimiterRes: any) {
+      // Rate limit exceeded
+      const retryAfter = Math.round(rateLimiterRes.msBeforeNext / 1000) || 1;
+      
+      res.status(429).json({
+        error: options.message || "Too many requests, please try again later",
+        retryAfter,
+        limit: options.points,
+        window: options.duration,
+      });
+
+      // Set Retry-After header
+      res.setHeader("Retry-After", retryAfter);
+    }
+  };
+}
+
+/**
+ * Global API rate limiter
+ * Applies to all /api/* routes
+ * 100 requests per 15 minutes per IP
+ */
+export const globalApiRateLimiter = createRateLimiter({
+  points: 100,
+  duration: 15 * 60, // 15 minutes
+  blockDuration: 15 * 60, // Block for 15 minutes
+  message: "API rate limit exceeded. Please try again later.",
 });
 
-// Moderate rate limiting for login attempts
-export const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 login attempts per windowMs
-  message: 'Too many login attempts from this IP, please try again after 15 minutes',
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true, // Don't count successful logins
-  handler: (req, res) => {
-    console.log(`[RateLimit] Login rate limit exceeded for IP: ${req.ip}`);
-    res.status(429).json({
-      error: 'Too many login attempts. Please try again later.',
-      retryAfter: Math.ceil(15 * 60 / 60) + ' minutes'
-    });
-  },
+/**
+ * Strict rate limiter for authentication endpoints
+ * In development: 50 requests per 15 minutes per IP (more lenient)
+ * In production: 5 requests per 15 minutes per IP
+ */
+export const authRateLimiter = createRateLimiter({
+  points: process.env.NODE_ENV === "production" ? 5 : 50, // More lenient in development
+  duration: 15 * 60, // 15 minutes
+  blockDuration: process.env.NODE_ENV === "production" ? 30 * 60 : 60, // Shorter block in development
+  message: "Too many authentication attempts. Please try again later.",
 });
 
-// Rate limiting for email verification resend
-export const resendVerificationLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // Limit each IP to 3 resend attempts per hour
-  message: 'Too many verification email requests',
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    console.log(`[RateLimit] Resend verification rate limit exceeded for IP: ${req.ip}`);
-    res.status(429).json({
-      error: 'Too many verification email requests. Please try again later.',
-      retryAfter: '1 hour'
-    });
+/**
+ * Rate limiter for password reset endpoints
+ * 3 requests per hour per IP
+ */
+export const passwordResetRateLimiter = createRateLimiter({
+  points: 3,
+  duration: 60 * 60, // 1 hour
+  blockDuration: 60 * 60, // Block for 1 hour
+  message: "Too many password reset attempts. Please try again later.",
+});
+
+/**
+ * Rate limiter for email verification
+ * 5 requests per hour per IP
+ */
+export const emailVerificationRateLimiter = createRateLimiter({
+  points: 5,
+  duration: 60 * 60, // 1 hour
+  blockDuration: 60 * 60, // Block for 1 hour
+  message: "Too many email verification requests. Please try again later.",
+});
+
+/**
+ * Rate limiter for user registration
+ * 3 requests per hour per IP
+ */
+export const registrationRateLimiter = createRateLimiter({
+  points: 3,
+  duration: 60 * 60, // 1 hour
+  blockDuration: 60 * 60, // Block for 1 hour
+  message: "Too many registration attempts. Please try again later.",
+});
+
+/**
+ * Rate limiter for admin endpoints
+ * 200 requests per 15 minutes per IP
+ */
+export const adminRateLimiter = createRateLimiter({
+  points: 200,
+  duration: 15 * 60, // 15 minutes
+  blockDuration: 15 * 60, // Block for 15 minutes
+  message: "Admin API rate limit exceeded. Please try again later.",
+});
+
+/**
+ * Rate limiter for webhook endpoints
+ * 1000 requests per minute per IP (webhooks can be high volume)
+ */
+export const webhookRateLimiter = createRateLimiter({
+  points: 1000,
+  duration: 60, // 1 minute
+  blockDuration: 60, // Block for 1 minute
+  message: "Webhook rate limit exceeded.",
+});
+
+/**
+ * Rate limiter for stock data refresh endpoints
+ * 10 requests per minute per user
+ */
+export const stockDataRateLimiter = createRateLimiter({
+  points: 10,
+  duration: 60, // 1 minute
+  blockDuration: 60, // Block for 1 minute
+  keyGenerator: (req) => {
+    // Use userId if authenticated, otherwise IP
+    return req.session?.userId 
+      ? `user:${req.session.userId}`
+      : req.ip || req.socket.remoteAddress || "unknown";
   },
+  message: "Too many stock data refresh requests. Please wait before trying again.",
 });

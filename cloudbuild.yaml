@@ -1,0 +1,94 @@
+substitutions:
+  _IMAGE_NAME: 'signal2'
+  _REGION: 'us-central1'
+  _TAG: 'latest'
+
+steps:
+  # Build the Docker image
+  # Note: VITE_* environment variables are injected at build time
+  # If you need to set VITE_* variables, add them as build args:
+  # --build-arg VITE_PAYPAL_CLIENT_ID=$_PAYPAL_CLIENT_ID
+  # --build-arg VITE_PAYPAL_PLAN_ID=$_PAYPAL_PLAN_ID
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/${_IMAGE_NAME}/${_IMAGE_NAME}:${_TAG}'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/${_IMAGE_NAME}/${_IMAGE_NAME}:latest'
+      - '.'
+    id: 'build-image'
+    env:
+      # Firebase client-side variables (injected at build time)
+      - 'VITE_FIREBASE_API_KEY=${_FIREBASE_API_KEY}'
+      - 'VITE_FIREBASE_AUTH_DOMAIN=${_FIREBASE_AUTH_DOMAIN}'
+      - 'VITE_FIREBASE_PROJECT_ID=${_FIREBASE_PROJECT_ID}'
+      # Add other VITE_* variables here if needed for build-time injection
+      # Example:
+      # - 'VITE_PAYPAL_CLIENT_ID=${_PAYPAL_CLIENT_ID}'
+      # - 'VITE_PAYPAL_PLAN_ID=${_PAYPAL_PLAN_ID}'
+
+  # Push the Docker image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/${_IMAGE_NAME}/${_IMAGE_NAME}:${_TAG}'
+    id: 'push-image-versioned'
+    waitFor: ['build-image']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/${_IMAGE_NAME}/${_IMAGE_NAME}:latest'
+    id: 'push-image-latest'
+    waitFor: ['build-image']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_IMAGE_NAME}'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/${_IMAGE_NAME}/${_IMAGE_NAME}:${_TAG}'
+      - '--project'
+      - '$PROJECT_ID'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--add-cloudsql-instances'
+      - 'signal2-479718:us-central1:signal2-db'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '10'
+      - '--timeout'
+      - '300'
+      - '--set-env-vars'
+      - 'NODE_ENV=production'
+      - '--set-secrets'
+      - 'DATABASE_URL=DATABASE_URL:latest,SESSION_SECRET=SESSION_SECRET:latest,RESEND_API_KEY=RESEND_API_KEY:latest,RESEND_FROM_EMAIL=RESEND_FROM_EMAIL:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,FIREBASE_ADMIN_SERVICE_ACCOUNT=FIREBASE_ADMIN_SERVICE_ACCOUNT:latest'
+      - '--set-env-vars'
+      - 'VITE_FIREBASE_API_KEY=${_FIREBASE_API_KEY},VITE_FIREBASE_AUTH_DOMAIN=${_FIREBASE_AUTH_DOMAIN},VITE_FIREBASE_PROJECT_ID=${_FIREBASE_PROJECT_ID}'
+    id: 'deploy-cloud-run'
+    waitFor: ['push-image-versioned']
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/${_IMAGE_NAME}/${_IMAGE_NAME}:${_TAG}'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/${_IMAGE_NAME}/${_IMAGE_NAME}:latest'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '1200s'
+

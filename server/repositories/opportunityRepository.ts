@@ -4,8 +4,8 @@
  */
 
 import { BaseRepository } from "./base";
-import { opportunities, opportunityBatches, userOpportunityRejections, followedStocks, type Opportunity, type InsertOpportunity, type OpportunityBatch, type InsertOpportunityBatch, type UserOpportunityRejection, type InsertUserOpportunityRejection } from "@shared/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { opportunities, opportunityBatches, userOpportunityRejections, followedStocks, tickerDailyBriefs, type Opportunity, type InsertOpportunity, type OpportunityBatch, type InsertOpportunityBatch, type UserOpportunityRejection, type InsertUserOpportunityRejection, type TickerDailyBrief } from "@shared/schema";
+import { eq, desc, sql, and, or, inArray } from "drizzle-orm";
 
 export interface IOpportunityRepository {
   // Opportunities (global, unified for all users)
@@ -25,6 +25,7 @@ export interface IOpportunityRepository {
   updateOpportunityBatchStats(batchId: string, stats: { added: number; rejected: number; duplicates: number }): Promise<void>;
   getLatestBatch(cadence: 'daily' | 'hourly'): Promise<OpportunityBatch | undefined>;
   getLatestBatchWithStats(): Promise<OpportunityBatch | undefined>;
+  countOpportunitiesByBatchWithScore(batchId: string, minScore: number): Promise<number>;
   
   // User Opportunity Rejections
   rejectOpportunity(userId: string, opportunityId: string): Promise<UserOpportunityRejection>;
@@ -38,7 +39,8 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
     cadence?: 'daily' | 'hourly' | 'all';
     userId?: string;
     ticker?: string;
-  }): Promise<Opportunity[]> {
+    includeBriefs?: boolean;
+  }): Promise<(Opportunity & { latestBrief?: any })[]> {
     this.log(`[OpportunityRepository.getOpportunities] Called with options:`, options);
     const conditions: any[] = [];
     
@@ -73,27 +75,32 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
     const results = await query.orderBy(desc(opportunities.createdAt));
     this.log(`[OpportunityRepository.getOpportunities] Raw results count:`, results.length);
     
-    // If userId provided, filter out rejected opportunities and followed tickers
+    // Debug: Count by cadence
+    const dailyCount = results.filter(r => r.cadence === 'daily').length;
+    const hourlyCount = results.filter(r => r.cadence === 'hourly').length;
+    this.log(`[OpportunityRepository.getOpportunities] Cadence breakdown - Daily: ${dailyCount}, Hourly: ${hourlyCount}, Total: ${results.length}`);
+    
+    // If userId provided, filter out rejected opportunities only
+    // NOTE: We do NOT filter out followed tickers - they should appear on both opportunities and following pages
     if (options?.userId) {
-      const [rejections, followedStocksList] = await Promise.all([
-        this.getUserRejections(options.userId),
-        // Note: getUserFollowedStocks is in FollowedStockRepository - this will need to be injected
-        // For now, we'll query directly to avoid circular dependency
-        this.db
-          .select()
-          .from(followedStocks)
-          .where(eq(followedStocks.userId, options.userId))
-      ]);
+      const rejections = await this.getUserRejections(options.userId);
       const rejectedIds = new Set(rejections.map(r => r.opportunityId));
-      const followedTickers = new Set(followedStocksList.map(f => f.ticker.toUpperCase()));
-      this.log(`[OpportunityRepository.getOpportunities] Rejections:`, rejectedIds.size, 'Followed tickers:', Array.from(followedTickers));
+      this.log(`[OpportunityRepository.getOpportunities] Rejections:`, rejectedIds.size);
       
-      const filtered = results.filter(opp => 
-        !rejectedIds.has(opp.id) && 
-        !followedTickers.has(opp.ticker.toUpperCase())
-      );
-      this.log(`[OpportunityRepository.getOpportunities] After filtering:`, filtered.length);
+      const filtered = results.filter(opp => !rejectedIds.has(opp.id));
+      this.log(`[OpportunityRepository.getOpportunities] After filtering (rejections only):`, filtered.length);
+      
+      // If includeBriefs is true, attach latest ticker daily briefs
+      if (options?.includeBriefs) {
+        return await this.attachLatestBriefs(filtered);
+      }
+      
       return filtered;
+    }
+    
+    // If includeBriefs is true, attach latest ticker daily briefs
+    if (options?.includeBriefs) {
+      return await this.attachLatestBriefs(results);
     }
     
     return results;
@@ -247,6 +254,113 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
       )
       .limit(1);
     return !!rejection;
+  }
+
+  /**
+   * Attach latest ticker daily brief to each opportunity
+   * Groups opportunities by ticker and fetches latest brief for each unique ticker
+   */
+  private async attachLatestBriefs(opportunities: Opportunity[]): Promise<(Opportunity & { latestBrief?: any })[]> {
+    // Get unique tickers
+    const uniqueTickers = Array.from(new Set(opportunities.map(opp => opp.ticker.toUpperCase())));
+    
+    if (uniqueTickers.length === 0) {
+      return opportunities;
+    }
+
+    this.log(`[attachLatestBriefs] Attaching briefs for ${uniqueTickers.length} unique tickers`);
+
+    // Fetch latest brief for each ticker
+    const briefsMap = new Map<string, TickerDailyBrief>();
+    
+    // Use a subquery to get the latest brief for each ticker
+    for (const ticker of uniqueTickers) {
+      const [latestBrief] = await this.db
+        .select()
+        .from(tickerDailyBriefs)
+        .where(eq(tickerDailyBriefs.ticker, ticker))
+        .orderBy(desc(tickerDailyBriefs.briefDate))
+        .limit(1);
+      
+      if (latestBrief) {
+        briefsMap.set(ticker, latestBrief);
+        this.log(`[attachLatestBriefs] Found brief for ${ticker}: score=${latestBrief.newSignalScore}, date=${latestBrief.briefDate}`);
+      } else {
+        this.log(`[attachLatestBriefs] No brief found for ${ticker}`);
+      }
+    }
+
+    this.log(`[attachLatestBriefs] Found ${briefsMap.size} briefs out of ${uniqueTickers.length} tickers`);
+
+    // Attach brief data to opportunities
+    const result = opportunities.map(opp => {
+      const brief = briefsMap.get(opp.ticker.toUpperCase());
+      if (brief) {
+        // Attach brief data to opportunity object
+        return {
+          ...opp,
+          latestBrief: {
+            newSignalScore: brief.newSignalScore,
+            scoreChange: brief.scoreChange,
+            briefText: brief.briefText,
+            stance: brief.stance,
+            briefDate: brief.briefDate,
+            priceChangePercent: brief.priceChangePercent,
+            keyUpdates: brief.keyUpdates,
+          }
+        };
+      }
+      return opp;
+    });
+
+    const withBriefs = result.filter(r => r.latestBrief);
+    this.log(`[attachLatestBriefs] Attached briefs to ${withBriefs.length} out of ${result.length} opportunities`);
+    
+    return result;
+  }
+
+  /**
+   * Count opportunities from a batch that have score >= threshold (added to board)
+   */
+  async countOpportunitiesByBatchWithScore(batchId: string, minScore: number): Promise<number> {
+    // Get all opportunities from this batch
+    const batchOpportunities = await this.db
+      .select({ ticker: opportunities.ticker })
+      .from(opportunities)
+      .where(eq(opportunities.batchId, batchId));
+    
+    if (batchOpportunities.length === 0) {
+      return 0;
+    }
+
+    // Get unique tickers
+    const uniqueTickers = Array.from(new Set(batchOpportunities.map(opp => opp.ticker.toUpperCase())));
+    
+    // Get analyses for these tickers
+    const { stockAnalyses } = await import('@shared/schema');
+    const upperTickers = uniqueTickers.map(t => t.toUpperCase());
+    const analyses = await this.db
+      .select()
+      .from(stockAnalyses)
+      .where(
+        and(
+          sql`UPPER(${stockAnalyses.ticker}) IN (${sql.join(upperTickers.map(t => sql`${t}`), sql`, `)})`,
+          eq(stockAnalyses.status, 'completed')
+        )
+      );
+    
+    // Count tickers with score >= minScore
+    let count = 0;
+    for (const analysis of analyses) {
+      const score = analysis.integratedScore ?? analysis.confidenceScore ?? 0;
+      if (score >= minScore) {
+        // Count all opportunities for this ticker from this batch
+        const tickerOpps = batchOpportunities.filter(opp => opp.ticker.toUpperCase() === analysis.ticker.toUpperCase());
+        count += tickerOpps.length;
+      }
+    }
+    
+    return count;
   }
 }
 

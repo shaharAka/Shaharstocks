@@ -81,12 +81,9 @@ export async function runTickerDailyBriefGeneration(storage: IStorage): Promise<
     
     for (const ticker of uniqueTickers) {
       try {
-        // Check if we already have a brief for this ticker today
+        // Get existing brief (if any) for score comparison
         const existingBrief = await storage.getLatestTickerBrief(ticker);
-        if (existingBrief && existingBrief.briefDate === today) {
-          skippedCount++;
-          continue;
-        }
+        // Don't skip if brief exists - we still need to check score threshold and remove low-scoring opportunities
         
         // Queue fresh analysis for this ticker to get updated scores
         let needsWait = false;
@@ -279,37 +276,43 @@ export async function runTickerDailyBriefGeneration(storage: IStorage): Promise<
           }
         }
         
-        // === CREATE THE BRIEF ===
-        const brief: InsertTickerDailyBrief = {
-          ticker,
-          briefDate: today,
-          priceSnapshot,
-          priceChange,
-          priceChangePercent,
-          priceSinceInsider,
-          previousSignalScore: previousScore,
-          newSignalScore: currentScore,
-          scoreChange,
-          scoreChangeReason: scoreChange !== null && scoreChange !== 0 
-            ? `Score changed due to updated market conditions and analysis` 
-            : null,
-          stance,
-          stanceChanged,
-          briefText,
-          keyUpdates,
-          newInsiderTransactions,
-          newsImpact,
-          priceActionAssessment: priceChangePercent ? (
-            parseFloat(priceChangePercent) >= 3 ? 'strong_up' :
-            parseFloat(priceChangePercent) <= -3 ? 'strong_down' :
-            parseFloat(priceChangePercent) >= 0 ? 'slight_up' : 'slight_down'
-          ) : null,
-          stopLossHit: false,
-          profitTargetHit: false,
-        };
-        
-        await storage.createTickerDailyBrief(brief);
-        briefsGenerated++;
+        // === CREATE OR UPDATE THE BRIEF ===
+        // Only create if one doesn't exist for today, otherwise skip (to avoid duplicates)
+        if (!existingBrief || existingBrief.briefDate !== today) {
+          const brief: InsertTickerDailyBrief = {
+            ticker,
+            briefDate: today,
+            priceSnapshot,
+            priceChange,
+            priceChangePercent,
+            priceSinceInsider,
+            previousSignalScore: previousScore,
+            newSignalScore: currentScore,
+            scoreChange,
+            scoreChangeReason: scoreChange !== null && scoreChange !== 0 
+              ? `Score changed due to updated market conditions and analysis` 
+              : null,
+            stance,
+            stanceChanged,
+            briefText,
+            keyUpdates,
+            newInsiderTransactions,
+            newsImpact,
+            priceActionAssessment: priceChangePercent ? (
+              parseFloat(priceChangePercent) >= 3 ? 'strong_up' :
+              parseFloat(priceChangePercent) <= -3 ? 'strong_down' :
+              parseFloat(priceChangePercent) >= 0 ? 'slight_up' : 'slight_down'
+            ) : null,
+            stopLossHit: false,
+            profitTargetHit: false,
+          };
+          
+          await storage.createTickerDailyBrief(brief);
+          briefsGenerated++;
+        } else {
+          // Brief already exists for today - skip creation but still processed score threshold check above
+          skippedCount++;
+        }
         
         console.log(`[TickerDailyBriefs] Generated brief for ${ticker}: score ${currentScore}, price $${priceSnapshot}, ${newsHeadlines.length} news items`);
         

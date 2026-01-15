@@ -17,7 +17,9 @@ type BatchInfo = {
   fetchedAt: string | Date;
   opportunityCount: number;
   stats?: {
-    added: number;
+    created?: number; // Opportunities created in database (legacy: was "added")
+    added?: number; // Legacy field for backwards compatibility
+    addedToBoard?: number; // Opportunities with score >= 70 (actually on the board)
     rejected: number;
     duplicates: number;
   };
@@ -224,12 +226,12 @@ export function AnalysisStatusPopup() {
         ) : hasStats ? (
           <>
             <div className="flex items-center justify-between text-sm">
-              <div className={cn("flex items-center gap-2", batchStats.added > 0 ? "text-success" : "text-muted-foreground")}>
+              <div className={cn("flex items-center gap-2", (batchStats.addedToBoard ?? batchStats.added ?? 0) > 0 ? "text-success" : "text-muted-foreground")}>
                 <CheckCircle className="h-3.5 w-3.5" />
-                <span>Added</span>
+                <span>Added to Board</span>
               </div>
-              <span className={cn("font-mono font-medium text-xs", batchStats.added > 0 ? "text-success" : "text-muted-foreground")}>
-                {batchStats.added > 0 ? `+${batchStats.added}` : "0"}
+              <span className={cn("font-mono font-medium text-xs", (batchStats.addedToBoard ?? batchStats.added ?? 0) > 0 ? "text-success" : "text-muted-foreground")}>
+                {(batchStats.addedToBoard ?? batchStats.added ?? 0) > 0 ? `+${batchStats.addedToBoard ?? batchStats.added}` : "0"}
               </span>
             </div>
 

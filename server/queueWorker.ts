@@ -448,6 +448,82 @@ class QueueWorker {
       await storage.markStockAnalysisPhaseComplete(job.ticker, 'combined');
       console.log(`[QueueWorker] ✅ Analysis complete for ${job.ticker}`);
 
+      // If this ticker has opportunities, create/update ticker daily brief immediately
+      // This ensures opportunities get scores right away instead of waiting for daily brief job
+      try {
+        const tickerOpportunities = await storage.getOpportunities({ ticker: job.ticker.toUpperCase() });
+        if (tickerOpportunities.length > 0) {
+          const today = new Date().toISOString().split('T')[0];
+          const existingBrief = await storage.getLatestTickerBrief(job.ticker);
+          
+          // Get current price for the brief
+          let priceSnapshot = '0';
+          let priceChange = null;
+          let priceChangePercent = null;
+          try {
+            const quote = await stockService.getQuote(job.ticker);
+            if (quote && quote.currentPrice) {
+              priceSnapshot = quote.currentPrice.toString();
+              if (quote.previousClose && quote.previousClose > 0) {
+                const change = quote.currentPrice - quote.previousClose;
+                priceChange = change.toString();
+                priceChangePercent = ((change / quote.previousClose) * 100).toFixed(2);
+              }
+            }
+          } catch (priceError) {
+            console.warn(`[QueueWorker] Could not fetch price for ${job.ticker} brief:`, priceError);
+          }
+          
+          const previousScore = existingBrief?.newSignalScore ?? null;
+          const scoreChange = previousScore !== null ? integratedScore - previousScore : null;
+          
+          const briefData = {
+            ticker: job.ticker.toUpperCase(),
+            briefDate: today,
+            priceSnapshot,
+            priceChange,
+            priceChangePercent,
+            priceSinceInsider: null, // Will be calculated by daily brief job if needed
+            previousSignalScore: previousScore,
+            newSignalScore: integratedScore,
+            scoreChange,
+            scoreChangeReason: scoreChange !== null 
+              ? `Score ${scoreChange >= 0 ? 'increased' : 'decreased'} by ${Math.abs(scoreChange)} points`
+              : 'Initial analysis',
+            stance: integratedScore >= 70 ? 'ENTER' : integratedScore >= 50 ? 'WATCH' : 'AVOID',
+            stanceChanged: existingBrief ? (existingBrief.stance !== (integratedScore >= 70 ? 'ENTER' : integratedScore >= 50 ? 'WATCH' : 'AVOID')) : false,
+            briefText: `Signal score: ${integratedScore}/100. ${analysis.recommendation?.substring(0, 200) || analysis.summary?.substring(0, 200) || 'Analysis complete.'}`,
+            keyUpdates: [],
+            newInsiderTransactions: true,
+            newsImpact: null,
+            priceActionAssessment: null,
+            stopLossHit: false,
+            profitTargetHit: false,
+          };
+          
+          if (existingBrief && existingBrief.briefDate === today) {
+            // Update existing brief for today
+            await storage.updateTickerDailyBrief(existingBrief.id, briefData);
+            console.log(`[QueueWorker] ✅ Updated ticker daily brief for ${job.ticker} (score: ${integratedScore})`);
+          } else {
+            // Create new brief
+            await storage.createTickerDailyBrief(briefData);
+            console.log(`[QueueWorker] ✅ Created ticker daily brief for ${job.ticker} (score: ${integratedScore})`);
+          }
+          
+          // If score < 70, remove opportunities (trimming)
+          if (integratedScore < 70) {
+            for (const opp of tickerOpportunities) {
+              console.log(`[QueueWorker] ${job.ticker} score ${integratedScore} < 70, removing from global opportunities`);
+              await storage.deleteOpportunity(opp.id);
+            }
+          }
+        }
+      } catch (briefError) {
+        // Don't fail the job if brief creation fails
+        console.warn(`[QueueWorker] Could not create brief for ${job.ticker}:`, briefError);
+      }
+
       // Create notifications for high-value opportunities (high confidence signals)
       // High score BUY: score >= 80 with BUY rating (only the best opportunities)
       // High score SELL: score >= 80 with SELL/AVOID rating (only the strongest sell signals)

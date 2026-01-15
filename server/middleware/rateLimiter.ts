@@ -101,15 +101,15 @@ export function createRateLimiter(options: {
       // Rate limit exceeded
       const retryAfter = Math.round(rateLimiterRes.msBeforeNext / 1000) || 1;
       
+      // Set Retry-After header BEFORE sending response
+      res.setHeader("Retry-After", retryAfter);
+      
       res.status(429).json({
         error: options.message || "Too many requests, please try again later",
         retryAfter,
         limit: options.points,
         window: options.duration,
       });
-
-      // Set Retry-After header
-      res.setHeader("Retry-After", retryAfter);
     }
   };
 }
@@ -117,24 +117,25 @@ export function createRateLimiter(options: {
 /**
  * Global API rate limiter
  * Applies to all /api/* routes
- * 100 requests per 15 minutes per IP
+ * In development: 1000 requests per 15 minutes per IP
+ * In production: 100 requests per 15 minutes per IP
  */
 export const globalApiRateLimiter = createRateLimiter({
-  points: 100,
+  points: process.env.NODE_ENV === "production" ? 100 : 1000, // Very lenient in development
   duration: 15 * 60, // 15 minutes
-  blockDuration: 15 * 60, // Block for 15 minutes
+  blockDuration: process.env.NODE_ENV === "production" ? 15 * 60 : 10, // Very short block in development (10 seconds)
   message: "API rate limit exceeded. Please try again later.",
 });
 
 /**
  * Strict rate limiter for authentication endpoints
- * In development: 50 requests per 15 minutes per IP (more lenient)
+ * In development: 1000 requests per 15 minutes per IP (very lenient for development)
  * In production: 5 requests per 15 minutes per IP
  */
 export const authRateLimiter = createRateLimiter({
-  points: process.env.NODE_ENV === "production" ? 5 : 50, // More lenient in development
+  points: process.env.NODE_ENV === "production" ? 5 : 1000, // Very lenient in development
   duration: 15 * 60, // 15 minutes
-  blockDuration: process.env.NODE_ENV === "production" ? 30 * 60 : 60, // Shorter block in development
+  blockDuration: process.env.NODE_ENV === "production" ? 30 * 60 : 10, // Very short block in development (10 seconds)
   message: "Too many authentication attempts. Please try again later.",
 });
 

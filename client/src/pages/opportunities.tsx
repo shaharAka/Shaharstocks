@@ -39,13 +39,22 @@ type OpportunityAsStock = Stock & {
     currentStep: string | null;
   } | null;
   ageDays?: number;
+  latestBrief?: {
+    newSignalScore: number | null;
+    scoreChange: number | null;
+    briefText: string | null;
+    stance: string | null;
+    briefDate: string | null;
+    priceChangePercent: string | null;
+    keyUpdates: string[] | null;
+  };
 };
 
 type SortOption = "signal" | "daysFromTrade" | "marketCap";
 
 
 // Convert Opportunity to Stock-like format for StockTable
-function opportunityToStock(opp: Opportunity): OpportunityAsStock {
+function opportunityToStock(opp: Opportunity & { latestBrief?: any }): OpportunityAsStock {
   return {
     id: opp.id,
     opportunityId: opp.id,
@@ -83,6 +92,7 @@ function opportunityToStock(opp: Opportunity): OpportunityAsStock {
     rejectedAt: null,
     userStatus: "pending",
     isFollowing: false,
+    latestBrief: opp.latestBrief,
   } as OpportunityAsStock;
 }
 
@@ -151,21 +161,25 @@ export default function Opportunities() {
   // Debug logging
   useEffect(() => {
     console.log('[OpportunitiesPage] Response:', opportunitiesResponse);
+    console.log('[OpportunitiesPage] Opportunities count:', opportunitiesResponse?.opportunities?.length ?? 0);
     console.log('[OpportunitiesPage] Loading:', isLoading);
     if (opportunitiesError) {
       console.error('[OpportunitiesPage] Error:', opportunitiesError);
     }
+    // Log first few opportunities to see their structure
+    if (opportunitiesResponse?.opportunities?.length > 0) {
+      console.log('[OpportunitiesPage] First 3 opportunities:', opportunitiesResponse.opportunities.slice(0, 3).map(opp => ({
+        ticker: opp.ticker,
+        recommendation: opp.recommendation,
+        hasBrief: !!opp.latestBrief,
+        briefScore: opp.latestBrief?.newSignalScore
+      })));
+    }
   }, [opportunitiesResponse, isLoading, opportunitiesError]);
-  
-  // Convert opportunities to stock-like format
-  const stocks = useMemo(() => {
-    if (!opportunitiesResponse?.opportunities) return [];
-    console.log('[OpportunitiesPage] Converting', opportunitiesResponse.opportunities.length, 'opportunities to stocks');
-    return opportunitiesResponse.opportunities.map(opportunityToStock);
-  }, [opportunitiesResponse]);
 
   // Fetch AI analyses - poll less frequently to reduce server load
   // Use ?all=true to get analyses for ALL tickers (needed for opportunities filtering)
+  // NOTE: Must be declared before useEffect that uses it
   const { data: analyses = [] } = useQuery<any[]>({
     queryKey: ["/api/stock-analyses", { all: true }],
     queryFn: async () => {
@@ -177,6 +191,39 @@ export default function Opportunities() {
     refetchOnWindowFocus: false, // Disable refetch on window focus
     refetchInterval: 2 * 60 * 1000, // Poll every 2 minutes instead of 60 seconds
   });
+  
+  // Debug analyses
+  useEffect(() => {
+    console.log('[OpportunitiesPage] Analyses count:', analyses.length);
+    if (analyses.length > 0) {
+      const highScoreAnalyses = analyses.filter((a: any) => {
+        const score = a.integratedScore ?? a.confidenceScore ?? 0;
+        return score >= 70;
+      });
+      console.log(`[OpportunitiesPage] High-score analyses (>=70): ${highScoreAnalyses.length}`);
+      if (highScoreAnalyses.length > 0) {
+        console.log('[OpportunitiesPage] High-score tickers:', highScoreAnalyses.map((a: any) => ({
+          ticker: a.ticker,
+          score: a.integratedScore ?? a.confidenceScore
+        })));
+      }
+    }
+  }, [analyses]);
+  
+  // Convert opportunities to stock-like format
+  const stocks = useMemo(() => {
+    if (!opportunitiesResponse?.opportunities) return [];
+    console.log('[OpportunitiesPage] Converting', opportunitiesResponse.opportunities.length, 'opportunities to stocks');
+    const converted = opportunitiesResponse.opportunities.map(opportunityToStock);
+    // Debug: log opportunities with briefs
+    const withBriefs = converted.filter(s => s.latestBrief);
+    const withHighScores = converted.filter(s => {
+      const briefScore = s.latestBrief?.newSignalScore;
+      return briefScore && briefScore >= 70;
+    });
+    console.log(`[OpportunitiesPage] Opportunities with briefs: ${withBriefs.length}, with high scores (>=70): ${withHighScores.length}`);
+    return converted;
+  }, [opportunitiesResponse]);
 
   // Fetch users
   const { data: users = [] } = useQuery<User[]>({
@@ -308,12 +355,19 @@ export default function Opportunities() {
 
   // Filter, enrich, group, and sort opportunities
   const displayOpportunities = useMemo(() => {
-    if (!stocks || stocks.length === 0) return [];
+    try {
+      if (!stocks || stocks.length === 0) {
+        console.log('[OpportunitiesPage] No stocks to display');
+        return [];
+      }
 
-    // Apply filters
-    const followedTickers = new Set(followedStocks.map(f => f.ticker));
-    
-    let filtered = stocks.filter(stock => {
+      console.log(`[OpportunitiesPage] Processing ${stocks.length} stocks, showAllOpportunities: ${showAllOpportunities}`);
+
+      // Apply filters
+      const followedTickers = new Set((followedStocks || []).map(f => f?.ticker).filter(Boolean));
+      console.log(`[OpportunitiesPage] Followed tickers:`, Array.from(followedTickers));
+      
+      let filtered = stocks.filter(stock => {
       const rec = stock.recommendation?.toLowerCase();
       if (!rec || (!rec.includes("buy") && !rec.includes("sell"))) return false;
       
@@ -342,27 +396,39 @@ export default function Opportunities() {
         if (!tickerMatch && !companyMatch) return false;
       }
       
-      return true;
-    });
+        return true;
+      });
 
-    // Enrich with AI scores and following status
-    // integratedScore is the primary score from AI analysis
-    const enriched = filtered.map(stock => {
-      const analysis = analyses.find((a: any) => a.ticker === stock.ticker);
-      const daysSinceTrade = getDaysFromBuy(stock.insiderTradeDate);
-      // Use integratedScore as the primary score (this is the AI-generated signal score)
-      const signalScore = analysis?.integratedScore ?? analysis?.confidenceScore ?? null;
-      return {
-        ...stock,
-        signalScore,
-        daysSinceTrade,
-        isFollowing: followedTickers.has(stock.ticker),
-      };
-    });
+      // Enrich with AI scores and following status
+      // Prefer latest brief score over analysis score (brief is daily updated)
+      const enriched = filtered.map(stock => {
+        // Match analysis by ticker (case-insensitive)
+        const analysis = analyses.find((a: any) => a.ticker?.toUpperCase() === stock.ticker?.toUpperCase());
+        const daysSinceTrade = getDaysFromBuy(stock.insiderTradeDate);
+        // Use latest brief score if available (daily updated), otherwise fall back to analysis score
+        const signalScore = stock.latestBrief?.newSignalScore ?? analysis?.integratedScore ?? analysis?.confidenceScore ?? null;
+        
+        // Debug logging for high-score opportunities
+        if (signalScore && signalScore >= 70) {
+          console.log(`[OpportunitiesPage] Found high-score opportunity: ${stock.ticker}, score: ${signalScore}, brief: ${stock.latestBrief?.newSignalScore ?? 'none'}, analysis: ${analysis?.integratedScore ?? analysis?.confidenceScore ?? 'none'}, recommendation: ${stock.recommendation}`);
+        }
+        
+        // Debug logging if no score found
+        if (!signalScore && stock.ticker) {
+          console.log(`[OpportunitiesPage] No score for ${stock.ticker}: brief=${!!stock.latestBrief}, analysis=${!!analysis}, analysisScore=${analysis?.integratedScore ?? analysis?.confidenceScore ?? 'none'}`);
+        }
+        
+        return {
+          ...stock,
+          signalScore,
+          daysSinceTrade,
+          isFollowing: followedTickers.has(stock.ticker),
+        };
+      });
 
-    // Group by ticker to get highest score per ticker
-    const grouped = new Map<string, typeof enriched[0] & { highestScore: number | null }>();
-    enriched.forEach(stock => {
+      // Group by ticker to get highest score per ticker
+      const grouped = new Map<string, typeof enriched[0] & { highestScore: number | null }>();
+      enriched.forEach(stock => {
       const score = stock.signalScore;
       const existing = grouped.get(stock.ticker);
       
@@ -374,30 +440,47 @@ export default function Opportunities() {
           grouped.set(stock.ticker, { ...stock, highestScore: score });
         } else if (stock.daysSinceTrade < existing.daysSinceTrade) {
           // Update to more recent transaction but preserve highest score
-          grouped.set(stock.ticker, { ...stock, highestScore: existing.highestScore });
+            grouped.set(stock.ticker, { ...stock, highestScore: existing.highestScore });
+          }
         }
-      }
-    });
+      });
 
-    // Convert back to array and filter for high signal (score >= 70)
-    let result = Array.from(grouped.values()).filter(stock => {
-      const score = stock.highestScore;
-      return score !== null && score >= 70;
-    });
+      // Convert back to array and filter for high signal (score >= 70)
+      // Processing opportunities are in the queue and shown in the summary popup, not here
+      let result = Array.from(grouped.values()).filter(stock => {
+        const score = stock.highestScore;
+        const passes = score !== null && score >= 70;
+        if (!passes) {
+          console.log(`[OpportunitiesPage] Filtered out ${stock.ticker} - score: ${score}, recommendation: ${stock.recommendation}, showAll: ${showAllOpportunities}`);
+        } else {
+          console.log(`[OpportunitiesPage] Keeping ${stock.ticker} - score: ${score}, recommendation: ${stock.recommendation}, showAll: ${showAllOpportunities}`);
+        }
+        return passes;
+      });
+      
+      console.log(`[OpportunitiesPage] Final result: ${result.length} opportunities with score >= 70`);
 
-    // Sort
-    result.sort((a, b) => {
+      // Sort
+      // For signal sort, use latest brief score if available (daily updated), otherwise use highestScore
+      result.sort((a, b) => {
       if (sortBy === "signal") {
-        return (b.highestScore ?? 0) - (a.highestScore ?? 0);
+        // Prefer latest brief score (daily updated) over analysis score
+        const aScore = a.latestBrief?.newSignalScore ?? a.highestScore ?? 0;
+        const bScore = b.latestBrief?.newSignalScore ?? b.highestScore ?? 0;
+        return bScore - aScore;
       } else if (sortBy === "daysFromTrade") {
         return a.daysSinceTrade - b.daysSinceTrade;
       } else if (sortBy === "marketCap") {
-        return parseMarketCap(b.marketCap) - parseMarketCap(a.marketCap);
-      }
-      return 0;
-    });
+          return parseMarketCap(b.marketCap) - parseMarketCap(a.marketCap);
+        }
+        return 0;
+      });
 
-    return result;
+      return result;
+    } catch (error) {
+      console.error('[OpportunitiesPage] Error in displayOpportunities useMemo:', error);
+      return [];
+    }
   }, [stocks, analyses, sortBy, tickerSearch, showAllOpportunities, followedStocks, currentUser]);
 
   if (isLoading) {
@@ -528,7 +611,7 @@ export default function Opportunities() {
                 }
                 
                 // Filter out already-followed stocks
-                const followedTickers = new Set(followedStocks.map(f => f.ticker));
+                const followedTickers = new Set((followedStocks || []).map(f => f.ticker).filter(Boolean));
                 const tickersToFollow = Array.from(selectedTickers).filter(
                   ticker => !followedTickers.has(ticker)
                 );

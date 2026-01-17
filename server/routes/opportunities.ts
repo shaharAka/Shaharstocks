@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import { storage } from "../storage";
 import { verifyFirebaseToken } from "../middleware/firebaseAuth";
+import { db } from "../db";
+import { aiAnalysisJobs, opportunities } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 
 export function registerOpportunitiesRoutes(app: Express) {
   app.get("/api/opportunities", verifyFirebaseToken, async (req, res) => {
@@ -17,18 +20,23 @@ export function registerOpportunitiesRoutes(app: Express) {
       }
       
       // Determine cadence based on subscription tier
-      // Pro = active subscription, trial users also get pro access during trial period
-      const isPro = user.subscriptionStatus === 'active' || 
-                    (user.subscriptionStatus === 'trial' && user.trialEndsAt && new Date(user.trialEndsAt) > new Date());
-      const cadence = isPro ? 'all' : 'daily'; // Pro users see all opportunities (daily + hourly), free users only daily
+      // Basic/Trial = daily updates only
+      // Pro = hourly updates only (not daily, not realtime)
+      // Admin = realtime SEC opportunities only (regardless of subscription)
+      const isPro = user.subscriptionStatus === 'pro';
+      const isAdmin = user.isAdmin || user.isSuperAdmin;
       
-      console.log(`[Opportunities] User ${user.email}, tier: ${isPro ? 'pro' : 'free'}, cadence: ${cadence}`);
+      // Determine cadence for each tier
+      const cadence = isAdmin ? 'realtime' : (isPro ? 'hourly' : 'daily');
       
-      // Fetch opportunities filtered by user rejections
+      // Fetch opportunities filtered by cadence and user rejections
       const opportunities = await storage.getOpportunities({
-        cadence: cadence as 'daily' | 'hourly' | 'all',
-        userId: req.user.userId
+        cadence: cadence as 'daily' | 'hourly' | 'realtime',
+        userId: req.user.userId,
+        includeBriefs: true
       });
+      
+      console.log(`[Opportunities] User ${user.email}, tier: ${isPro ? 'pro' : 'basic'}, admin: ${isAdmin}, cadence: ${cadence}, opportunities: ${opportunities.length}`);
       
       console.log(`[Opportunities] Returning ${opportunities.length} opportunities`);
       
@@ -71,16 +79,40 @@ export function registerOpportunitiesRoutes(app: Express) {
       }
       
       // Determine user tier
-      const isPro = user.subscriptionStatus === 'active' || 
-                    (user.subscriptionStatus === 'trial' && user.trialEndsAt && new Date(user.trialEndsAt) > new Date());
+      // Basic/Trial = daily updates only
+      // Pro = hourly updates only
+      // Admin = realtime SEC opportunities only
+      const isPro = user.subscriptionStatus === 'pro';
+      const isAdmin = user.isAdmin || user.isSuperAdmin;
+      const cadence = isAdmin ? 'realtime' : (isPro ? 'hourly' : 'daily');
       
-      // Get latest batch based on user tier (pro gets most recent of any type, free gets latest daily)
-      const latestBatch = isPro 
-        ? await storage.getLatestBatch('hourly') ?? await storage.getLatestBatch('daily')
-        : await storage.getLatestBatch('daily');
+      // Get the latest batch for the user's cadence tier
+      let latestBatch: any;
+      if (isAdmin) {
+        // Admin: get latest realtime batch (SEC poller creates these)
+        latestBatch = await storage.getLatestBatch('realtime') || await storage.getLatestBatchWithStats();
+      } else if (isPro) {
+        // Pro: get latest hourly batch
+        latestBatch = await storage.getLatestBatch('hourly');
+      } else {
+        // Basic/Trial: get latest daily batch
+        latestBatch = await storage.getLatestBatch('daily');
+      }
       
       if (!latestBatch) {
-        return res.json({ fetchedAt: new Date().toISOString(), cadence: isPro ? 'hourly' : 'daily', opportunityCount: 0 });
+        return res.json({ fetchedAt: new Date().toISOString(), cadence, opportunityCount: 0 });
+      }
+      
+      // If admin got a non-realtime batch, try to find a realtime one
+      if (isAdmin && latestBatch.cadence !== 'realtime') {
+        const realtimeBatch = await storage.getLatestBatch('realtime');
+        if (realtimeBatch) {
+          latestBatch = realtimeBatch;
+        }
+      }
+      
+      if (!latestBatch) {
+        return res.json({ fetchedAt: new Date().toISOString(), cadence, opportunityCount: 0 });
       }
       
       const fetchedAtStr = latestBatch.fetchedAt instanceof Date 
@@ -98,26 +130,62 @@ export function registerOpportunitiesRoutes(app: Express) {
         }
       }
       const stats = metadata?.stats;
-      console.log(`[LatestBatch] Batch ${latestBatch.id}, parsed metadata:`, metadata, 'stats:', stats);
       
-      // Get queue stats to show active processing status
-      const queueStats = await storage.getQueueStats();
-      const isProcessing = queueStats.pending > 0 || queueStats.processing > 0;
+      // Calculate queue stats - show batch-specific jobs
+      const batchPending = await storage.countOpportunitiesByBatchPending(latestBatch.id);
+      const batchAnalyzing = await storage.countOpportunitiesByBatchAnalyzing(latestBatch.id);
+      const batchInQueue = batchPending + batchAnalyzing;
+      
+      // Get all opportunities from this batch
+      const batchOpportunities = await db
+        .select()
+        .from(opportunities)
+        .where(eq(opportunities.batchId, latestBatch.id));
+      
+      // Count opportunities added to board (score >= 70)
+      const addedToBoard = await storage.countOpportunitiesByBatchWithScore(latestBatch.id, 70);
+      
+      // Count opportunities rejected by score (score < 70)
+      const rejectedStillInDb = await storage.countOpportunitiesByBatchRejectedByScore(latestBatch.id, 70);
+      
+      // Calculate detailed stats for logging
+      const fetched = latestBatch.count; // Total transactions fetched from OpenInsider
+      const preFilterRejected = stats?.rejected ?? 0; // Rejected by initial filters (market cap, no quote)
+      const duplicates = stats?.duplicates ?? 0; // Duplicates skipped
+      const batchAdded = stats?.added ?? 0; // Opportunities created (after pre-filters)
+      const currentInBatch = batchOpportunities.length;
+      const estimatedDeleted = Math.max(0, batchAdded - currentInBatch - addedToBoard);
+      const rejectedByScore = rejectedStillInDb + estimatedDeleted; // Low score rejections
+      
+      // Detailed logging for debugging
+      console.log(`[LatestBatch] Batch ${latestBatch.id} detailed stats:`);
+      console.log(`  • Fetched: ${fetched} transactions from OpenInsider`);
+      console.log(`  • Pre-filter rejected: ${preFilterRejected} (market cap/no quote)`);
+      console.log(`  • Duplicates skipped: ${duplicates}`);
+      console.log(`  • Created: ${batchAdded} opportunities (after pre-filters)`);
+      console.log(`  • In queue: ${batchInQueue} (${batchPending} pending, ${batchAnalyzing} processing)`);
+      console.log(`  • Added to board: ${addedToBoard} (score >= 70)`);
+      console.log(`  • Rejected by score: ${rejectedByScore} (${rejectedStillInDb} in DB, ${estimatedDeleted} deleted)`);
+      console.log(`  • Total rejected: ${preFilterRejected + rejectedByScore} (pre-filter + low score)`);
+      
+      // Simplified stats for frontend popup
+      const totalRejected = preFilterRejected + rejectedByScore;
       
       res.json({
         id: latestBatch.id,
         cadence: latestBatch.cadence,
         fetchedAt: fetchedAtStr,
         opportunityCount: latestBatch.count,
-        stats: stats ? {
-          added: stats.added,
-          rejected: stats.rejected,
-          duplicates: stats.duplicates
-        } : undefined,
+        stats: {
+          fetched: fetched, // Total transactions fetched
+          inQueue: batchInQueue, // Opportunities in analysis queue
+          rejected: totalRejected, // All rejections (pre-filter + low score)
+          addedToBoard: addedToBoard, // Opportunities with score >= 70
+        },
         queueStats: {
-          pending: queueStats.pending,
-          processing: queueStats.processing,
-          isProcessing
+          pending: batchPending,
+          processing: batchAnalyzing,
+          isProcessing: batchInQueue > 0
         }
       });
     } catch (error) {

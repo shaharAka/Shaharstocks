@@ -37,19 +37,23 @@ export async function verifyFirebaseToken(
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     
+    log.info(`[Auth] Request to ${req.path} - Auth header: ${authHeader ? 'present' : 'missing'}`, "auth");
+    
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      log.info("Missing or invalid Authorization header", "auth");
-      res.status(401).json({ error: "Authentication required. Please provide a valid token." });
+      log.info(`[Auth] Missing or invalid Authorization header for ${req.path}`, "auth");
+      res.status(401).json({ error: "Not authenticated" });
       return;
     }
 
     const idToken = authHeader.substring(7); // Remove "Bearer " prefix
 
     if (!idToken) {
-      log.info("Empty token in Authorization header", "auth");
-      res.status(401).json({ error: "Authentication required. Token is missing." });
+      log.info(`[Auth] Empty token in Authorization header for ${req.path}`, "auth");
+      res.status(401).json({ error: "Not authenticated" });
       return;
     }
+    
+    log.info(`[Auth] Token extracted, length: ${idToken.length}`, "auth");
 
     // Verify token with Firebase Admin SDK
     let decodedToken;

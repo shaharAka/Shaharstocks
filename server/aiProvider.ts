@@ -238,7 +238,58 @@ export function clearProviderCache(): void {
   // No-op - caching removed for simplicity
 }
 
-export async function fetchAvailableModels(_provider: "openai" | "gemini"): Promise<string[]> {
-  // Return only supported models
-  return SUPPORTED_MODELS.map(m => m.id);
+export async function fetchAvailableModels(provider: "openai" | "gemini"): Promise<string[]> {
+  try {
+    if (provider === "openai") {
+      // Always return supported OpenAI models as fallback
+      const supportedModels = SUPPORTED_MODELS.filter(m => m.provider === "openai").map(m => m.id);
+      
+      if (!isOpenAIAvailable()) {
+        console.log("[AIProvider] OpenAI API key not configured, returning supported models");
+        return supportedModels;
+      }
+      
+      try {
+        // Fetch models from OpenAI API
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const models = await openai.models.list();
+        
+        // Filter to only GPT models and sort by ID
+        const gptModels = models.data
+          .filter(m => m.id.startsWith("gpt"))
+          .map(m => m.id)
+          .sort();
+        
+        // If we got models from API, return them, otherwise fall back to supported
+        if (gptModels.length > 0) {
+          console.log(`[AIProvider] Fetched ${gptModels.length} models from OpenAI API`);
+          return gptModels;
+        } else {
+          console.log("[AIProvider] OpenAI API returned no models, using supported models");
+          return supportedModels;
+        }
+      } catch (apiError: any) {
+        console.error(`[AIProvider] Error fetching OpenAI models:`, apiError?.message || apiError);
+        // Fall back to supported models on API error
+        return supportedModels;
+      }
+    } else {
+      // Gemini - always return supported models (Gemini API doesn't have listModels)
+      const supportedModels = SUPPORTED_MODELS.filter(m => m.provider === "gemini").map(m => m.id);
+      
+      if (!isGeminiAvailable()) {
+        console.log("[AIProvider] Gemini API key not configured, returning supported models");
+      } else {
+        console.log("[AIProvider] Returning supported Gemini models");
+      }
+      
+      return supportedModels;
+    }
+  } catch (error: any) {
+    console.error(`[AIProvider] Unexpected error fetching models for ${provider}:`, error?.message || error);
+    // Fall back to supported models on any error - ensure we always return something
+    const fallbackModels = SUPPORTED_MODELS.filter(m => m.provider === provider).map(m => m.id);
+    console.log(`[AIProvider] Returning fallback models for ${provider}:`, fallbackModels);
+    return fallbackModels.length > 0 ? fallbackModels : [];
+  }
 }

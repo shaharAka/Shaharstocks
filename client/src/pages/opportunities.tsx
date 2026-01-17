@@ -20,7 +20,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { type Stock, type User, type Opportunity } from "@shared/schema";
 import { getTerm } from "@/lib/compliance";
 import { useUser } from "@/contexts/UserContext";
@@ -148,14 +148,16 @@ export default function Opportunities() {
   }, [currentUser?.showAllOpportunities]);
 
   // Fetch unified global opportunities - filtered by user tier on server
+  // Auto-refresh every 5 minutes to match SEC poller frequency (for admins seeing realtime)
   const { data: opportunitiesResponse, isLoading, error: opportunitiesError } = useQuery<{
     opportunities: Opportunity[];
     tier: 'pro' | 'free';
     cadence: string;
   }>({
     queryKey: ["/api/opportunities"],
-    staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
+    staleTime: 5 * 60 * 1000, // Consider fresh for 5 minutes
     refetchOnWindowFocus: true,
+    refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes to match SEC poller frequency
   });
   
   // Debug logging
@@ -181,12 +183,8 @@ export default function Opportunities() {
   // Use ?all=true to get analyses for ALL tickers (needed for opportunities filtering)
   // NOTE: Must be declared before useEffect that uses it
   const { data: analyses = [] } = useQuery<any[]>({
-    queryKey: ["/api/stock-analyses", { all: true }],
-    queryFn: async () => {
-      const res = await fetch("/api/stock-analyses?all=true", { credentials: 'include' });
-      if (!res.ok) throw new Error("Failed to fetch analyses");
-      return res.json();
-    },
+    queryKey: ["/api/stock-analyses?all=true"],
+    queryFn: getQueryFn({ on401: "throw" }),
     staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
     refetchOnWindowFocus: false, // Disable refetch on window focus
     refetchInterval: 2 * 60 * 1000, // Poll every 2 minutes instead of 60 seconds
@@ -362,6 +360,8 @@ export default function Opportunities() {
       }
 
       console.log(`[OpportunitiesPage] Processing ${stocks.length} stocks, showAllOpportunities: ${showAllOpportunities}`);
+      console.log(`[OpportunitiesPage] Stock tickers:`, stocks.map(s => s.ticker));
+      console.log(`[OpportunitiesPage] Analyses available: ${analyses.length}, tickers:`, analyses.map((a: any) => a.ticker).slice(0, 10));
 
       // Apply filters
       const followedTickers = new Set((followedStocks || []).map(f => f?.ticker).filter(Boolean));
@@ -407,6 +407,23 @@ export default function Opportunities() {
         const daysSinceTrade = getDaysFromBuy(stock.insiderTradeDate);
         // Use latest brief score if available (daily updated), otherwise fall back to analysis score
         const signalScore = stock.latestBrief?.newSignalScore ?? analysis?.integratedScore ?? analysis?.confidenceScore ?? null;
+        
+        // Enhanced debug logging for all stocks being enriched
+        if (stock.ticker?.toUpperCase() === 'OFIX' || stock.ticker?.toUpperCase() === 'MDB' || (signalScore && signalScore >= 70)) {
+          console.log(`[OpportunitiesPage] Enriching ${stock.ticker}:`, {
+            ticker: stock.ticker,
+            analysesCount: analyses.length,
+            foundAnalysis: !!analysis,
+            analysisTicker: analysis?.ticker,
+            analysisStatus: analysis?.status,
+            integratedScore: analysis?.integratedScore,
+            confidenceScore: analysis?.confidenceScore,
+            briefScore: stock.latestBrief?.newSignalScore,
+            finalSignalScore: signalScore,
+            recommendation: stock.recommendation,
+            passesFilter: signalScore !== null && signalScore >= 70
+          });
+        }
         
         // Debug logging for high-score opportunities
         if (signalScore && signalScore >= 70) {

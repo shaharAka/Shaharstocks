@@ -1,7 +1,8 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import fs from "fs";
 import path from "path";
-import { registerRoutes } from "./routes";
+import { registerRoutes } from "./routes/index";
 import { log } from "./logger";
 // Note: setupVite and serveStatic are dynamically imported to avoid vite dependency in production
 import { initSentry, sentryErrorHandler, sentryTracingHandler, sentryRequestHandler, captureError } from "./sentry";
@@ -13,7 +14,7 @@ import { telegramNotificationService } from "./telegramNotificationService";
 import { openinsiderService } from "./openinsiderService";
 import { aiAnalysisService } from "./aiAnalysisService";
 import { startCleanupScheduler } from "./jobs/cleanupStaleStocks";
-import { startTickerDailyBriefScheduler } from "./jobs/generateTickerDailyBriefs";
+import { startTickerDailyBriefScheduler, runTickerDailyBriefGeneration } from "./jobs/generateTickerDailyBriefs";
 import { startPriceUpdateJob } from "./jobs/priceUpdate";
 import { startCandlestickDataJob } from "./jobs/candlestickData";
 import { startHoldingsPriceHistoryJob } from "./jobs/holdingsPriceHistory";
@@ -27,11 +28,17 @@ import { startDailyBriefJob } from "./jobs/dailyBrief";
 import { startUnverifiedUserCleanupJob } from "./jobs/unverifiedUserCleanup";
 import { stockService } from "./stockService";
 import { secEdgarService } from "./secEdgarService";
+import cron from "node-cron";
 // Session middleware removed - using Firebase JWT tokens instead
 import { queueWorker } from "./queueWorker";
 import { websocketManager } from "./websocketServer";
 import { initializeQueueSystem } from "./queue";
 import { initializeFirebaseAdmin } from "./firebaseAdmin";
+import { secPoller } from "./services/sec/SecPoller";
+import { secClient } from "./services/sec/SecClient";
+import { tickerMapper } from "./services/sec/TickerMapper";
+import { secParser } from "./services/sec/SecParser";
+import { applyOpenInsiderFiltersToSecTransaction } from "./services/sec/secFilters";
 
 // Feature flags
 const ENABLE_TELEGRAM = process.env.ENABLE_TELEGRAM === "true";
@@ -122,27 +129,20 @@ app.use((req, res, next) => {
     res.status(status).json({ message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // In development, frontend runs separately on port 5173 via Vite
+  // API requests are proxied from Vite to this server on port 5002
+  // Add CORS middleware for development to allow Vite dev server to access API
   if (app.get("env") === "development") {
-    // Dynamically import vite-dev only in development to avoid dependency in production
-    // Using Function constructor to create a truly dynamic import that esbuild can't analyze
-    const viteDevPath = "./vite-dev";
-    const viteDevModule = await new Function("path", "return import(path)")(viteDevPath);
-    const { setupVite } = viteDevModule;
-    
-    // Add middleware to bypass Vite for API routes
-    app.use('/api/*', (req, res, next) => {
-      // If we get here, it means no API route matched - return 404
-      if (!res.headersSent) {
-        res.status(404).json({ error: "API endpoint not found" });
-      } else {
-        next();
+    app.use((req, res, next) => {
+      res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.header('Access-Control-Allow-Credentials', 'true');
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
       }
+      next();
     });
-    
-    await setupVite(app, server);
   } else {
     // Serve static files in production (no vite dependency)
     // Inlined here to avoid needing to bundle vite-prod.ts
@@ -198,11 +198,16 @@ app.use((req, res, next) => {
       await storage.initializeDefaults();
       log.info("Default configuration initialized", "server");
       
+      // Start SEC Poller (it will check the feature toggle internally)
+      // The poller will only run if insiderDataSource is set to "sec_direct"
+      secPoller.start(5 * 60 * 1000); // 5 minutes interval
+      log.info("SEC Poller initialized (will start if feature toggle is enabled)", "server");
+
       // Initialize AI provider configuration from database
-      try {
-        const settings = await storage.getSystemSettings();
-        if (settings?.aiProvider) {
-          const { setMacroProviderConfig } = await import("./macroAgentService");
+    try {
+      const settings = await storage.getSystemSettings();
+      if (settings?.aiProvider) {
+        // ... existing AI setup ...
           const { setBacktestProviderConfig } = await import("./backtestService");
           const { clearProviderCache } = await import("./aiProvider");
           
@@ -332,24 +337,36 @@ app.use((req, res, next) => {
  * 
  * TODO: Extract this to server/jobs/unifiedOpportunities.ts
  */
+let fetchUnifiedOpportunitiesFn: ((cadence: 'daily' | 'hourly', options?: { forceOpenInsider?: boolean }) => Promise<{ transactionsFetched: number; opportunitiesCreated: number } | undefined>) | null = null;
+
 function startUnifiedOpportunitiesFetchJob() {
   const ONE_HOUR = 60 * 60 * 1000;
   
   let isJobRunning = false;
 
-  async function fetchUnifiedOpportunities(cadence: 'daily' | 'hourly') {
+  async function fetchUnifiedOpportunities(
+    cadence: 'daily' | 'hourly',
+    options?: { forceOpenInsider?: boolean }
+  ): Promise<{ transactionsFetched: number; opportunitiesCreated: number } | undefined> {
     if (isJobRunning) {
-      log(`[UnifiedOpportunities] Job already running, skipping ${cadence} execution`);
+      log.info(`[UnifiedOpportunities] Job already running, skipping ${cadence} execution`);
       return;
     }
     isJobRunning = true;
-    
+
     try {
-      log(`[UnifiedOpportunities] Starting ${cadence} opportunities fetch...`);
-      
+      log.info(`[UnifiedOpportunities] Starting ${cadence} opportunities fetch...`);
+
+      const settings = await storage.getSystemSettings();
+      // Skip OpenInsider when SEC direct is on, unless explicitly requested (fallback)
+      if (!options?.forceOpenInsider && settings?.insiderDataSource === "sec_direct") {
+        log.info("[UnifiedOpportunities] SEC Direct is enabled, skipping OpenInsider fetch (SEC poller handles real-time data)");
+        return;
+      }
+
       const config = await storage.getOpeninsiderConfig();
       if (!config || !config.enabled) {
-        log("[UnifiedOpportunities] OpenInsider is not configured or disabled, skipping");
+        log.info("[UnifiedOpportunities] OpenInsider is not configured or disabled, skipping");
         return;
       }
 
@@ -373,27 +390,45 @@ function startUnifiedOpportunitiesFetchJob() {
       const optionsDealThreshold = config.optionsDealThresholdPercent ?? 15;
       const minMarketCap = config.minMarketCap ?? 500;
 
+      // Calculate fetch limits: different ratios for purchases vs sales
+      // Hourly: 250 purchases + 50 sales (5:1 ratio)
+      // Daily: use base limit with duplicate factor
+      let purchaseLimit: number;
+      let salesLimit: number;
+      
+      if (cadence === 'hourly') {
+        purchaseLimit = 250;
+        salesLimit = 50;
+        log.info(`[UnifiedOpportunities] Fetching ${purchaseLimit} purchases + ${salesLimit} sales for hourly cadence...`);
+      } else {
+        const baseLimit = config.fetchLimit || 50;
+        const duplicateFactor = 2; // 2x for daily
+        purchaseLimit = baseLimit * duplicateFactor;
+        salesLimit = baseLimit * duplicateFactor;
+        log.info(`[UnifiedOpportunities] Fetching ${purchaseLimit} purchases + ${salesLimit} sales (${baseLimit} base × ${duplicateFactor} for daily cadence)...`);
+      }
+
       // Fetch BOTH purchase and sale transactions
       const [purchasesResponse, salesResponse] = await Promise.all([
         openinsiderService.fetchInsiderPurchases(
-          config.fetchLimit || 50,
+          purchaseLimit,
           Object.keys(filters).length > 0 ? filters : undefined,
           "P"
         ),
         openinsiderService.fetchInsiderSales(
-          config.fetchLimit || 50,
+          salesLimit,
           Object.keys(filters).length > 0 ? filters : undefined
         )
       ]);
       
       const transactions = [...purchasesResponse.transactions, ...salesResponse.transactions];
       
-      log(`[UnifiedOpportunities] Fetched ${transactions.length} transactions for ${cadence} cadence`);
+      log.info(`[UnifiedOpportunities] Fetched ${transactions.length} transactions for ${cadence} cadence`);
       
       if (transactions.length === 0) {
-        log("[UnifiedOpportunities] No insider transactions found");
+        log.info("[UnifiedOpportunities] No insider transactions found");
         await storage.updateOpeninsiderSyncStatus();
-        return;
+        return { transactionsFetched: 0, opportunitiesCreated: 0 };
       }
 
       // Create a batch record for this fetch
@@ -402,7 +437,7 @@ function startUnifiedOpportunitiesFetchJob() {
         count: transactions.length
       });
       
-      log(`[UnifiedOpportunities] Created batch ${batch.id} for ${cadence} cadence`);
+      log.info(`[UnifiedOpportunities] Created batch ${batch.id} for ${cadence} cadence`);
 
       let createdCount = 0;
       let duplicatesSkipped = 0;
@@ -418,12 +453,13 @@ function startUnifiedOpportunitiesFetchJob() {
       
       // Get unique tickers to pre-fetch data efficiently
       const uniqueTickers = Array.from(new Set(transactions.map(t => t.ticker)));
-      log(`[UnifiedOpportunities] Pre-fetching data for ${uniqueTickers.length} unique tickers...`);
+      log.info(`[UnifiedOpportunities] Pre-fetching data for ${uniqueTickers.length} unique tickers...`);
       
       // Pre-fetch quote and company data for all unique tickers
       for (const ticker of uniqueTickers) {
         try {
           await delay(RATE_LIMIT_DELAY);
+          // Get quote first
           const quote = await finnhubService.getQuote(ticker);
           
           if (!quote || !quote.currentPrice) {
@@ -432,24 +468,39 @@ function startUnifiedOpportunitiesFetchJob() {
             continue;
           }
           
+          // Get company profile (for market cap check)
           await delay(RATE_LIMIT_DELAY);
-          const stockData = await finnhubService.getBatchStockData([ticker]);
-          const data = stockData.get(ticker);
+          const companyInfo = await finnhubService.getCompanyProfile(ticker);
           
-          if (!data?.marketCap || data.marketCap < minMarketCap) {
-            tickerDataCache.set(ticker, null); // Filtered by market cap (tracked separately below)
+          // Check market cap before fetching news (saves API calls)
+          if (!companyInfo?.marketCap || companyInfo.marketCap < minMarketCap) {
+            tickerDataCache.set(ticker, null); // Filtered by market cap
             filteredMarketCap++;
             continue;
           }
           
-          tickerDataCache.set(ticker, { quote, data });
+          // Get news (only if market cap is valid)
+          await delay(RATE_LIMIT_DELAY);
+          const news = await finnhubService.getCompanyNews(ticker);
+          
+          // Store all data
+          tickerDataCache.set(ticker, { 
+            quote, 
+            data: {
+              quote,
+              marketCap: companyInfo.marketCap,
+              companyInfo,
+              news,
+              insiderSentiment: undefined
+            }
+          });
         } catch (error) {
           console.error(`[UnifiedOpportunities] Error pre-fetching ${ticker}:`, error);
           tickerDataCache.set(ticker, null);
         }
       }
       
-      log(`[UnifiedOpportunities] Pre-fetched ${tickerDataCache.size} tickers, ${Array.from(tickerDataCache.values()).filter(v => v !== null).length} valid`);
+      log.info(`[UnifiedOpportunities] Pre-fetched ${tickerDataCache.size} tickers, ${Array.from(tickerDataCache.values()).filter(v => v !== null).length} valid`);
       
       for (const transaction of transactions) {
         try {
@@ -508,12 +559,12 @@ function startUnifiedOpportunitiesFetchJob() {
               if (signalScore < 70) {
                 // Low signal - remove from global opportunities board
                 // (Users who followed this stock still have it on their personal followed board)
-                log(`[UnifiedOpportunities] ${transaction.ticker} signal score ${signalScore} < 70, removing from global opportunities`);
+                log.info(`[UnifiedOpportunities] ${transaction.ticker} signal score ${signalScore} < 70, removing from global opportunities`);
                 await storage.deleteOpportunity(opportunity.id);
                 continue; // Don't count as created
               }
               
-              log(`[UnifiedOpportunities] ${transaction.ticker} signal score ${signalScore} >= 70, keeping opportunity`);
+              log.info(`[UnifiedOpportunities] ${transaction.ticker} signal score ${signalScore} >= 70, keeping opportunity`);
               
               // Generate Day-0 ticker daily brief with existing analysis
               const today = new Date().toISOString().split('T')[0];
@@ -540,7 +591,7 @@ function startUnifiedOpportunitiesFetchJob() {
               });
             } else {
               // No completed analysis yet - queue one for processing
-              log(`[UnifiedOpportunities] Queuing AI analysis for ${transaction.ticker}...`);
+              log.info(`[UnifiedOpportunities] Queuing AI analysis for ${transaction.ticker}...`);
               await storage.enqueueAnalysisJob(transaction.ticker, "opportunity_batch", "normal");
             }
           } catch (aiError) {
@@ -554,11 +605,19 @@ function startUnifiedOpportunitiesFetchJob() {
         }
       }
 
-      log(`[UnifiedOpportunities] ${cadence.toUpperCase()} batch complete:`);
-      log(`  • Created: ${createdCount} opportunities`);
-      log(`  • Duplicates skipped: ${duplicatesSkipped}`);
-      log(`  • Filtered (market cap): ${filteredMarketCap}`);
-      log(`  • Filtered (no quote): ${filteredNoQuote}`);
+      log.info(`[UnifiedOpportunities] ${cadence.toUpperCase()} batch complete:`);
+      log.info(`  • Fetched: ${transactions.length} transactions from OpenInsider`);
+      log.info(`  • Created: ${createdCount} new opportunities`);
+      log.info(`  • Duplicates skipped: ${duplicatesSkipped} (${((duplicatesSkipped / transactions.length) * 100).toFixed(1)}% duplicate rate)`);
+      log.info(`  • Filtered (market cap): ${filteredMarketCap}`);
+      log.info(`  • Filtered (no quote): ${filteredNoQuote}`);
+      
+      // Warn if duplicate rate is very high - might need to fetch more
+      const duplicateRate = transactions.length > 0 ? (duplicatesSkipped / transactions.length) : 0;
+      const expectedMinCreated = cadence === 'hourly' ? 50 : (config.fetchLimit || 50);
+      if (duplicateRate > 0.8 && createdCount < expectedMinCreated) {
+        log.warn(`[UnifiedOpportunities] High duplicate rate (${(duplicateRate * 100).toFixed(1)}%) - consider increasing fetch limit or checking for missed transactions`);
+      }
       
       // Store batch stats for the popup to display
       await storage.updateOpportunityBatchStats(batch.id, {
@@ -568,6 +627,7 @@ function startUnifiedOpportunitiesFetchJob() {
       });
       
       await storage.updateOpeninsiderSyncStatus();
+      return { transactionsFetched: transactions.length, opportunitiesCreated: createdCount };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`[UnifiedOpportunities] Error in ${cadence} fetch:`, error);
@@ -577,58 +637,245 @@ function startUnifiedOpportunitiesFetchJob() {
     }
   }
 
-  // Calculate milliseconds until next midnight UTC
-  function msUntilMidnightUTC(): number {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setUTCHours(24, 0, 0, 0); // Next midnight UTC
-    return midnight.getTime() - now.getTime();
+  async function runSecHourlyPromotion(): Promise<{ promoted: number } | null> {
+    try {
+      const settings = await storage.getSystemSettings();
+      if (settings?.insiderDataSource !== "sec_direct") return null;
+      const result = await storage.promoteSecRealtimeToHourly();
+      if (result) {
+        log.info(`[SecHourly] Promoted ${result.promoted} SEC realtime opportunities to hourly batch`);
+      }
+      return result;
+    } catch (err) {
+      log.error("[SecHourly] Promotion failed", err);
+      return null;
+    }
   }
 
-  // Run hourly job
-  async function hourlyCheck() {
-    // Run hourly fetch for pro users
-    await fetchUnifiedOpportunities('hourly');
+  // Schedule hourly job at top of every hour using cron
+  function scheduleHourlyJob() {
+    // Cron pattern: "0 * * * *" = at minute 0 of every hour (00:00, 01:00, 02:00, etc.)
+    cron.schedule('0 * * * *', async () => {
+      try {
+        const settings = await storage.getSystemSettings();
+        if (settings?.insiderDataSource === 'sec_direct') {
+          // SEC primary: promote realtime->hourly; if 0, OpenInsider fallback
+          const promo = await runSecHourlyPromotion().catch(() => null);
+          if (promo === null || promo.promoted === 0) {
+            log.info("[UnifiedOpportunities] SEC hourly had 0 opportunities, running OpenInsider fallback");
+            await fetchUnifiedOpportunities('hourly', { forceOpenInsider: true }).catch(err => {
+              log.error("[UnifiedOpportunities] Fallback OpenInsider hourly fetch failed:", err);
+            });
+          }
+        } else {
+          // OpenInsider primary: fetch; if 0, SEC fallback (promote accumulated realtime)
+          const result = await fetchUnifiedOpportunities('hourly').catch(() => undefined);
+          if (!result || result.opportunitiesCreated === 0) {
+            log.info("[UnifiedOpportunities] OpenInsider hourly produced 0, adding SEC accumulated");
+            const secPromo = await storage.promoteSecRealtimeToHourly();
+            if (secPromo) {
+              log.info(`[SecHourly] SEC fallback promoted ${secPromo.promoted} to hourly`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[UnifiedOpportunities] Hourly job error:", err);
+      }
+    }, {
+      timezone: 'UTC'
+    });
+
+    log.info(`[UnifiedOpportunities] Hourly job scheduled with cron pattern "0 * * * *" (top of every hour UTC)`);
   }
 
   // Track if daily fetch ran today to prevent duplicates
   let lastDailyFetchDate: string | null = null;
-  
+
   function hasDailyRunToday(): boolean {
     const today = new Date().toISOString().split('T')[0];
     return lastDailyFetchDate === today;
   }
-  
+
   function markDailyRun() {
     lastDailyFetchDate = new Date().toISOString().split('T')[0];
   }
-  
-  // Modified daily fetch that tracks when it ran
-  async function runDailyFetch() {
-    if (hasDailyRunToday()) {
-      log("[UnifiedOpportunities] Daily fetch already ran today, skipping");
-      return;
+
+  /**
+   * EDGAR daily: parse SEC Form 4 daily index, fetch XML, create opportunities (cadence: daily, source: sec).
+   * Applies OpenInsider-style filters via applyOpenInsiderFiltersToSecTransaction.
+   */
+  async function runEdgarDailyFetch(): Promise<{ opportunitiesCreated: number }> {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 1);
+    const targetDate = d.toISOString().slice(0, 10).replace(/-/g, "");
+    await tickerMapper.initialize();
+    const oiConfig = await storage.getOpeninsiderConfig();
+
+    let entries: Awaited<ReturnType<typeof secClient.getDailyForm4Index>>;
+    try {
+      entries = await secClient.getDailyForm4Index(targetDate);
+    } catch (e) {
+      log.warn("[EdgarDaily] getDailyForm4Index failed, falling back to OpenInsider", e);
+      return { opportunitiesCreated: 0 };
     }
-    await fetchUnifiedOpportunities('daily');
-    markDailyRun();
+
+    if (entries.length === 0) {
+      return { opportunitiesCreated: 0 };
+    }
+
+    const batch = await storage.createOpportunityBatch({
+      cadence: "daily",
+      source: "sec",
+      count: 0,
+    });
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    let createdCount = 0;
+    let duplicatesSkipped = 0;
+    let filteredNoQuote = 0;
+    let filteredBySecFilters = 0;
+
+    for (const entry of entries) {
+      try {
+        const ticker = tickerMapper.getTicker(entry.cik);
+        if (!ticker) continue;
+
+        let xmlContent: string | null = null;
+        try {
+          const index = await secClient.getFilingIndex(entry.cik, entry.accessionNumber);
+          const items = index?.directory?.item || [];
+          for (const item of items) {
+            const name = item?.name || item;
+            if (typeof name === "string" && name.endsWith(".xml") && !name.includes("index") && !name.includes("xslF345X05")) {
+              const content = await secClient.getFilingDocument(entry.cik, entry.accessionNumber, name);
+              if (content?.trim().startsWith("<?xml") || content?.includes("<ownershipDocument")) {
+                xmlContent = content;
+                break;
+              }
+            }
+          }
+        } catch {
+          // try fallback
+        }
+        if (!xmlContent) {
+          const noDashes = entry.accessionNumber.replace(/-/g, "");
+          for (const p of [`${noDashes}.xml`, `${noDashes}-form4.xml`]) {
+            try {
+              const c = await secClient.getFilingDocument(entry.cik, entry.accessionNumber, p);
+              if (c?.trim().startsWith("<?xml") || c?.includes("<ownershipDocument")) {
+                xmlContent = c;
+                break;
+              }
+            } catch {
+              continue;
+            }
+          }
+        }
+        if (!xmlContent) continue;
+
+        const transactions = secParser.parseForm4(xmlContent);
+        for (const t of transactions) {
+          const existing = await storage.getOpportunityByTransaction(
+            ticker,
+            t.transactionDate,
+            t.ownerName,
+            t.transactionCode === "P" ? "buy" : "sell",
+            "daily"
+          );
+          if (existing) {
+            duplicatesSkipped++;
+            continue;
+          }
+
+          const quote = await finnhubService.getQuote(ticker);
+          await delay(850);
+          if (!quote?.currentPrice) {
+            filteredNoQuote++;
+            continue;
+          }
+          const companyInfo = await finnhubService.getCompanyProfile(ticker);
+          await delay(850);
+          if (!applyOpenInsiderFiltersToSecTransaction({ tx: t, quote: { currentPrice: quote.currentPrice }, companyInfo, config: oiConfig || {}, refDate: new Date() })) {
+            filteredBySecFilters++;
+            continue;
+          }
+
+          await storage.createOpportunity({
+            ticker,
+            companyName: companyInfo?.name || entry.companyName || ticker,
+            recommendation: t.transactionCode === "P" ? "buy" : "sell",
+            cadence: "daily",
+            batchId: batch.id,
+            currentPrice: String(quote.currentPrice),
+            insiderName: t.ownerName,
+            insiderTitle: t.officerTitle || (t.isDirector ? "Director" : t.isOfficer ? "Officer" : "Owner"),
+            insiderTradeDate: t.transactionDate,
+            insiderQuantity: t.transactionShares,
+            insiderPrice: String(t.transactionPrice),
+            marketCap: String(companyInfo!.marketCap),
+            country: companyInfo?.country ?? null,
+            industry: companyInfo?.industry ?? null,
+            source: "sec",
+            confidenceScore: 80,
+          });
+          createdCount++;
+          try {
+            const existingAnalysis = await storage.getStockAnalysis(ticker);
+            if (!existingAnalysis || existingAnalysis.status !== "completed") {
+              await storage.enqueueAnalysisJob(ticker, "opportunity_batch", "normal");
+            }
+          } catch {
+            // keep opportunity
+          }
+        }
+      } catch (err) {
+        log.warn("[EdgarDaily] Error processing entry", { cik: entry.cik, err });
+      }
+    }
+
+    await storage.updateOpportunityBatchStats(batch.id, {
+      added: createdCount,
+      rejected: filteredNoQuote + filteredBySecFilters,
+      duplicates: duplicatesSkipped,
+    });
+    log.info(`[EdgarDaily] Created ${createdCount} daily opportunities from ${entries.length} Form 4 entries (duplicates: ${duplicatesSkipped}, filtered: noQuote ${filteredNoQuote}, secFilters ${filteredBySecFilters})`);
+    return { opportunitiesCreated: createdCount };
   }
 
-  // Schedule daily job at midnight UTC
+  // Modified daily fetch: EDGAR daily primary, OpenInsider fallback
+  async function runDailyFetch() {
+    if (hasDailyRunToday()) {
+      log.info("[UnifiedOpportunities] Daily fetch already ran today, skipping");
+      return;
+    }
+
+    const edgar = await runEdgarDailyFetch();
+    if (edgar.opportunitiesCreated === 0) {
+      log.info("[UnifiedOpportunities] EDGAR daily produced 0, running OpenInsider fallback");
+      await fetchUnifiedOpportunities("daily", { forceOpenInsider: true });
+    }
+    markDailyRun();
+
+    log.info("[UnifiedOpportunities] Starting ticker daily brief generation after daily fetch...");
+    try {
+      await runTickerDailyBriefGeneration(storage);
+      log.info("[UnifiedOpportunities] Ticker daily brief generation completed");
+    } catch (error) {
+      log.error("[UnifiedOpportunities] Ticker daily brief generation failed", error);
+    }
+  }
+
+  // Schedule daily job at midnight UTC using cron
   function scheduleDailyJob() {
-    const msToMidnight = msUntilMidnightUTC();
-    log(`[UnifiedOpportunities] Daily job scheduled in ${Math.round(msToMidnight / 60000)} minutes (next midnight UTC)`);
+    // Cron pattern: "0 0 * * *" = at minute 0 of hour 0 (midnight UTC)
+    cron.schedule('0 0 * * *', async () => {
+      await runDailyFetch().catch(err => {
+        console.error("[UnifiedOpportunities] Daily fetch failed:", err);
+      });
+    }, {
+      timezone: 'UTC'
+    });
     
-    setTimeout(async () => {
-      // Run daily fetch (will skip if already ran today)
-      await runDailyFetch();
-      
-      // Then schedule next daily job (24 hours from now)
-      setInterval(() => {
-        runDailyFetch().catch(err => {
-          console.error("[UnifiedOpportunities] Daily fetch failed:", err);
-        });
-      }, 24 * 60 * 60 * 1000); // 24 hours
-    }, msToMidnight);
+    log.info(`[UnifiedOpportunities] Daily job scheduled with cron pattern "0 0 * * *" (midnight UTC)`);
   }
   
   // Schedule the daily job at next midnight UTC
@@ -639,12 +886,21 @@ function startUnifiedOpportunitiesFetchJob() {
     console.error("[UnifiedOpportunities] Initial daily fetch failed:", err);
   });
   
-  // Set up hourly interval for pro users (starts immediately)
-  hourlyCheck().catch(err => {
-    console.error("[UnifiedOpportunities] Initial hourly fetch failed:", err);
-  });
-  setInterval(hourlyCheck, ONE_HOUR);
-  log("[UnifiedOpportunities] Background job started - hourly for pro, daily at midnight UTC for all");
+  // Schedule hourly job at top of every hour (00:00, 01:00, 02:00, etc.)
+  scheduleHourlyJob();
+  log.info("[UnifiedOpportunities] Background job started - hourly at top of each hour for pro, daily at midnight UTC for all");
+  
+  // Export function for manual triggering
+  fetchUnifiedOpportunitiesFn = fetchUnifiedOpportunities;
+}
+
+// Export function to manually trigger opportunities fetch
+export async function triggerOpportunitiesFetch(cadence: 'daily' | 'hourly'): Promise<void> {
+  if (fetchUnifiedOpportunitiesFn) {
+    await fetchUnifiedOpportunitiesFn(cadence);
+  } else {
+    throw new Error("Opportunities fetch job not initialized");
+  }
 }
 
 /**

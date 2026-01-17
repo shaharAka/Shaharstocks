@@ -127,7 +127,7 @@ import {
   userOpportunityRejections,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, inArray, lt, isNull, or } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, lt, isNull, or, gte } from "drizzle-orm";
 import { isStockStale, getStockAgeInDays } from "@shared/time";
 import { eventDispatcher } from "./eventDispatcher";
 
@@ -222,9 +222,10 @@ export interface IStorage {
   // Opportunity Batches (track fetch runs)
   createOpportunityBatch(batch: InsertOpportunityBatch): Promise<OpportunityBatch>;
   updateOpportunityBatchStats(batchId: string, stats: { added: number; rejected: number; duplicates: number }): Promise<void>;
-  getLatestBatch(cadence: 'daily' | 'hourly'): Promise<OpportunityBatch | undefined>;
+  getLatestBatch(cadence: 'daily' | 'hourly' | 'realtime'): Promise<OpportunityBatch | undefined>;
   getLatestBatchWithStats(): Promise<OpportunityBatch | undefined>;
-  
+  promoteSecRealtimeToHourly(): Promise<{ promoted: number } | null>;
+
   // User Opportunity Rejections
   rejectOpportunity(userId: string, opportunityId: string): Promise<UserOpportunityRejection>;
   unrejectOpportunity(userId: string, opportunityId: string): Promise<boolean>;
@@ -456,6 +457,7 @@ export class DatabaseStorage implements IStorage {
         fetchPreviousDayOnly: false,
         insiderTitles: ["CEO", "CFO", "Director", "President", "COO", "CTO", "10% Owner"],
         minTransactionValue: 100000, // $100k minimum
+        dataSource: "openinsider",
       });
     }
   }
@@ -1754,7 +1756,7 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getLatestBatch(cadence: 'daily' | 'hourly'): Promise<OpportunityBatch | undefined> {
+  async getLatestBatch(cadence: 'daily' | 'hourly' | 'realtime'): Promise<OpportunityBatch | undefined> {
     const [result] = await db
       .select()
       .from(opportunityBatches)
@@ -1781,6 +1783,41 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(opportunityBatches.fetchedAt))
       .limit(1);
     return result;
+  }
+
+  async promoteSecRealtimeToHourly(): Promise<{ promoted: number } | null> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const rows = await db
+      .select({ id: opportunities.id })
+      .from(opportunities)
+      .where(
+        and(
+          eq(opportunities.cadence, "realtime"),
+          eq(opportunities.source, "sec"),
+          gte(opportunities.createdAt, oneHourAgo)
+        )
+      );
+
+    if (rows.length === 0) return null;
+
+    const roundHour = new Date();
+    roundHour.setUTCMinutes(0, 0, 0);
+    roundHour.setUTCSeconds(0, 0);
+
+    const batch = await this.createOpportunityBatch({
+      cadence: "hourly",
+      source: "sec",
+      count: rows.length,
+      fetchedAt: roundHour,
+    });
+
+    await db
+      .update(opportunities)
+      .set({ cadence: "hourly", batchId: batch.id })
+      .where(inArray(opportunities.id, rows.map((r) => r.id)));
+
+    return { promoted: rows.length };
   }
 
   // User Opportunity Rejections
@@ -2181,26 +2218,34 @@ export class DatabaseStorage implements IStorage {
     const ONE_DAY = 24 * 60 * 60 * 1000;
     const now = new Date().getTime();
 
-    // Active (paid) subscribers: can refresh every hour
-    if (user.subscriptionStatus === "active") {
+    // Pro (paid) subscribers: can refresh every hour (hourly updates)
+    if (user.subscriptionStatus === "pro") {
       if (!user.lastDataRefresh) return true;
       const timeSinceLastRefresh = now - new Date(user.lastDataRefresh).getTime();
       return timeSinceLastRefresh >= ONE_HOUR;
     }
 
-    // Trial users: can only refresh once per day
+    // Active (basic) users: can refresh once per day (daily updates)
+    if (user.subscriptionStatus === "active") {
+      if (!user.lastDataRefresh) return true;
+      const timeSinceLastRefresh = now - new Date(user.lastDataRefresh).getTime();
+      return timeSinceLastRefresh >= ONE_DAY;
+    }
+
+    // Trial users: can refresh once per day (daily updates during trial)
     if (user.subscriptionStatus === "trial") {
       if (!user.lastDataRefresh) return true;
       const timeSinceLastRefresh = now - new Date(user.lastDataRefresh).getTime();
       return timeSinceLastRefresh >= ONE_DAY;
     }
 
-    // Other statuses (pending, expired, cancelled): no refresh
+    // Other statuses (pending_verification, inactive, expired, cancelled): no refresh
     return false;
   }
 
   async getUsersEligibleForDataRefresh(): Promise<User[]> {
     // Get all active users (not archived, valid subscription)
+    // active = basic users (daily updates), pro = paid users (hourly updates), trial = trial users
     const allUsers = await db
       .select()
       .from(users)
@@ -2209,6 +2254,7 @@ export class DatabaseStorage implements IStorage {
           eq(users.archived, false),
           or(
             eq(users.subscriptionStatus, "active"),
+            eq(users.subscriptionStatus, "pro"),
             eq(users.subscriptionStatus, "trial")
           )
         )

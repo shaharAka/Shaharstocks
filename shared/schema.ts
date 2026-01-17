@@ -103,9 +103,11 @@ export const opportunityBatches = pgTable("opportunity_batches", {
     };
     duration?: number; // Fetch duration in ms
     stats?: {
-      added: number; // Stocks that passed the funnel and were added
-      rejected: number; // Stocks that didn't pass (market cap, no quote, etc.)
+      added: number; // Stocks that passed the funnel and were added (before signal calculation)
+      rejected: number; // Stocks that didn't pass pre-filters (market cap, no quote, etc.)
       duplicates: number; // Already existed in this cadence
+      rejectedByScore?: number; // Opportunities from this batch with score < 70 (after analysis)
+      addedToBoard?: number; // Opportunities from this batch with score >= 70 (after analysis)
     };
   }>(),
 });
@@ -949,6 +951,7 @@ export const openinsiderConfig = pgTable("openinsider_config", {
   minMarketCap: integer("min_market_cap").notNull().default(500), // Minimum market cap in millions (default $500M)
   optionsDealThresholdPercent: integer("options_deal_threshold_percent").notNull().default(15), // Insider price must be >= this % of market price (filters options deals)
   minCommunityEngagement: integer("min_community_engagement").notNull().default(10), // Minimum comments + follows to appear in Community section
+  dataSource: text("data_source").notNull().default("openinsider"), // "openinsider" or "sec"
   lastSync: timestamp("last_sync"),
   lastError: text("last_error"),
 });
@@ -1317,6 +1320,8 @@ export const systemSettings = pgTable("system_settings", {
   // AI Provider Configuration
   aiProvider: text("ai_provider").notNull().default("openai"), // "openai" or "gemini"
   aiModel: text("ai_model"), // Optional specific model override (e.g., "gpt-4o", "gemini-2.5-pro")
+  // Insider Trading Data Source
+  insiderDataSource: text("insider_data_source").notNull().default("openinsider"), // "openinsider" or "sec_direct"
 });
 
 export const insertSystemSettingsSchema = createInsertSchema(systemSettings).omit({ id: true, updatedAt: true });

@@ -565,7 +565,12 @@ export class StorageFacade implements IStorage {
   }
 
   // Opportunities
-  async getOpportunities(options?: any) {
+  async getOpportunities(options?: { 
+    cadence?: 'daily' | 'hourly' | 'all';
+    userId?: string;
+    ticker?: string;
+    includeBriefs?: boolean;
+  }) {
     return this.opportunity.getOpportunities(options);
   }
 
@@ -603,6 +608,30 @@ export class StorageFacade implements IStorage {
 
   async getLatestBatchWithStats() {
     return this.opportunity.getLatestBatchWithStats();
+  }
+
+  async promoteSecRealtimeToHourly() {
+    return this.opportunity.promoteSecRealtimeToHourly();
+  }
+
+  async countOpportunitiesByBatchWithScore(batchId: string, minScore: number) {
+    return this.opportunity.countOpportunitiesByBatchWithScore(batchId, minScore);
+  }
+
+  async countOpportunitiesByBatchInQueue(batchId: string) {
+    return this.opportunity.countOpportunitiesByBatchInQueue(batchId);
+  }
+
+  async countOpportunitiesByBatchPending(batchId: string) {
+    return this.opportunity.countOpportunitiesByBatchPending(batchId);
+  }
+
+  async countOpportunitiesByBatchAnalyzing(batchId: string) {
+    return this.opportunity.countOpportunitiesByBatchAnalyzing(batchId);
+  }
+
+  async countOpportunitiesByBatchRejectedByScore(batchId: string, maxScore: number) {
+    return this.opportunity.countOpportunitiesByBatchRejectedByScore(batchId, maxScore);
   }
 
   async rejectOpportunity(userId: string, opportunityId: string) {

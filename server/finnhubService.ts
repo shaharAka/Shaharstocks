@@ -1,10 +1,13 @@
 /**
- * Stock Market Data Service (Alpha Vantage)
+ * Stock Market Data Service — Alpha Vantage only
+ *
  * Fetches real-time stock quotes, company profiles, news, and historical data
- * Using Alpha Vantage API (Pro license: 75 requests/minute)
- * 
- * Note: This file was previously using Finnhub. Now uses Alpha Vantage exclusively.
- * The service name is kept for backward compatibility with imports.
+ * using the Alpha Vantage API (Pro: 75 requests/minute). All opportunity pipelines
+ * (OpenInsider, SEC realtime, EDGAR daily) use this service for getQuote and
+ * getCompanyProfile; no Finnhub API is used.
+ *
+ * The "finnhubService" export name is legacy; the implementation is AlphaVantageStockService.
+ * Requires ALPHA_VANTAGE_API_KEY. Finnhub and FINNHUB_* env vars are not used.
  */
 
 interface StockQuote {
@@ -59,7 +62,8 @@ class AlphaVantageStockService {
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
   private cacheTimeout = 60 * 1000; // 1 minute cache
   private lastApiCallTime: number = 0;
-  private minDelayBetweenCalls: number = 800; // 0.8 seconds (Pro: 75 requests/minute)
+  private rateLimitChain: Promise<void> = Promise.resolve();
+  private minDelayBetweenCalls: number = 1200; // 1.2 seconds = 50 calls/min (safe margin under 75/min limit)
 
   constructor() {
     this.apiKey = process.env.ALPHA_VANTAGE_API_KEY || "";
@@ -67,23 +71,36 @@ class AlphaVantageStockService {
     if (!this.apiKey) {
       console.warn("[AlphaVantage] WARNING: ALPHA_VANTAGE_API_KEY not set. Stock data will not be available.");
     } else {
-      console.log("[AlphaVantage] Stock service initialized (Pro license: 75 calls/min)");
+      console.log("[AlphaVantage] Stock service initialized (Pro license: 75 calls/min, max 5/sec burst limit)");
     }
   }
 
   /**
-   * Rate limiter - ensures at least 0.8 seconds between API calls (Pro: 75/min)
+   * Global rate limiter - serializes ALL API calls through a shared chain to prevent bursts
+   * Alpha Vantage limits: 75 requests/minute average, max 5 requests/second (burst limit)
+   * Using 1.2 second delay = 50 calls/min to stay safely under both limits with margin for network latency
    */
   private async enforceRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastCall = now - this.lastApiCallTime;
+    // Serialize all API calls through a shared chain to avoid bursty parallel requests
+    this.rateLimitChain = this.rateLimitChain
+      .then(async () => {
+        const now = Date.now();
+        const timeSinceLastCall = now - this.lastApiCallTime;
+        
+        // Use 1.2 second delay to prevent bursts (50 calls/min, max 0.83/sec = well under 5/sec limit)
+        if (timeSinceLastCall < this.minDelayBetweenCalls) {
+          const waitTime = this.minDelayBetweenCalls - timeSinceLastCall;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        
+        this.lastApiCallTime = Date.now();
+      })
+      .catch((error) => {
+        // Ensure the chain stays usable even if something unexpected happens
+        console.warn("[AlphaVantage] Rate limit chain error:", error);
+      });
     
-    if (timeSinceLastCall < this.minDelayBetweenCalls) {
-      const waitTime = this.minDelayBetweenCalls - timeSinceLastCall;
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-    
-    this.lastApiCallTime = Date.now();
+    return this.rateLimitChain;
   }
 
   /**
@@ -108,9 +125,11 @@ class AlphaVantageStockService {
       throw new Error(`Alpha Vantage API Error: ${data["Error Message"]}`);
     }
     
-    if (data["Note"]) {
-      console.warn("[AlphaVantage] API rate limit warning:", data["Note"]);
-      throw new Error("API rate limit exceeded. Please try again later.");
+    // Check both "Note" and "Information" for rate limit errors
+    if (data["Note"] || data["Information"]) {
+      const errorMessage = data["Note"] || data["Information"];
+      console.warn("[AlphaVantage] API rate limit warning:", errorMessage);
+      throw new Error(`API rate limit exceeded: ${errorMessage}`);
     }
 
     this.cache.set(cacheKey, { data, timestamp: Date.now() });
@@ -381,7 +400,11 @@ class AlphaVantageStockService {
     for (const ticker of tickers) {
       try {
         const quote = await this.getQuote(ticker);
+        await new Promise(resolve => setTimeout(resolve, 850)); // Add delay between calls
+        
         const companyInfo = await this.getCompanyProfile(ticker);
+        await new Promise(resolve => setTimeout(resolve, 850)); // Add delay between calls
+        
         const news = await this.getCompanyNews(ticker);
         
         stockData.set(ticker, {

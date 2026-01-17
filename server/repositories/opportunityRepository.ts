@@ -5,7 +5,7 @@
 
 import { BaseRepository } from "./base";
 import { opportunities, opportunityBatches, userOpportunityRejections, followedStocks, tickerDailyBriefs, type Opportunity, type InsertOpportunity, type OpportunityBatch, type InsertOpportunityBatch, type UserOpportunityRejection, type InsertUserOpportunityRejection, type TickerDailyBrief } from "@shared/schema";
-import { eq, desc, sql, and, or, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, or, inArray, gte } from "drizzle-orm";
 
 export interface IOpportunityRepository {
   // Opportunities (global, unified for all users)
@@ -23,9 +23,13 @@ export interface IOpportunityRepository {
   // Opportunity Batches (track fetch runs)
   createOpportunityBatch(batch: InsertOpportunityBatch): Promise<OpportunityBatch>;
   updateOpportunityBatchStats(batchId: string, stats: { added: number; rejected: number; duplicates: number }): Promise<void>;
-  getLatestBatch(cadence: 'daily' | 'hourly'): Promise<OpportunityBatch | undefined>;
+  getLatestBatch(cadence: 'daily' | 'hourly' | 'realtime'): Promise<OpportunityBatch | undefined>;
   getLatestBatchWithStats(): Promise<OpportunityBatch | undefined>;
+  promoteSecRealtimeToHourly(): Promise<{ promoted: number } | null>;
   countOpportunitiesByBatchWithScore(batchId: string, minScore: number): Promise<number>;
+  countOpportunitiesByBatchInQueue(batchId: string): Promise<number>;
+  countOpportunitiesByBatchPending(batchId: string): Promise<number>;
+  countOpportunitiesByBatchAnalyzing(batchId: string): Promise<number>;
   
   // User Opportunity Rejections
   rejectOpportunity(userId: string, opportunityId: string): Promise<UserOpportunityRejection>;
@@ -49,6 +53,8 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
       conditions.push(eq(opportunities.cadence, 'daily'));
     } else if (options?.cadence === 'hourly') {
       conditions.push(eq(opportunities.cadence, 'hourly'));
+    } else if (options?.cadence === 'realtime') {
+      conditions.push(eq(opportunities.cadence, 'realtime'));
     }
     // 'all' or undefined: no cadence filter
     
@@ -179,7 +185,7 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
     `);
   }
 
-  async getLatestBatch(cadence: 'daily' | 'hourly'): Promise<OpportunityBatch | undefined> {
+  async getLatestBatch(cadence: 'daily' | 'hourly' | 'realtime'): Promise<OpportunityBatch | undefined> {
     const [batch] = await this.db
       .select()
       .from(opportunityBatches)
@@ -196,6 +202,41 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
       .orderBy(desc(opportunityBatches.fetchedAt))
       .limit(1);
     return batch;
+  }
+
+  async promoteSecRealtimeToHourly(): Promise<{ promoted: number } | null> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const rows = await this.db
+      .select({ id: opportunities.id })
+      .from(opportunities)
+      .where(
+        and(
+          eq(opportunities.cadence, "realtime"),
+          eq(opportunities.source, "sec"),
+          gte(opportunities.createdAt, oneHourAgo)
+        )
+      );
+
+    if (rows.length === 0) return null;
+
+    const roundHour = new Date();
+    roundHour.setUTCMinutes(0, 0, 0);
+    roundHour.setUTCSeconds(0, 0);
+
+    const batch = await this.createOpportunityBatch({
+      cadence: "hourly",
+      source: "sec",
+      count: rows.length,
+      fetchedAt: roundHour,
+    });
+
+    await this.db
+      .update(opportunities)
+      .set({ cadence: "hourly", batchId: batch.id })
+      .where(inArray(opportunities.id, rows.map((r) => r.id)));
+
+    return { promoted: rows.length };
   }
 
   // User Opportunity Rejections
@@ -321,6 +362,7 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
 
   /**
    * Count opportunities from a batch that have score >= threshold (added to board)
+   * Uses brief scores (preferred) or analysis scores (fallback) to match frontend display logic
    */
   async countOpportunitiesByBatchWithScore(batchId: string, minScore: number): Promise<number> {
     // Get all opportunities from this batch
@@ -336,7 +378,23 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
     // Get unique tickers
     const uniqueTickers = Array.from(new Set(batchOpportunities.map(opp => opp.ticker.toUpperCase())));
     
-    // Get analyses for these tickers
+    // Get latest briefs for these tickers (preferred source, matches frontend)
+    const briefsMap = new Map<string, TickerDailyBrief>();
+    
+    for (const ticker of uniqueTickers) {
+      const [latestBrief] = await this.db
+        .select()
+        .from(tickerDailyBriefs)
+        .where(eq(tickerDailyBriefs.ticker, ticker))
+        .orderBy(desc(tickerDailyBriefs.briefDate))
+        .limit(1);
+      
+      if (latestBrief) {
+        briefsMap.set(ticker, latestBrief);
+      }
+    }
+    
+    // Get analyses as fallback (for opportunities without briefs yet)
     const { stockAnalyses } = await import('@shared/schema');
     const upperTickers = uniqueTickers.map(t => t.toUpperCase());
     const analyses = await this.db
@@ -349,14 +407,229 @@ export class OpportunityRepository extends BaseRepository implements IOpportunit
         )
       );
     
-    // Count tickers with score >= minScore
+    // Count opportunities with score >= minScore
+    // Match frontend logic: prefer brief score, fall back to analysis score
     let count = 0;
-    for (const analysis of analyses) {
-      const score = analysis.integratedScore ?? analysis.confidenceScore ?? 0;
+    for (const opp of batchOpportunities) {
+      const ticker = opp.ticker.toUpperCase();
+      const brief = briefsMap.get(ticker);
+      const analysis = analyses.find(a => a.ticker.toUpperCase() === ticker);
+      
+      // Use same logic as frontend: brief score preferred, then analysis score
+      const score = brief?.newSignalScore ?? analysis?.integratedScore ?? analysis?.confidenceScore ?? 0;
+      
       if (score >= minScore) {
-        // Count all opportunities for this ticker from this batch
-        const tickerOpps = batchOpportunities.filter(opp => opp.ticker.toUpperCase() === analysis.ticker.toUpperCase());
-        count += tickerOpps.length;
+        count++;
+      }
+    }
+    
+    return count;
+  }
+
+  /**
+   * Count opportunities from a batch that are in the analysis queue (pending or processing)
+   */
+  async countOpportunitiesByBatchInQueue(batchId: string): Promise<number> {
+    // Get all opportunities from this batch
+    const batchOpportunities = await this.db
+      .select({ ticker: opportunities.ticker })
+      .from(opportunities)
+      .where(eq(opportunities.batchId, batchId));
+    
+    if (batchOpportunities.length === 0) {
+      return 0;
+    }
+
+    // Get unique tickers
+    const uniqueTickers = Array.from(new Set(batchOpportunities.map(opp => opp.ticker.toUpperCase())));
+    
+    // Check which tickers have pending or processing analysis jobs
+    const { aiAnalysisJobs } = await import('@shared/schema');
+    const upperTickers = uniqueTickers.map(t => t.toUpperCase());
+    const jobsInQueue = await this.db
+      .select({ ticker: aiAnalysisJobs.ticker })
+      .from(aiAnalysisJobs)
+      .where(
+        and(
+          sql`UPPER(${aiAnalysisJobs.ticker}) IN (${sql.join(upperTickers.map(t => sql`${t}`), sql`, `)})`,
+          sql`${aiAnalysisJobs.status} IN ('pending', 'processing')`
+        )
+      );
+    
+    const tickersInQueue = new Set(jobsInQueue.map(j => j.ticker.toUpperCase()));
+    
+    // Count opportunities for tickers that are in the queue
+    let count = 0;
+    for (const opp of batchOpportunities) {
+      if (tickersInQueue.has(opp.ticker.toUpperCase())) {
+        count++;
+      }
+    }
+    
+    return count;
+  }
+
+  /**
+   * Count opportunities from a batch that are pending analysis (status = 'pending', not processing)
+   */
+  async countOpportunitiesByBatchPending(batchId: string): Promise<number> {
+    // Get all opportunities from this batch
+    const batchOpportunities = await this.db
+      .select({ ticker: opportunities.ticker })
+      .from(opportunities)
+      .where(eq(opportunities.batchId, batchId));
+    
+    if (batchOpportunities.length === 0) {
+      return 0;
+    }
+
+    // Get unique tickers
+    const uniqueTickers = Array.from(new Set(batchOpportunities.map(opp => opp.ticker.toUpperCase())));
+    
+    // Get tickers that have processing jobs (to exclude them from pending count)
+    const { aiAnalysisJobs } = await import('@shared/schema');
+    const upperTickers = uniqueTickers.map(t => t.toUpperCase());
+    const processingJobs = await this.db
+      .select({ ticker: aiAnalysisJobs.ticker })
+      .from(aiAnalysisJobs)
+      .where(
+        and(
+          sql`UPPER(${aiAnalysisJobs.ticker}) IN (${sql.join(upperTickers.map(t => sql`${t}`), sql`, `)})`,
+          eq(aiAnalysisJobs.status, 'processing')
+        )
+      );
+    
+    const tickersProcessing = new Set(processingJobs.map(j => j.ticker.toUpperCase()));
+    
+    // Get tickers that have pending jobs (but not processing)
+    const pendingJobs = await this.db
+      .select({ ticker: aiAnalysisJobs.ticker })
+      .from(aiAnalysisJobs)
+      .where(
+        and(
+          sql`UPPER(${aiAnalysisJobs.ticker}) IN (${sql.join(upperTickers.map(t => sql`${t}`), sql`, `)})`,
+          eq(aiAnalysisJobs.status, 'pending')
+        )
+      );
+    
+    const tickersPending = new Set(pendingJobs.map(j => j.ticker.toUpperCase()));
+    
+    // Count opportunities for tickers that are pending (and not currently processing)
+    let count = 0;
+    for (const opp of batchOpportunities) {
+      const ticker = opp.ticker.toUpperCase();
+      if (tickersPending.has(ticker) && !tickersProcessing.has(ticker)) {
+        count++;
+      }
+    }
+    
+    return count;
+  }
+
+  /**
+   * Count opportunities from a batch that are currently being analyzed (status = 'processing')
+   */
+  async countOpportunitiesByBatchAnalyzing(batchId: string): Promise<number> {
+    // Get all opportunities from this batch
+    const batchOpportunities = await this.db
+      .select({ ticker: opportunities.ticker })
+      .from(opportunities)
+      .where(eq(opportunities.batchId, batchId));
+    
+    if (batchOpportunities.length === 0) {
+      return 0;
+    }
+
+    // Get unique tickers
+    const uniqueTickers = Array.from(new Set(batchOpportunities.map(opp => opp.ticker.toUpperCase())));
+    
+    // Check which tickers have processing analysis jobs (not pending, only actively processing)
+    const { aiAnalysisJobs } = await import('@shared/schema');
+    const upperTickers = uniqueTickers.map(t => t.toUpperCase());
+    const processingJobs = await this.db
+      .select({ ticker: aiAnalysisJobs.ticker })
+      .from(aiAnalysisJobs)
+      .where(
+        and(
+          sql`UPPER(${aiAnalysisJobs.ticker}) IN (${sql.join(upperTickers.map(t => sql`${t}`), sql`, `)})`,
+          eq(aiAnalysisJobs.status, 'processing')
+        )
+      );
+    
+    const tickersProcessing = new Set(processingJobs.map(j => j.ticker.toUpperCase()));
+    
+    // Count opportunities for tickers that are currently being processed
+    let count = 0;
+    for (const opp of batchOpportunities) {
+      if (tickersProcessing.has(opp.ticker.toUpperCase())) {
+        count++;
+      }
+    }
+    
+    return count;
+  }
+
+  /**
+   * Count opportunities from a batch that have score < threshold (rejected by score)
+   * Uses brief scores (preferred) or analysis scores (fallback)
+   */
+  async countOpportunitiesByBatchRejectedByScore(batchId: string, maxScore: number): Promise<number> {
+    // Get all opportunities from this batch
+    const batchOpportunities = await this.db
+      .select({ ticker: opportunities.ticker })
+      .from(opportunities)
+      .where(eq(opportunities.batchId, batchId));
+    
+    if (batchOpportunities.length === 0) {
+      return 0;
+    }
+
+    // Get unique tickers
+    const uniqueTickers = Array.from(new Set(batchOpportunities.map(opp => opp.ticker.toUpperCase())));
+    
+    // Get latest briefs for these tickers (preferred source)
+    const briefsMap = new Map<string, TickerDailyBrief>();
+    for (const ticker of uniqueTickers) {
+      const [latestBrief] = await this.db
+        .select()
+        .from(tickerDailyBriefs)
+        .where(eq(tickerDailyBriefs.ticker, ticker))
+        .orderBy(desc(tickerDailyBriefs.briefDate))
+        .limit(1);
+      
+      if (latestBrief) {
+        briefsMap.set(ticker, latestBrief);
+      }
+    }
+    
+    // Get analyses as fallback (for opportunities without briefs yet)
+    const { stockAnalyses } = await import('@shared/schema');
+    const upperTickers = uniqueTickers.map(t => t.toUpperCase());
+    const analyses = await this.db
+      .select()
+      .from(stockAnalyses)
+      .where(
+        and(
+          sql`UPPER(${stockAnalyses.ticker}) IN (${sql.join(upperTickers.map(t => sql`${t}`), sql`, `)})`,
+          eq(stockAnalyses.status, 'completed')
+        )
+      );
+    
+    // Count opportunities with score < maxScore
+    // Match frontend logic: prefer brief score, fall back to analysis score
+    let count = 0;
+    for (const opp of batchOpportunities) {
+      const ticker = opp.ticker.toUpperCase();
+      const brief = briefsMap.get(ticker);
+      const analysis = analyses.find(a => a.ticker.toUpperCase() === ticker);
+      
+      // Use same logic as frontend: brief score preferred, then analysis score
+      const score = brief?.newSignalScore ?? analysis?.integratedScore ?? analysis?.confidenceScore ?? 0;
+      
+      // Only count if score is < maxScore AND analysis is completed (not in queue)
+      // If no analysis/brief exists, don't count as rejected (it's still in queue)
+      if ((brief || analysis) && score < maxScore) {
+        count++;
       }
     }
     

@@ -6,10 +6,12 @@ import { runTickerDailyBriefGeneration } from "../jobs/generateTickerDailyBriefs
 import { stockService } from "../stockService";
 import { aiAnalysisService } from "../aiAnalysisService";
 import { fetchInitialDataForUser } from "./utils";
+import { verifyFirebaseToken } from "../middleware/firebaseAuth";
+import { triggerOpportunitiesFetch } from "../index";
 
-export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeof import("../session").createRequireAdmin>) {
+export function registerAdminRoutes(app: Express, requireAdmin: typeof import("../middleware/firebaseAuth").requireAdmin) {
   // Admin: Update app version
-  app.post("/api/admin/version", requireAdmin, async (req, res) => {
+  app.post("/api/admin/version", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
       const { appVersion, releaseNotes } = req.body;
       
@@ -17,10 +19,14 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
         return res.status(400).json({ error: "Version is required" });
       }
       
+      if (!req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
       const settings = await storage.updateSystemSettings({
         appVersion: appVersion.trim(),
         releaseNotes: releaseNotes?.trim() || null,
-        lastUpdatedBy: req.session.userId,
+        lastUpdatedBy: req.user.userId,
       });
       
       res.json({
@@ -36,7 +42,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
   });
 
   // Admin: Get AI provider configuration
-  app.get("/api/admin/ai-provider", requireAdmin, async (req, res) => {
+  app.get("/api/admin/ai-provider", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
       const settings = await storage.getSystemSettings();
       const { getAvailableProviders } = await import("../aiProvider");
@@ -44,6 +50,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
       res.json({
         provider: settings?.aiProvider || "openai",
         model: settings?.aiModel || null,
+        insiderDataSource: settings?.insiderDataSource || "openinsider",
         availableProviders: getAvailableProviders(),
       });
     } catch (error) {
@@ -53,15 +60,27 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
   });
 
   // Admin: Update AI provider configuration
-  app.post("/api/admin/ai-provider", requireAdmin, async (req, res) => {
+  app.post("/api/admin/ai-provider", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
-      const { provider, model } = req.body;
+      const { provider, model, insiderDataSource } = req.body;
       
-      if (!provider || !["openai", "gemini"].includes(provider)) {
-        return res.status(400).json({ error: "Invalid provider. Must be 'openai' or 'gemini'" });
+      // Valid provider is only "openai" or "gemini". Anything else (undefined, "", "openinsider", etc.)
+      // is treated as insider-only: no provider selection is required; AI uses a fixed fallback chain.
+      const wantsProviderUpdate = provider === "openai" || provider === "gemini";
+
+      if (!wantsProviderUpdate) {
+        // Insider-only update: update insiderDataSource when provided; no provider required
+        const updateData: any = { lastUpdatedBy: req.user?.userId };
+        if (insiderDataSource !== undefined && insiderDataSource !== null && insiderDataSource !== "") {
+          updateData.insiderDataSource = insiderDataSource;
+        }
+        const settings = await storage.updateSystemSettings(updateData);
+        console.log("[Admin] Insider data source updated to:", settings.insiderDataSource);
+        return res.json({ success: true, insiderDataSource: settings.insiderDataSource });
       }
       
-      // Check if the selected provider is available
+      // Legacy: explicit provider+model update (UI no longer sends provider; kept for API callers)
+      
       const { isOpenAIAvailable, isGeminiAvailable, clearProviderCache } = await import("../aiProvider");
       
       if (provider === "openai" && !isOpenAIAvailable()) {
@@ -72,17 +91,20 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
         return res.status(400).json({ error: "Gemini API key is not configured. Please add GEMINI_API_KEY to secrets." });
       }
       
-      // Update settings
-      const settings = await storage.updateSystemSettings({
+      const updateData: any = {
         aiProvider: provider,
         aiModel: model || null,
-        lastUpdatedBy: req.session.userId,
-      });
+        lastUpdatedBy: req.user?.userId,
+      };
       
-      // Clear the provider cache so the new provider is used
+      if (insiderDataSource !== undefined && insiderDataSource !== null && insiderDataSource !== "") {
+        updateData.insiderDataSource = insiderDataSource;
+      }
+      
+      const settings = await storage.updateSystemSettings(updateData);
+      
       clearProviderCache();
       
-      // Update all services that use AI
       const { aiAnalysisService } = await import("../aiAnalysisService");
       const { setMacroProviderConfig } = await import("../macroAgentService");
       const { setBacktestProviderConfig } = await import("../backtestService");
@@ -92,21 +114,26 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
       setMacroProviderConfig(config);
       setBacktestProviderConfig(config);
       
-      console.log(`[Admin] AI provider updated to: ${provider}${model ? ` (model: ${model})` : ""}`);
+      console.log("[Admin] AI provider updated to:", provider, model ? `(model: ${model})` : "");
       
       res.json({
         success: true,
         provider: settings.aiProvider,
         model: settings.aiModel,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating AI provider:", error);
-      res.status(500).json({ error: "Failed to update AI provider configuration" });
+      console.error("Error stack:", error?.stack);
+      console.error("Error message:", error?.message);
+      res.status(500).json({ 
+        error: "Failed to update AI provider configuration",
+        details: error?.message || String(error)
+      });
     }
   });
 
   // Admin: Fetch available models from provider APIs dynamically
-  app.get("/api/admin/ai-provider/models", requireAdmin, async (req, res) => {
+  app.get("/api/admin/ai-provider/models", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
       const provider = req.query.provider as string;
       
@@ -115,15 +142,44 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
       }
       
       const { fetchAvailableModels } = await import("../aiProvider");
-      const models = await fetchAvailableModels(provider as "openai" | "gemini");
       
-      res.json({
-        provider,
-        models,
+      // Hardcoded fallback models (always available)
+      const fallbackModels = provider === "openai" 
+        ? ["gpt-5.2", "gpt-5"]
+        : ["gemini-3-pro-preview", "gemini-3-flash-preview"];
+      
+      try {
+        const models = await fetchAvailableModels(provider as "openai" | "gemini");
+        
+        // Use fetched models if valid, otherwise use fallback
+        const finalModels = (models && Array.isArray(models) && models.length > 0) 
+          ? models 
+          : fallbackModels;
+        
+        console.log(`[Admin] Returning ${finalModels.length} models for ${provider}:`, finalModels);
+        
+        res.json({
+          provider,
+          models: finalModels,
+        });
+      } catch (fetchError: any) {
+        console.error(`[Admin] Error fetching models for ${provider}:`, fetchError?.message || fetchError);
+        // Always return fallback models on error
+        console.log(`[Admin] Using fallback models:`, fallbackModels);
+        
+        res.json({
+          provider,
+          models: fallbackModels,
+        });
+      }
+    } catch (error: any) {
+      console.error("[Admin] Error in models endpoint:", error?.message || error);
+      // Last resort: return empty array with error
+      res.status(500).json({ 
+        error: "Failed to fetch AI models",
+        provider: req.query.provider,
+        models: []
       });
-    } catch (error) {
-      console.error("Error fetching AI models:", error);
-      res.status(500).json({ error: "Failed to fetch AI models" });
     }
   });
 
@@ -232,6 +288,71 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
     }
   });
 
+  // ADMIN ONLY: Update user subscription status
+  app.post("/api/admin/update-subscription-status", verifyFirebaseToken, requireAdmin, async (req, res) => {
+    try {
+      const { email, subscriptionStatus } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      if (!subscriptionStatus) {
+        return res.status(400).json({ error: "Subscription status is required" });
+      }
+
+      // Validate subscription status
+      const validStatuses = ["pending_verification", "inactive", "active", "trial", "pro", "cancelled", "expired"];
+      if (!validStatuses.includes(subscriptionStatus)) {
+        return res.status(400).json({ error: `Invalid subscription status. Must be one of: ${validStatuses.join(", ")}` });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const updateData: any = {
+        subscriptionStatus,
+      };
+
+      // Set trial end date if setting to trial
+      if (subscriptionStatus === "trial") {
+        const now = new Date();
+        const trialEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+        updateData.trialEndsAt = trialEndsAt;
+        updateData.subscriptionStartDate = now;
+      } else if (subscriptionStatus === "active" || subscriptionStatus === "pro") {
+        // Set subscription start date for active/pro
+        if (!user.subscriptionStartDate) {
+          updateData.subscriptionStartDate = new Date();
+        }
+        // Clear trial end date if moving from trial
+        if (user.subscriptionStatus === "trial") {
+          updateData.trialEndsAt = null;
+        }
+      } else if (subscriptionStatus === "expired" || subscriptionStatus === "cancelled") {
+        // Set subscription end date
+        updateData.subscriptionEndDate = new Date();
+      }
+
+      const updatedUser = await storage.updateUser(user.id, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({
+        success: true,
+        message: `Subscription status updated to ${subscriptionStatus}`,
+        user: {
+          ...updatedUser,
+          passwordHash: undefined,
+        }
+      });
+    } catch (error) {
+      console.error("Update subscription status error:", error);
+      res.status(500).json({ error: "Failed to update subscription status" });
+    }
+  });
+
   // ADMIN ONLY: Deactivate user subscription
   app.post("/api/admin/deactivate-subscription", requireAdmin, async (req, res) => {
     try {
@@ -266,10 +387,13 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
   });
 
   // SUPER ADMIN ONLY: Manually verify user email (for testing purposes)
-  app.post("/api/admin/verify-email", requireAdmin, async (req, res) => {
+  app.post("/api/admin/verify-email", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       // Require super admin access
-      const adminUser = await storage.getUser(req.session.userId!);
+      const adminUser = await storage.getUser(req.user.userId);
       if (!adminUser?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -365,7 +489,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
         }
       }
 
-      const archivedUser = await storage.archiveUser(user.id, req.session.userId!);
+      const archivedUser = await storage.archiveUser(user.id, req.user!.userId);
 
       // Update subscription status to cancelled
       if (user.paypalSubscriptionId) {
@@ -456,7 +580,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
   });
 
   // ADMIN ONLY: Manually extend subscription for N months
-  app.post("/api/admin/extend-subscription", requireAdmin, async (req, res) => {
+  app.post("/api/admin/extend-subscription", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
       const { email, months, reason } = req.body;
       if (!email || !months) {
@@ -482,7 +606,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
         endDate,
         monthsExtended: months,
         reason: reason || `Admin extended subscription by ${months} month(s)`,
-        createdBy: req.session.userId!,
+        createdBy: req.user!.userId,
       });
 
       const updatedUser = await storage.updateUserSubscriptionStatus(
@@ -561,7 +685,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
         status: "completed",
         transactionId: `manual_${Date.now()}`,
         notes: notes || "Manual payment entry by admin",
-        createdBy: req.session.userId!,
+        createdBy: req.user!.userId,
       });
 
       res.json({
@@ -576,13 +700,13 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
   });
 
   // Admin notifications
-  app.get("/api/admin/notifications", async (req, res) => {
+  app.get("/api/admin/notifications", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -595,13 +719,13 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
     }
   });
 
-  app.get("/api/admin/notifications/unread-count", async (req, res) => {
+  app.get("/api/admin/notifications/unread-count", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -614,13 +738,13 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
     }
   });
 
-  app.post("/api/admin/notifications/:id/read", async (req, res) => {
+  app.post("/api/admin/notifications/:id/read", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -637,13 +761,13 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
     }
   });
 
-  app.post("/api/admin/notifications/mark-all-read", async (req, res) => {
+  app.post("/api/admin/notifications/mark-all-read", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isSuperAdmin) {
         return res.status(403).json({ error: "Super admin access required" });
       }
@@ -657,13 +781,13 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
   });
 
   // Admin endpoint to regenerate daily briefs for all followed stocks
-  app.post("/api/admin/regenerate-briefs", async (req, res) => {
+  app.post("/api/admin/regenerate-briefs", verifyFirebaseToken, requireAdmin, async (req, res) => {
     try {
-      if (!req.session.userId) {
+      if (!req.user) {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const user = await storage.getUser(req.user.userId);
       if (!user?.isAdmin) {
         return res.status(403).json({ error: "Admin access required" });
       }
@@ -671,7 +795,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
       const today = new Date().toISOString().split('T')[0];
       
       // Get all followed tickers for this user
-      const followedStocks = await storage.getUserFollowedStocks(req.session.userId);
+      const followedStocks = await storage.getUserFollowedStocks(req.user.userId);
       const followedTickers = followedStocks.map(f => f.ticker);
       
       let generatedCount = 0;
@@ -689,7 +813,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
           }
           
           // Get stock data for context and opportunity type
-          const stock = await storage.getStock(req.session.userId, ticker);
+          const stock = await storage.getStock(req.user.userId, ticker);
           const stockData = stock as any;
           const opportunityType = stockData?.recommendation?.toLowerCase().includes("sell") ? "sell" : "buy";
           const previousAnalysis = stockData?.overallRating ? {
@@ -704,7 +828,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
           } : undefined;
           
           // Check if user owns this stock (real holdings only, not simulated)
-          const holding = await storage.getPortfolioHoldingByTicker(req.session.userId, ticker, false);
+          const holding = await storage.getPortfolioHoldingByTicker(req.user.userId, ticker, false);
           const userOwnsPosition = holding !== undefined && holding.quantity > 0;
           
           // Get recent news
@@ -731,7 +855,7 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
           
           // Create or update brief with BOTH scenarios
           await storage.createDailyBrief({
-            userId: req.session.userId,
+            userId: req.user.userId,
             ticker,
             briefDate: today,
             priceSnapshot: quote.price.toString(),
@@ -775,6 +899,31 @@ export function registerAdminRoutes(app: Express, requireAdmin: ReturnType<typeo
     } catch (error) {
       console.error("Failed to regenerate briefs:", error);
       res.status(500).json({ error: "Failed to regenerate briefs" });
+    }
+  });
+
+  // Admin endpoint to manually trigger opportunities fetch
+  app.post("/api/admin/trigger-opportunities-fetch", verifyFirebaseToken, requireAdmin, async (req, res) => {
+    try {
+      const { cadence } = req.body;
+      
+      if (!cadence || (cadence !== 'daily' && cadence !== 'hourly')) {
+        return res.status(400).json({ error: "cadence must be 'daily' or 'hourly'" });
+      }
+
+      // Trigger the fetch in the background
+      triggerOpportunitiesFetch(cadence as 'daily' | 'hourly').catch(error => {
+        console.error(`[Admin] Failed to trigger ${cadence} opportunities fetch:`, error);
+      });
+
+      res.json({ 
+        success: true, 
+        message: `${cadence} opportunities fetch triggered`,
+        cadence 
+      });
+    } catch (error) {
+      console.error("Trigger opportunities fetch error:", error);
+      res.status(500).json({ error: "Failed to trigger opportunities fetch" });
     }
   });
 }

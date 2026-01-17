@@ -150,13 +150,17 @@ export class CachedStorage implements IStorage {
     await cache.invalidatePortfolioCache(userId);
   }
 
+  async promoteSecRealtimeToHourly() {
+    return this.storage.promoteSecRealtimeToHourly();
+  }
+
   // Delegate all other methods to original storage (no caching needed or too complex)
   // This is a simplified version - in practice, you'd want to delegate all methods
   // For now, we'll use a Proxy to automatically delegate unknown methods
-  
+  //
   // Note: TypeScript doesn't support perfect proxy typing, so we'll need to explicitly
   // implement the methods we want to cache, and use a fallback for others
-
+  //
   // For methods we don't cache, delegate directly
   // Since IStorage has many methods, we'll use a Proxy pattern at the storage level
   // instead of manually implementing everything here

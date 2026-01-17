@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, getQueryFn } from "@/lib/queryClient";
 import { useUser } from "@/contexts/UserContext";
+import { auth } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,7 @@ interface User {
   subscriptionStatus: string;
   subscriptionStartDate?: string;
   subscriptionEndDate?: string;
+  trialEndsAt?: string;
   paypalSubscriptionId?: string;
   createdAt: string;
   archived: boolean;
@@ -122,8 +124,7 @@ export default function AdminPage() {
   const [versionInput, setVersionInput] = useState("");
   const [releaseNotesInput, setReleaseNotesInput] = useState("");
   
-  const [selectedAIProvider, setSelectedAIProvider] = useState<string>("");
-  const [selectedAIModel, setSelectedAIModel] = useState<string>("");
+  const [selectedInsiderSource, setSelectedInsiderSource] = useState<string>("");
 
   const handleSetAdminSecret = () => {
     if (secretInput) {
@@ -144,12 +145,30 @@ export default function AdminPage() {
     queryKey: ["/api/users", showArchived],
     enabled: !!currentUser?.isAdmin,
     queryFn: async () => {
+      // Get Firebase ID token
+      let authToken: string | null = null;
+      try {
+        const firebaseUser = auth.currentUser;
+        if (firebaseUser) {
+          authToken = await firebaseUser.getIdToken();
+        }
+      } catch (error) {
+        console.warn("Failed to get Firebase token:", error);
+      }
+
       const params = new URLSearchParams();
       if (showArchived) {
         params.append("includeArchived", "true");
       }
       const url = `/api/users${params.toString() ? `?${params.toString()}` : ""}`;
+      
+      const headers: HeadersInit = {};
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+      
       const res = await fetch(url, {
+        headers,
         credentials: "include",
       });
       
@@ -260,6 +279,57 @@ export default function AdminPage() {
       toast({
         title: "Error",
         description: error.message || "Failed to activate subscription",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateSubscriptionStatusMutation = useMutation({
+    mutationFn: async ({ email, subscriptionStatus }: { email: string; subscriptionStatus: string }) => {
+      // Get Firebase ID token
+      let authToken: string | null = null;
+      try {
+        const firebaseUser = auth.currentUser;
+        if (firebaseUser) {
+          authToken = await firebaseUser.getIdToken();
+        }
+      } catch (error) {
+        console.warn("Failed to get Firebase token:", error);
+        throw new Error("Failed to get authentication token");
+      }
+      
+      if (!authToken) {
+        throw new Error("Not authenticated");
+      }
+      
+      const res = await fetch("/api/admin/update-subscription-status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ email, subscriptionStatus }),
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to update subscription status");
+      }
+      
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: "Success",
+        description: "Subscription status updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
         variant: "destructive",
       });
     },
@@ -415,52 +485,46 @@ export default function AdminPage() {
   });
 
   interface AIProviderInfo {
-    provider: string;
-    model: string | null;
-    availableProviders: Array<{
-      id: string;
-      name: string;
-      available: boolean;
-      models: string[];
-    }>;
+    insiderDataSource?: string;
   }
 
-  const { data: aiProviderInfo, isLoading: isLoadingAIProvider } = useQuery<AIProviderInfo>({
+  const { data: aiProviderInfo, isLoading: isLoadingAIProvider } = useQuery<AIProviderInfo & { provider?: string; model?: string }>({
     queryKey: ["/api/admin/ai-provider"],
     enabled: !!currentUser?.isAdmin,
-  });
-
-  const currentProvider = selectedAIProvider || aiProviderInfo?.provider || "openai";
-  
-  const { data: dynamicModels, isLoading: isLoadingModels, refetch: refetchModels } = useQuery<{ provider: string; models: string[] }>({
-    queryKey: ["/api/admin/ai-provider/models", currentProvider],
-    queryFn: async () => {
-      const res = await fetch(`/api/admin/ai-provider/models?provider=${currentProvider}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error("Failed to fetch models");
-      }
-      return res.json();
-    },
-    enabled: !!currentUser?.isAdmin,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    queryFn: getQueryFn({ on401: "throw" }),
   });
 
   const updateAIProviderMutation = useMutation({
-    mutationFn: async ({ provider, model }: { provider: string; model?: string }) => {
+    mutationFn: async ({ insiderDataSource }: { insiderDataSource: string }) => {
+      // Get Firebase ID token for authentication
+      let authToken: string | null = null;
+      try {
+        const firebaseUser = auth.currentUser;
+        if (firebaseUser) {
+          authToken = await firebaseUser.getIdToken();
+        }
+      } catch (error) {
+        console.warn("Failed to get Firebase token:", error);
+      }
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
       const res = await fetch("/api/admin/ai-provider", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ provider, model }),
+        headers,
+        body: JSON.stringify({ insiderDataSource }),
         credentials: "include",
       });
       
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Failed to update AI provider");
+        const error = await res.json().catch(() => ({ error: res.statusText }));
+        console.error("[Admin] Update AI provider error:", error);
+        throw new Error(error.error || error.details || "Failed to update system settings");
       }
       
       return res.json();
@@ -469,7 +533,7 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/ai-provider"] });
       toast({
         title: "Success",
-        description: "AI provider updated successfully",
+        description: "System settings updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -861,18 +925,48 @@ export default function AdminPage() {
                         {user.email}
                       </p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <Badge
-                          variant={
-                            user.subscriptionStatus === "active"
-                              ? "default"
-                              : user.subscriptionStatus === "cancelled"
-                              ? "destructive"
-                              : "secondary"
-                          }
-                          data-testid={`badge-status-${user.id}`}
+                        <Select
+                          value={user.subscriptionStatus}
+                          onValueChange={(newStatus) => {
+                            updateSubscriptionStatusMutation.mutate({
+                              email: user.email,
+                              subscriptionStatus: newStatus,
+                            });
+                          }}
+                          disabled={updateSubscriptionStatusMutation.isPending || user.archived}
                         >
-                          {user.subscriptionStatus}
-                        </Badge>
+                          <SelectTrigger className="w-[140px] h-7 text-xs" data-testid={`select-status-${user.id}`}>
+                            <SelectValue>
+                              <Badge
+                                variant={
+                                  user.subscriptionStatus === "pro"
+                                    ? "default"
+                                    : user.subscriptionStatus === "active"
+                                    ? "default"
+                                    : user.subscriptionStatus === "trial"
+                                    ? "default"
+                                    : user.subscriptionStatus === "cancelled"
+                                    ? "destructive"
+                                    : user.subscriptionStatus === "expired"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                                className="text-xs"
+                              >
+                                {user.subscriptionStatus}
+                              </Badge>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending_verification">pending_verification</SelectItem>
+                            <SelectItem value="inactive">inactive</SelectItem>
+                            <SelectItem value="trial">trial</SelectItem>
+                            <SelectItem value="active">active</SelectItem>
+                            <SelectItem value="pro">pro</SelectItem>
+                            <SelectItem value="cancelled">cancelled</SelectItem>
+                            <SelectItem value="expired">expired</SelectItem>
+                          </SelectContent>
+                        </Select>
                         {user.subscriptionStartDate && (
                           <span className="text-xs text-muted-foreground">
                             Started: {format(new Date(user.subscriptionStartDate), "MMM d, yyyy")}
@@ -881,6 +975,11 @@ export default function AdminPage() {
                         {user.subscriptionEndDate && (
                           <span className="text-xs text-muted-foreground">
                             Ends: {format(new Date(user.subscriptionEndDate), "MMM d, yyyy")}
+                          </span>
+                        )}
+                        {user.trialEndsAt && user.subscriptionStatus === "trial" && (
+                          <span className="text-xs text-muted-foreground">
+                            Trial ends: {format(new Date(user.trialEndsAt), "MMM d, yyyy")}
                           </span>
                         )}
                       </div>
@@ -1215,124 +1314,58 @@ export default function AdminPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>AI Provider Configuration</CardTitle>
+              <CardTitle>Data & AI Settings</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                AI uses a fixed fallback chain: Gemini Pro → GPT-5.2 → Gemini Flash → GPT-5. No configuration needed.
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-4 bg-muted rounded-lg space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Current Provider:</span>
-                  <Badge variant="outline" className="font-mono" data-testid="text-current-ai-provider">
-                    {aiProviderInfo?.provider === "gemini" ? "Google Gemini" : "OpenAI GPT"}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Current Model:</span>
-                  <Badge variant="outline" className="font-mono" data-testid="text-current-ai-model">
-                    {aiProviderInfo?.model || (aiProviderInfo?.provider === "gemini" ? "gemini-2.5-flash" : "gpt-4o")}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="ai-provider">Select AI Provider</Label>
-                  <Select 
-                    value={selectedAIProvider || aiProviderInfo?.provider || "openai"} 
-                    onValueChange={(value) => {
-                      setSelectedAIProvider(value);
-                      setSelectedAIModel("");
-                    }}
-                  >
-                    <SelectTrigger data-testid="select-ai-provider">
-                      <SelectValue placeholder="Select AI provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="openai" data-testid="select-item-openai">
-                        OpenAI
-                      </SelectItem>
-                      <SelectItem value="gemini" data-testid="select-item-gemini">
-                        Google Gemini
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {aiProviderInfo?.availableProviders && (
-                    <p className="text-xs text-muted-foreground">
-                      {aiProviderInfo.availableProviders.map(p => 
-                        `${p.name}: ${p.available ? "Available" : "API key not configured"}`
-                      ).join(" | ")}
-                    </p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="ai-model">Select Model</Label>
-                  <Select 
-                    value={selectedAIModel || aiProviderInfo?.model || ""} 
-                    onValueChange={setSelectedAIModel}
-                    disabled={isLoadingModels}
-                  >
-                    <SelectTrigger data-testid="select-ai-model">
-                      <SelectValue placeholder={isLoadingModels ? "Loading models..." : "Select model"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {dynamicModels?.models?.map((model) => (
-                        <SelectItem 
-                          key={model} 
-                          value={model}
-                          data-testid={`select-item-model-${model}`}
-                        >
-                          {model}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">
-                      {isLoadingModels 
-                        ? "Fetching available models from provider..."
-                        : `${dynamicModels?.models?.length || 0} models available from ${currentProvider === "gemini" ? "Google Gemini" : "OpenAI"}`}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => refetchModels()}
-                      disabled={isLoadingModels}
-                      className="h-6 text-xs"
-                      data-testid="button-refresh-models"
-                    >
-                      {isLoadingModels ? "Loading..." : "Refresh"}
-                    </Button>
+              <div className="space-y-2">
+                <Label htmlFor="insider-source">Insider Trading Data Source</Label>
+                <div className="p-4 bg-muted rounded-lg mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Current:</span>
+                    <Badge variant="outline" className="font-mono">
+                      {aiProviderInfo?.insiderDataSource === "sec_direct" ? "SEC Direct (Real-time)" : "OpenInsider (Legacy)"}
+                    </Badge>
                   </div>
                 </div>
-
-                <p className="text-xs text-muted-foreground">
-                  Changes affect all AI-powered features: stock analysis, macro sector analysis, and backtest scenario generation.
-                </p>
-                <Button
-                  onClick={() => {
-                    const provider = selectedAIProvider || aiProviderInfo?.provider;
-                    if (!provider || !["openai", "gemini"].includes(provider)) {
-                      toast({
-                        title: "Error",
-                        description: "Please select a valid AI provider",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-                    const model = selectedAIModel || aiProviderInfo?.model || undefined;
-                    updateAIProviderMutation.mutate({ provider, model });
-                    setSelectedAIProvider("");
-                    setSelectedAIModel("");
-                  }}
-                  disabled={
-                    updateAIProviderMutation.isPending || 
-                    isLoadingAIProvider
-                  }
-                  data-testid="button-update-ai-provider"
+                
+                <Select 
+                  value={selectedInsiderSource || aiProviderInfo?.insiderDataSource || "openinsider"} 
+                  onValueChange={setSelectedInsiderSource}
                 >
-                  {updateAIProviderMutation.isPending ? "Updating..." : "Update AI Provider"}
-                </Button>
+                  <SelectTrigger id="insider-source">
+                    <SelectValue placeholder="Select data source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openinsider">
+                      OpenInsider (Legacy Scraper)
+                    </SelectItem>
+                    <SelectItem value="sec_direct">
+                      SEC Direct (Real-time RSS)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  SEC Direct: 5‑min polling from SEC.gov. OpenInsider: legacy Python scraper (hourly/daily).
+                </p>
               </div>
+
+              <Button
+                onClick={() => {
+                  const insiderDataSource = selectedInsiderSource || aiProviderInfo?.insiderDataSource || "openinsider";
+                  updateAIProviderMutation.mutate({ insiderDataSource });
+                  setSelectedInsiderSource("");
+                }}
+                disabled={
+                  updateAIProviderMutation.isPending || 
+                  isLoadingAIProvider
+                }
+                data-testid="button-update-ai-provider"
+              >
+                {updateAIProviderMutation.isPending ? "Updating..." : "Update Insider Data Source"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

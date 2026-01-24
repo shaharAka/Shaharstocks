@@ -8,6 +8,8 @@ import { aiAnalysisService } from "../aiAnalysisService";
 import { fetchInitialDataForUser } from "./utils";
 import { verifyFirebaseToken } from "../middleware/firebaseAuth";
 import { triggerOpportunitiesFetch } from "../index";
+import { secPoller } from "../services/sec/SecPoller";
+import { opportunityScheduler } from "../services/OpportunityScheduler";
 
 export function registerAdminRoutes(app: Express, requireAdmin: typeof import("../middleware/firebaseAuth").requireAdmin) {
   // Admin: Update app version
@@ -300,7 +302,9 @@ export function registerAdminRoutes(app: Express, requireAdmin: typeof import(".
       }
 
       // Validate subscription status
-      const validStatuses = ["pending_verification", "inactive", "active", "trial", "pro", "cancelled", "expired"];
+      // Valid statuses: trial/basic (free tier), pro (pro tier)
+      // Admin is determined by isAdmin/isSuperAdmin flags, not subscription status
+      const validStatuses = ["trial", "basic", "pro", "pending_verification", "inactive", "cancelled", "expired"];
       if (!validStatuses.includes(subscriptionStatus)) {
         return res.status(400).json({ error: `Invalid subscription status. Must be one of: ${validStatuses.join(", ")}` });
       }
@@ -320,8 +324,8 @@ export function registerAdminRoutes(app: Express, requireAdmin: typeof import(".
         const trialEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
         updateData.trialEndsAt = trialEndsAt;
         updateData.subscriptionStartDate = now;
-      } else if (subscriptionStatus === "active" || subscriptionStatus === "pro") {
-        // Set subscription start date for active/pro
+      } else if (subscriptionStatus === "pro") {
+        // Set subscription start date for pro
         if (!user.subscriptionStartDate) {
           updateData.subscriptionStartDate = new Date();
         }
@@ -924,6 +928,144 @@ export function registerAdminRoutes(app: Express, requireAdmin: typeof import(".
     } catch (error) {
       console.error("Trigger opportunities fetch error:", error);
       res.status(500).json({ error: "Failed to trigger opportunities fetch" });
+    }
+  });
+
+  // Admin endpoint to check SecPoller status
+  app.get("/api/admin/sec-poller/status", verifyFirebaseToken, requireAdmin, async (req, res) => {
+    try {
+      const status = secPoller.getStatus();
+      const now = Date.now();
+      
+      // Add recommendations based on status
+      const recommendations: string[] = [];
+      if (!status.isPolling) {
+        recommendations.push("Poller is not running. Use /api/admin/sec-poller/restart to start it.");
+      } else if (status.healthStatus === 'unhealthy') {
+        recommendations.push("Poller appears unhealthy. Consider restarting with /api/admin/sec-poller/restart");
+      } else if (!status.hasTimer) {
+        recommendations.push("Timer is not set. Poller may have failed to initialize properly.");
+      }
+      
+      res.json({ 
+        success: true, 
+        status,
+        recommendations,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Get SecPoller status error:", error);
+      res.status(500).json({ error: "Failed to get SecPoller status" });
+    }
+  });
+
+  // Admin endpoint to manually trigger SecPoller
+  app.post("/api/admin/sec-poller/trigger", verifyFirebaseToken, requireAdmin, async (req, res) => {
+    try {
+      await secPoller.triggerPoll();
+      res.json({ 
+        success: true, 
+        message: "SecPoller poll triggered successfully",
+        status: secPoller.getStatus()
+      });
+    } catch (error: any) {
+      console.error("Trigger SecPoller error:", error);
+      res.status(500).json({ 
+        error: "Failed to trigger SecPoller", 
+        message: error.message,
+        status: secPoller.getStatus()
+      });
+    }
+  });
+
+  // Admin endpoint to restart SecPoller
+  app.post("/api/admin/sec-poller/restart", verifyFirebaseToken, requireAdmin, async (req, res) => {
+    try {
+      console.log(`[Admin] [${new Date().toISOString()}] Manual SecPoller restart requested`);
+      await secPoller.restart();
+      res.json({ 
+        success: true, 
+        message: "SecPoller restarted successfully",
+        status: secPoller.getStatus()
+      });
+    } catch (error: any) {
+      console.error("Restart SecPoller error:", error);
+      res.status(500).json({ 
+        error: "Failed to restart SecPoller", 
+        message: error.message,
+        status: secPoller.getStatus()
+      });
+    }
+  });
+
+  // Admin endpoint to check Opportunity Scheduler status
+  app.get("/api/admin/opportunity-scheduler/status", verifyFirebaseToken, requireAdmin, async (req, res) => {
+    try {
+      const status = opportunityScheduler.getStatus();
+      const recommendations: string[] = [];
+      
+      if (status.hourly.healthStatus === 'unhealthy') {
+        recommendations.push("Hourly job appears unhealthy. Check logs for errors.");
+      }
+      if (status.daily.healthStatus === 'unhealthy') {
+        recommendations.push("Daily job appears unhealthy. Check logs for errors.");
+      }
+      if (!status.hourly.isScheduled) {
+        recommendations.push("Hourly job is not scheduled. Server may need restart.");
+      }
+      if (!status.daily.isScheduled) {
+        recommendations.push("Daily job is not scheduled. Server may need restart.");
+      }
+      
+      res.json({ 
+        success: true, 
+        status,
+        recommendations,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Get Opportunity Scheduler status error:", error);
+      res.status(500).json({ error: "Failed to get scheduler status" });
+    }
+  });
+
+  // Admin endpoint to manually trigger hourly job
+  app.post("/api/admin/opportunity-scheduler/trigger-hourly", verifyFirebaseToken, requireAdmin, async (req, res) => {
+    try {
+      console.log(`[Admin] [${new Date().toISOString()}] Manual hourly job trigger requested`);
+      await triggerOpportunitiesFetch('hourly');
+      res.json({ 
+        success: true, 
+        message: "Hourly job triggered successfully",
+        status: opportunityScheduler.getStatus()
+      });
+    } catch (error: any) {
+      console.error("Trigger hourly job error:", error);
+      res.status(500).json({ 
+        error: "Failed to trigger hourly job", 
+        message: error.message,
+        status: opportunityScheduler.getStatus()
+      });
+    }
+  });
+
+  // Admin endpoint to manually trigger daily job
+  app.post("/api/admin/opportunity-scheduler/trigger-daily", verifyFirebaseToken, requireAdmin, async (req, res) => {
+    try {
+      console.log(`[Admin] [${new Date().toISOString()}] Manual daily job trigger requested`);
+      await triggerOpportunitiesFetch('daily');
+      res.json({ 
+        success: true, 
+        message: "Daily job triggered successfully",
+        status: opportunityScheduler.getStatus()
+      });
+    } catch (error: any) {
+      console.error("Trigger daily job error:", error);
+      res.status(500).json({ 
+        error: "Failed to trigger daily job", 
+        message: error.message,
+        status: opportunityScheduler.getStatus()
+      });
     }
   });
 }

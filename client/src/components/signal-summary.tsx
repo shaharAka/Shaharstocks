@@ -3,13 +3,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Brain, Globe, AlertTriangle } from "lucide-react";
-import type { StockAnalysis, MacroAnalysis } from "@shared/schema";
+import type { StockAnalysis, MacroAnalysis, TickerDailyBrief } from "@shared/schema";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { LoadingStrikeBorder } from "@/components/loading-strike-border";
 
 interface SignalSummaryProps {
   ticker: string;
@@ -46,13 +47,26 @@ export function SignalSummary({ ticker }: SignalSummaryProps) {
     },
   });
 
+  // Fetch latest daily brief for most updated score (single source of truth)
+  const { data: dailyBriefs = [] } = useQuery<TickerDailyBrief[]>({
+    queryKey: ["/api/stocks", ticker, "ticker-daily-briefs"],
+    queryFn: async () => {
+      const response = await fetch(`/api/stocks/${ticker}/ticker-daily-briefs?limit=1`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!ticker,
+  });
+
   if (isLoadingAnalysis) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <Skeleton className="h-32 w-full" />
-        </CardContent>
-      </Card>
+      <LoadingStrikeBorder isLoading={true}>
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-32 w-full" />
+          </CardContent>
+        </Card>
+      </LoadingStrikeBorder>
     );
   }
 
@@ -66,8 +80,9 @@ export function SignalSummary({ ticker }: SignalSummaryProps) {
     );
   }
 
-  // Calculate primary signal score (null if unavailable)
-  const primaryScore = analysis.integratedScore ?? analysis.confidenceScore ?? null;
+  // SINGLE SOURCE OF TRUTH: Use latest brief score (most updated, daily), fall back to analysis score
+  const latestBriefScore = dailyBriefs.length > 0 ? dailyBriefs[0].newSignalScore : null;
+  const primaryScore = latestBriefScore ?? analysis.integratedScore ?? analysis.confidenceScore ?? null;
   
   // Don't render if no valid score
   if (primaryScore === null) {

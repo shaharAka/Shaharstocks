@@ -22,7 +22,7 @@ import {
   ArrowDown,
   Minus
 } from "lucide-react";
-import type { TickerDailyBrief } from "@shared/schema";
+import type { TickerDailyBrief, Stock } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { StockAnalysis } from "@shared/schema";
@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { TermTooltip } from "@/components/term-tooltip";
+import { LoadingStrikeBorder } from "@/components/loading-strike-border";
 
 const FINANCIAL_TERMS: Record<string, string> = {
   "RSI": "Relative Strength Index - measures momentum on a 0-100 scale. Above 70 is overbought, below 30 is oversold.",
@@ -136,6 +137,19 @@ function HighlightedText({ text }: { text: string }) {
 export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
   const { toast } = useToast();
 
+  // Fetch stock data (includes latestBrief for opportunities)
+  const { data: stock } = useQuery<Stock | null>({
+    queryKey: ["/api/stocks", ticker],
+    queryFn: async () => {
+      const response = await fetch(`/api/stocks/${ticker}`);
+      if (response.status === 404) return null;
+      if (!response.ok) throw new Error("Failed to fetch stock");
+      return response.json();
+    },
+    enabled: !!ticker,
+    staleTime: 0,
+  });
+
   const { data: analysis, isLoading: isLoadingExisting } = useQuery<StockAnalysis | null>({
     queryKey: ["/api/stocks", ticker, "analysis"],
     queryFn: async () => {
@@ -211,14 +225,16 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
 
   if (isLoadingExisting) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading playbook...</span>
-          </div>
-        </CardContent>
-      </Card>
+      <LoadingStrikeBorder isLoading={true}>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Loading playbook...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </LoadingStrikeBorder>
     );
   }
 
@@ -254,39 +270,41 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
 
   if (analysis.status === "pending" || analysis.status === "analyzing") {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>AI playbook in progress...</span>
+      <LoadingStrikeBorder isLoading={true}>
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>AI playbook in progress...</span>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <span className="text-xs text-muted-foreground">Stuck for too long?</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => resetMutation.mutate()}
+                  disabled={resetMutation.isPending}
+                  data-testid={`button-reset-${ticker}`}
+                  className="text-xs h-7"
+                >
+                  {resetMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset & Retry
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2 pt-2 border-t">
-              <span className="text-xs text-muted-foreground">Stuck for too long?</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetMutation.mutate()}
-                disabled={resetMutation.isPending}
-                data-testid={`button-reset-${ticker}`}
-                className="text-xs h-7"
-              >
-                {resetMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Resetting...
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="h-3 w-3 mr-1" />
-                    Reset & Retry
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </LoadingStrikeBorder>
     );
   }
 
@@ -342,8 +360,13 @@ export function StockAIAnalysis({ ticker }: StockAIAnalysisProps) {
     );
   }
 
-  // Get signal score (use integratedScore or confidenceScore)
-  const signalScore = analysis.integratedScore ?? analysis.confidenceScore ?? 50;
+  // Get signal score - SINGLE SOURCE OF TRUTH: Use latest brief score (most updated, daily)
+  // Priority: stock.latestBrief (from API) > dailyBriefs[0] (from separate query) > analysis score
+  // This matches the logic used on the opportunities page
+  const stockBriefScore = (stock as any)?.latestBrief?.newSignalScore ?? null;
+  const dailyBriefScore = dailyBriefs.length > 0 ? dailyBriefs[0].newSignalScore : null;
+  const latestBriefScore = stockBriefScore ?? dailyBriefScore;
+  const signalScore = latestBriefScore ?? analysis?.integratedScore ?? analysis?.confidenceScore ?? 50;
   const signalInfo = getSignalLabel(signalScore);
   const SignalIcon = signalInfo.icon;
 

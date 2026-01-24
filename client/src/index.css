@@ -281,13 +281,23 @@
     inset: -1px;
   }
 
-  /* Loading strike animation */
+  /* Loading strike animation - horizontal gradient */
   @keyframes loading-strike {
     0% {
       background-position: 200% 0;
     }
     100% {
       background-position: -200% 0;
+    }
+  }
+  
+  /* Loading stripe animation - rotating border */
+  @keyframes loading-stripe-rotate {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
     }
   }
   

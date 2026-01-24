@@ -39,6 +39,7 @@ import { secClient } from "./services/sec/SecClient";
 import { tickerMapper } from "./services/sec/TickerMapper";
 import { secParser } from "./services/sec/SecParser";
 import { applyOpenInsiderFiltersToSecTransaction } from "./services/sec/secFilters";
+import { opportunityScheduler } from "./services/OpportunityScheduler";
 
 // Feature flags
 const ENABLE_TELEGRAM = process.env.ENABLE_TELEGRAM === "true";
@@ -129,20 +130,27 @@ app.use((req, res, next) => {
     res.status(status).json({ message });
   });
 
-  // In development, frontend runs separately on port 5173 via Vite
-  // API requests are proxied from Vite to this server on port 5002
-  // Add CORS middleware for development to allow Vite dev server to access API
+  // In development, serve frontend via Vite middleware on the same port
+  // This allows both API and frontend to be served from port 5002
   if (app.get("env") === "development") {
-    app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      res.header('Access-Control-Allow-Credentials', 'true');
-      if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-      }
-      next();
-    });
+    try {
+      const { setupVite } = await import("./vite-dev");
+      await setupVite(app, server);
+      log.info("Vite middleware enabled - serving frontend on same port", "server");
+    } catch (error) {
+      log.error("Failed to setup Vite middleware, falling back to CORS only", error, "server");
+      // Fallback to CORS if Vite setup fails
+      app.use((req, res, next) => {
+        res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        if (req.method === 'OPTIONS') {
+          return res.sendStatus(200);
+        }
+        next();
+      });
+    }
   } else {
     // Serve static files in production (no vite dependency)
     // Inlined here to avoid needing to bundle vite-prod.ts
@@ -200,8 +208,15 @@ app.use((req, res, next) => {
       
       // Start SEC Poller (it will check the feature toggle internally)
       // The poller will only run if insiderDataSource is set to "sec_direct"
-      secPoller.start(5 * 60 * 1000); // 5 minutes interval
-      log.info("SEC Poller initialized (will start if feature toggle is enabled)", "server");
+      log.info("Starting SEC Poller...", "server");
+      secPoller.start(5 * 60 * 1000).then(() => {
+        log.info("✅ SEC Poller started successfully", "server");
+      }).catch(err => {
+        log.error(`❌ Failed to start SEC Poller: ${(err as Error).message}`, err, "server");
+        log.error("SEC Poller will retry automatically. Check logs for retry attempts.", "server");
+        // Don't throw - let it retry automatically
+      });
+      log.info("SEC Poller start() initiated (will retry automatically on failure)", "server");
 
       // Initialize AI provider configuration from database
     try {
@@ -259,6 +274,11 @@ app.use((req, res, next) => {
         log.warn("Using legacy setInterval job scheduling", "server");
       }
 
+      // Start unified global opportunities fetch (new system) - ALWAYS start (uses cron, not queue)
+      // This handles hourly and daily opportunity fetching with cron scheduling
+      // TODO: Extract unifiedOpportunities job - currently still inline
+      startUnifiedOpportunitiesFetchJob();
+
       // Only start setInterval jobs if queue system is not available
       if (!useQueueSystem) {
         log.info("Starting legacy setInterval jobs", "server");
@@ -285,10 +305,6 @@ app.use((req, res, next) => {
         
         // Start automatic OpenInsider data fetching every hour (legacy per-user system)
         startOpeninsiderFetchJob(storage);
-        
-        // Start unified global opportunities fetch (new system)
-        // TODO: Extract unifiedOpportunities job - currently still inline
-        startUnifiedOpportunitiesFetchJob();
         
         // Start automatic cleanup of old recommendations (older than 2 weeks)
         startRecommendationCleanupJob(storage);
@@ -459,13 +475,34 @@ function startUnifiedOpportunitiesFetchJob() {
       for (const ticker of uniqueTickers) {
         try {
           await delay(RATE_LIMIT_DELAY);
-          // Get quote first
+          // Get quote first (Finnhub)
           const quote = await finnhubService.getQuote(ticker);
           
           if (!quote || !quote.currentPrice) {
             tickerDataCache.set(ticker, null); // Mark as invalid
             filteredNoQuote++;
             continue;
+          }
+          
+          // CRITICAL: Validate AlphaVantage supports this ticker (required for analysis)
+          // Check if AlphaVantage has quote data (same validation as analysis will use)
+          try {
+            await delay(RATE_LIMIT_DELAY);
+            const avQuote = await stockService.getQuote(ticker);
+            if (!avQuote || !avQuote.price) {
+              console.log(`[UnifiedOpportunities] ${ticker} not supported by AlphaVantage, skipping (will fail analysis)`);
+              tickerDataCache.set(ticker, null);
+              filteredNoQuote++;
+              continue;
+            }
+          } catch (avError: any) {
+            if (avError.message?.includes("No quote data found")) {
+              console.log(`[UnifiedOpportunities] ${ticker} not supported by AlphaVantage, skipping (will fail analysis)`);
+              tickerDataCache.set(ticker, null);
+              filteredNoQuote++;
+              continue;
+            }
+            throw avError; // Re-throw if it's a different error
           }
           
           // Get company profile (for market cap check)
@@ -652,40 +689,38 @@ function startUnifiedOpportunitiesFetchJob() {
     }
   }
 
-  // Schedule hourly job at top of every hour using cron
-  function scheduleHourlyJob() {
-    // Cron pattern: "0 * * * *" = at minute 0 of every hour (00:00, 01:00, 02:00, etc.)
-    cron.schedule('0 * * * *', async () => {
-      try {
-        const settings = await storage.getSystemSettings();
-        if (settings?.insiderDataSource === 'sec_direct') {
-          // SEC primary: promote realtime->hourly; if 0, OpenInsider fallback
-          const promo = await runSecHourlyPromotion().catch(() => null);
-          if (promo === null || promo.promoted === 0) {
-            log.info("[UnifiedOpportunities] SEC hourly had 0 opportunities, running OpenInsider fallback");
-            await fetchUnifiedOpportunities('hourly', { forceOpenInsider: true }).catch(err => {
-              log.error("[UnifiedOpportunities] Fallback OpenInsider hourly fetch failed:", err);
-            });
-          }
-        } else {
-          // OpenInsider primary: fetch; if 0, SEC fallback (promote accumulated realtime)
-          const result = await fetchUnifiedOpportunities('hourly').catch(() => undefined);
-          if (!result || result.opportunitiesCreated === 0) {
-            log.info("[UnifiedOpportunities] OpenInsider hourly produced 0, adding SEC accumulated");
-            const secPromo = await storage.promoteSecRealtimeToHourly();
-            if (secPromo) {
-              log.info(`[SecHourly] SEC fallback promoted ${secPromo.promoted} to hourly`);
-            }
+  // Hourly job callback
+  async function runHourlyJob() {
+    try {
+      const settings = await storage.getSystemSettings();
+      if (settings?.insiderDataSource === 'sec_direct') {
+        // SEC primary: promote realtime->hourly; if 0, OpenInsider fallback
+        const promo = await runSecHourlyPromotion().catch(() => null);
+        if (promo === null || promo.promoted === 0) {
+          log.info("[UnifiedOpportunities] SEC hourly had 0 opportunities, running OpenInsider fallback");
+          await fetchUnifiedOpportunities('hourly', { forceOpenInsider: true }).catch(err => {
+            log.error("[UnifiedOpportunities] Fallback OpenInsider hourly fetch failed:", err);
+            throw err; // Re-throw so scheduler tracks the failure
+          });
+        }
+      } else {
+        // OpenInsider primary: fetch; if 0, SEC fallback (promote accumulated realtime)
+        const result = await fetchUnifiedOpportunities('hourly').catch(err => {
+          log.error("[UnifiedOpportunities] OpenInsider hourly fetch failed:", err);
+          throw err; // Re-throw so scheduler tracks the failure
+        });
+        if (!result || result.opportunitiesCreated === 0) {
+          log.info("[UnifiedOpportunities] OpenInsider hourly produced 0, adding SEC accumulated");
+          const secPromo = await storage.promoteSecRealtimeToHourly();
+          if (secPromo) {
+            log.info(`[SecHourly] SEC fallback promoted ${secPromo.promoted} to hourly`);
           }
         }
-      } catch (err) {
-        console.error("[UnifiedOpportunities] Hourly job error:", err);
       }
-    }, {
-      timezone: 'UTC'
-    });
-
-    log.info(`[UnifiedOpportunities] Hourly job scheduled with cron pattern "0 * * * *" (top of every hour UTC)`);
+    } catch (err) {
+      log.error("[UnifiedOpportunities] Hourly job error:", err);
+      throw err; // Re-throw so scheduler tracks the failure
+    }
   }
 
   // Track if daily fetch ran today to prevent duplicates
@@ -792,6 +827,25 @@ function startUnifiedOpportunitiesFetchJob() {
             filteredNoQuote++;
             continue;
           }
+          
+          // CRITICAL: Validate AlphaVantage supports this ticker (required for analysis)
+          try {
+            const avQuote = await stockService.getQuote(ticker);
+            await delay(850);
+            if (!avQuote || !avQuote.price) {
+              console.log(`[EdgarDaily] ${ticker} not supported by AlphaVantage, skipping (will fail analysis)`);
+              filteredNoQuote++;
+              continue;
+            }
+          } catch (avError: any) {
+            if (avError.message?.includes("No quote data found")) {
+              console.log(`[EdgarDaily] ${ticker} not supported by AlphaVantage, skipping (will fail analysis)`);
+              filteredNoQuote++;
+              continue;
+            }
+            throw avError; // Re-throw if it's a different error
+          }
+          
           const companyInfo = await finnhubService.getCompanyProfile(ticker);
           await delay(850);
           if (!applyOpenInsiderFiltersToSecTransaction({ tx: t, quote: { currentPrice: quote.currentPrice }, companyInfo, config: oiConfig || {}, refDate: new Date() })) {
@@ -864,30 +918,26 @@ function startUnifiedOpportunitiesFetchJob() {
     }
   }
 
-  // Schedule daily job at midnight UTC using cron
-  function scheduleDailyJob() {
-    // Cron pattern: "0 0 * * *" = at minute 0 of hour 0 (midnight UTC)
-    cron.schedule('0 0 * * *', async () => {
-      await runDailyFetch().catch(err => {
-        console.error("[UnifiedOpportunities] Daily fetch failed:", err);
-      });
-    }, {
-      timezone: 'UTC'
-    });
-    
-    log.info(`[UnifiedOpportunities] Daily job scheduled with cron pattern "0 0 * * *" (midnight UTC)`);
+  // Daily job callback
+  async function runDailyJob() {
+    try {
+      await runDailyFetch();
+    } catch (err) {
+      log.error("[UnifiedOpportunities] Daily job error:", err);
+      throw err; // Re-throw so scheduler tracks the failure
+    }
   }
   
-  // Schedule the daily job at next midnight UTC
-  scheduleDailyJob();
+  // Start the scheduler with callbacks
+  opportunityScheduler.start(runHourlyJob, runDailyJob).catch(err => {
+    log.error("[UnifiedOpportunities] Failed to start scheduler:", err);
+  });
   
   // Run initial daily fetch on startup to populate data (won't run again at midnight due to tracking)
   runDailyFetch().catch(err => {
-    console.error("[UnifiedOpportunities] Initial daily fetch failed:", err);
+    log.error("[UnifiedOpportunities] Initial daily fetch failed:", err);
   });
   
-  // Schedule hourly job at top of every hour (00:00, 01:00, 02:00, etc.)
-  scheduleHourlyJob();
   log.info("[UnifiedOpportunities] Background job started - hourly at top of each hour for pro, daily at midnight UTC for all");
   
   // Export function for manual triggering
